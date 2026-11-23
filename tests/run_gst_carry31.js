@@ -140,5 +140,36 @@ console.log("== D. the cloud's 3B is not shown for a month a correction kept onl
   A.ctx.S.books.r1Fix = {}; A.ctx.S.books.itcAdj = {a1: {reg: "07", ym: "202602", line: "4A5", head: "igst", amt: 10}};
   ok(C.correctedHere("07", "202602") && !C.correctedHere("07", "202601") && !C.correctedHere("29", "202602"), "an ITC adjustment of February: February on, that registration only");
 }
+console.log("== E. (re-review of bf5c7f9c0) a quarterly return nets its months before the nil floor; 3.1(a)'s value carried; a confirmation kept for the remainder, and undone");
+{ const q = (vs) => { const A = app(""); books(A, vs); A.x.GSTSet.store(reg).filing = [{type: "qrmp", from: "202601"}]; A.G._carry = null; return A; };
+  const A1 = q([out("Sales", "20251204", "S/1", "Walk-in Customers", "", 20000, {cgst: 1800, sgst: 1800}), out("Credit Note", "20260115", "CN/1", "Walk-in Customers", "", 10000, {cgst: 900, sgst: 900}),
+    out("Sales", "20260210", "S/2", "Walk-in Customers", "", 10000, {cgst: 900, sgst: 900}), out("Sales", "20260320", "X/9", "Harbour Clinic", "", 1000, {}, XC)]);
+  const t1 = T(A1, "202603");
+  { const W = app("itc r1"); books(W, [out("Sales", "20251204", "S/1", "Walk-in Customers", "", 20000, {cgst: 1800, sgst: 1800}), out("Credit Note", "20260115", "CN/1", "Walk-in Customers", "", 10000, {cgst: 900, sgst: 900}),
+      out("Sales", "20260210", "S/2", "Walk-in Customers", "", 10000, {cgst: 900, sgst: 900}), out("Sales", "20260320", "X/9", "Harbour Clinic", "", 1000, {}, XC)], {twoB: 1}); W.x.GSTSet.store(reg).filing = [{type: "qrmp", from: "202601"}]; W.G._carry = null;
+    const tw = T(W, "202603"), jw = (W.G._carry = null, W.G.threeBm("202601", reg));
+    ok(near(jw.net.cgst, -900) && !jw.f31 && near(tw.net.cgst, 0) && near(tw.pay.cash.cgst, 0), "QRMP through the app's wraps (a 2B loaded): January's month left as it is (-900), the quarter nil (" + jw.net.cgst + ", " + tw.net.cgst + ")"); }
+  ok(t1.quarter && near(t1.net.cgst, 0) && near(t1.pay.cash.cgst, 0) && !(t1.pay.carry.neg && t1.pay.carry.neg.cgst >= .005), "QRMP: January's credit note (CGST 900) and February's sale (900) net to nil in the quarter (" + JSON.stringify(t1.net) + ", cash " + t1.pay.cash.cgst + ")");
+  const A2 = q([out("Sales", "20251204", "S/1", "Walk-in Customers", "", 20000, {cgst: 1800, sgst: 1800}), out("Credit Note", "20260115", "CN/1", "Walk-in Customers", "", 10000, {cgst: 900, sgst: 900}), out("Sales", "20260320", "X/9", "Harbour Clinic", "", 1000, {}, XC)]);
+  const t2 = T(A2, "202603");
+  ok(t2.quarter && near(t2.net.cgst, 0) && t2.pay.carry.neg && near(t2.pay.carry.neg.cgst, 900), "QRMP: the credit note alone: the quarter nil, CGST 900 carried as negative liability (" + JSON.stringify(t2.pay.carry) + ")");
+  const vs3 = () => [out("Sales", "20251204", "S/1", "Walk-in Customers", "", 20000, {cgst: 1800, sgst: 1800}), out("Credit Note", "20260120", "CN/1", "Walk-in Customers", "", 50000, {cgst: 4500, sgst: 4500}),
+    out("Sales", "20260210", "S/2", "Walk-in Customers", "", 40000, {cgst: 3600, sgst: 3600}), out("Sales", "20260310", "S/3", "Walk-in Customers", "", 30000, {cgst: 2700, sgst: 2700})];
+  const A3 = app(""); books(A3, vs3()); const j3 = T(A3, "202601"), f3 = T(A3, "202602"), m3 = T(A3, "202603");
+  ok(near(j3.net.taxable, 0) && j3.pay.carry.cls && j3.pay.carry.cls.net && near(j3.pay.carry.cls.net.taxable, 50000), "3.1(a)'s value below nil carried like 3.1(b)/(c)/(e): January 50,000 (" + JSON.stringify(j3.pay.carry.cls) + ")");
+  ok(near(f3.net.taxable, 0) && near(f3.pay.carry.cls.net.taxable, 10000) && near(m3.net.taxable, 20000), "February 40,000 less 50,000: nil, 10,000 on; March 30,000 less 10,000 = 20,000 (" + f3.net.taxable + ", " + m3.net.taxable + ")");
+  nls(A3, "202602"); const f4 = T(A3, "202602"), m4 = T(A3, "202603");
+  ok(near(f4.pay.negAdj.cgst, 3600) && f4.pay.carry.negOk && near(f4.pay.carry.negOk.cgst, 900), "February confirmed: 3,600 of 4,500 used; the 900 left stays confirmed (" + JSON.stringify(f4.pay.carry) + ")");
+  ok(m4.pay.negAdj && near(m4.pay.negAdj.cgst, 900) && near(m4.pay.cash.cgst, 1800) && !(m4.opening.negWait), "March: the confirmed 900 set off without asking again: cash 1,800 (" + JSON.stringify(m4.pay.negAdj) + ", " + m4.pay.cash.cgst + ")");
+  const {N3} = { N3: (vm.runInContext("(function(){" + strip("gst3bNil.js") + "\n; return {r3bNeeds, nlsSet}; })()", A3.ctx)) };
+  ok(typeof N3.nlsSet === "function", "nlsSet: the confirmation set or undone, with a note kept");
+  N3.nlsSet(A3.ctx.S.books, reg, "202602", false, "zz@test"); A3.G._carry = null; const f5 = T(A3, "202602"), g = A3.ctx.S.books.gst3b[reg + "|202602"];
+  ok(!f5.pay.negAdj && near(f5.pay.cash.cgst, 3600) && g.nls === false && (g.nlsLog || []).length === 1 && g.nlsLog[0].act === "undone", "the confirmation undone: February pays 3,600 again; the undoing is kept in its history (" + JSON.stringify(g) + ")");
+  ok(N3.r3bNeeds(f5, false).some((s) => /in this return/.test(s)), "the prompt: confirm in the return where the portal adjusts it");
+}
+{ const A = app(""); books(A, exempt()); vm.runInContext("globalThis.__c4 = (function(){" + strip("../screens/gst/cloud3b.js") + "\n; return {correctedHere}; })();", A.ctx);
+  A.ctx.S.books.itcDec = {"07|b2b|X": {d: "later", ym: "202602"}};
+  ok(A.ctx.__c4.correctedHere("07", "202602") && !A.ctx.__c4.correctedHere("07", "202601"), "an ITC decision of February: February on is worked out here, not the cloud's");
+}
 console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
 process.exit(fails ? 1 : 0);

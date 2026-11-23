@@ -8,7 +8,7 @@
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { r3bTables, r3bBills, R3B_CLICK } from "./portal.js";
-import { r3bNeeds, r3bCarry } from "../../lib/gst3bNil.js";
+import { r3bNeeds, r3bCarry, nlsSet } from "../../lib/gst3bNil.js";
 import { Pop } from "./ItcParts.jsx";
 import FigureDetail, { FIG_LABEL } from "./ItcFigure.jsx";
 
@@ -85,10 +85,12 @@ export default function R3bPortal({ b, t, cloud }) {
   const needs = r3bNeeds(t, !!(typeof GSTF === "object" && (GSTF.peek(ym, reg) || {}).r3b)), carried = r3bCarry(t, ym);
   // (re-review of bac94a801, N1) the CA's word that the portal's Negative Liability Statement shows the negative liability
   // carried in (books.gst3b["<reg>|<month>"].nls, GSTR.nlsOk); then it is set off this month
-  const nlsYes = () => { const bk = S.books, k = reg + "|" + ym; bk.gst3b = Object.assign({}, bk.gst3b, { [k]: Object.assign({}, (bk.gst3b || {})[k], { nls: true }) }); GSTR._carry = null; saveBooks(); render(); };
+  const who = (S.account && S.account.me && S.account.me.email) || "", nlsTo = (on) => { nlsSet(S.books, reg, ym, on, who); GSTR._carry = null; saveBooks(); render(); }, nlsYes = () => nlsTo(true);
+  const nlsDone = !!((S.books.gst3b || {})[reg + "|" + ym] || {}).nls && t.pay && t.pay.negAdj;
   return <div data-r3b-portal="">
     {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}{/Negative Liability Statement/.test(m) && <> <button type="button" className="btn small" data-r3b-nls="" onClick={nlsYes}>The portal shows it</button></>}</p>)}
     {carried.map((m, i) => <p key={"c" + i} className="note" data-r3b-carry={i}>{m}</p>)}
+    {nlsDone && <p className="note" data-r3b-nls-done="">You confirmed the portal’s Negative Liability Statement shows the negative liability set off here. <button type="button" className="linkbtn" onClick={() => nlsTo(false)}>Undo</button></p>}
     {tables.map((tb) => {
       return <section key={tb.id} className="r3b-t" data-r3b-table={tb.id}>
         <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="">

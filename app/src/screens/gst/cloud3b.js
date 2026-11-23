@@ -39,7 +39,8 @@ function ask(cid, reg, ym, s) {
 export function correctedHere(reg, ym) {
   const b = S.books || {}, r1 = b.r1Fix || {};
   return Object.keys(r1).some((k) => { const [g, m] = k.split("|"), c = r1[k] && r1[k].cur; return g === reg && m <= ym && c && ((c.adds || []).length || Object.keys(c.mods || {}).length || Object.keys(c.dels || {}).length); })
-    || Object.values(b.itcAdj || {}).some((a) => a && (a.reg || "") === reg && String(a.ym || "") <= ym);
+    || Object.values(b.itcAdj || {}).some((a) => a && (a.reg || "") === reg && String(a.ym || "") <= ym)
+    || Object.entries(b.itcDec || {}).some(([k, d]) => k.split("|")[0] === reg && d && String(d.ym || "") <= ym);   // an ITC decision too
 }
 
 // -> {t, at}: the cloud's 3B to show; {wait: true}: its first answer awaited; null: work it out here

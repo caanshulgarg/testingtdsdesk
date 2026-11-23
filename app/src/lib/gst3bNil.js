@@ -26,7 +26,7 @@ export function r3bNeeds(t, filed) {
   // (re-review of bac94a801, N1) negative liability carried in waits for the CA's word on the portal's statement
   const nw = (t.opening || {}).negWait;
   if (nw && ["igst", "cgst", "sgst", "cess"].some((h) => n(nw[h]) >= 0.005))
-    w.push("negative liability of " + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "cess"]].filter(([h]) => n(nw[h]) >= 0.005).map(([h, l]) => l + " " + RS(nw[h])).join(", ") + " is carried in from credit notes of an earlier return. Check that the portal's Negative Liability Statement shows it, then confirm: it is set against this return's tax. Until then it is not.");
+    w.push("negative liability of " + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "cess"]].filter(([h]) => n(nw[h]) >= 0.005).map(([h, l]) => l + " " + RS(nw[h])).join(", ") + " is carried in from credit notes of an earlier return. Check that the portal's Negative Liability Statement shows it in this return (where the portal adjusts it), then confirm here: it is set against this return's tax. Until then it is not.");
   return w;
 }
 // (the owner, 23-Nov-2026) the plain notes for the 3B page on what was carried: brought in from the return before and
@@ -35,13 +35,24 @@ const MON = ["January", "February", "March", "April", "May", "June", "July", "Au
 const ymLabel = (ym) => MON[+String(ym).slice(4, 6) - 1] + " " + String(ym).slice(0, 4);
 const addM = (ym, k) => { const d = +String(ym).slice(0, 4) * 12 + (+String(ym).slice(4, 6) - 1) + k; return String(Math.floor(d / 12)) + String(d % 12 + 1).padStart(2, "0"); };
 const RS = (v) => "\u20b9" + Math.round(Math.abs(v)).toLocaleString("en-IN");
+// (re-review of bf5c7f9c0) the CA's word on the portal's Negative Liability Statement, set or undone, each kept in its
+// history (books.gst3b["<reg>|<month>"]: nls, nlsLog [{act, at, by}])
+export function nlsSet(b, reg, ym, on, by) {
+  const k = (reg || "") + "|" + ym, g = (b.gst3b || {})[k] || {};
+  b.gst3b = Object.assign({}, b.gst3b, { [k]: Object.assign({}, g, { nls: !!on, nlsLog: (g.nlsLog || []).concat([{ act: on ? "confirmed" : "undone", at: new Date().toISOString(), by: by || "" }]) }) });
+}
 export function r3bCarry(t, ym) {
-  const c = t && t.c31, w = [];
-  if (!c) return w;
+  const c = t && t.c31, f = t && t.f31, w = [];
+  if (!c && !f) return w;
   // (review of ad4be74c3) "this quarter" for a quarterly return; said when what was brought in took the box below nil;
   // 3.1(b)'s tax below nil is set off against its head (negative liability), never carried in the box
   const q = !!t.quarter, per = q ? "this quarter" : "this month", next = q ? "the next quarter (" + ymLabel(addM(ym, 1)) + " to " + ymLabel(addM(ym, 3)) + ")" : ymLabel(addM(ym, 1)), prev = q ? "the quarter before" : ymLabel(addM(ym, -1));
-  BOX.forEach(([k, l]) => {
+  // 3.1(a)'s value: brought in, and carried on when below nil (pay31's f31)
+  if (f && (n(f.cin) >= 0.005 || n((f.up || {}).taxable) >= 0.005)) { const s = [];
+    if (n(f.cin) >= 0.005) s.push(RS(f.cin) + " of credit notes brought from " + prev + " taken off here.");
+    if (n((f.up || {}).taxable) >= 0.005) s.push("Credit notes more than supplies " + per + ": shown as nil, " + RS(f.up.taxable) + " carried to " + next + ".");
+    w.push("3.1(a) outward taxable supplies: " + s.join(" ")); }
+  if (c) BOX.forEach(([k, l]) => {
     const i = c.cin && c.cin[k], o = c.out && c.out[k], r = (c.raw || {})[k] || {}, s = [];
     if (i) s.push(RS(i.taxable) + " of credit notes brought from " + prev + " taken off here.");
     if (o) s.push((i && n(r.taxable) >= 0 ? "With them the box is below nil" : "Credit notes more than supplies " + per) + ": shown as nil, " + RS(o.taxable) + " carried to " + next + ".");

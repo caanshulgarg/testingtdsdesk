@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "sc4dda0a68c72270c";
+const GST3B_SRC = "sa62d1c5865cfcc8f";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -2320,10 +2320,14 @@ const GSTR = {
     // (the owner, 23-Nov-2026) a negative 3.1(b), (c) or (e): nil, the excess carried (carry31); a quarterly filer's
     // month is left as it is, the quarter's return works it out on the quarter's sum (GSTQ.threeBQ)
     const c31 = typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" ? null : this.carry31({zero, nil, nongst}, opening);
-    const t31 = {net, rcmOut, opening, zero, c31}, pay = this.pay31(t31, netItc);
-    return Object.assign({sale: taxableOut, cn, net: t31.net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
+    const t31 = {net, rcmOut, opening, zero, c31, noFold: typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp"}, pay = this.pay31(t31, netItc);
+    const out31 = Object.assign({sale: taxableOut, cn, net: t31.net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
       buy, itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: P31.unregPos,
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, isdAdj, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash}, c31 ? {c31} : {}, t31.f31 ? {f31: t31.f31} : {});
+    // (a quarterly filer's month stays unfolded through the app's wraps too: itcFinal, gstr1Fix; not enumerable, so the
+    // month's figures are as before)
+    if (t31.noFold) Object.defineProperty(out31, "noFold", {value: true});
+    return out31;
   },
   // (the owner, 23-Nov-2026; review of ad4be74c3) 3.1(b), 3.1(c) and 3.1(e) are never reported negative (the portal takes
   // no negative value there): a box whose credit notes are above the return's supplies of the class is nil, and its
@@ -2361,14 +2365,22 @@ const GSTR = {
   //  - a negative liability carried in is set off only once the CA has confirmed the portal's statement shows it
   //    (creditIn: else it waits, opening.negWait, carried on unchanged)
   // f31: {raw (3.1(a) before), take, up}; none when 3.1(a) is as the books give it
+  // (re-review of bf5c7f9c0) a quarterly filer's month is not folded (t.noFold): the quarter's return nets its months
+  // first and folds once (GSTQ.threeBQ); 3.1(a)'s value below nil is carried to the next return like 3.1(b)/(c)/(e)'s
+  // (pay.carry.cls.net, f31.cin); what is left of a confirmed negative liability stays confirmed (pay.carry.negOk)
   pay31(t, netItc){
-    const raw = t.f31 ? t.f31.raw : t.net, net = Object.assign({}, raw), zt = t.c31 && t.c31.zt, take = {}, up = {};
+    const op = t.opening || {}, raw = t.f31 ? t.f31.raw : t.net;
+    if (t.noFold){ t.net = raw; delete t.f31; return this.withCarry31(this.setOff(raw, t.rcmOut, netItc, op, t.zero), t.c31); }
+    const net = Object.assign({}, raw), zt = t.c31 && t.c31.zt, take = {}, up = {}, cin = r2(num(((op.cls || {}).net || {}).taxable));
+    if (cin >= .005) net.taxable = r2(num(net.taxable) - cin);
     if (zt) ["igst", "cess"].forEach(h => { if (num(zt[h]) <= -.005){ net[h] = r2(num(net[h]) + num(zt[h])); take[h] = r2(num(zt[h])); } });
     this.HEADS.concat(["taxable"]).forEach(h => { if (num(net[h]) <= -.005){ up[h] = r2(-num(net[h])); net[h] = 0; } });
-    if (Object.keys(take).length || Object.keys(up).length){ t.net = net; t.f31 = {raw: Object.assign({}, raw), take, up}; } else { t.net = raw; delete t.f31; }
-    const op = t.opening || {}, pay = this.withCarry31(this.setOff(t.net, t.rcmOut, netItc, op, t.zero), t.c31);
-    const extra = [up, op.negWait].filter(o => o && this.HEADS.some(h => num(o[h]) >= .005));
-    if (extra.length){ const neg = {}; this.HEADS.forEach(h => { neg[h] = r2(num((pay.carry.neg || {})[h]) + extra.reduce((a, o) => a + num(o[h]), 0)); }); pay.carry = Object.assign({}, pay.carry, {neg}); }
+    if (Object.keys(take).length || Object.keys(up).length || cin >= .005){ t.net = net; t.f31 = Object.assign({raw: Object.assign({}, raw), take, up}, cin >= .005 ? {cin} : {}); } else { t.net = raw; delete t.f31; }
+    const pay = this.withCarry31(this.setOff(t.net, t.rcmOut, netItc, op, t.zero), t.c31), nz = o => o && this.HEADS.some(h => num(o[h]) >= .005);
+    const okLeft = nz(pay.carry.neg) ? Object.assign({}, pay.carry.neg) : null, extra = [up, op.negWait].filter(nz);
+    if (extra.length || okLeft){ const neg = {}; this.HEADS.forEach(h => { neg[h] = r2(num((pay.carry.neg || {})[h]) + extra.reduce((a, o) => a + num(o[h]), 0)); });
+      pay.carry = Object.assign({}, pay.carry, {neg}, okLeft ? {negOk: okLeft} : {}); }
+    if (num(up.taxable) >= .005) pay.carry = Object.assign({}, pay.carry, {cls: Object.assign({}, pay.carry.cls, {net: {taxable: up.taxable}})});
     return pay;
   },
   // the CA's word that the portal's Negative Liability Statement shows what FinCom carries (books.gst3b["<reg>|<month>"]
@@ -2428,7 +2440,12 @@ const GSTR = {
     if (i > 0){ const prev = months[i - 1], f = typeof GSTF === "object" ? GSTF.filed3b(prev, reg) : null, t = f || (b.shareSrc && b.shareSrc.carry ? b.shareSrc.carry(prev, reg) : null) || this.threeB(prev, reg); bal = Object.assign({}, t.pay.carry);
       // (re-review of bac94a801, N1) negative liability carried in: set off only on the CA's word that the portal's
       // statement shows it (nlsOk); else it waits (negWait, carried on by pay31)
-      if (bal.neg && this.HEADS.some(h => num(bal.neg[h]) >= .005) && !this.nlsOk(ym, reg)){ bal.negWait = bal.neg; delete bal.neg; } }
+      // (re-review of bf5c7f9c0) what was left of an amount already confirmed (negOk) is set off without asking again
+      if (bal.neg && this.HEADS.some(h => num(bal.neg[h]) >= .005) && !this.nlsOk(ym, reg)){ const ok = bal.negOk || {}, a = {}, w = {};
+        this.HEADS.forEach(h => { a[h] = r2(Math.min(num(bal.neg[h]), num(ok[h]))); w[h] = r2(num(bal.neg[h]) - a[h]); });
+        if (this.HEADS.some(h => w[h] >= .005)) bal.negWait = w;
+        if (this.HEADS.some(h => a[h] >= .005)) bal.neg = a; else delete bal.neg; }
+      delete bal.negOk; }
     this._carry.m[ym] = bal;
     return bal;
   },
