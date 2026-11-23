@@ -370,6 +370,8 @@ var requestClass = map[string]string{
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	payrollImportID:    "import",
+	fixVoucherID:       "import",
+	fixLedgerID:        "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
 	ledListID: "ledgerPeriod", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
