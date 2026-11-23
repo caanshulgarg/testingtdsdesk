@@ -225,7 +225,7 @@ try:
     c, r = stop_mid("p145")
     F.T.setdefault("tally_post_ids", []).append({"job_id": "p145", "fincom_id": "K2", "entry_id": "K2", "accepted_at": None, "released_at": "2026-11-23T10:01:00Z", "released_by": "owner", "live": False})
     row("p145")["updated_at"] = ago(4); beat()
-    ok(row("p145")["message"].startswith(PAUSED) and row("p145")["status"] == "taken", "an entry of it released meanwhile: not put back (%s)" % row("p145")["status"])
+    ok(row("p145")["status"] == "taken" and "released" in row("p145")["message"] and not row("p145")["message"].startswith(PAUSED), "an entry of it released meanwhile: not put back, says why (%s)" % row("p145")["message"][:90])
     # carried on, then FinCom slow again before the first part of that try (part 1 of 1): paused again, never failed
     c, r = stop_mid("p146", part="1 of 1", results=[])
     row("p146")["results"] = [K1OK]
@@ -235,6 +235,66 @@ try:
     # cancelled in FinCom while paused: never put back
     c, r = stop_mid("p147"); row("p147")["status"] = "cancelled"; row("p147")["updated_at"] = ago(4); beat()
     ok(row("p147")["status"] == "cancelled", "cancelled while paused: stays cancelled")
+    print("== 14b. (next-post-resume-2) the review's follow-ups")
+    CAP = "FinCom's cloud kept timing out; posting waits — tell FinCom support"
+    RESUMED = "Carrying on: FinCom Bridge"
+    up = lambda jid, sq, done=1, part="2 of 3", res=None: call({"kind": "posts_update", "version": "2.5.19", "bridge": ME, "id": jid, "status": "taken", "done": done, "seq": sq, "updatedAt": "2026-11-23T10:00:00Z",
+                                       "message": MID % part, "results": [K1OK] if res is None else res, "items": IT3, "reqs": [], "secondsTotal": 0.4})
+    # 3. a late repeat of the stopped report after the put-back: the put-back stands (still waiting, its words); once taken
+    # again (seq cleared by the hand-out), a repeat keeps the Paused mark and is not counted as another pause
+    ok(row("p141")["status"] == "waiting", "(p141 put back above)")
+    c, r = up("p141", 5)
+    ok(c == 200 and row("p141")["status"] == "waiting" and row("p141")["message"].startswith(RESUMED), "a late repeat while put back: still waiting, its words kept (%s; %s)" % (row("p141")["status"], row("p141")["message"][:80]))
+    row("p141")["status"] = "taken"; row("p141")["seq"] = None
+    c, r = up("p141", 5)
+    n141 = (row("p141").get("timing") or {}).get("pauses")
+    ok(c == 200 and row("p141")["status"] == "taken" and row("p141")["message"].startswith(PAUSED) and n141 == 1, "a late repeat once taken again: Paused, not counted again (pauses %s)" % n141)
+    # 1. it cannot carry on by itself: the words say what it waits for, never "in a few minutes"
+    c, r = stop_mid("p151")   # an entry released meanwhile
+    F.T["tally_post_ids"].append({"job_id": "p151", "fincom_id": "K2", "entry_id": "K2", "accepted_at": None, "released_at": "2026-11-23T10:01:00Z", "released_by": "owner", "live": False})
+    c, r = stop_mid("p152")   # Tally accepted an entry FinCom has not confirmed (found at the put-back)
+    c, r = stop_mid("p153"); row("p153")["resend_only"] = ["K2"]   # a re-send list
+    for jid in ("p151", "p152", "p153"): row(jid)["updated_at"] = ago(4)
+    F.JOB_ACCEPTED[0] = lambda a_: "K1" if a_.get("p_job") == "p152" else None
+    beat(); F.JOB_ACCEPTED[0] = None
+    for jid, want in (("p151", "released"), ("p152", "Tally accepted K1"), ("p153", "re-send")):
+        m_ = row(jid)["message"]
+        ok(row(jid)["status"] == "taken" and not m_.startswith(PAUSED) and "in a few minutes" not in m_ and want in m_, "%s: says what it waits for (%s)" % (jid, m_[:150]))
+    # 2. blocked rows never starve another: the oldest read first, each acted on (put back or relabelled)
+    F.HONOR_LIMIT[0] = True
+    for k in range(6):
+        stop_mid("p16%d" % k)
+        F.T["tally_post_ids"].append({"job_id": "p16%d" % k, "fincom_id": "K2", "entry_id": "K2", "accepted_at": None, "released_at": "2026-11-23T10:01:00Z", "released_by": "owner", "live": False})
+        row("p16%d" % k)["updated_at"] = ago(20 - k)
+    stop_mid("p169"); row("p169")["updated_at"] = ago(4)
+    beat(); beat()
+    F.HONOR_LIMIT[0] = False
+    ok(row("p169")["status"] == "waiting" and all(not row("p16%d" % k)["message"].startswith(PAUSED) for k in range(6)), "six blocked postings older than it: it is put back all the same (%s)" % row("p169")["status"])
+    # 4. five pauses in a row with nothing more sent: no more put-backs, plain words
+    c, r = stop_mid("p170")
+    for i in range(2, 6):
+        row("p170")["updated_at"] = ago(4); beat()
+        ok(row("p170")["status"] == "waiting", "p170 pause %d: put back" % (i - 1))
+        row("p170")["status"] = "taken"; row("p170")["seq"] = None
+        up("p170", 5 + i)
+    m_ = row("p170")["message"]
+    ok(row("p170")["status"] == "taken" and CAP in m_ and not m_.startswith(PAUSED), "the fifth pause in a row: not put back again, plain words (%s)" % m_[:160])
+    row("p170")["updated_at"] = ago(30); beat()
+    ok(row("p170")["status"] == "taken", "and a beat later still waits (%s)" % row("p170")["status"])
+    # (more sent between two pauses: a new run of pauses)
+    c, r = stop_mid("p171"); row("p171")["updated_at"] = ago(4); beat(); row("p171")["status"] = "taken"; row("p171")["seq"] = None
+    up("p171", 9, done=2, res=[K1OK, dict(K1OK, id="K2", vchId="42", batchEnd="42")])
+    ok(row("p171")["message"].startswith(PAUSED) and (row("p171").get("timing") or {}).get("pauses") == 1, "more sent since the last pause: counted from 1 again (%s)" % (row("p171").get("timing") or {}).get("pauses"))
+    # 6. no read of paused postings on every beat when none is paused
+    # (each paused posting reported finished by its bridge, or answered cancelled)
+    for j_ in list(F.T["tally_post_jobs"]):
+        if j_.get("device_id") == "d-2515" and str(j_.get("message") or "").startswith(PAUSED):
+            call({"kind": "posts_update", "version": "2.5.19", "bridge": ME, "id": j_["id"], "status": "done", "done": 3, "seq": 999, "message": "Posted 3 of 3", "results": [K1OK], "items": IT3, "reqs": [], "secondsTotal": 0.4})
+    ok(not [j_["id"] for j_ in F.T["tally_post_jobs"] if j_.get("device_id") == "d-2515" and j_.get("taken_by") == ME["id"] and j_.get("status") != "cancelled" and str(j_.get("message") or "").startswith(PAUSED)], "(none of this bridge's paused now: %s)" % [j_["id"] for j_ in F.T["tally_post_jobs"] if str(j_.get("message") or "").startswith(PAUSED) and j_.get("status") != "cancelled"])
+    beat()
+    q0 = len(F.QUERIES); beat(); beat()
+    reads = [x for x in F.QUERIES[q0:] if x[0] == "GET" and x[1].endswith("/tally_post_jobs") and "like" in x[2]]
+    ok(not reads, "nothing paused: the next beats do not look for paused postings (%d reads)" % len(reads))
     # 36b's resend guard and tally_post_job_accepted, the real ones (PostgreSQL): an entry stamped accepted by FinCom whose
     # result the bridge says "sent, no answer": not paused; one Tally's reply posted (confirmed): paused, then put back
     if PG:
