@@ -6,6 +6,8 @@
 import { useEffect, useMemo, useState } from "react";
 import "./itr.css";
 import "../../lib/finGlobals.js";
+// the 3CD draft the checks read (Audit.form3cd) comes with the Audit screen's file (src/js/77-audit.js), not in legacy.js
+import "../../../../src/js/77-audit.js";
 import { makeStore, appDeps, fileIn, AY_KEY } from "../../lib/itr/store.js";
 import { LABEL } from "../../lib/itr/imports.js";
 import { importsOf, buildModel, buildProfile, formsFor } from "../../lib/itr/model.js";

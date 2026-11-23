@@ -75,9 +75,10 @@ with sync_playwright() as p:
     # 11. due dates from today, by the filing type
     d = E("MIS.dues('20261002')")
     labels = [x[1] for x in d]
-    ok(["20261013", "GSTR-1 for Q2 2026-27"] in d and ["20261024", "GSTR-3B and tax for Q2 2026-27"] in d and ["20261031", "TDS and TCS returns for Q2 2026-27"] in d and d[0][0] >= "20261002",
+    ok(["20261013", "GSTR-1 for Q2 2026-27"] in d and ["20261024", "GSTR-3B and tax for Q2 2026-27"] in d and ["20261031", "TDS returns for Q2 2026-27"] in d and ["20261015", "TCS return (Form 27EQ) for Q2 2026-27"] in d and d[0][0] >= "20261002",
        "11. from 02-Oct-2026: GSTR-1 on the 13th and 3B on the 24th after the quarter, TDS returns 31-Oct (%s)" % labels[:4])
-    ok(["20270430", "TDS and TCS deposit for Mar-2027"] in E("MIS.dues('20270410')"), "11. TDS for March is due on 30 April")
+    ok(["20270430", "TDS deposit for Mar-2027"] in E("MIS.dues('20270410')"), "11. TDS for March is due on 30 April (rule 30(2))")
+    ok(["20270407", "TCS deposit for Mar-2027"] in E("MIS.dues('20270401')"), "11. TCS for March is due on 7 April (rule 37CA)")
     ok(any(x[1].startswith("IFF for") for x in E("MIS.dues('20261105')")), "11. a quarterly filer's IFF in the quarter's first two months")
 
     # 12. TDS-named assets and expenses are not TDS payable

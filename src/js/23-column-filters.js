@@ -1241,7 +1241,7 @@ async function tallyFileKind(f){
   }
   const kind = vch ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
   if (!kind && /<ENVELOPE[\s>]/i.test(head) && /<SVCURRENTCOMPANY>|<TALLYMESSAGE[\s>]|<IMPORTDATA>|<TALLYREQUEST>|Day ?Book/i.test(head))
-    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Format XML or JSON, and upload that file."};
+    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press Alt+F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Current, F8 (File Format): XML or JSON, and E to export; upload that file."};
   if (!kind) return {kind, why: f.name + " is not a file FinCom can read: it is not a Tally Day Book, ledger masters or trial balance saved as XML or JSON. In TallyPrime open the report, then Alt+E (Export) \u2192 Format XML or JSON, and upload that file. If it is a Day Book, send the file to FinCom support so we can see why."};
   if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
   return {kind};

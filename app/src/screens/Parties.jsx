@@ -2,6 +2,8 @@
 // Was viewParties() in src/js/19 and its handlers in src/js/27.
 import ListTable from "../parts/ListTable.jsx";
 import DateBox from "../parts/DateBox.jsx";
+// the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-pending-suppliers.js";
 const save = (p, now) => { if (now) Store.saveParty(S.coId, p); else later("p" + p.id, () => Store.saveParty(S.coId, p), 600); };
 const set = (p, k, v, now) => { p[k] = /^(pan|gstin)$/.test(k) ? String(v).toUpperCase().trim() : v; save(p, now); render(); };
 
@@ -88,9 +90,12 @@ function Party({ p, fy }) {
       <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Payment type</th><th className="n">Credited (before GST)</th><th className="n">TDS base</th></tr></thead>
         <tbody>{rules().filter((r) => r.basis !== "never" && r.basis !== "always").map((r) => {
-          const y = ytdOf(p, fy, r.id);
+          const y = ytdOf(p, fy, r.id), below = num((((p.ytd || {})[fy] || {})[r.id] || {}).credited);
+          // (release review 23-Nov-2026) a credit note approved before its bill keeps the year below nil: read as nil
+          // (ytdOf), said in words, never shown as a negative amount credited
           return <tr key={r.id}><td>{r.label}</td>
-            <td className="n"><input type="number" step="0.01" aria-label={r.label + ": credited"} key={p.id + fy + "credited"} defaultValue={y.credited || ""} onChange={(ev) => ytd(r.id, "credited", ev.target.value)} /></td>
+            <td className="n"><input type="number" step="0.01" aria-label={r.label + ": credited"} key={p.id + fy + "credited"} defaultValue={y.credited || ""} onChange={(ev) => ytd(r.id, "credited", ev.target.value)} />
+              {below < 0 && !y.fromTally && <div className="note" data-credit-before-bill="">Nil: a credit note of {money0(-below)} came before its bill; it comes off the next bill</div>}</td>
             <td className="n"><input type="number" step="0.01" aria-label={r.label + ": TDS base"} key={p.id + fy + "tdsBase"} defaultValue={y.tdsBase || ""} onChange={(ev) => ytd(r.id, "tdsBase", ev.target.value)} /></td></tr>;
         })}</tbody>
       </table></div>
@@ -98,7 +103,8 @@ function Party({ p, fy }) {
   );
 }
 
-const ytdSum = (q, fy, k) => Object.values((q.ytd && q.ytd[fy]) || {}).reduce((a, v) => a + num(v[k]), 0);
+// (a payment type's year credited below nil, a credit note before its bill, is nil, as ytdOf reads it)
+const ytdSum = (q, fy, k) => Object.values((q.ytd && q.ytd[fy]) || {}).reduce((a, v) => a + (k === "credited" ? Math.max(0, num(v[k])) : num(v[k])), 0);
 
 // suppliers on bills waiting for review: fill their PAN, type and earlier amounts before the first approval
 function PendingSuppliers() {

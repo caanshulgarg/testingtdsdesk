@@ -42,6 +42,8 @@ import("./lib/gstr1Fix.js").then(() => { try { if (typeof Engine === "object" &&
 import "./lib/payLoad.js";
 // next-fix-bankswitch: a receipt's sales invoice (matchSalesInvoice, src/js/21) found without trying every two invoices
 import "./lib/salesMatch.js";
+// next-fix-audit-bank: the bank lines' checks (balances, links to bills and invoices, accounts): src/js/22-bank-guards.js
+import "./lib/bankGuards.js";
 // Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)
 import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)

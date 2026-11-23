@@ -48,6 +48,8 @@ import { clientTallyState, tallyDevs, pcLive, seenWords, openOn } from "../lib/t
 import "../../../src/js/83-tds-forms-2025.js";
 // the two-pane look of both pages (the owner's redesign of 17-Nov-2026): with this screen's file, not in the main styles
 import "./settings-layout.css";
+// the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-pending-suppliers.js";
 
 // the list on the left: groups of sections; each section one line, its label and, at the right, where it stands now
 // (a section that needs something done: warn, in the warning colour; its whole status in the tip)

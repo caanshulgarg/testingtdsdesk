@@ -30,6 +30,9 @@ Object.assign(Audit, {
   BLOCKED_RE: /\b(FOOD|MEAL|CATERING|CANTEEN|STAFF WELFARE|REFRESHMENT|CLUB|MEMBERSHIP|HEALTH|MEDICAL|LIFE INSURANCE|MOTOR CAR|CAR HIRE|VEHICLE|BEAUTY|GYM|GIFT|HOLIDAY)\b/i,
   isFixed(l){ return this.under(l, /^fixed assets$/i); },
   isIncome(l){ return this.under(l, /^(sales accounts|direct incomes|indirect incomes)$/i); },
+  // a ledger (or a voucher's party name) that stands for a person paid or paying: not cash or bank, tax, income, expense,
+  // purchase, fixed asset, loan or capital (sections 40A(3) and 269ST count what one person pays or is paid)
+  isPerson(l){ return !!l && !this.isCash(l) && !this.isBankL(l) && !this.isDuties(l) && !this.isIncome(l) && !this.isExpense(l) && !this.isFixed(l) && !this.under(l, /^purchase accounts$/i) && !this.isLoan(l) && !this.isCapital(l); },
   // next-speed0 (09-Nov-2026, a 40,000-entry book with 6,787 ledgers: 84 s of the first open were spent here): TDS.billParty
   // asks once per entry and the checks once per line, and counting every ledger name each time made it ledgers x entries.
   // Now a "yes" is kept for the list of groups it was counted on (S.books.under itself: another client's books, or books
@@ -130,22 +133,26 @@ Object.assign(Audit, {
   // ---------------------------------------------------------------- the checks
   checks: {
     cash40A3(A, V, ctx){ return Audit.drain(Audit.checkSteps.cash40A3(A, V, ctx)); },
-    cashLoans(A, V){ return Audit.drain(Audit.checkSteps.cashLoans(A, V)); },
+    cashLoans(A, V, ctx){ return Audit.drain(Audit.checkSteps.cashLoans(A, V, ctx)); },
+    // section 269ST: what one person pays in cash in a day, counted in full (the bill's GST with it). The person: the party
+    // ledger credited; else the entry's party; else the entry alone (a cash sale to no one named). Sales and tax ledgers
+    // are never a person; loans and capital are 269SS's (review of 22-Nov-2026: it was the ledger credited, so one bill
+    // over 2 lakh split across Sales and GST was missed, and many small cash sales to Sales on one day were one "person")
     cash269ST(A, V){
       const byDay = {};
       V.forEach(v => {
         const cashIn = v.ent.filter(e => A.isCash(e.l) && e.a < 0).reduce((s, e) => s - e.a, 0);
         if (!cashIn) return;
-        v.ent.filter(e => e.a > 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !A.isLoan(e.l) && !A.isCapital(e.l)).forEach(e => {
-          const k = v.date + "|" + e.l, x = byDay[k] = byDay[k] || {date: v.date, l: e.l, amt: 0, v};
-          x.amt = r2(x.amt + Math.min(e.a, cashIn));
-        });
+        const cr = v.ent.filter(e => e.a > 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !A.isLoan(e.l) && !A.isCapital(e.l)), pty = cr.filter(e => A.isPerson(e.l)), p = A.isPerson(v.party) ? v.party : "";
+        const put = (k, l, a) => { const x = byDay[v.date + "|" + k] = byDay[v.date + "|" + k] || {date: v.date, l, amt: 0, v, n: 0}; x.amt = r2(x.amt + a); x.n++; };
+        if (pty.length) pty.forEach(e => put(e.l, e.l, Math.min(e.a, cashIn)));
+        else if (cr.length) put(p || "\u0001" + v.id, p || "no party named (voucher " + v.no + ")", Math.min(cr.reduce((s, e) => s + e.a, 0), cashIn));
       });
       const rows = Object.values(byDay).filter(x => x.amt >= 200000);
       if (!rows.length) return null;
       return {area: "cash", sev: "high", clause: "section 269ST", title: "Cash received of \u20b92 lakh or more from one person in a day",
         problem: rows.length + " receipts.", impact: "Penalty under section 271DA equal to the amount received.", amount: rows.reduce((s, x) => s + x.amt, 0),
-        suggestion: "Receive these amounts by bank only.", je: null, rows: rows.map(x => A.row(x.v, {party: x.l, amount: x.amt}))};
+        suggestion: "Receive these amounts by bank only. Cash for one bill received over several days is also within section 269ST; check those by the bill.", je: null, rows: rows.map(x => A.row(x.v, {party: x.l, amount: x.amt, note: x.n + " cash receipt" + (x.n === 1 ? "" : "s") + " that day, tax included"}))};
     },
     cashNegative(A, V, ctx){ return Audit.drain(Audit.checkSteps.cashNegative(A, V, ctx)); },
     // round 69 (the owner, 16-Oct-2026: "Should have deducted" belongs in the audit): one TDS answer. The parties past a TDS
@@ -197,16 +204,18 @@ Object.assign(Audit, {
         problem: rows.length + " deductions of \u20b9" + INR.format(r2(amt)) + (TDS.challans().length ? " are not against any challan." : "; no challans are entered in FinCom yet."),
         impact: "If not deposited: the expense is disallowed (30%), interest runs under section 201(1A), and the return shows a shortfall.", amount: amt,
         suggestion: TDS.challans().length ? "Match them under TDS \u2192 the quarter \u2192 Challans, or deposit what is unpaid." : "Enter the challans under TDS \u2192 the quarter \u2192 Challans (payments in Tally are offered there), then put the deductions against them.",
-        je: null, rows: rows.slice(0, 500).map(r => ({vid: r.voucherId || "", date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r.tds, note: "section " + r.section}))};
+        je: null, rows: rows.map(r => ({vid: r.voucherId || "", date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r.tds, note: "section " + r.section}))};
     },
     tdsPan(A, V, ctx){
       const rows = TDS.rows().filter(r => r.date >= ctx.from && r.date <= ctx.to && !Certs.validPan(r.pan));
       if (!rows.length) return null;
-      const short = rows.reduce((s, r) => s + Math.max(0, r2(r.paid * 0.2 - r.tds)), 0);
+      // section 206AA: the higher of the section's rate and 20%, 5% for 194Q and 194-O (Certs.expectedNormal, as the TDS rate
+      // check works it out; review of 22-Nov-2026: a flat 20% overstated 194Q four times)
+      const rt = r => num(Certs.expectedNormal(r).rate), short = rows.reduce((s, r) => s + Math.max(0, r2(r.paid * rt(r) / 100 - r.tds)), 0);
       return {total: rows.length, area: "tds", sev: "medium", clause: "3CD 34(a); section 206AA", title: "Deductees without a valid PAN", problem: rows.length + " deductions to " + new Set(rows.map(r => r.party)).size + " parties with no valid PAN in Tally.",
-        impact: "TDS applies at 20% without a PAN; the shortfall is \u20b9" + INR.format(r2(short)) + ", and the return is rejected for invalid PANs.", amount: short,
-        suggestion: "Get the PAN and add it to the party ledger in Tally; if a party truly has none, deduct the balance to 20%.", je: null,
-        rows: rows.slice(0, 500).map(r => ({vid: "", date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r.tds, note: "paid " + A.money(r.paid)}))};
+        impact: "Without a PAN, TDS applies at the higher of the section's rate and 20% (5% for 194Q and 194-O, section 206AA); the shortfall is \u20b9" + INR.format(r2(short)) + ", and the return is rejected for invalid PANs.", amount: short,
+        suggestion: "Get the PAN and add it to the party ledger in Tally; if a party truly has none, deduct the balance up to the rate shown.", je: null,
+        rows: rows.map(r => ({vid: "", date: r.date, no: r.voucher || "", type: r.section, party: r.party, amount: r.tds, note: "paid " + A.money(r.paid) + "; " + rt(r) + "% applies without a PAN"}))};
     },
     tdsRate(A, V, ctx){
       const fy = TDS.fyOf(ctx.to), rows = [];
@@ -302,10 +311,10 @@ Object.assign(Audit, {
       if (after.length) out.push({key: "after", total: after.length, area: "books", sev: "medium", clause: "audit trail, rule 3(1)", title: "Entries changed after the period ended",
         problem: after.length + " vouchers of the period were created or altered after " + fmtDate(tallyDate(ctx.to)) + ".", impact: "Returns already filed may no longer agree with the books; for companies, each change has to be traceable in the audit trail.",
         amount: 0, suggestion: "Review each; where a return was filed, check whether an amendment is needed.", je: null,
-        rows: after.slice(0, 500).map(v => A.row(v, {amount: 0, note: "changed on " + fmtDate(tallyDate(v.upd)) + (v.by ? " by " + v.by : "")}))});
+        rows: after.map(v => A.row(v, {amount: 0, note: "changed on " + fmtDate(tallyDate(v.upd)) + (v.by ? " by " + v.by : "")}))});
       if (late.length) out.push({key: "late", total: late.length, area: "books", sev: "low", clause: "", title: "Bills entered more than 60 days after their date", problem: late.length + " sales and purchase entries.",
         impact: "Late entries make monthly returns wrong and are where omissions hide.", amount: 0, suggestion: "Enter bills in the month they belong to.", je: null,
-        rows: late.slice(0, 500).map(v => A.row(v, {amount: 0, note: "entered " + fmtDate(tallyDate(v.upd)) + ", " + A.days(v.date, v.upd) + " days later" + (v.by ? " by " + v.by : "")}))});
+        rows: late.map(v => A.row(v, {amount: 0, note: "entered " + fmtDate(tallyDate(v.upd)) + ", " + A.days(v.date, v.upd) + " days later" + (v.by ? " by " + v.by : "")}))});
       const cx = V.filter(v => v.cancel || v.opt);
       if (cx.length) out.push({key: "cancel", area: "books", sev: "low", clause: "", title: "Cancelled or optional vouchers", problem: cx.length + " vouchers.", impact: "They are left out of every return here; make sure that is right.", amount: 0,
         suggestion: "Check that optional vouchers are not real transactions.", je: null, rows: cx.map(v => A.row(v, {amount: 0, note: v.cancel ? "cancelled" : "optional"}))});
@@ -317,43 +326,61 @@ Object.assign(Audit, {
   // next-audit-steps: the checks that read every entry of the year, in steps (each: Audit.each, 4,000 entries a step);
   // Audit.checks has each of them worked out at once (the same answer), for whoever asks a check by itself
   checkSteps: {
+    // section 40A(3): what is paid in cash to one person in a day, the bill's GST with it (review of 22-Nov-2026: it was
+    // grouped by the ledger debited, without the tax, so a cash bill of 9,000 + 1,620 GST was missed and four suppliers
+    // booked to Purchase on one day were one "party"). The person: the party ledger debited; else the entry's party;
+    // else the entry alone (the ledgers debited name no payee). Tax paid on its own (to the government) is not counted
     *cash40A3(A, V, ctx){
-      const byDay = {};
+      const byDay = {}, out = l => A.isLoan(l) || A.isCapital(l) || A.isDebtor(l) || /IMPREST|ADVANCE|SECURITY DEPOSIT/i.test(l);
       yield* Audit.each(V, v => {
         if (/CONTRA/i.test(v.type)) return;
         const paid = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
         if (!paid) return;
-        v.ent.filter(e => e.a < 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !A.isLoan(e.l) && !A.isCapital(e.l) && !A.isDuties(e.l) && !A.isDebtor(e.l) && !/IMPREST|ADVANCE|SECURITY DEPOSIT/i.test(e.l)).forEach(e => {
-          const k = v.date + "|" + e.l + (A.isExpense(e.l) ? "|" + v.id : ""), x = byDay[k] = byDay[k] || {date: v.date, l: e.l, amt: 0, vs: []};
-          x.amt = r2(x.amt + Math.min(-e.a, paid)); x.vs.push(v);
-        });
+        const use = v.ent.filter(e => e.a < 0 && !A.isCash(e.l) && !A.isBankL(e.l) && !out(e.l)), base = use.filter(e => !A.isDuties(e.l));
+        if (!base.length) return;
+        const pty = base.filter(e => A.isPerson(e.l)), p = A.isPerson(v.party) && !out(v.party) ? v.party : "";
+        const put = (k, l, a) => { const x = byDay[v.date + "|" + k] = byDay[v.date + "|" + k] || {date: v.date, l, amt: 0, vs: []}; x.amt = r2(x.amt + a); x.vs.push(v); };
+        if (pty.length) pty.forEach(e => put(e.l, e.l, Math.min(-e.a, paid)));
+        else put(p || "\u0001" + v.id, p || base.map(e => e.l).join(", "), Math.min(use.reduce((s, e) => s - e.a, 0), paid));
       });
       const rows = Object.values(byDay).filter(x => x.amt > (/TRANSPORT|ROADWAYS|LOGISTIC|CARRIER|GOODS CARRIAGE|TRUCK/i.test(x.l) ? 35000 : 10000));
       if (!rows.length) return null;
       const amt = rows.reduce((s, x) => s + x.amt, 0);
       return {area: "cash", sev: "high", clause: "3CD 21(d); section 40A(3)", title: "Cash payments above \u20b910,000 to one party in a day",
-        problem: rows.length + " cash payments over \u20b910,000 (\u20b935,000 for transporters): to one party in a day, or in one voucher where the expense ledger names no payee.",
+        problem: rows.length + " cash payments over \u20b910,000 (\u20b935,000 for transporters), tax included: to one party in a day, or in one voucher where no payee is named.",
         impact: "Disallowed under section 40A(3) unless a rule 6DD exception applies; for a capital asset, left out of its cost (section 43(1)).", amount: amt,
         suggestion: "Pay these by bank. For the year, add the amount to income in the computation, or record the rule 6DD exception that applies.", je: null,
         rows: rows.map(x => A.row(x.vs[0], {party: x.l, amount: x.amt, note: x.vs.length + " voucher" + (x.vs.length === 1 ? "" : "s") + " that day"}))};
     },
-    *cashLoans(A, V){
-      const taken = [], repaid = [];
-      yield* Audit.each(V, v => {
+    // sections 269SS / 269T, lender by lender (review of 22-Nov-2026: each voucher was judged alone): a loan taken in cash is
+    // a breach when it, with what the lender's loans stand at that day (the opening balance and every entry since, by bank
+    // too), comes to 20,000 or more (269SS (a)-(c)); a repayment in cash when the loan repaid stands at 20,000 or more (269T)
+    *cashLoans(A, V, ctx){
+      const taken = [], repaid = [], bal = ctx && ctx.bal && ctx.bal.ok ? ctx.bal.at(A.dayBefore(ctx.from)) : {}, run = {}, intr = {};
+      yield* Audit.each(V.slice().sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id))), v => {
         const cashIn = v.ent.filter(e => A.isCash(e.l) && e.a < 0).reduce((s, e) => s - e.a, 0), cashOut = v.ent.filter(e => A.isCash(e.l) && e.a > 0).reduce((s, e) => s + e.a, 0);
         v.ent.forEach(e => {
           if (!A.isLoan(e.l) || /BANK|FINANCE|NBFC|CAPITAL LTD|HOUSING/i.test(e.l)) return;
-          if (cashIn >= 20000 && e.a > 0) taken.push(A.row(v, {party: e.l, amount: Math.min(e.a, cashIn)}));
-          if (cashOut >= 20000 && e.a < 0) repaid.push(A.row(v, {party: e.l, amount: Math.min(-e.a, cashOut)}));
+          const was = Math.max(0, run[e.l] != null ? run[e.l] : num(bal[e.l])), c = e.a > 0 ? Math.min(e.a, cashIn) : Math.min(-e.a, cashOut);
+          run[e.l] = r2(was + e.a);
+          // (review of 22-Nov-2026) interest credited to the lender (the entry's other side an interest ledger) is in what
+          // is owed; section 269SS counts the loan or deposit remaining unpaid, so where the limit is crossed only with the
+          // interest the row says so, for the auditor to decide (kept in the list: the stricter reading)
+          const it = Math.min(was, num(intr[e.l]));
+          if (e.a > 0 && !c && v.ent.some(o => o.a < 0 && /INTEREST/i.test(o.l))) intr[e.l] = r2(num(intr[e.l]) + e.a);
+          else if (e.a < 0) intr[e.l] = Math.max(0, r2(num(intr[e.l]) + e.a));
+          if (c > 0 && e.a > 0 && was + c >= 20000) taken.push(A.row(v, {party: e.l, amount: c, note: (was ? A.money(was) + " already owed to the lender" : "") +
+            (it > 0 && was - it + c < 20000 ? "; " + A.money(it) + " of it is interest credited: the loan alone comes to " + A.money(was - it + c) + ", under \u20b920,000 (check whether the interest counts)" : "")}));
+          if (c > 0 && e.a < 0 && Math.max(was, c) >= 20000) repaid.push(A.row(v, {party: e.l, amount: c, note: "the loan stood at " + A.money(was)}));
         });
       });
-      const out = [];
+      const out = [], ob = ctx && ctx.bal && ctx.bal.ok ? "" : " The loans' opening balances are not known here, so loans owed from before the period are not counted.";
       if (taken.length) out.push({key: "269SS", area: "cash", sev: "high", clause: "3CD 31(a); section 269SS", title: "Loans or deposits taken in cash, \u20b920,000 or more",
-        problem: taken.length + " loans or deposits received in cash.", impact: "Penalty under section 271D equal to the amount taken.", amount: taken.reduce((s, r) => s + r.amount, 0),
+        problem: taken.length + " loans or deposits received in cash where the amount, with what was already owed to the lender, is \u20b920,000 or more." + ob, impact: "Penalty under section 271D equal to the amount taken.", amount: taken.reduce((s, r) => s + r.amount, 0),
         suggestion: "Take loans only by bank. Report each in clause 31(a); where there is a reasonable cause, keep the explanation on file.", je: null, rows: taken});
-      if (repaid.length) out.push({key: "269T", area: "cash", sev: "high", clause: "3CD 31(b), 31(c); section 269T", title: "Loans or deposits repaid in cash, \u20b920,000 or more",
-        problem: repaid.length + " repayments made in cash.", impact: "Penalty under section 271E equal to the amount repaid.", amount: repaid.reduce((s, r) => s + r.amount, 0),
-        suggestion: "Repay only by bank. Report each in clause 31.", je: null, rows: repaid});
+      if (repaid.length) out.push({key: "269T", area: "cash", sev: "high", clause: "3CD 31(c); section 269T", title: "Loans or deposits repaid in cash, \u20b920,000 or more",
+        problem: repaid.length + " repayments made in cash of loans standing at \u20b920,000 or more." + ob, impact: "Penalty under section 271E equal to the amount repaid.", amount: repaid.reduce((s, r) => s + r.amount, 0),
+        suggestion: "Repay only by bank. Report each in clause 31(c).", je: null, rows: repaid});
       return out;
     },
     *cashNegative(A, V, ctx){
@@ -372,7 +399,7 @@ Object.assign(Audit, {
       if (!rows.length) return null;
       return {area: "cash", sev: "high", title: "Cash in hand below zero", clause: "books of account", problem: rows.length + " days on which the cash book closed in credit.",
         impact: "Cash cannot be negative: entries are missing, dated wrongly, or the cash is not real. Auditors report this, and it can lead to additions as unexplained money.",
-        amount: Math.max.apply(null, rows.map(r => r.amount)), suggestion: "Find the receipts or withdrawals that were not entered, or correct the dates.", je: null, rows: rows.slice(0, 300)};
+        amount: Math.max.apply(null, rows.map(r => r.amount)), suggestion: "Find the receipts or withdrawals that were not entered, or correct the dates.", je: null, rows};
     },
     *gstRule37(A, V, ctx){
       const bills = {};
@@ -461,7 +488,7 @@ Object.assign(Audit, {
       const sun = V.filter(v => (Books.isSale(v) || Books.isPurchase(v) || /RECEIPT|PAYMENT/i.test(v.type)) && (new Date(A.iso(v.date) + "T00:00:00").getDay() === 0 || HOL.includes(v.date.slice(4))));
       if (sun.length > 0) out.push({key: "sunday", area: "books", sev: "low", clause: "", title: "Entries dated on a Sunday or a national holiday", problem: sun.length + " entries.",
         impact: "Usually a wrong date; sometimes a sign of back-dating.", amount: 0, suggestion: "Check the dates against the bills and bank.", je: null,
-        rows: sun.slice(0, 300).map(v => A.row(v, {amount: Math.abs((v.ent[0] || {}).a || 0), note: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(A.iso(v.date) + "T00:00:00").getDay()]}))});
+        rows: sun.map(v => A.row(v, {amount: Math.abs((v.ent[0] || {}).a || 0), note: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(A.iso(v.date) + "T00:00:00").getDay()]}))});
       yield;
       const jr = V.filter(v => /JOURNAL/i.test(v.type)).map(v => ({v, amt: v.ent.filter(e => e.a > 0).reduce((s, e) => s + e.a, 0)}));
       const round = jr.filter(x => x.amt >= 100000 && x.amt % 10000 === 0 && x.v.ent.some(e => A.isExpense(e.l) || A.isIncome(e.l)));
@@ -493,10 +520,33 @@ Object.assign(Audit, {
       if (sus.length) out.push({key: "suspense", area: "bal", sev: "medium", clause: "", title: "Suspense balances not cleared", problem: sus.length + " suspense ledgers carry a balance.",
         impact: "Unexplained balances are reported by the auditor and can be treated as unexplained income or expense.", amount: sus.reduce((s, [, v]) => s + Math.abs(v), 0),
         suggestion: "Find what each entry is and move it to its proper ledger.", je: null, rows: sus.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: Math.abs(v), note: v < 0 ? "debit" : "credit"}))});
-      const dues = Object.entries(bal).filter(([l, v]) => v > 1 && (A.under(l, /^duties & taxes$/i) || /\b(PF|ESI|EPF|PROFESSIONAL TAX)\b/i.test(l)) && !/INPUT|ELECTRONIC|RECEIVABLE/i.test(l));
-      if (dues.length) out.push({key: "43B", area: "bal", sev: "medium", clause: "3CD 26; section 43B", title: "Taxes and statutory dues unpaid at the end of the period", problem: dues.length + " ledgers show amounts payable.",
+      // section 43B: the client's own taxes and dues unpaid. TDS and TCS are tax of others (sections 40(a)(ia), clause 34), not
+      // 43B; GST is what is payable after the input credit in the books is set off (IGST credit for any head, CGST and SGST
+      // credit for their own head or IGST, cess for cess, reverse charge in cash only), registration by registration
+      // (review of 22-Nov-2026: TDS payable and the gross GST output were listed as unpaid 43B sums)
+      const isT = l => { const k = Books.ledgerOf(l).kind; return /^(tds_|tcs_)/.test(k || "") || /\b(TDS|TCS)\b|TAX (DEDUCTED|COLLECTED)/i.test(l); };
+      const G = {}, gst = (l, v) => { const m = Books.ledgerOf(l), h = String(m.tax || "").toUpperCase();
+        if (!/^(gst|gst_common|gst_rcm)$/.test(m.kind || "") || !/^(CGST|SGST|IGST|CESS)$/.test(h)) return false;
+        const g = G[m.reg || ""] = G[m.reg || ""] || {L: {}, C: {}, rcm: 0}, out = m.kind === "gst_common" ? v > 0 : m.side === "output";
+        if (out && (m.kind === "gst_rcm" || m.rcm)) g.rcm = r2(g.rcm + v); else if (out) g.L[h] = r2((g.L[h] || 0) + v); else g.C[h] = r2((g.C[h] || 0) - v);
+        return true; };
+      const dues = Object.entries(bal).filter(([l, v]) => !isT(l) && !gst(l, v) && v > 1 && (A.under(l, /^duties & taxes$/i) || /\b(PF|ESI|EPF|PROFESSIONAL TAX)\b/i.test(l)) && !/INPUT|ELECTRONIC|RECEIVABLE/i.test(l))
+        .map(([l, v]) => [l, v, /\b(PF|ESI|EPF|ESIC)\b/i.test(l) ? "employees' share: section 36(1)(va), clause 20(b); the employer's: section 43B \u2014 check which" : "payable"]);
+      Object.keys(G).sort().forEach(reg => {
+        const {L, C} = G[reg], c = x => Math.max(0, num(x)), use = (a, b) => { const u = Math.min(a.v, b.v); a.v -= u; b.v -= u; };
+        const lc = {v: c(L.CGST)}, ls = {v: c(L.SGST)}, li = {v: c(L.IGST)}, ci = {v: c(C.IGST)}, cc = {v: c(C.CGST)}, cs = {v: c(C.SGST)};
+        // sections 49(5) and 49A of the CGST Act with rule 88A: IGST credit first, against IGST and then CGST and SGST in
+        // any share (here the share that leaves least to pay); then CGST credit against CGST and then IGST, SGST credit
+        // against SGST and then IGST; CGST credit never against SGST, nor SGST credit against CGST (section 49(5)(e), (f))
+        // (review of 22-Nov-2026: CGST and SGST credit were used before the IGST credit, so output SGST 1,00,000 and IGST
+        // 1,00,000 with credit IGST 1,00,000 and CGST 1,00,000 showed nil payable; SGST 1,00,000 is)
+        use(ci, li); use(cc, lc); use(cs, ls); use(cc, li); use(cs, li);
+        const v = r2(Math.max(0, lc.v + ls.v - ci.v) + li.v + Math.max(0, c(L.CESS) - c(C.CESS)) + c(G[reg].rcm));
+        if (v > 1) dues.push([(reg ? reg + " " : "") + "GST payable after input credit", v, "output less the input credit in the books, set off head by head"]);
+      });
+      if (dues.length) out.push({key: "43B", area: "bal", sev: "medium", clause: "3CD 26; section 43B", title: "Taxes and statutory dues unpaid at the end of the period", problem: dues.length + " amounts payable.",
         impact: "Under section 43B these are allowed only when paid by the due date of the return; employees' PF and ESI only when paid by their own due dates (section 36(1)(va)).", amount: dues.reduce((s, [, v]) => s + v, 0),
-        suggestion: "Pay them, and keep the challans for the audit; report the dates in clause 26.", je: null, rows: dues.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: v, note: "payable"}))});
+        suggestion: "Pay them, and keep the challans for the audit; report the dates in clause 26.", je: null, rows: dues.map(([l, v, n]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: r2(v), note: n}))});
       return out;
     }
   },
@@ -511,7 +561,7 @@ Object.assign(Audit, {
   // the ledger tests of one run, each answer kept for the run by ledger name (next-audit-steps: the cash checks asked
   // isCash, isLoan... of every line of the year again, 20-100 ms a check on 51,758 made-up entries). Within a run the
   // books do not change (the day's run on its own starts again when they do: autoSlice), so the answers are the same
-  ASK: ["isCash", "isBankL", "isLoan", "isCapital", "isDuties", "isCreditor", "isDebtor", "isExpense", "isFixed", "isIncome"],
+  ASK: ["isCash", "isBankL", "isLoan", "isCapital", "isDuties", "isCreditor", "isDebtor", "isExpense", "isFixed", "isIncome", "isPerson"],
   runA(){
     const A = Object.create(this), um = new Map();
     this.ASK.forEach(f => { const m = new Map(), g = this[f]; A[f] = function(l){ let x = m.get(l); if (x === undefined){ x = g.call(this, l); m.set(l, x); } return x; }; });
@@ -534,7 +584,7 @@ Object.assign(Audit, {
     from = this.ymd(from); to = this.ymd(to);
     const V = this.vouchers(from, to);
     yield;
-    const basis = MIS.basis();
+    const basis = this.basisNow();
     yield;
     V.sort((a, c) => a.date.localeCompare(c.date) || String(a.id).localeCompare(String(c.id)));
     yield;
@@ -672,9 +722,13 @@ Object.assign(Audit, {
     if (!run || !run.from) return null;
     const n = this.vouchers(run.from, run.to).length;
     if (n !== run.vouchers) return {was: run.vouchers, now: n};
-    if (!run.basis || run.basis !== MIS.basis()) return {was: run.vouchers, now: n, changed: true};
+    if (!run.basis || run.basis !== this.basisNow()) return {was: run.vouchers, now: n, changed: true};
     return null;
   },
+  // the books' basis (MIS.basis) and the MSME suppliers' days set under MIS settings, which 43B(h) reads (review of
+  // 22-Nov-2026: the days changed, the Audit tab kept the old 43B(h) findings as if current). Not set: MIS.basis alone,
+  // so a run from before this still fits
+  basisNow(){ const d = num(((S.books || {}).misCfg || {}).msmeDays); return MIS.basis() + (d > 0 ? "|msme" + Math.min(45, d) : ""); },
   howLabel(run){ return !run || !run.how || run.how === "run now" ? "run by hand" : run.how; },
   // next-audit-steps (owner-approved, 12-Nov-2026): the day's first audit on its own ran in one go right after new
   // entries came in from the cloud copy (TCloud.rework) or the books opened, and held the page for it (1.4 s on 51,758
@@ -875,58 +929,8 @@ Object.assign(Audit, {
     return x + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>";
   },
   jesToPass(run){ return run.findings.filter(f => f.je && this.status(f.id).s === "pass").flatMap(f => f.je); },
-  missingLedgers(jes){ return Array.from(new Set(jes.flatMap(j => j.lines.map(l => l.l)).filter(l => !this.exists(l)))); },
-  // the report: a cover, a summary by area, then each finding with what to do
-  reportHtml(run, stSnap){
-    const co = CO(), b = S.books, m = v => INR.format(r2(v || 0)), st = id => (stSnap ? stSnap[id] : null) || this.status(id);
-    const sevL = {high: "High", medium: "Medium", low: "Low"}, sevC = {high: "#B42318", medium: "#B9541B", low: "#5A6B63"};
-    let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:10px;margin-bottom:14px"><div style="font-size:12px;color:#5A6B63">AUDIT OBSERVATIONS</div><h1 style="font-size:22px;margin:4px 0">' + esc(co.name) + "</h1>" +
-      '<div style="font-size:13px">' + esc(((b.meta || {}).gstins || []).join(", ")) + (co.pan ? " \u00b7 PAN " + esc(co.pan) : "") + "</div>" +
-      '<div style="font-size:13px;margin-top:6px">Period: <b>' + fmtDate(tallyDate(run.from)) + " to " + fmtDate(tallyDate(run.to)) + "</b> \u00b7 Checked on " + fmtDate(run.at.slice(0, 10)) + " \u00b7 " + run.vouchers + " vouchers read from Tally" +
-      (b.meta && b.meta.company ? " (" + esc(b.meta.company) + ")" : "") + "</div></div>";
-    h += "<h2>Summary</h2><table><thead><tr><th>Area</th><th>High</th><th>Medium</th><th>Low</th><th class=\"n\">Amount involved, high and medium</th></tr></thead><tbody>" +
-      this.AREAS.map(([a, l]) => { const f = run.findings.filter(x => x.area === a); if (!f.length) return ""; return "<tr><td>" + l + "</td><td>" + f.filter(x => x.sev === "high").length + "</td><td>" + f.filter(x => x.sev === "medium").length + "</td><td>" + f.filter(x => x.sev === "low").length + '</td><td class="n">' + m(f.filter(x => x.sev !== "low").reduce((s, x) => s + x.amount, 0)) + "</td></tr>"; }).join("") +
-      "</tbody></table>";
-    if (run.notes.length) h += '<p class="note">' + run.notes.map(esc).join(" ") + "</p>";
-    h += "<h2>Observations</h2>";
-    run.findings.forEach((f, i) => {
-      const s = st(f.id);
-      h += '<div style="border:1px solid #D9E0DC;border-left:4px solid ' + sevC[f.sev] + ';padding:10px 12px;margin:0 0 12px">' +
-        '<div style="font-size:11px;color:' + sevC[f.sev] + ';font-weight:700">' + (i + 1) + ". " + sevL[f.sev].toUpperCase() + " \u00b7 " + esc((this.AREAS.find(a => a[0] === f.area) || [])[1] || "") + (f.clause ? " \u00b7 " + esc(f.clause) : "") + "</div>" +
-        '<div style="font-size:15px;font-weight:700;margin:3px 0 6px;page-break-after:avoid">' + esc(f.title) + "</div>" +
-        "<p><b>Observation.</b> " + esc(f.problem) + (f.amount ? " Amount involved: \u20b9" + m(f.amount) + "." : "") + "</p>" +
-        "<p><b>Effect.</b> " + esc(f.impact) + "</p><p><b>Recommendation.</b> " + esc(f.suggestion) + "</p>" +
-        (f.je && f.je.length ? "<p><b>Suggested entr" + (f.je.length === 1 ? "y" : "ies") + ".</b></p><table><thead><tr><th>Date</th><th>Ledger</th><th class=\"n\">Debit</th><th class=\"n\">Credit</th></tr></thead><tbody>" +
-          f.je.slice(0, 12).map(j => j.lines.map((l, k) => "<tr><td>" + (k ? "" : fmtDate(tallyDate(j.date))) + "</td><td>" + (l.cr ? "&nbsp;&nbsp;&nbsp;To " : "") + esc(l.l) + (this.exists(l.l) ? "" : " <i>(create)</i>") + '</td><td class="n">' + (l.dr ? m(l.dr) : "") + '</td><td class="n">' + (l.cr ? m(l.cr) : "") + "</td></tr>").join("") +
-            '<tr><td></td><td colspan="3" style="color:#5A6B63;font-size:11px">(' + esc(j.narr) + ")</td></tr>").join("") + "</tbody></table>" + (f.je.length > 12 ? '<p class="note">' + (f.je.length - 12) + " more entries in the Excel.</p>" : "") : "") +
-        (this.solvedOf(f.id).n ? "<p><b>Put right since first found.</b> " + this.solvedOf(f.id).n + " item" + (this.solvedOf(f.id).n === 1 ? "" : "s") + "; " + f.count + " still open.</p>" : "") +
-        "<p><b>Management response.</b> " + esc((this.STATUS.find(x => x[0] === s.s) || [])[1] || "Open") + (s.note ? ": " + esc(s.note) : "") + "</p>" +
-        (f.rows && f.rows.length ? '<table><thead><tr><th>Date</th><th>Voucher</th><th>Party or ledger</th><th class="n">Amount</th><th>Detail</th></tr></thead><tbody>' +
-          f.rows.slice(0, 15).map(r => "<tr><td>" + (r.date ? fmtDate(tallyDate(r.date)) : "") + "</td><td>" + esc(r.no || "") + (r.type ? '<br><span style="color:#5A6B63">' + esc(r.type) + "</span>" : "") + "</td><td>" + esc(r.party || "") + '</td><td class="n">' + (r.amount ? m(r.amount) : "") + "</td><td>" + esc(r.note || "") + "</td></tr>").join("") +
-          "</tbody></table>" + (f.rows.length > 15 ? '<p class="note">Showing 15 of ' + f.rows.length + "; all are in the Excel annexure.</p>" : "") : "") + "</div>";
-    });
-    const done = (run.solved || []).filter(x => x.n);
-    if (done.length){
-      h += "<h2>Put right</h2><p class=\"note\">Found in an earlier run and no longer in the books when checked again.</p><table><thead><tr><th>Observation</th><th>Item</th><th>Date</th><th class=\"n\">Amount</th><th>Put right by</th></tr></thead><tbody>" +
-        done.flatMap(x => x.items.slice(-40).map(it => "<tr><td>" + esc(x.title) + "</td><td>" + esc([(it.row || {}).no, (it.row || {}).party].filter(Boolean).join(" \u00b7 ")) + "</td><td>" + ((it.row || {}).date ? fmtDate(tallyDate(it.row.date)) : "") +
-          '</td><td class="n">' + ((it.row || {}).amount ? m(it.row.amount) : "") + "</td><td>" + fmtDate(String(it.solved).slice(0, 10)) + "</td></tr>")).join("") + "</tbody></table>";
-    }
-    h += '<p class="note" style="margin-top:18px">Result code ' + esc(run.code || "") + ": the same books give the same code. Rules only; nothing in this report is guessed by a machine." + (run.balances ? " Balances: " + esc(run.balances) + "." : "") + "</p>";
-    h += '<p class="note" style="margin-top:6px">Prepared from the books in Tally by ' + esc(co.firm || (S.firm && S.firm.firmName) || "the firm") + ". These are observations for review; each is to be confirmed against the documents before any adjustment is made.</p>";
-    return h;
-  },
-  async toExcel(run){
-    await ensureXlsx();
-    const d = s => s && String(s).length === 8 ? String(s).slice(6, 8) + "-" + String(s).slice(4, 6) + "-" + String(s).slice(0, 4) : s || "";
-    const wb = XLSX.utils.book_new(), add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
-    add("Observations", [["#", "Severity", "Area", "Clause", "Observation", "Items", "Amount", "Effect", "Recommendation", "Status", "Note"]].concat(run.findings.map((f, i) =>
-      [i + 1, f.sev, (this.AREAS.find(a => a[0] === f.area) || [])[1], f.clause, f.title + ": " + f.problem, f.count, r2(f.amount), f.impact, f.suggestion, (this.STATUS.find(x => x[0] === this.status(f.id).s) || [])[1], this.status(f.id).note || ""])));
-    add("Annexure", [["#", "Observation", "Date", "Voucher", "Type", "Party or ledger", "Amount", "Detail"]].concat(run.findings.flatMap((f, i) => (f.rows || []).map(r => [i + 1, f.title, d(r.date), r.no, r.type, r.party, r2(r.amount || 0), r.note || ""]))));
-    add("Journal entries", [["#", "Observation", "Date", "Ledger", "Debit", "Credit", "Narration", "Ledger in Tally"]].concat(run.findings.flatMap((f, i) => (f.je || []).flatMap(j => j.lines.map((l, k) =>
-      [i + 1, f.title, k ? "" : d(j.date), l.l, l.dr || "", l.cr || "", k ? "" : j.narr, this.exists(l.l) ? "yes" : "to create"])))));
-    const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
-    saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-audit-" + run.from + "-" + run.to + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-  }
+  missingLedgers(jes){ return Array.from(new Set(jes.flatMap(j => j.lines.map(l => l.l)).filter(l => !this.exists(l)))); }
+  // (reportHtml, toExcel: with the Audit screen, src/js/77-audit.js AuditRep, for legacy.js's budget)
 });
 // a check that has its steps (checkSteps) is worked out in them by Audit.runIn (a check put in its place has none)
 Object.keys(Audit.checkSteps).forEach(k => { Audit.checks[k].steps = Audit.checkSteps[k]; });

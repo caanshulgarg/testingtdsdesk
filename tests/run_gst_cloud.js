@@ -30,7 +30,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
 const NAMES = ["GST3B_SRC", "num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "toDateObj", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend",
   "GST2B", "INR", "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "GSTV", "M2B", "Audit", "TDSTally", "TDS", "BookSrc", "BookItems", "BookSync", "BOOKS_KEYS", "clone", "TallyRead", "CO",
   "RENDER_GEN", "BOOKS_REV", "drawStamp", "REACT_SCOPE", "reactScopeEnd", "reactScope", "perRender", "memoScope"];
-const REVF = path.join(__dirname, "gst_cloud_rev.json"), REV_FILES = ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js", "server/gst-run/data.ts", "server/gst-run/handler.ts", "server/gst-run/index.ts", "server/gst-run/migration-153-gst-cloud.sql"];
+const REVF = path.join(__dirname, "gst_cloud_rev.json"), REV_FILES = ["server/_shared/gst3b.js", "server/_shared/names.js", "server/_shared/gst3bprint.js", "server/gst-run/engine.js", "server/gst-run/data.ts", "server/gst-run/handler.ts", "server/gst-run/index.ts", "server/gst-run/migration-153-gst-cloud.sql", "server/tally-cloud/migration-210-gst-calc-fid.sql"];
 // GST3B_SRC (server/_shared/gst3b.js): its text without the value, and names.js's, hashed
 const SRC_RE = /^const GST3B_SRC = "[^"]*";$/m;
 function srcHash(){ const h = require("crypto").createHash("sha256"); h.update(fs.readFileSync(path.join(ROOT, "server/_shared/gst3b.js"), "utf8").replace(SRC_RE, "") + "\n" + fs.readFileSync(path.join(ROOT, "server/_shared/names.js"), "utf8")); return "s" + h.digest("hex").slice(0, 16); }
@@ -272,6 +272,11 @@ async function big(){
   const bigApp = app3b(big, "07", "202603"), bk = bt.kept.find(z => z.args === "07|202603");
   ok(bk && JSON.stringify(Object.assign({}, bk.result, {engine: undefined, src: undefined, fp: undefined})) === JSON.stringify(boxes(bigApp["202603"])), "the 40,000-entry book's January-March quarter: the cloud's 3B is the app's");
   [bf, br, path.join(OUT, "gst-cloud-rows.json"), path.join(OUT, "gst-cloud-res.json")].forEach(f => { try { fs.unlinkSync(f); } catch (e){} });
+  // (final review of 157da641f) gst-run's view of the marketplace invoices the book's entries show: tests/run_gst_sales_seen.ts
+  console.log("== 6. the marketplace invoices the book shows (data.ts salesSeen, engine.js seenOf): a failed read, voucher types, cost");
+  const ss = cp.spawnSync(DENO, ["run", "--allow-all", path.join(__dirname, "run_gst_sales_seen.ts")], {encoding: "utf8", env: Object.assign({}, process.env, {TZ: "UTC", DENO_DIR: path.join(ROOT, ".deno-scratch", "cache")})});
+  String(ss.stdout || "").split("\n").filter(l => /^  (ok|FAIL)/.test(l)).forEach(l => console.log(l));
+  ok(ss.status === 0, "tests/run_gst_sales_seen.ts: all passed" + (ss.status === 0 ? "" : " (" + String(ss.stderr || "").slice(0, 300) + ")"));
   console.log(fails ? fails + " FAILED" : "all ok");
   process.exit(fails ? 1 : 0);
 }

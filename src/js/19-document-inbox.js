@@ -78,17 +78,27 @@ async function readDocq(ids, cid, opts){
   }
   render();
 }
-// called when a job that came from the inbox finishes
+// called when a job that came from the inbox finishes. A PDF of several bills is several jobs of the one file: the file
+// is read once every one of them has finished, and only when each was (a part not read is named; audit of 22-Nov-2026:
+// the first part to finish marked the whole file read). A file the reader sent to Sales or to Unsorted uploads
+// (unsorted) was handled there: read, not waiting for ever as "Not read"
 function docqFinish(j){
   const id = j.file && j.file.__docq;
   const d = id && S.docq[id];
   if (!d) return;
-  if (j.status === "done" || j.status === "partial" || (j.status === "held" && j.entryId)){      // held: read, and kept for you to confirm as a possible duplicate
+  const all = (S.jobs || []).filter(x => x.file === j.file).concat((S.jobs || []).includes(j) ? [] : [j]);
+  if (all.some(x => ["waiting", "checking", "reading"].includes(x.status))) return;
+  // held: read, and kept for you to confirm as a possible duplicate
+  const ok = x => ["done", "partial", "unsorted"].includes(x.status) || (x.status === "held" && x.entryId);
+  const bad = all.filter(x => !ok(x) && x.status !== "duplicate"), got = all.find(x => x.entryId);
+  if (!bad.length && all.some(ok)){
     localSet(id, "");
-    docqSave(d, {status: "read", entryId: j.entryId || null, client_id: d.client_id || j.cid || ""}).catch(() => {});
-  } else if (j.status === "duplicate"){
-    localSet(id, "dup", j.msg || "", {entryId: (j.dupRef && (j.dupRef.entryId || j.dupRef.e)) || "", cid: (j.dupRef && j.dupRef.cid) || d.client_id});
-  } else localSet(id, "failed", j.msg || "could not be read");        // stays waiting; staff can try again
+    docqSave(d, {status: "read", entryId: (got && got.entryId) || null, client_id: d.client_id || (got && got.cid) || j.cid || "", ...(all.some(x => x.status === "unsorted") ? {note: all.map(x => x.msg).filter(Boolean).join("; ")} : {})}).catch(() => {});
+  } else if (!bad.length){
+    const r = j.dupRef || (all.find(x => x.dupRef) || {}).dupRef;
+    localSet(id, "dup", j.msg || "", {entryId: (r && (r.entryId || r.e)) || "", cid: (r && r.cid) || d.client_id});
+  // (a part of several: reading the file again here finds the parts read as duplicates, so Retry or Type it in on that part)
+  } else localSet(id, "failed", all.length > 1 ? bad.map(x => x.name + ": " + (x.msg || "could not be read")).join("; ") + ". Use Retry or Type it in on " + (bad.length > 1 ? "those parts" : "that part") : j.msg || "could not be read");        // stays waiting; staff can try again
   softRender();
 }
 async function setAsideDocq(id){

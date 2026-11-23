@@ -43,7 +43,7 @@ D1, D2, D3, D4 = [d["id"] for d in DEVS]
 STOPS = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on the bank ledger", "stopped_at": "ago:40", "cleared_at": None, "stopped_by": None}]
 SETUP = """([devs, stops, companies, role, lines]) => {
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
-  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date().toISOString().slice(0, 10) : v);
+  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date(Date.now() + 19800000).toISOString().slice(0, 10) : v);   // (the bridge's day is India's: audit 22-Nov-2026)
   let c = Object.values(S.companies).find(x => x.name === "Alpha Traders");
   window.__devs = fix(devs); window.__stops = fix(stops); window.__calls = [];
   window.__companies = fix(companies).map(x => Object.assign(x, {client_id: x.client_id === "ALPHA" ? c.id : x.client_id}));

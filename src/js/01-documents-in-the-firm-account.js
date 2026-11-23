@@ -822,11 +822,26 @@ function findParty(x, cid){
   const pan = effectivePan(x);
   if (pan && parties["p-" + pan]) return parties["p-" + pan];
   const nm = norm(x.vendorName);
+  // in a drawing or a job (refreshStats, the review table): the suppliers by PAN and by name, made once (audit of
+  // 22-Nov-2026: every draft scanned every supplier for every other draft, 20 s and more on a large client); the same
+  // supplier as the scan: the first in the list that matches
+  if (IN_RENDER){
+    const ix = partyIdx(cid), a = pan && ix.get("p" + pan), b = nm && ix.get("n" + nm), h = a && b ? (a.i < b.i ? a : b) : a || b;
+    return h ? h.p : null;
+  }
   return Object.values(parties).find(p => (pan && p.pan === pan) || (nm && norm(p.name) === nm)) || null;
 }
-// Suppliers on bills still waiting for review, not yet in the supplier list (review item 8): shown in Client setup as
-// "new, not yet approved" so PAN, payment type and amounts credited earlier can be filled before the first approval
-// (which is what makes the yearly limit right on that first bill).
+function partyIdx(cid){
+  return perRender(partyIdx, (cid || S.coId) + "|" + ENTRY_REV, () => { const m = new Map();
+    Object.values(D(cid).parties).forEach((p, i) => { [p.pan && "p" + p.pan, norm(p.name) && "n" + norm(p.name)].forEach(k => { if (k && !m.has(k)) m.set(k, {p, i}); }); });
+    return m; });
+}
+// the drafts waiting for each supplier (its id: how many), worked out once in a drawing or a job
+function draftParties(cid){
+  return perRender(draftParties, (cid || S.coId) + "|" + ENTRY_REV, () => { const m = new Map();
+    Object.values(D(cid).entries).forEach(o => { const p = o.status === "draft" && findParty(o.x, cid); if (p) m.set(p.id, (m.get(p.id) || 0) + 1); });
+    return m; });
+}
 // the supplier's ledger in Tally, by GSTIN, then PAN, then name (review of 02-Oct-2026: a supplier with a Tally ledger
 // was called "New supplier"); "" when Tally has none
 function supplierInTally(x){
@@ -842,31 +857,7 @@ function supplierInTally(x){
   const names = new Set([].concat(Object.keys(info), Object.keys(b.gstins || {}), Object.keys(b.map || {}), Object.keys((b.tb || {}).led || {})));
   return Array.from(names).find(l => (typeof ledgerKey === "function" ? ledgerKey(l) : l.toLowerCase()) === k) || "";
 }
-function pendingSuppliers(cid){
-  cid = cid || S.coId;
-  const out = new Map();
-  Object.values(D(cid).entries || {}).forEach(e => {
-    if (e.status !== "draft" || !e.x || !String(e.x.vendorName || "").trim() || findParty(e.x, cid)) return;
-    const pan = effectivePan(e.x), key = pan ? "pan:" + pan : "name:" + norm(e.x.vendorName);
-    const k = out.get(key) || {key, name: e.x.vendorName, pan: pan || "", gstin: e.x.vendorGstin || "", natureId: e.natureId || "", ledgerName: e.partyLedger || "", tally: supplierInTally(e.x), bills: 0, total: 0};
-    k.bills++; k.total = r2(k.total + num(e.x.total));
-    out.set(key, k);
-  });
-  return Array.from(out.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-// save a supplier from a waiting bill into the list (the same shape approval makes)
-function addPendingSupplier(key, cid){
-  cid = cid || S.coId;
-  const k = pendingSuppliers(cid).find(p => p.key === key);
-  if (!k) return null;
-  const id = k.pan ? "p-" + k.pan : "p-" + slug(k.name) + "-" + Date.now().toString(36);
-  const party = {id, name: k.name, pan: k.pan, gstin: k.gstin, ledgerName: k.ledgerName, natureDefault: k.natureId && k.natureId !== "none" ? k.natureId : "", expenseLedger: "", ldcRate: "", ldcValidTo: "", ytd: {}};
-  // the ledger of a bill still waiting is FinCom's guess until a person confirms it (Suppliers) or approves a bill
-  if (k.ledgerName && typeof partyChoiceSet === "function") partyChoiceSet(party, k.ledgerName, "guessed");
-  D(cid).parties[id] = party;
-  Store.saveParty(cid, party);
-  return party;
-}
+// (pendingSuppliers, addPendingSupplier: src/js/99-pending-suppliers.js, with the screens that use them)
 /* ---------- what this supplier was already credited in Tally this year ---------- */
 function fyStartEnd(fy){
   const m = String(fy).match(/(\d{4})/);
@@ -876,44 +867,7 @@ function fyStartEnd(fy){
 function partyLedgerName(party, e){
   return exactLedger((e && e.partyLedger) || (party && party.ledgerName) || (e && e.x && e.x.vendorName) || (party && party.name) || "") || "";
 }
-// credits to the supplier's ledger in Tally for the year, without GST
-async function fetchPartyYtd(party, fy, ledger, opts){
-  const co = CO(), cid = S.coId;
-  if (!bridgeLive(co) || !ledger) return null;
-  const span = fyStartEnd(fy);
-  const today = new Date().toISOString().slice(0, 10);
-  const to = span.to < today ? span.to : today;
-  const j = await Bridge.call(ledgerLinesUrl(Bridge.openFor(co).name, ledger, span.from, to), null, 300000);
-  let credited = 0, gross = 0, n = 0;
-  [].concat(j.vouchers || []).forEach(v => {
-    if (/^yes$/i.test(v.cancelled || "")) return;
-    const entries = [].concat(v.entries || []);
-    const mine = entries.find(x => norm(x.ledger) === norm(ledger));
-    if (!mine) return;
-    const amt = parseFloat(String(mine.amount).replace(/,/g, "")) || 0;
-    if (amt <= 0) return;                       // only credits to the supplier
-    n++;
-    gross = r2(gross + amt);
-    // the bill value without GST: the other side, leaving out tax ledgers
-    let base = 0;
-    entries.forEach(x => {
-      if (norm(x.ledger) === norm(ledger)) return;
-      const a = parseFloat(String(x.amount).replace(/,/g, "")) || 0;
-      if (a >= 0) return;                        // debits carry the value
-      const info = ledgerInfo(x.ledger);
-      if (info && /duties|taxes/i.test(info.group || "")) return;
-      if (/\b(c|s|i|ut)gst|cess|tds\b/i.test(x.ledger)) return;
-      base = r2(base + Math.abs(a));
-    });
-    credited = r2(credited + (base || amt));
-  });
-  const info = {fy, ledger, credited, gross, vouchers: n, at: new Date().toISOString()};
-  const key = normName(ledger) + "|" + fy;
-  co.tallyYtd = Object.assign({}, co.tallyYtd, {[key]: info});
-  Store.saveCompany(co);
-  if (party){ party.tallyYtd = info; Store.saveParty(cid, party); }
-  return info;
-}
+// (fetchPartyYtd, reading the year from Tally: src/js/99-bill-suppliers.js, with the bill and review screens)
 function tallyYtdFor(party, fy, e){
   const co = CO();
   const led = partyLedgerName(party, e);
@@ -922,29 +876,33 @@ function tallyYtdFor(party, fy, e){
   const t = party && party.tallyYtd;
   return t && t.fy === fy ? t : null;
 }
-// our own approved bills of this party, this year, this payment type
+// our own approved bills of this party, this year, this payment type. A supplier's credit note takes its value off
+// (audit of 22-Nov-2026: it was added, so the limit was crossed early) and carries no TDS. sentCatch: the catch-up of
+// the bills already in Tally (their TDS there covers earlier bills, which Tally shows without TDS)
 function ourYtd(party, fy, natureId, cid, skipSent){
-  let credited = 0, tdsBase = 0, bills = 0;
+  let credited = 0, tdsBase = 0, bills = 0, sentCatch = 0;
   Object.values(D(cid).entries || {}).forEach(e => {
     if (e.status !== "approved" || !e.snapshot) return;
     if (fyOf(e.x.invoiceDate) !== fy || e.natureId !== natureId) return;
     const p = findParty(e.x, cid);
     if (!party || !p || p.id !== party.id) return;
-    if (skipSent && e.exportedAt) return;        // those are counted in the Tally figure
+    const cn = e.noteKind === "credit";
+    if (skipSent && e.exportedAt){ if (!cn) sentCatch = r2(sentCatch + num(e.snapshot.catchUp)); return; }   // those are counted in the Tally figure
     bills++;
-    credited = r2(credited + num(e.snapshot.base));
-    tdsBase = r2(tdsBase + num(e.snapshot.tdsBase));
+    credited = r2(credited + (cn ? -1 : 1) * num(e.snapshot.base));
+    if (!cn) tdsBase = r2(tdsBase + num(e.snapshot.tdsBase));
   });
-  return {credited, tdsBase, bills};
+  return {credited, tdsBase, bills, sentCatch};
 }
 function ytdOf(party, fy, natureId, cid){
   const y = party && party.ytd && party.ytd[fy] && party.ytd[fy][natureId];
-  const stored = {credited: y ? num(y.credited) : 0, tdsBase: y ? num(y.tdsBase) : 0};
+  const stored = {credited: y ? Math.max(0, num(y.credited)) : 0, tdsBase: y ? num(y.tdsBase) : 0};
   const t = tallyYtdFor(party, fy, arguments[4]);
   if (!t) return stored;
-  // Tally already holds the bills sent to it; count only the rest from here
+  // Tally already holds the bills sent to it; count only the rest from here. What already had TDS: the Tally bills with
+  // their own TDS, the bills here not yet sent, and the catch-up the sent ones carried
   const ours = ourYtd(party, fy, natureId, cid || S.coId, true);
-  return {credited: r2(t.credited + ours.credited), tdsBase: r2(Math.max(stored.tdsBase, ours.tdsBase)), fromTally: t, ours};
+  return {credited: Math.max(0, r2(t.credited + ours.credited)), tdsBase: r2(Math.max(stored.tdsBase, num(t.tdsBase) + ours.tdsBase + ours.sentCatch)), fromTally: t, ours};
 }
 
 /* ------------------------------------------------------------------ */
@@ -1058,7 +1016,7 @@ function rcmTaxOf(e, co, base){
   if (!(e.rcm && e.rcm.on)) return null;
   const rate = num(e.rcm.rate);
   const supState = gstinValid(e.x.vendorGstin) ? e.x.vendorGstin.slice(0, 2) : "";
-  const cliState = (co.gstin || "").slice(0, 2);
+  const cliState = itcCheck(e, co).reg.slice(0, 2);
   const inter = e.rcm.inter != null ? !!e.rcm.inter : !!(supState && cliState && supState !== cliState);
   const tax = r2(base * rate / 100);
   return inter ? {inter, rate, tax, igst: tax, cgst: 0, sgst: 0} : {inter, rate, tax, igst: 0, cgst: r2(tax / 2), sgst: r2(tax - r2(tax / 2))};
@@ -1081,7 +1039,8 @@ function tdsSkipOf(e, co, party){
   if (e.tdsForce) return null;
   if (e.tdsSkip) return {reason: e.tdsSkip, from: "bill"};
   if (co && co.mustDeduct === false) return {reason: "notliable", from: "client"};
-  if (party && party.transporter && (e.natureId === "contractor")) return {reason: "transporter", from: "supplier"};
+  // 194C(6): only with the transporter's PAN (without it 206AA's 20% applies)
+  if (party && party.transporter && e.natureId === "contractor" && (effectivePan(e.x) || PAN_RE.test(party.pan || ""))) return {reason: "transporter", from: "supplier"};
   if (party && party.noTds) return {reason: party.noTdsReason || "na", from: "supplier"};
   if (co && co.bookTds === false) return {reason: "booked", from: "client"};
   return null;
@@ -1101,21 +1060,32 @@ function ledgerListFor(cid){
 function itcCheck(e, co){
   const x = e.x || {}, notes = [];
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
-  const cli = String(co.gstin || "").toUpperCase(), billedTo = String(x.buyerGstin || "").toUpperCase();
+  const cli = String(co.gstin || "").toUpperCase(), billedTo = String(x.buyerGstin || "").toUpperCase(), own = ownGstins(co);
+  // a bill to the client's registration in another state (its Other GSTINs, of its own PAN) is the client's: the credit
+  // is that registration's, and the place of supply is checked against that state (audit of 22-Nov-2026)
+  const reg = billedTo && billedTo !== cli && own.includes(billedTo) ? billedTo : cli;
   const sup = gstinValid(x.vendorGstin) ? String(x.vendorGstin).slice(0, 2) : "";
-  const home = GSTIN_RE.test(cli) ? cli.slice(0, 2) : "";
+  const home = GSTIN_RE.test(reg) ? reg.slice(0, 2) : "";
   const pos = {sup, home, expect: sup && home ? (sup === home ? "cgst" : "igst") : "", charged: num(x.igst) ? "igst" : (num(x.cgst) || num(x.sgst)) ? "cgst" : ""};
   let ok = true, why = "";
   if (!cli){ ok = false; why = "unregistered"; if (gst > 0) notes.push({lvl:"", t:"This client has no GSTIN, so no input credit: the GST of " + money(gst) + " is added to the expense. Add the GSTIN in Client setup if the client is registered."}); }
-  else if (billedTo && billedTo !== cli){ ok = false; why = "other-gstin"; if (gst > 0) notes.push({lvl:"hi", t:"No input credit: the bill is billed to GSTIN " + billedTo + ", not this client's " + cli + ". The GST of " + money(gst) + " is added to the expense. Ask the supplier for a bill on the right GSTIN."}); }
+  else if (billedTo && !own.includes(billedTo)){ ok = false; why = "other-gstin"; if (gst > 0) notes.push({lvl:"hi", t:"No input credit: the bill is billed to GSTIN " + billedTo + ", not this client's " + cli + ". The GST of " + money(gst) + " is added to the expense. Ask the supplier for a bill on the right GSTIN."}); }
+  // each GSTIN is a distinct person (s.25(4) CGST Act) and the credit is the registration's the bill is made out to (s.16):
+  // posted to this client's GST ledgers it is that GSTIN's only once a person says so (e.regOk; compute's missing)
+  if (reg !== cli && gst > 0) notes.push({lvl:e.regOk === reg ? "" : "hi", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. " + (e.regOk === reg ? "You confirmed the GST ledgers are " + reg + "'s." : "Check the GST ledgers are the ones for " + reg + ".")});
   if (ok && gst > 0 && pos.expect && pos.charged && pos.expect !== pos.charged)
     notes.push({lvl:"hi", t:pos.expect === "cgst" ? "The supplier is in the client's state (" + sup + "), so CGST + SGST are expected, but the bill charges IGST. Check the place of supply." : "The supplier is in another state (" + sup + ", client " + home + "), so IGST is expected, but the bill charges CGST + SGST. Check the place of supply."});
-  return {ok, why, pos, notes};
+  return {ok, why, pos, notes, reg};
+}
+// the client's own GSTINs: its GSTIN, and its Other GSTINs of its own PAN (as Sales takes them, src/js/25)
+function ownGstins(co){
+  const cli = String(co.gstin || "").toUpperCase(), pan = salesPan(co);
+  return [cli].concat((String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || []).concat(co.gstins || []).map(g => String(g).toUpperCase()).filter(g => salesGstinOfPan(g, pan)));
 }
 function compute(e, cid){
   cid = cid || S.coId;
   const co = CO(cid), x = e.x, party = findParty(x, cid), entries = D(cid).entries;
-  const rule = ruleOf(e.natureId);
+  let rule = ruleOn(ruleOf(e.natureId), x.invoiceDate);
   const gstTotal = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
   const base = r2(num(x.taxable) || Math.max(0, num(x.total) - gstTotal));
   const total = r2(num(x.total) || base + gstTotal);
@@ -1124,7 +1094,10 @@ function compute(e, cid){
   const pan = effectivePan(x);
   const panOk = !!pan;
   const indHuf = panOk && (pan[3] === "P" || pan[3] === "H");
-  const why = [], flags = [];
+  const why = [], flags = [], cn = e.noteKind === "credit";
+  if (rule.dated) why.push(rule.dated);
+  // 194-O(4) (393(1) Sl. 8(v)): the ₹5 lakh limit is only for an individual or HUF seller who gave a PAN
+  if (rule.id === "ecommerce" && !indHuf){ rule = Object.assign({}, rule, {basis: "always"}); why.push("The ₹5 lakh limit is only for an individual or HUF seller with a PAN."); }
   let applicable = false, tdsBase = 0, catchUp = 0, meter = null;
 
   let rate = 0, rateNote = "", cert = null, normalRate = 0;
@@ -1150,7 +1123,9 @@ function compute(e, cid){
   // "Deduct anyway" counts only when a person ticked it on this bill (review item 3: an unrecorded tick on a draft is dropped)
   const forceAlways = !!e.tdsAlways && (e.status !== "draft" || !!e.tdsAlwaysBy);
   const pendingCatch = Math.max(0, r2(ytd.credited - ytd.tdsBase));
-  switch (rule.basis){
+  // a supplier's credit note: it takes its value off the year's total credited, and carries no TDS of its own
+  if (cn) why.push("A credit note: it takes " + money0(base) + " off this year's total" + (rule.basis === "never" ? "." : " (" + money0(Math.max(0, ytd.credited - base)) + "), and no TDS is deducted on it."));
+  else switch (rule.basis){
     case "never":
       why.push("This payment type is not covered by TDS.");
       break;
@@ -1199,16 +1174,22 @@ function compute(e, cid){
       } else why.push("Purchases this year of " + money0(after) + " are within " + money0(rule.limit) + ".");
       break;
   }
-  const anyway = !applicable && forceAlways && rule.basis !== "never";
+  const anyway = !applicable && forceAlways && rule.basis !== "never" && !cn;
   if (anyway){
     applicable = true; tdsBase = base;
     why.push("Deducted anyway on your instruction" + (e.tdsAlwaysBy ? " (" + e.tdsAlwaysBy + (e.tdsAlwaysAt ? ", " + fmtDate(String(e.tdsAlwaysAt).slice(0, 10)) : "") + ")" : "") + ", although this bill is below the limits" + (e.tdsAlwaysWhy ? ": " + e.tdsAlwaysWhy : "") + ".");
   }
   if (applicable && rule.basis !== "excess") why.push("TDS is worked on the value before GST, as GST is shown separately.");
 
+  // the year's figure read from Tally: what had TDS there is known only where the bill carries it, and Tally's figure
+  // counts every credit to the ledger, of every payment type; the catch-up is included only when a person ticks it
+  // (audit of 22-Nov-2026: TDS already deducted in Tally was deducted again)
+  // (review of 22-Nov-2026) e.catchUpNotDue: a person checked Tally and found that TDS deducted already, or not due
+  const t = ytd.fromTally, nd = t && e.catchUpNotDue, catchUpAsk = catchUp > 0 && !!t && !e.catchUpTally && !nd, catchUpIn = catchUp > 0 && !!e.includeCatchUp && !catchUpAsk && !nd;
   if (catchUp > 0){
-    flags.push({lvl:"", t:"Earlier bills worth " + money0(catchUp) + " this year had no TDS. " + (e.includeCatchUp ? "Their TDS is included in this entry." : "Their TDS is not included; tick the box to add it.")});
-    if (e.includeCatchUp) tdsBase = r2(tdsBase + catchUp);
+    flags.push(nd ? {lvl:"", t:"Earlier bills worth " + money0(catchUp) + ": checked in Tally by " + (nd.by || "?") + ", their TDS deducted already or not due. Not included."} : catchUpAsk ? {lvl:"hi", t:"Earlier bills worth " + money0(catchUp) + " this year may have had no TDS: Tally has " + money0(t.credited) + " credited to " + t.ledger + " (every payment type), " + money0(num(t.tdsBase)) + " of it with TDS in the bill" + (num(t.tdsSep) ? ", and TDS of " + money0(t.tdsSep) + " in entries of their own" : "") + ". Check them in Tally; tick the box to include their TDS."}
+      : {lvl:"", t:"Earlier bills worth " + money0(catchUp) + " this year had no TDS. " + (catchUpIn ? "Their TDS is included in this entry." : "Their TDS is not included; tick the box to add it.")});
+    if (catchUpIn) tdsBase = r2(tdsBase + catchUp);
   }
   // a certificate covers only its amount: what goes above it is at the normal rate
   let certBase = 0;
@@ -1237,9 +1218,10 @@ function compute(e, cid){
   if (e.docKind && !e.docOverride){
     flags.push({lvl: "hi", t: "This paper is " + (DOC_KIND_TEXT[e.docKind] || "not a tax invoice") + ", not a purchase bill. No purchase should be booked from it. If the supplier later sends the tax invoice, book that one."});
   }
-  if (x.shipGstin && co.gstin && String(x.shipGstin).toUpperCase() === co.gstin && String(x.buyerGstin || "").toUpperCase() !== co.gstin)
+  const own = ownGstins(co), mine = !x.buyerGstin || own.includes(String(x.buyerGstin).toUpperCase());
+  if (x.shipGstin && co.gstin && String(x.shipGstin).toUpperCase() === co.gstin && !mine)
     flags.push({lvl: "hi", t: "This bill is billed to " + (x.buyerGstin || "another party") + " and only delivered to " + co.name + ". The purchase belongs to the party it is billed to, not to this client."});
-  if (x.buyerGstin && co.gstin && String(x.buyerGstin).toUpperCase() !== co.gstin) flags.push({lvl:"hi", t:"The invoice is billed to GSTIN " + x.buyerGstin + ", not " + co.name + " (" + co.gstin + "). Check it belongs to this client."});
+  if (co.gstin && !mine) flags.push({lvl:"hi", t:"The invoice is billed to GSTIN " + x.buyerGstin + ", not " + co.name + " (" + co.gstin + "). Check it belongs to this client."});
   if (num(x.taxable) && num(x.total) && Math.abs(num(x.taxable) + gstTotal - num(x.total)) > 1) flags.push({lvl:"", t:"Taxable value plus GST (" + money(num(x.taxable) + gstTotal) + ") differs from the invoice total (" + money(x.total) + "). The difference goes to round off."});
   if (num(x.cgst) !== num(x.sgst)) flags.push({lvl:"", t:"CGST and SGST are not equal. Check the GST amounts."});
   if ((num(x.cgst) || num(x.sgst)) && num(x.igst)) flags.push({lvl:"", t:"The invoice shows both IGST and CGST/SGST. Check the place of supply."});
@@ -1259,7 +1241,7 @@ function compute(e, cid){
   const dup = e.status === "approved" || e.notDuplicate ? null : findDuplicate(e, cid);
   if (dup) flags.push({lvl:"hi", t:(dup.strong ? "Duplicate: " : "Possible duplicate: ") + dup.msg + (dup.strong ? " Approval is blocked unless you confirm it is a different bill." : "")});
   if (party && e.status === "draft"){
-    const others = Object.values(entries).filter(o => o.id !== e.id && o.status === "draft" && (findParty(o.x, cid) || {}).id === party.id).length;
+    const me = entries[e.id], others = (draftParties(cid).get(party.id) || 0) - (me && me.status === "draft" && (findParty(me.x, cid) || {}).id === party.id ? 1 : 0);
     if (others) flags.push({lvl:"info", t:others + " other draft" + (others > 1 ? "s" : "") + " for this deductee are waiting. Limits count only approved invoices, so approve in date order."});
   }
   if (!party && rule.basis !== "never" && e.status === "draft") flags.push({lvl:"info", t:"New deductee for this client. If bills were credited earlier this year outside this desk, enter them in Deductees so the limits are right."});
@@ -1304,7 +1286,8 @@ function compute(e, cid){
 
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
-  if (x.buyerGstin && co.gstin && String(x.buyerGstin).toUpperCase() !== co.gstin && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
+  if (co.gstin && !mine && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
+  if (itc.reg !== String(co.gstin || "").toUpperCase() && num(x.cgst) + num(x.sgst) + num(x.igst) > 0 && e.regOk !== itc.reg) missing.push("your word that the GST ledgers are " + itc.reg + "'s");
   if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
@@ -1313,6 +1296,9 @@ function compute(e, cid){
   if (!e.expenseLedger) missing.push("expense ledger");
   if (tds > 0 && !tdsLedger) missing.push("TDS ledger");
   if (Math.abs(dr - cr) >= 0.01) missing.push("a balanced entry");
+  // what goes to round off: up to ₹1, else only on a person's word for this difference (audit of 22-Nov-2026: a misread
+  // total of 1,180 for 11,800 posted 10,620 to Round Off)
+  if (Math.abs(ro) > 1 && e.roOk !== ro) missing.push("your check of the total: " + money(Math.abs(ro)) + " would go to round off");
   if (dup && dup.strong) missing.push("confirmation that this is not a duplicate");
   if (e.confirmType && e.status === "draft" && !(party && party.natureDefault) && !skip) missing.push("your confirmation of the payment type");
   // every line of the Tally entry needs a Tally ledger (review item 2): a blank one always stops approval;
@@ -1337,7 +1323,7 @@ function compute(e, cid){
     notIn.forEach(n => missing.push("\u201c" + n + "\u201d is not a ledger in Tally: pick one or create it"));
   } else if (e.status === "draft") flags.push({lvl:"", t:"The ledgers are not checked against Tally: this client's ledger list has not been read from Tally yet. Read it (Tally ledgers) so each line can be matched before approval."});
 
-  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, inoperative, cert, certBase, normalRate, applicable, rate, rateNote, tdsBase, catchUp, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
+  return {rule, party, base, total, gstTotal, fy, ytd, pan, panOk, indHuf, inoperative, cert, certBase, normalRate, applicable, rate, rateNote, tdsBase, catchUp, catchUpAsk, catchUpIn, ro, cn, tds, tdsWould, skip, anyway, gd, rcmTax, blocked, itc, why, flags, meter, lines, dr, cr, missing, tdsLedger, dup};
 }
 
 /* ------------------------------------------------------------------ */
@@ -1692,10 +1678,11 @@ async function ocrCanvas(c, psm, opts){
 /* A result is accepted only when every check passes.                  */
 /* ------------------------------------------------------------------ */
 const MONTHS = {jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12};
-function toIsoDate(d, m, y){
+// lo: the first year taken (2017, the first year of GST, for bills; 2000 for a bank statement's lines: bankDate)
+function toIsoDate(d, m, y, lo){
   d = +d; m = +m; y = +y;
   if (y < 100) y += 2000;
-  if (!(y >= 2017 && y <= 2035 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return "";
+  if (!(y >= (lo || 2017) && y <= 2035 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return "";
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (dt.getUTCMonth() !== m - 1) return "";
   return y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
@@ -2731,11 +2718,20 @@ function addNotRead(j, cid, err, msg){
   e.notRead = {kind: err.kind, reason: msg.replace(/^.*?: not read, /, ""), at: new Date().toISOString()};
   e.readTrace = err.trace || [];
   e.fileHash = j.hash;
-  S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = [].concat(j.page)[0]; const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill"); FileStore.put(cid, e.id, j.file);
+  keepFile(e, j); FileStore.put(cid, e.id, j.file);
   if (isImage(j.file)) S.previews[e.id] = URL.createObjectURL(j.file);
   finishNewEntry(e, cid, j);
   if (j.status === "done") j.status = "notread";
   j.msg = msg;
+}
+// a new bill's file kept (this computer, the firm account), and the pages of the PDF it is on, kept on the bill too
+// (audit of 22-Nov-2026: Retry or Read again after a reload read the PDF's first pages, another invoice's, over this bill)
+function keepFile(e, j){ S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = e.pages = [].concat(j.page); const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill"); }
+// the pages to read again; a bill cut from a longer PDF whose pages were not kept is not read again (null: said)
+function pagesOf(e){
+  const p = S.filePages[e.id] || e.pages;
+  if (!p && /\u00b7 pages? \d/.test(e.fileName || "")){ toast("Which pages of the PDF this bill is on was not kept. Upload the PDF again to read it."); return null; }
+  return p || undefined;
 }
 // not read and not typed in yet: the supplier, date and total are still empty
 function notReadYet(e){ return !!(e && e.notRead && !(e.x.vendorName && e.x.invoiceDate && num(e.x.total) > 0)); }
@@ -2745,11 +2741,13 @@ async function retryNotRead(id){
   if (!e || S.reading[id]) return;
   const file = await FileStore.get(cid, e.id, e.docPath || "", e.fileName);
   if (!file){ toast("The file for this bill is not on this computer or in the firm account any more. Upload it again, or type it in."); return; }
+  const pg = pagesOf(e);
+  if (pg === null) return;
   S.readBlocked = null;
   S.reading[id] = "Reading again"; render();
   try {
     await readerLoad();
-    const r = await readWithRetry(file, null, S.filePages[id], cid, null, (err) => { S.reading[id] = "Waiting to try again"; toast(readFail(e.fileName, err, true)); render(); });
+    const r = await readWithRetry(file, null, pg, cid, null, (err) => { S.reading[id] = "Waiting to try again"; toast(readFail(e.fileName, err, true)); render(); });
     applyExtraction(e, r.j, cid);
     e.readMode = readLabel(r); e.readTrace = r.trace || [];
     if (r.confirmType) e.confirmType = true;
@@ -2785,7 +2783,7 @@ async function runJob(j){
       e.uncertain = Array.from(new Set((e.uncertain || []).concat(pr.missing)));
       e.readError = "Free reading found part of this bill. Fill in the fields marked in amber (" + err.detail + "), or add a Google OCR or Claude key in Settings.";
       e.fileHash = j.hash;
-      S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = [].concat(j.page)[0]; const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill"); FileStore.put(cid, e.id, j.file);
+      keepFile(e, j); FileStore.put(cid, e.id, j.file);
       setPreview(e.id, pr.preview);
       j.method = "free-partial";
       finishNewEntry(e, cid, j);
@@ -2833,7 +2831,7 @@ async function runJob(j){
     if (!route.cid){
       const item = {id:uid("i"), fileName:j.name, createdAt:new Date().toISOString(), j:r.j, note:route.note, hash:j.hash, readMode:readLabel(r), freeWhy:r.freeWhy || "", readNote:r.note || ""};
       S.inbox[item.id] = item; S.files[item.id] = j.file; setPreview(item.id, r.preview);
-      if (j.page) S.filePages[item.id] = [].concat(j.page)[0];
+      if (j.page) S.filePages[item.id] = item.pages = [].concat(j.page);
       Store.saveInbox(item);
       j.status = "unsorted"; j.msg = route.note;
       return;
@@ -2851,7 +2849,7 @@ async function runJob(j){
   if (r.note) e.readNote = r.note;
   e.fileHash = j.hash;
   if (how) e.routedBy = how;
-  S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = [].concat(j.page)[0]; const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill");
+  keepFile(e, j);
   setPreview(e.id, r.preview);
   finishNewEntry(e, cid, j);
 }
@@ -2874,32 +2872,7 @@ function finishNewEntry(e, cid, j){
     S.filter = e.status; S.selected = e.id;
   }
 }
-function addPasted(text){
-  let data;
-  const raw = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  try { data = JSON.parse(raw); }
-  catch (err){
-    const m = raw.match(/[\[{][\s\S]*[\]}]/);
-    try { data = m ? JSON.parse(m[0]) : null; } catch (e2){ data = null; }
-  }
-  const list = Array.isArray(data) ? data : data && typeof data === "object" ? (Array.isArray(data.bills) ? data.bills : [data]) : [];
-  const bills = list.filter(b => b && typeof b === "object" && (b.vendorName || b.invoiceNo || b.totalAmount));
-  if (!bills.length){ toast("No bill details found. Paste the JSON exactly as Claude gave it."); return; }
-  const cid = S.coId;
-  let held = 0, lastId = null;
-  bills.forEach((b, i) => {
-    const e = newEntry("Pasted bill " + (b.invoiceNo ? b.invoiceNo : i + 1));
-    applyExtraction(e, b, cid);
-    e.readMode = "pasted";
-    finishNewEntry(e, cid, null);
-    if (e.status === "duplicate") held++; else lastId = e.id;
-  });
-  S.pasteOpen = false;
-  if (lastId){ S.filter = "draft"; S.selected = lastId; }
-  const added = bills.length - held;
-  toast([added ? added + " bill" + (added > 1 ? "s" : "") + " added" : "", held ? held + " held as duplicate" + (held > 1 ? "s" : "") : ""].filter(Boolean).join(", ") + ".");
-  render();
-}
+// (addPasted: src/js/99-bill-suppliers.js, with the screen that calls it)
 async function downloadStandalone(){
   const root = document.documentElement.cloneNode(true);
   root.querySelectorAll("[data-injected]").forEach(n => n.remove());
@@ -2938,34 +2911,16 @@ async function askPermission(){
   toast(S.samplePerm === "granted" ? "Claude reading is allowed." : S.samplePerm === "denied" ? "Access was declined. Reload the page to be asked again." : "Claude reading is " + S.samplePerm + ".");
   render();
 }
-function typeItIn(j){
-  const cid = j.target === "auto" ? S.coId : j.target;
-  if (!cid){ toast("Open the client first, then use Type it in."); return; }
-  const e = newEntry(j.name);
-  e.fileHash = j.hash; e.readError = j.msg;
-  S.files[e.id] = j.file; if (j.page) S.filePages[e.id] = [].concat(j.page)[0]; const dcid = j.cid || j.target || S.coId; FileStore.put(dcid, e.id, j.file); CloudDocs.add(dcid, e.id, j.file, "bill");
-  if (isImage(j.file)) S.previews[e.id] = URL.createObjectURL(j.file);
-  finishNewEntry(e, cid, null);
-  j.status = "typed"; j.cid = cid; j.entryId = e.id;
-  if (S.coId !== cid) openCompany(cid);
-  S.filter = "draft"; S.selected = e.id; render();
-}
-function openJobEntry(j){
-  const ref = j.entryId ? {cid:j.cid, entryId:j.entryId} : j.dupRef;
-  if (!ref || !ref.cid){ toast("The earlier copy is not on this desk any more."); return; }
-  openCompany(ref.cid).then(() => {
-    const e = D(ref.cid).entries[ref.entryId];
-    if (!e){ toast("The earlier copy is not on this desk any more."); return; }
-    S.tab = "invoices"; S.filter = e.status; S.selected = e.id; render();
-  });
-}
+// (typeItIn, openJobEntry: src/js/99-bill-suppliers.js, with the screens that call them)
 async function rereadCarefully(e){
   const file = S.files[e.id], cid = S.coId;
   if (!file){ toast("The original file is only kept while this page is open. Upload it again to re-read."); return; }
+  const pg = pagesOf(e);
+  if (pg === null) return;
   S.reading[e.id] = "Reading again carefully"; render();
   try {
     await readerLoad();
-    const r = await extract(file, true, S.filePages[e.id], cid);
+    const r = await extract(file, true, pg, cid);
     e.readTrace = (e.readTrace || []).concat(r.trace || []);
     const keepParty = e.partyLedger;
     e.partyLedger = ""; e.expenseLedger = "";
@@ -2980,14 +2935,7 @@ async function rereadCarefully(e){
 }
 function cidForCount(j){ return j.target && j.target !== "auto" ? j.target : null; }
 // the reading queue, the reading check, the upload options and the "reading…" cards are React (app/src/parts/Reading.jsx)
-// a job in the reading queue: read it again (the same way, or with Google OCR or Claude), type it in, or open its bill
-function jobAction(kind, jid){
-  const j = S.jobs.find(x => x.id === jid);
-  if (!j) return;
-  if (kind === "retry" || kind === "google" || kind === "claude"){ S.readBlocked = null; j.force = kind === "retry" ? null : kind; j.advanced = false; j.status = "waiting"; j.msg = ""; j.prev = null; j.donePromise = new Promise(res => { j.markDone = res; }); S.batchSize = 2; pump(); render(); }
-  else if (kind === "type") typeItIn(j);
-  else if (kind === "open") openJobEntry(j);
-}
+// (jobAction: src/js/99-bill-suppliers.js, with the screens that call it)
 function setSplitPdf(on){ S.splitPdf = on; lsSet("tdsdesk:splitPdf", on ? "1" : ""); }
 function freeRate(co){
   const rc = (co && co.readCounts) || {}, n = (rc.free || 0) + (rc.google || 0) + (rc.claude || 0);
@@ -3024,21 +2972,7 @@ function routeCompany(j){
   }
   return {cid: null, note: bg || bn ? "Billed to " + (j.buyerName || "") + (bg ? " (" + bg + ")" : "") + ", which does not match any client." : "No buyer details were found on the invoice."};
 }
-async function assignInbox(id, cid){
-  const item = S.inbox[id];
-  if (!item || !cid) return;
-  await Store.loadCompany(cid);
-  const e = newEntry(item.fileName);
-  if (item.j) applyExtraction(e, item.j, cid);
-  else e.readError = item.note;
-  e.fileHash = item.hash; e.readMode = item.readMode; if (item.freeWhy) e.freeWhy = item.freeWhy; if (item.readNote) e.readNote = item.readNote;
-  movePreview(id, e.id);
-  if (S.filePages[id]){ S.filePages[e.id] = S.filePages[id]; delete S.filePages[id]; }
-  delete S.inbox[id]; Store.deleteInbox(id);
-  finishNewEntry(e, cid, null);
-  toast(item.fileName + " moved to " + CO(cid).name + (e.status === "duplicate" ? ", held as a duplicate." : "."));
-  render();
-}
+// (assignInbox: src/js/99-bill-suppliers.js, with the screen that calls it)
 
 /* ------------------------------------------------------------------ */
 /* Approve / undo / reject (current client)                            */
@@ -3064,8 +2998,10 @@ function approve(e, o){
   party.ytd = party.ytd || {};
   party.ytd[c.fy] = party.ytd[c.fy] || {};
   const cur = party.ytd[c.fy][c.rule.id] || {credited:0, tdsBase:0};
-  const addBase = c.applicable ? c.tdsBase : 0;
-  cur.credited = r2(num(cur.credited) + c.base);
+  // a supplier's credit note takes its value off the year's total and adds nothing to what had TDS; kept below nil when
+  // approved before its bill (read as nil: ytdOf), so the bill approved later is net of it
+  const addBase = c.applicable && !c.cn ? c.tdsBase : 0, was = num(cur.credited);
+  cur.credited = r2(was + (c.cn ? -c.base : c.base));
   cur.tdsBase = r2(num(cur.tdsBase) + addBase);
   party.ytd[c.fy][c.rule.id] = cur;
   e.status = "approved"; delete e.notRead;
@@ -3074,9 +3010,9 @@ function approve(e, o){
   const k = invKey(e.x), co = CO(cid);
   // the bill's id is kept with the date (02-Oct-2026), so a later copy can name and open this one
   if (k){ co.keys = co.keys || {}; co.keys[k] = {d: e.approvedAt.slice(0, 10), e: e.id}; pruneIndex(co.keys, 3000); Store.saveCompany(co); }
-  e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:c.base, tdsBase:addBase};
+  e.applied = {partyId:party.id, fy:c.fy, natureId:c.rule.id, credited:r2(cur.credited - was), tdsBase:addBase};
   e.snapshot = {lines:c.lines, tds:c.tds, tdsWould:c.tdsWould, skip:c.skip, rcm:c.rcmTax ? Object.assign({cat:e.rcm.cat}, c.rcmTax) : null, blocked:c.gd.block ? c.gd.block.cat : null, noItc:c.itc && !c.itc.ok ? c.itc.why : null, rate:c.rate, tdsBase:c.tdsBase, base:c.base, total:c.total, pan:c.pan, ref:c.rule.ref, old:c.rule.old, label:c.rule.label, cert:c.cert && c.applicable ? (c.cert.no || "-") : "", certBase:c.cert && c.applicable ? c.certBase : 0, certRate:c.cert ? num(c.cert.rate) : null, normalRate:c.normalRate, inoperative:!!c.inoperative, form:c.rule.form || "26Q",
-    applicable:c.applicable, catchUp:e.includeCatchUp ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
+    applicable:c.applicable, catchUp:c.catchUpIn ? c.catchUp : 0, why:c.why, meter:c.meter, fy:c.fy, rateNote:c.rateNote, indHuf:c.indHuf, never:c.rule.basis === "never"};
   Store.saveParty(cid, party);
   Store.saveEntry(cid, e);
   const said = "Approved. " + (c.skip ? "TDS not booked (" + (SKIP_REASONS[c.skip.reason] || c.skip.reason) + "); would have been " + money0(c.tdsWould) + "." : c.tds ? "TDS " + money0(c.tds) + " drafted for Tally." : "No TDS on this invoice.");
@@ -3103,9 +3039,7 @@ function billPostLive(e, cid){ return !!(e && (e.exportedAt || e.postUnconfirmed
 // after the owner's "Deleted in Tally" (deletedInTally.verified; billPosted ends it): the cloud's hold is the cleared
 // posting's (postClearedJobs) while no newer posting names the bill; a newer one (any state) holds it again
 function billOldHold(e, cid){ const c = e.deletedInTally && e.deletedInTally.verified && e.postClearedJobs, v = c && postJobStates(cid).get(String(e.id)); return !!c && !(v && v.job && !c.includes(v.job.id)); }
-// the bar under an approved bill (app/src/screens/Review.jsx)
-function billBar(e){ const l = billPostLive(e, S.coId); return {note: e.exportedAt || e.goneFromTally ? tallyStateOf(e)[1] : "Waiting in Send to Tally",
-  acts: [!l && ["undo", "Undo approval"], !e.exportedAt && ["goExport", "Send to Tally"], l && !postSending(S.coId).has(String(e.id)) && ["billDeletedInTally", "Deleted in Tally"]].filter(Boolean)}; }
+// (billBar: src/js/99-bill-suppliers.js, with the screens that call it)
 // such a bill is not taken off its supplier's totals and put back to review here (it would be posted twice). o.force: a
 // bill deleted (a posted bill cannot be: billDelete), or Tally's own refusal of
 // this posting (src/js/24)
@@ -3114,7 +3048,7 @@ function unapply(e, cid, o){
   const a = e.applied, p = a && D(cid).parties[a.partyId];
   if (p && p.ytd && p.ytd[a.fy] && p.ytd[a.fy][a.natureId]){
     const cur = p.ytd[a.fy][a.natureId];
-    cur.credited = r2(Math.max(0, num(cur.credited) - a.credited));
+    cur.credited = r2(num(cur.credited) - a.credited);
     cur.tdsBase = r2(Math.max(0, num(cur.tdsBase) - a.tdsBase));
     Store.saveParty(cid, p);
   }
@@ -3142,10 +3076,12 @@ async function rereadEntry(e, force){
   if (!file){ toast("The file for this bill is not on this computer any more. Upload it again."); return; }
   if (force === "claude" && !claudeReady()){ toast("Claude is not available on this plan or in this view."); return; }
   if (force === "google" && !googleReady()){ toast("Google OCR is not set up: add a key in Settings, or use a plan that includes it."); return; }
+  const pg = pagesOf(e);
+  if (pg === null) return;
   S.reading[e.id] = true; toast(force === "claude" ? "Reading again with Claude\u2026" : force === "google" ? "Reading again with Google OCR\u2026" : "Reading again\u2026"); render();
   try {
     await readerLoad();
-    const r = await extractBest(file, null, S.filePages[e.id], cid, force);
+    const r = await extractBest(file, null, pg, cid, force);
     applyExtraction(e, r.j, cid);
     e.readMode = readLabel(r); e.readTrace = r.trace || []; e.readError = ""; e.uncertain = e.uncertain || [];
     Store.saveEntry(cid, e);
@@ -3182,10 +3118,19 @@ function linkDuplicates(cid, only){
 // a draft that needs a look (its checks: something missing, or a flag above "info")
 function draftNeedsCheck(e, cid){ if (S.reading[e.id]) return false; const c = compute(e, cid); return !!(c.missing.length || c.flags.some(f => f.lvl !== "info")); }
 const statsRev = {};
+// many bills at once (a sheet's rows, Approve all): the counts once at the end, not after each bill (audit of 22-Nov-2026:
+// a 300-row sheet worked every draft's checks out 300 times)
+let STATS_HOLD = 0;
+const statsHeldFor = new Set();
+function statsHeld(fn){
+  STATS_HOLD++;
+  try { return fn(); } finally { if (!--STATS_HOLD){ const l = Array.from(statsHeldFor); statsHeldFor.clear(); l.forEach(c => refreshStats(c)); } }
+}
 // check: the count of drafts that need a look, when worked out already (refreshStatsSoon)
 function refreshStats(cid, check){
   const co = CO(cid), d = S.data[cid];
   if (!co || !d || !d.loaded) return;
+  if (STATS_HOLD){ statsHeldFor.add(cid); return; }
   statsRev[cid] = (statsRev[cid] || 0) + 1;
   linkDuplicates(cid);
   const v = Object.values(d.entries), fy = fyOf(null);

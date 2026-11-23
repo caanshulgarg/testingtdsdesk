@@ -78,6 +78,7 @@ function ensureFileInputs(){
   });
 }
 async function loadBank(cid){
+  bankFlush();
   S.bank = {cid, loading: true, stmts: [], cur: null, rows: [], rules: [], ledgers: {list: [], importedAt: ""}, newLed: [], keys: {}, books: {},
     filter: "review", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0};
   render();
@@ -99,6 +100,7 @@ async function loadBank(cid){
 }
 async function openStatement(sid){
   const b = B(); if (!b) return;
+  bankFlush();
   b.cur = sid; b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
   const st0 = b.stmts.find(s => s.id === sid);
   if (st0 && st0.n > b.rows.length && await bankHeal(b.cid, b.stmts, null, 1)) b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
@@ -167,14 +169,19 @@ function saveBank(what){
   if (typeof cloudSoon === "function") setTimeout(cloudSoon, 950);     // after the rows are kept here
   const cid = b.cid;
   if (!what || what.rows){
-    clearTimeout(bankSaveTimer);
     const sid = b.cur, rows = b.rows;
-    bankSaveTimer = setTimeout(() => {
-      bankSaveTimer = null;
-      BankDB.set("stmt:" + cid + ":" + sid, rows);
+    // the write waiting is another statement's (another statement or client opened since): written now, never dropped
+    // (audit of 22-Nov-2026: one timer for all, so a save on statement B cancelled A's)
+    if (saveBank.k !== cid + ":" + sid) bankFlush(); else clearTimeout(bankSaveTimer);
+    saveBank.k = cid + ":" + sid;
+    saveBank.run = () => {
+      bankSaveTimer = null; saveBank.k = "";
       const st = b.stmts.find(s => s.id === sid);
-      if (st){ st.counts = countStates(rows); BankDB.set("stmts:" + cid, b.stmts); }
-    }, 900);
+      // its links to bills and invoices, for the other statements' suggestions (bankClaims, src/js/22-bank-guards.js)
+      if (st){ st.counts = countStates(rows); st.links = bankLinks(rows); BankDB.set("stmts:" + cid, b.stmts); }
+      return BankDB.set("stmt:" + cid + ":" + sid, rows);
+    };
+    bankSaveTimer = setTimeout(saveBank.run, 900);
   }
   if (what && what.stmts) BankDB.set("stmts:" + cid, b.stmts);
   if (what && what.rules) BankDB.set("rules:" + cid, b.rules);
@@ -186,7 +193,9 @@ function saveBank(what){
   if (what && what.books) BankDB.set("books:" + cid, b.books);
   if (what && what.hist){ clearTimeout(saveBank.histTimer); saveBank.histTimer = setTimeout(() => BankDB.set("hist:" + cid, b.hist), 700); }
 }
-window.addEventListener("pagehide", () => { if (bankSaveTimer && S.bank){ clearTimeout(bankSaveTimer); const b = S.bank; BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows); } });
+// the bank lines' write waiting, done now (the page closing, another statement or client opened, a cloud sync)
+function bankFlush(){ if (bankSaveTimer){ clearTimeout(bankSaveTimer); return saveBank.run(); } }
+window.addEventListener("pagehide", bankFlush);
 function countStates(rows){ const c = {}; rows.forEach(r => { if (!(typeof bankAside === "function" && bankAside(r))) c[r.state] = (c[r.state] || 0) + 1; }); return c; }
 
 /* ---------- reading cells ---------- */
@@ -198,10 +207,14 @@ function cellText(v){
 function bankAmount(v){
   if (v == null || v === "") return null;
   if (typeof v === "number") return isFinite(v) ? v : null;
-  let s = String(v).replace(/[₹,\s]/g, "").replace(/^(rs\.?|inr)/i, "");
+  // (a minus as U+2212 or a dash, as PDF-to-Excel copies write it; 1.234,50 is no Indian figure, never read as 1.2345:
+  // next-fix-audit-imports)
+  if (/\.\d{3},\d{1,2}$/.test(String(v).trim())) return null;
+  let s = String(v).replace(/[₹,\s]/g, "").replace(/^(rs\.?|inr)/i, "").replace(/^[\u2212\u2013\u2014](?=\d)/, "-");
   if (!s || /^[-–—]+$/.test(s)) return null;
   let neg = false;
   if (/^\(.*\)$/.test(s)){ neg = true; s = s.slice(1, -1); }
+  if (/\d-$/.test(s)){ neg = true; s = s.slice(0, -1); }          // "500.00-": a trailing minus
   if (/dr\.?$/i.test(s)){ neg = true; s = s.replace(/dr\.?$/i, ""); }
   s = s.replace(/cr\.?$/i, "");
   if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
@@ -213,15 +226,15 @@ function bankDate(v){
   if (v instanceof Date && !isNaN(v)) return new Date(v.getTime() - v.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   if (typeof v === "number" && v > 20000 && v < 80000 && window.XLSX){
     const d = XLSX.SSF.parse_date_code(v);
-    return d ? toIsoDate(d.d, d.m, d.y) : "";
+    return d ? toIsoDate(d.d, d.m, d.y, 2000) : "";
   }
   const s = String(v).trim();
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return toIsoDate(m[3], m[2], m[1]);
+  if (m) return toIsoDate(m[3], m[2], m[1], 2000);
   m = s.match(/^(\d{1,2})[\/\-.\s](\d{1,2})[\/\-.\s](\d{2,4})\b/);
-  if (m) return toIsoDate(m[1], m[2], m[3]);
+  if (m) return toIsoDate(m[1], m[2], m[3], 2000);
   m = s.match(/^(\d{1,2})[\/\-.\s]?(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*[\/\-.\s,]*(\d{2,4})\b/i);
-  if (m) return toIsoDate(m[1], MONTHS[m[2].toLowerCase()], m[3]);
+  if (m) return toIsoDate(m[1], MONTHS[m[2].toLowerCase()], m[3], 2000);
   return "";
 }
 const BANK_HDR = [
@@ -275,30 +288,38 @@ function statementMeta(lines){
   // ICICI's "DETAILED STATEMENT" heading: "Transactions List - -<COMPANY> (INR) - <account>"; it wins over an IFSC in a narration
   const icici = txt.match(/transactions?\s+list\s*-.*\([A-Z]{3}\)\s*-\s*(\d{9,18})/i);
   if (icici) meta.acct = icici[1];
-  const ifsc = txt.toUpperCase().match(/IFSC(?:\s*CODE)?\s*[:\-]?\s*([A-Z]{4}0[A-Z0-9]{6})\b/) || txt.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/);
+  // the IFSC: labelled ("IFSC", "IFS Code"), or one of the bank the statement names: never just any IFSC-shaped word, which
+  // may be a party's in a narration (audit of 22-Nov-2026: SBI read as Axis Bank, a new account each statement)
+  const byName = BANK_NAMES.find(b => new RegExp("\\b" + b[1].replace(/ /g, "\\s*"), "i").test(txt)), U = txt.toUpperCase();
+  const ifsc = U.match(/IFS(?:C)?(?:\s*CODE)?\s*[:\-]?\s*([A-Z]{4}0[A-Z0-9]{6})\b/) || (byName && U.match(new RegExp("\\b(" + byName[0] + "0[A-Z0-9]{6})\\b")));
   if (ifsc && !(icici && ifsc[1].slice(0, 4) !== "ICIC")) meta.ifsc = ifsc[1];
   const byIfsc = meta.ifsc && BANK_NAMES.find(b => b[0] === meta.ifsc.slice(0, 4));
-  const byName = BANK_NAMES.find(b => new RegExp("\\b" + b[1].replace(/ /g, "\\s*"), "i").test(txt));
   meta.bank = icici ? "ICICI Bank" : byIfsc ? byIfsc[1] : byName ? byName[1] : "";
-  const per = txt.match(/(?:from|period)\s*[:\-]?\s*(\S+)\s*(?:to|-)\s*(\S+)/i);
+  const D = "(\\d{1,2}[\\s\\/.\\-][A-Za-z0-9]{2,9}[\\s\\/.\\-]\\d{2,4}|\\S+)", per = txt.match(new RegExp("(?:from|period)(?:\\s*date)?\\s*[:\\-]?\\s*" + D + "\\s*(?:to|-)(?:\\s*date)?\\s*[:\\-]?\\s*" + D, "i"));
   if (per){ meta.from = bankDate(per[1]); meta.to = bankDate(per[2]); }
   const ob = txt.match(/(?:opening\s*bal(?:ance)?|bal(?:ance)?\s*(?:brought|b\/)\s*f(?:or)?w?(?:ar)?d?|b\/f\s*bal(?:ance)?)[^0-9\-]{0,20}(-?[\d,]+\.\d{2})\s*(dr|cr)?/i);
   if (ob) meta.opening = bankAmount(ob[1] + (ob[2] || ""));
   const cb = txt.match(/closing\s*balance[^0-9\-]{0,20}(-?[\d,]+\.\d{2})\s*(dr|cr)?/i);
   if (cb) meta.closing = bankAmount(cb[1] + (cb[2] || ""));
+  // a balance printed with Cr is in credit: never read as an overdraft (checkBalances)
+  if ((ob && /cr/i.test(ob[2] || "")) || (cb && /cr/i.test(cb[2] || ""))) meta.crPrinted = true;
   return meta;
 }
 // Turn cells into transactions; join narration lines that wrap onto the next row
-function rowsFromCells(list, cols, getCell, rowText){
+// opts.guess: the columns were placed by the words' x position (PDF text, OCR), so a Withdrawal or Deposit column does not
+// state a line's direction: such a line may still be turned round to fit its balance (re-review of the bank audit); a
+// printed Dr/Cr or a minus still states it
+function rowsFromCells(list, cols, getCell, rowText, opts){
   const out = [];
   let lastWasTxn = false;
   for (const raw of list){
     const g = k => cols[k] === undefined ? "" : getCell(raw, cols[k]);
     const date = bankDate(g("date"));
-    let debit = bankAmount(g("debit")), credit = bankAmount(g("credit"));
+    let debit = bankAmount(g("debit")), credit = bankAmount(g("credit")), dirSure = !(opts && opts.guess) && cols.debit !== undefined && cols.credit !== undefined;
     if (cols.amount !== undefined){
       const a = bankAmount(g("amount")), t = cellText(g("drcr")).toUpperCase();
       if (a !== null){
+        dirSure = a < 0 || /^[DC]|DR|CR|DEBIT|CREDIT|WITHDRAW|DEPOSIT/.test(t);
         if (/^D|DR|DEBIT|WITHDRAW/.test(t) || (a < 0 && !/CR/.test(t))){ debit = Math.abs(a); credit = null; }
         else { credit = Math.abs(a); debit = null; }
       }
@@ -314,21 +335,36 @@ function rowsFromCells(list, cols, getCell, rowText){
       else lastWasTxn = false;
       continue;
     }
-    if (!debit && !credit){ lastWasTxn = false; continue; }
+    if (!debit && !credit){ if (["debit", "credit", "amount"].some(k => /\d/.test(cellText(g(k))) && bankAmount(g(k)) === null)) out.unread = (out.unread || 0) + 1; lastWasTxn = false; continue; }
     lastWasTxn = true;
-    out.push({date, valueDate: bankDate(g("valueDate")), narr, ref, page: raw.page || null, debit: debit ? Math.abs(debit) : 0, credit: credit ? Math.abs(credit) : 0, balance});
+    // dirSure: the file states the direction (checkBalances never turns such a line round)
+    out.push({date, valueDate: bankDate(g("valueDate")), narr, ref, page: raw.page || null, debit: debit ? Math.abs(debit) : 0, credit: credit ? Math.abs(credit) : 0, balance, dirSure});
   }
   return out;
 }
 /* ---------- Excel / CSV ---------- */
+// A workbook from its bytes. A real Excel file (zip, or the old binary) is read with opt (its date cells as dates);
+// anything else (CSV, text, or an HTML or XML table called .xls, as many banks and portals export) keeps every cell as
+// written, so 05/09/26 stays 5 September and invoice 00123 stays 00123 (SheetJS reads such text US-style: next-fix-audit-imports)
+function xlsxBook(buf, opt){
+  const b = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf);
+  return XLSX.read(b, (b[0] === 0x50 && b[1] === 0x4b) || (b[0] === 0xd0 && b[1] === 0xcf) ? Object.assign({type: "array"}, opt) : {type: "array", raw: true});
+}
+// A sheet's rows, up to its last cell with a value (a cell formatted far down stretches the range to a million empty
+// rows). keep: a number Excel shows with leading zeros (00123) as that text
+function xlsxRows(ws, o, keep){
+  let r = -1, c = -1;
+  for (const k in ws){ const x = ws[k]; if (k[0] === "!" || !x || x.v == null || x.v === "") continue;
+    const a = XLSX.utils.decode_cell(k); if (a.r > r) r = a.r; if (a.c > c) c = a.c;
+    if (keep && x.t === "n" && /^0\d+$/.test(x.w || "")){ x.t = "s"; x.v = x.w; } }
+  if (ws["!ref"] && r >= 0){ const g = XLSX.utils.decode_range(ws["!ref"]); g.e.r = Math.min(g.e.r, r); g.e.c = Math.min(g.e.c, c); ws["!ref"] = XLSX.utils.encode_range(g); }
+  return XLSX.utils.sheet_to_json(ws, Object.assign({header: 1, raw: true, defval: ""}, o));
+}
 async function gridsFromSheet(file){
   await ensureXlsx();
   if (!window.XLSX) throw {code: "xlsx_missing"};
-  const buf = await file.arrayBuffer();
-  // CSV/text: keep every value as written, so 05-09-2026 stays 5 September (SheetJS would read it US-style)
-  const plain = /\.(csv|txt)$/i.test(file.name) || /text\/(csv|plain)/.test(file.type);
-  const wb = XLSX.read(buf, plain ? {type: "array", raw: true} : {type: "array", cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
-  return wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, raw: true, defval: "", blankrows: false}));
+  const wb = xlsxBook(await file.arrayBuffer(), {cellDates: true, raw: false, dateNF: "dd/mm/yyyy"});
+  return wb.SheetNames.map(n => xlsxRows(wb.Sheets[n], {blankrows: false}));
 }
 async function parseSheetStatement(file){
   const grids = await gridsFromSheet(file);
@@ -344,7 +380,7 @@ async function parseSheetStatement(file){
   throw {code: "bank_no_header"};
 }
 /* ---------- PDF with text inside: rebuild the table from word positions ---------- */
-const MONEY_TOKEN = /^-?[\d,]+\.\d{2}(cr|dr)?$/i;
+const MONEY_TOKEN = /^-?[\d,]+\.\d{2}(cr|dr|-)?$/i;        // "500.00-": a trailing minus (bankAmount)
 const DATE_TOKEN = /^(\d{1,2}[\/\-.](\d{1,2}|[a-z]{3,9})[\/\-.]\d{2,4}|\d{4}-\d{2}-\d{2})$/i;
 // Split a text piece that holds several dates/amounts ("0.00 59,400.00 159,400.00") into positioned tokens
 function splitPiece(it){
@@ -529,7 +565,7 @@ async function parsePdfStatement(file){
   const colIdx = {};
   cols.forEach(c => { if (c.k) colIdx[c.k] = c.k; });
   const meta = statementMeta(metaLines);
-  const rows = rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text);
+  const rows = rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text, {guess: true});
   return {meta, rows, source: "pdf"};
 }
 /* ---------- reading any statement: headings first, then a heading-free reader, then OCR ---------- */
@@ -723,6 +759,8 @@ async function statementImages(file, onPage){
   const canvases = [];
   if (isPdf(file)){
     const pdf = await openPdfDoc(new Uint8Array(await file.arrayBuffer()));
+    // more pages than are read: said on the statement (readStatement: parsed.cut; BankOverlap.take: st.cut)
+    if (pdf.numPages > 60) (file.cut = file.cut || {}).img = [60, pdf.numPages];
     for (let p = 1; p <= Math.min(pdf.numPages, 60); p++){
       const page = await pdf.getPage(p);
       const vp0 = page.getViewport({scale: 1});
@@ -784,7 +822,7 @@ function parseByHeadings(pages){
     r.text = Object.values(r.cells).join(" ");
   });
   const colIdx = {}; cols.forEach(c => { if (c.k) colIdx[c.k] = c.k; });
-  return {rows: rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text), meta: statementMeta(metaLines)};
+  return {rows: rowsFromCells(allRows, colIdx, (r, k) => r.cells[k] || "", r => r.text, {guess: true}), meta: statementMeta(metaLines)};
 }
 // OCR gives single words: join words on one line that sit close together into phrases
 function joinOcrWords(items){

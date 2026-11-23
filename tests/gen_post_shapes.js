@@ -16,7 +16,11 @@ const js = [SHARED].concat(ORDER.map(f => fs.readFileSync(path.join(SRC, f), "ut
 const NAMES = ["xesc", "r2", "num", "amt", "toTallyDate", "fmtDate", "toDateObj", "MONTHS", "MONTHS3", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial",
   "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering", "ledNm", "OWN_BANK",
   // the sheet-import change: voucherXml takes the voucher type from vchTypeOf (src/js/03), which asks billVt; salesVoucherXml from salesVt (src/js/25)
-  "vchTypeOf", "billVt", "salesVt"];
+  "vchTypeOf", "billVt", "salesVt",
+  // next-fix-audit-bank: a receipt's allocations, of the invoices of the customer posted to (src/js/22-bank-guards.js)
+  "bankSalesOf", "bankSalesAlloc",
+  // (next-fix-audit-sales-einv) a credit note against an invoice posted from FinCom is set against its bill: salesAgainstOf (src/js/25)
+  "salesAgainstOf"];
 const re = /\n(?:async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/g;
 const decl = []; let m;
 while ((m = re.exec(js))) decl.push({name: m[1], at: m.index});
@@ -29,11 +33,12 @@ const ctx = {console, Math, JSON, Date, Number, String, RegExp, Object, Array, S
   S: {bank: null, sales: {cfg: {voucherType: "Sales"}}},
   tallyLedgerName: n => n, narrationFor: e => e.narr, exactLedger: n => n, knownLedgers: () => new Map(), bankLedgers: () => ({tds: "TDS Payable"}),
   B: () => ({salesRef: []}), SL: () => ({cfg: {voucherType: "Sales"}}),
+  // (next-fix-audit-sales-einv) the voucher's company GSTIN (2f8b825a7: the registration the invoice is issued from), the
+  // client's own in these one-registration shapes; the client's states, one
+  salesCmpGstin: (v, co) => co.gstin || "", salesOwnStates: () => ["27"], salesRegOf: () => ({code: "27", gstin: "27AAACZ1234Z1Z5"}),
   // the invoice's lines (salesLines works them out from the invoice and the company's ledgers): given here as they come out
-  salesLines: v => v.lines,
-  // the company's GSTIN the invoice is made under (src/js/25 salesCmpGstin, from the client's own GSTINs): the invoice here
-  // names no seller GSTIN, so the company's own, as the app gives it then
-  salesCmpGstin: (v, co) => (co && co.gstin) || ""};
+  // (staging-next had the same stub, salesCmpGstin, here: one kept, above, with the sales track's)
+  salesLines: v => v.lines};
 vm.createContext(ctx);
 // the shared name helpers ledNm calls (namesBreaks), as the app has them first (build.py NAMES_JS, without the export line); not hashed: they are
 // the cloud's and the app's one rule for Tally names, not a posting builder

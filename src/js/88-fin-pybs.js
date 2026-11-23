@@ -74,7 +74,10 @@ const FinPyBs = (() => {
     const pick = bsS.length ? bsS.concat(ntS) : [sheets[0]];
     let unit = 0, cols = null; const raw = [];
     pick.forEach((sh, si) => {
-      const rows = sh.rows.map(r => (r || []).map(c => c == null ? "" : c));
+      // a year heading kept as a real Excel date (31-03-2026) is read as its written date (next-fix-audit-imports: it came
+      // as a number, so the heading was not found, the Note column was taken as this year and last year's was lost)
+      const dmy = d => [d.getDate(), d.getMonth() + 1].map(x => String(x).padStart(2, "0")).join("-") + "-" + d.getFullYear();
+      const rows = sh.rows.map(r => (r || []).map(c => c == null ? "" : c instanceof Date ? (isNaN(c) ? "" : dmy(c)) : c));
       const txt = r => r.filter(c => typeof c === "string").join(" ");
       rows.slice(0, 12).forEach(r => { unit = unit || unitOf(txt(r)); });
       // the heading row: two or more cells with a year (or "current / previous year")
@@ -87,7 +90,8 @@ const FinPyBs = (() => {
       } else {
         // no heading: the columns that hold figures (a column of small whole numbers next to the label is the note)
         const cnt = {}; rows.forEach(r => r.forEach((x, i) => { if (typeof x === "number" || (typeof x === "string" && amount(x) != null && /\d/.test(x))) cnt[i] = (cnt[i] || 0) + 1; }));
-        const noteCol = Object.keys(cnt).map(Number).find(i => rows.every(r => r[i] === "" || r[i] == null || (Number.isInteger(+r[i]) && +r[i] > 0 && +r[i] < 100)));
+        // (a "Note" title cell over it, words with no figure, does not stop it being the note column)
+        const noteCol = Object.keys(cnt).map(Number).find(i => rows.every(r => r[i] === "" || r[i] == null || (typeof r[i] === "string" && !/\d/.test(r[i])) || (Number.isInteger(+r[i]) && +r[i] > 0 && +r[i] < 100)));
         const amts = Object.keys(cnt).map(Number).filter(i => i !== noteCol && cnt[i] >= 2).sort((a, z) => a - z);
         c = {cy: amts[0] == null ? -1 : amts[0], py: amts[1] == null ? null : amts[1], note: noteCol == null ? -1 : noteCol};
         hi = -1;

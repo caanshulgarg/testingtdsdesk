@@ -9,6 +9,8 @@ import DateBox from "../parts/DateBox.jsx";
 import More from "../parts/More.jsx";
 import { AutoChip, AutoWhy, AutoUndo } from "../parts/AutoPost.jsx";
 import { Info } from "../parts/Answer.jsx";
+// the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 
 // ui-tidy (13-Oct-2026): how the bill was read, in one short line ("Read free from the PDF text · all checks passed ✓")
 const readWords = (m) => m === "free (PDF text)" ? "Read free from the PDF text" : m === "free OCR" ? "Read free by OCR" : m === "Google OCR" ? "Read by Google OCR" : m === "pasted" ? "Pasted in" : "Read by " + m;
@@ -68,9 +70,14 @@ function Items({ e }) {
 }
 
 // why this bill may not belong here: not a tax invoice, or billed to someone else
-function DocWarnings({ e }) {
+// (a bill to the client's other registration, its Other GSTINs, is the client's: ownGstins, src/js/01); a difference over
+// ₹1 between the bill's lines and its total goes to round off only once a person says the total is right
+function DocWarnings({ e, c }) {
   const co = CO(), x = e.x, bill = String(x.buyerGstin || "").toUpperCase(), ship = String(x.shipGstin || "").toUpperCase();
-  const notBill = e.docKind && !e.docOverride, elsewhere = co.gstin && bill && bill !== co.gstin && !e.buyerOverride, deliveredHere = ship && ship === co.gstin;
+  const notBill = e.docKind && !e.docOverride, elsewhere = co.gstin && bill && !ownGstins(co).includes(bill) && !e.buyerOverride, deliveredHere = ship && ship === co.gstin;
+  const ro = e.status === "draft" && c && Math.abs(c.ro) > 1 && e.roOk !== c.ro;
+  // a bill to the client's other registration: its credit is that GSTIN's (s.16, s.25(4) CGST Act), a person says the GST ledgers are its
+  const reg = e.status === "draft" && c && c.itc && c.itc.reg && c.itc.reg !== String(co.gstin || "").toUpperCase() && e.regOk !== c.itc.reg && (c.missing || []).some((m) => /GST ledgers/.test(m)) ? c.itc.reg : "";
   return <>
     {notBill && <div className="bigwarn"><b>This is {DOC_KIND_TEXT[e.docKind] || "not a tax invoice"}, not a purchase bill.</b>
       <div>Nothing should be booked from it. Wait for the supplier's tax invoice and book that one instead.</div>
@@ -78,6 +85,12 @@ function DocWarnings({ e }) {
     {elsewhere && <div className="bigwarn"><b>This bill is not made out to {co.name}.</b>
       <div>It is billed to <b>{bill}</b>{deliveredHere ? <>, and only <b>delivered</b> to this client. The purchase belongs to the party it is billed to.</> : ", while this client’s GSTIN is " + co.gstin + "."} Check whether it was filed under the wrong client.</div>
       <div className="row" style={{ marginTop: 8 }}><button className="btn small" onClick={() => doAct("buyerOk")}>It does belong here — carry on</button></div></div>}
+    {reg && <div className="bigwarn"><b>Billed to this client’s other registration {reg}.</b>
+      <div>The input credit is that GSTIN’s, not {co.gstin}’s. Post it only to GST ledgers kept for {reg}; if this Tally company holds only {co.gstin}, the credit lands in the wrong GSTR-3B.</div>
+      <div className="row" style={{ marginTop: 8 }}><button className="btn small" onClick={() => billSetChoice(e, "regOk", reg)}>The GST ledgers are {reg}’s — carry on</button></div></div>}
+    {ro && <div className="bigwarn"><b>The lines do not add up to the total.</b>
+      <div>Taxable value plus GST is {money(r2(c.base + c.gstTotal))}; the total is {money(c.total)}. {money(Math.abs(c.ro))} would go to round off. Correct the figures, or confirm the total is right.</div>
+      <div className="row" style={{ marginTop: 8 }}><button className="btn small" onClick={() => doAct("roOk")}>The total is right — post {money(Math.abs(c.ro))} to round off</button></div></div>}
   </>;
 }
 
@@ -136,6 +149,7 @@ function Gst({ e, c, ro, snap }) {
           <div className="row" style={{ marginTop: 6 }}><button className="btn small" onClick={() => doAct("blockAccept")}>Accept: block credit</button><button className="btn small" onClick={() => doAct("blockReject")}>Reject: credit allowed</button></div></div>}
         {blocked175 && <>
           <label className="f" style={{ marginTop: 6 }}><span>Category</span><select value={bcat} onChange={(ev) => billGst(e, "blockCat", ev.target.value)}>
+            {!BLOCK_CATS.some((x) => x.id === bcat) && <option value={bcat}>{bcat}</option>}
             {BLOCK_CATS.map((x) => <option key={x.id} value={x.id}>{x.label + " — " + x.sec}</option>)}</select></label>
           <p className="note" style={{ margin: "6px 0 0" }}>{gd.block.from === "client" ? "Blocked by this client's setting. Untick to claim credit on this bill. " : ""}GST of {money_(c.gstTotal + (r ? r.tax : 0))} is added to the expense instead of input credit.</p>
         </>}
@@ -186,7 +200,7 @@ function Tds({ e, c, v, ro }) {
       {newType && <div className="row" style={{ margin: "-4px 0 10px" }}><button className="btn small" onClick={() => doAct("confirmType")}>Confirm payment type</button><span className="note">{supplierInTally(e.x) ? "In Tally as " + supplierInTally(e.x) + ", not yet in FinCom’s list" : "New supplier"}: the payment type decides the TDS section.</span></div>}
       {e.ai && e.ai.reason && <p className="note" style={{ margin: "-4px 0 10px" }}>{/Claude/.test(e.readMode || "") || !e.readMode ? "Claude: " + e.ai.reason : "Guessed from the bill: " + e.ai.reason.replace(/^Free reading:\s*/, "")}</p>}
       <p className={"verdict " + (v.applicable ? "yes" : "nope")}>{v.applicable ? (v.skip ? "TDS applies: " + money_(v.tdsWould) + ", not booked" : "TDS applies: " + money_(v.tds)) : "No TDS on this invoice"}</p>
-      {(v.tdsWould > 0 || e.tdsSkip || !v.never) && !ro ? (
+      {(v.tdsWould > 0 || e.tdsSkip || !v.never) && !ro && !c.cn ? (
         <div className="skipbox">
           {(v.tdsWould > 0 && !v.anyway) || v.skip
             ? <label className="chk"><input type="checkbox" checked={v.tdsWould > 0 && !v.skip} onChange={(ev) => billBookTds(e, ev.target.checked)} /> <b>Deduct TDS on this bill</b></label>
@@ -200,7 +214,8 @@ function Tds({ e, c, v, ro }) {
       ) : ro && v.skip ? <p className="note" style={{ margin: "0 0 8px" }}>Not booked: {skipText(v.skip)}</p> : null}
       <ul className="why">{v.why.map((w, i) => <li key={i}>{w}</li>)}</ul>
       {v.meter && v.meter.limit ? <><Meter m={v.meter} /><YtdSource e={e} c={c} /></> : null}
-      {v.catchUp > 0 && !ro && <label className="chk" style={{ marginTop: 10 }}><input type="checkbox" checked={!!e.includeCatchUp} onChange={(ev) => billSetChoice(e, "includeCatchUp", ev.target.checked)} /> Include TDS on earlier bills ({money0(v.catchUp)}) in this entry</label>}
+      {v.catchUp > 0 && !ro && <label className="chk" style={{ marginTop: 10 }}><input type="checkbox" checked={!!c.catchUpIn} onChange={(ev) => { if (c.ytd.fromTally){ e.catchUpTally = ev.target.checked; if (ev.target.checked) e.catchUpNotDue = null; } billSetChoice(e, "includeCatchUp", ev.target.checked); }} /> Include TDS on earlier bills ({money0(v.catchUp)}) in this entry</label>}
+      {v.catchUp > 0 && !ro && c.ytd.fromTally && !c.catchUpIn && <label className="chk" style={{ marginTop: 6 }}><input type="checkbox" checked={!!e.catchUpNotDue} onChange={(ev) => { if (ev.target.checked) e.includeCatchUp = false; billSetChoice(e, "catchUpNotDue", ev.target.checked ? { by: whoAmI(), at: new Date().toISOString() } : null); }} /> Checked in Tally: their TDS was deducted already, or is not due</label>}
     </div>
     <dl className="figs">
       <dt>Section</dt><dd>{v.ref}</dd><dt>Old section</dt><dd>{v.old}</dd>
@@ -394,7 +409,7 @@ export default function BillDetail({ id }) {
         {e.uncertain && e.uncertain.length ? e.uncertain.length + (e.uncertain.length === 1 ? " field needs" : " fields need") + " a quick look (amber)" : "Check the figures against the image"}{e.handwritten ? " · handwritten bill" : ""}
         {" "}<Info label="What to do">{e.uncertain && e.uncertain.length ? "Compare the fields marked in amber with the image; to correct one, click in the box and type. When they are right, press “Fields look right” in the bar at the bottom." : "Check the figures against the image."}
           {e.legibility ? " Claude noted: " + e.legibility : ""}</Info></p></section>}
-      <DocWarnings e={e} />
+      <DocWarnings e={e} c={c} />
       {closed.length > 0 && <div className="banner cp-banner"><b>Closed period.</b> This bill is dated {fmtDate(x.invoiceDate)}: {closed.join("; ")}. It can still be posted; FinCom will ask first.</div>}
       <section className={e.fileName !== "Manual entry" ? "withprev" : ""}>
         {e.fileName !== "Manual entry" && <BillDoc e={e} />}

@@ -12,6 +12,7 @@ import { needDays } from "./needDays.js";
 // migration 136 (next-held-settle): a client's held lines, one period, with the Day Book upload preset to it
 import { heldFor } from "../parts/HeldBlock.jsx";
 import { soonDraw } from "./soonDraw.js";
+import { TALLY_CONN } from "./tallyPort.js";
 import { QUIET } from "./quietReads.js";
 // next-tally-own-status: this person's own bridge and own Tally (the look on this computer, ownBridge, ownState, placeOf)
 // are lib/ownBridge.js's, loaded at the app's start; the Tally page's tables and words here read them as before
@@ -287,6 +288,7 @@ export function ownOpen() {
   let o; try { o = ownState(); } catch (e) { o = { state: "none" }; }
   return openOf(o);
 }
+if (typeof window === "object" && window.FCOwn) window.FCOwn.open = ownOpen;
 const OPEN_OF = new WeakMap();
 function openOf(o) {
   if (o && typeof o === "object" && OPEN_OF.has(o)) return OPEN_OF.get(o);
@@ -351,7 +353,7 @@ const otherWords = (client, company, own) => { const u = otherLoginOf(client, co
   // its own Tally's ports are closed): that is why the company is not seen here, not another login
   const off = ownConnOff(own);
   return off || shown(client) + "’s Tally is open in another Windows login (" + u + "), not in this login’s. Open it in this login, or install FinCom Bridge in the " + u + " login."; };
-export const CONN_OFF = "Your Tally’s connection is off, so FinCom can’t see the companies open in it. In TallyPrime: F1 → Settings → Connectivity → Client/Server configuration → TallyPrime acts as: Both, then restart Tally.";
+export const CONN_OFF = "Your Tally’s connection is off, so FinCom can’t see the companies open in it. In TallyPrime: " + TALLY_CONN + " → Acts as Both, then restart Tally.";
 // this login's own bridge's beat says its Tally's connection is off: FinCom Bridge could not write tally.ini ("cannot
 // write"), or Tally runs in this login and none of its own ports answers (closed / not answering; another user's never
 // counts); "" otherwise

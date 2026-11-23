@@ -81,9 +81,12 @@ const same = (a, b, w) => ok(JSON.stringify(a) === JSON.stringify(b), w + ": " +
   console.log("13-week forecast, week 1 (01-Apr-2026 to 07-Apr-2026)");
   const w1 = r.p2.fc.weeks[0];
   ok(w1.from === "20260401" && w1.to === "20260407", "week 1 runs 01-Apr to 07-Apr");
-  eq(w1.inn, 559800, "week 1 in");
+  // review of 22-Nov-2026 (EXPECTED.md): a bill more than 180 days past its expected date is doubtful and kept apart
+  // (Marigold LFU/001, 59,000, expected 28-Jul-2025; Nightjar NSL/112, 1,16,000, expected 02-Jun-2025), not taken in week 1
+  eq(w1.inn, 500800, "week 1 in");
   // finding 2 (EXPECTED.md), fixed on 02-Oct-2026: March's TDS is due on 30 April, not 7 April
-  eq(w1.out, 352400, "FINDING 2: week 1 out"); eq(w1.net, 207400, "FINDING 2: week 1 net");
+  eq(w1.out, 236400, "FINDING 2: week 1 out"); eq(w1.net, 264400, "FINDING 2: week 1 net");
+  ok(r.p2.fc.old && r.p2.fc.old.n === 2 && r.p2.fc.old.inn === 59000 && r.p2.fc.old.out === 116000, "bills over 180 days late kept apart: 59,000 to collect, 1,16,000 to pay");
   ok(!w1.items.some(z => z.what === "TDS") && r.p2.fc.weeks.some(w => w.items.some(z => z.what === "TDS" && z.d === "20260430")), "FINDING 2: March's TDS is due on 30 April, not in week 1");
 
   console.log("cash flow");

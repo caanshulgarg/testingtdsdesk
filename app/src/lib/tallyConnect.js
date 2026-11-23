@@ -53,6 +53,7 @@ export function deadKey(whose, beat) {
 
 // "PC1\usera" and "usera" are the same login (one side may say no computer); two computers' are not; null: not known
 import { lc, sameUser, ownHint, HERE, baseNow, lastMine } from "./ownBridge.js";
+import { TALLY_CONN } from "./tallyPort.js";
 export { sameUser, ownHint, HERE, lastMine };
 // a /ping answer is this login's bridge: its session says so (2.5.3), or (older, or Windows did not say) it is this
 // Windows user's with an id, and its Windows user is not another than this login's own bridge's (when both are known)
@@ -196,9 +197,26 @@ async function rekeyOnce(why) {
   if (!d || !d.key) throw { message: "FinCom's cloud did not make a key for this computer." };
   let r;
   try { r = await within(Bridge.call("/cloudlink", { url: TCloud.ingestUrl(), key: d.key }, LINK_MS), LINK_MS + 2000, "FinCom Bridge did not finish connecting in time (it needs the internet to reach FinCom). Try again."); }
-  catch (e) { try { await TCloud.rpc("tally_device_revoke", { p_id: d.id }); } catch (e2) { /* left unused */ } throw e; }
+  catch (e) {
+    // audit 22-Nov-2026 (tally-pages 5): no answer in time is not a refusal. The bridge goes on saying hello to FinCom
+    // (up to a minute) after the page stopped waiting, and the first key it binds with is its key for good (migration
+    // 54): a key revoked then left the bridge bound to a dead key. So the cloud is asked a few times whether the bridge
+    // is now this firm's (only this new key can have made it so: it was not before, stillNeeded); the key is removed
+    // only when the bridge said no, or is still not this firm's after that
+    if (!/^bridge(_key|_other_user|_unproven)?$/.test(String((e && e.code) || ""))) {
+      const id = (Bridge.cfg() || {}).bridgeId || "";
+      for (let i = 0; i < 5; i++) {
+        await pause(5000);
+        const w = await whoseIs(id);
+        if (w && w.mine) { TCloud.autoAt = Date.now() + 60000; TCloud.autoErr = ""; TCloud.rekeyed = { at: Date.now(), why: why || "" }; HERE.refused = false; return { late: true }; }
+      }
+    }
+    try { await TCloud.rpc("tally_device_revoke", { p_id: d.id }); } catch (e2) { /* left unused */ }
+    throw e;
+  }
   TCloud.autoAt = Date.now() + 60000; TCloud.autoErr = "";
   TCloud.rekeyed = { at: Date.now(), why: why || "" };
+  HERE.refused = false;   // (re-review 22-Nov-2026: a new key handed over, an earlier refusal is over everywhere)
   return r || {};
 }
 
@@ -209,7 +227,8 @@ export async function keyRefused() {
   if (!(await within(Bridge.ensureProven(), 6000, "").catch(() => false))) return false;
   try { await within(Bridge.refresh(false), STEP_MS, ""); } catch (e) { return false; }
   if (Bridge.st.state !== "ok") return false;
-  return deadKey(await whoseIs(Bridge.cfg().bridgeId), Bridge.st.beat);
+  // (kept for the page's own status: ownState says the key is refused, audit 22-Nov-2026)
+  return (HERE.refused = deadKey(await whoseIs(Bridge.cfg().bridgeId), Bridge.st.beat));
 }
 
 // the one click. Returns {st, say, ...}: ok | code (this browser not connected to the bridge yet: its code) | none |
@@ -312,7 +331,7 @@ export function bridgeTakesPort() {
 // "error", say}); 0: automatic again. An older bridge: the page's pin, as before ({st: "pinned"})
 export async function typePort(p) {
   const n = Number(String(p == null ? "" : p).replace(/\D/g, "")) || 0;
-  if (n > 65535) return { st: "bad", say: "Type a port number from 1 to 65535 (TallyPrime: F1 → Settings → Connectivity)." };
+  if (n > 65535) return { st: "bad", say: "Type a port number from 1 to 65535 (TallyPrime: " + TALLY_CONN + ")." };
   if (!bridgeTakesPort()) return usePort(n) ? { st: "pinned", port: n } : { st: "bad", say: "Type a port number from 1 to 65535." };
   let j;
   try { j = await within(Bridge.call("/ports/use", { port: n }, 15000), STEP_MS, "FinCom Bridge did not answer in time."); }
@@ -347,7 +366,11 @@ export const cloudKnows = (company) => [].concat((typeof TLight === "object" && 
   .some((r) => r && r.company === company);
 export async function linkNow(company, cid) {
   if (typeof TCloudUp !== "object") throw new Error("Sign in to the firm account first.");
-  const bridge = typeof Bridge === "object" && Bridge.cfg ? String(Bridge.cfg().bridgeId || "") : "";
+  // (audit 22-Nov-2026, tally-pages 3: this browser's bridge is named only when the company is open in its own Tally;
+  // else the cloud takes the bridge whose beat has it open, never this login's for another login's company)
+  const mine = typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.st && Bridge.st.state === "ok"
+    && [].concat(Bridge.st.open || []).some((o) => o && o.name === company && o.mine !== false);
+  const bridge = mine && Bridge.cfg ? String(Bridge.cfg().bridgeId || "") : "";
   const j = await within(TCloudUp.post({ kind: "link_now", company, client: cid, bridge }, {}), LINKNOW_MS, "FinCom's cloud did not answer in time (the internet on this computer?). Press Link again.");
   const row = { company, client_id: cid, device_id: (j && j.device) || "", gstin: "", last_seen: new Date().toISOString(), linked_at: new Date().toISOString(), linked_by: "" };
   [(typeof TLight === "object" && TLight.st && TLight.st.cos) || null, (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || null]

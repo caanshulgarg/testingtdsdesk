@@ -250,7 +250,8 @@ function clientRemoved(id){
 // in memory as JSON: the base cloudApplyNow merges against when a copy comes in over a change made here and not yet
 // sent (owner, 04-Oct-2026). Clients keep theirs in BankDB (ClientBase).
 const CloudBase = new Map();
-const CLOUD_BASE_SEED = new Set(["entry", "party", "unsorted", "sales", "firm"]);
+// (audit 22-Nov-2026: bank_rows too, so a statement part merges line by line against the copy both had: bankRowsMerge)
+const CLOUD_BASE_SEED = new Set(["entry", "party", "unsorted", "sales", "firm", "bank_rows"]);
 function cloudBaseSet(k, json){ if (!/^(client|inbox)\|/.test(k)) CloudBase.set(k, json); }
 // changes since the last sync (and anything deleted here)
 function cloudChanges(){
@@ -350,6 +351,29 @@ function merge3(base, mine, theirs){
     return out;
   }
   return mine;
+}
+// Audit 22-Nov-2026 (tally-sync 1): a statement's lines go as parts of 300 (bank_rows, {rows: [...]}); merge3 kept the
+// whole list of this computer, so a line another computer posted (its state, its Tally voucher) or classified came back
+// as ready here and was sent back. Now line by line on the id: each line merged as the client setup is (merge3 against
+// that line of the copy both had; with no such copy, this computer's line), and a line posted on one side only (sent or
+// in Tally, not as the copy both had) keeps that side's posting, so a voucher already in Tally is never offered again.
+// The list of lines stays this computer's (a part is a slice by position: no line is added to it from the other copy).
+const BANK_POST_KEYS = ["state", "sentAt", "postedVia", "postError", "postJob", "postJobNew", "postedOptional", "postVerified", "postByReply", "checking", "tally"];
+function bankRowsMerge(base, mine, theirs){
+  const by = d => new Map(((d && d.rows) || []).filter(x => x && x.id != null).map(x => [String(x.id), x]));
+  const bb = base === NOBASE ? null : by(base), tt = by(theirs), posted = x => !!x && (x.state === "sent" || x.state === "intally");
+  return ((mine && mine.rows) || []).map(m => {
+    const id = m && m.id != null ? String(m.id) : null, t = id ? tt.get(id) : undefined;
+    if (!t) return m;
+    const bl = bb ? bb.get(id) : undefined;
+    let v = bb ? merge3(bl, m, t) : m;
+    if (posted(v)) return v;
+    const p = [m, t].find(x => posted(x) && !(posted(bl) && bl.state === x.state && sameVal(bl.tally, x.tally)));
+    if (!p) return v;
+    v = Object.assign({}, v);
+    BANK_POST_KEYS.forEach(k => { if (k in p) v[k] = p[k]; else delete v[k]; });
+    return v;
+  });
 }
 // A choice the server holds that this copy never had stays, with the bank account it names and that account's ledger
 // (26-Oct-2026: a copy here older than the base, from another tab or an old object saved, removed the account's
@@ -525,6 +549,7 @@ async function cloudApplyNow(rows){
         const base = baseGet(k);
         // no base kept (a change made before this page was opened): what is here is kept whole
         let data = base !== undefined && plainObj(here) && plainObj(r.data) ? merge3(JSON.parse(base), here, r.data) : here;
+        if (r.kind === "bank_rows" && plainObj(here) && plainObj(r.data)) data = Object.assign({}, here, {rows: bankRowsMerge(base !== undefined ? JSON.parse(base) : NOBASE, here, r.data)});
         // (next-fix-sales-sync) Sales settings: their copy as it came, merged setting by setting with the times
         // (cloudApplySales), not by which push was later
         if (r.kind === "sales_cfg" && plainObj(data) && plainObj(r.data)) data = Object.assign({}, data, {cfg: r.data.cfg, cfgAt: r.data.cfgAt});
@@ -1047,17 +1072,7 @@ function billGst(e, k, v){
   if (k === "blockCat") e.itcBlock = {on:true, cat:v};
   Store.saveEntry(cid, e); refreshStats(cid); render();
 }
-// the client's Tally ledger list, so a bill's entry can be checked line by line before approval (review item 2):
-// straight from Tally when the bridge has the company open, else from a ledger list file exported from Tally
-async function billReadLedgers(){
-  const cid = S.coId, co = CO(cid);
-  if (!S.bank || S.bank.cid !== cid || S.bank.loading) await loadBank(cid);
-  if (bridgeLive(co) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(cid))){ await Ledgers.refresh(cid); return; }
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".xlsx,.xls,.csv,.xml";
-  inp.onchange = async () => { const f = inp.files && inp.files[0]; if (f && S.bank && S.bank.cid === cid){ await importLedgerList(f); render(); } };
-  inp.click();
-}
+// (billReadLedgers, focusBillField: src/js/99-bill-suppliers.js, with the bill screens)
 // "Booked before for this supplier": use that expense ledger
 function billUseExpense(e, name){ if (e && e.status === "draft"){ e.expenseLedger = name; e.expenseUserSet = true; e.expenseFrom = ""; Store.saveEntry(S.coId, e); render(); } }
 // a ledger not in Tally: use a suggested one (to) or create it; the same fix goes to every bill waiting with it
@@ -1169,18 +1184,6 @@ function billRestore(id){
 const MISSING_FIELD = {"invoice date": "invoiceDate", "supplier name": "vendorName", "taxable value": "taxable", "party ledger": "partyLedger", "expense ledger": "expenseLedger", "TDS ledger": "tdsLedger"};
 function missingField(item){ return MISSING_FIELD[String(item || "").trim()] || ""; }
 function firstMissingField(missing){ for (const m of (missing || [])){ const k = missingField(m); if (k) return k; } return ""; }
-// ui-tidy (13-Oct-2026; the owner: "there is some glitch also while opening this"): when a bill opens, its first missing
-// field gets the cursor without the page or the drawer scrolling to it ({noScroll}); the bill opens at its top, the PDF and
-// the fields in view. A click on a missing item ("Cannot approve: …") still scrolls to it
-function focusBillField(key, o){
-  const host = document.querySelector("#app aside.drawer") || document.getElementById("app") || document;
-  const el = host.querySelector('[data-focus-field="' + key + '"]');
-  if (!el) return false;
-  if (o && o.noScroll){ try { el.focus({preventScroll: true}); } catch (e){ el.focus(); } return true; }
-  try { el.scrollIntoView({block: "center"}); } catch (e){}
-  el.focus();
-  return true;
-}
 // C1 (the bulk buttons): why no bill is ready, counted from the drafts' missing lists: "No bill is ready: 2 need an invoice
 // date, 1 a party ledger"
 function noneReadyWords(rows){
@@ -1464,7 +1467,7 @@ function doAct(act, t){
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
       const heldIds = [];
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; });
+      statsHeld(() => rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; }));
       S.revSel = new Set();
       // smart moves round 1 (8): "5 approved · Post 5 to Tally → · Show the 2 that need details" (buttons; nothing is posted by itself)
       const waiting = Object.values(D().entries).filter(x => x.status === "approved" && !x.exportedAt).length;
@@ -1573,6 +1576,7 @@ function doAct(act, t){
       break;
     }
     case "docIsBill": { const e0 = curEntry(); if (e0){ e0.docOverride = true; Store.saveEntry(S.coId, e0); toast("Taken as a tax invoice."); render(); } break; }
+    case "roOk": { const e0 = curEntry(); if (e0){ e0.roOk = compute(e0).ro; Store.saveEntry(S.coId, e0); refreshStats(S.coId); render(); } break; }
     case "buyerOk": { const e0 = curEntry(); if (e0){ e0.buyerOverride = true; Store.saveEntry(S.coId, e0); toast("Kept under " + CO().name + "."); render(); } break; }
     case "cloudSync": cloudSync(true); break;
     case "logAll": S.logAll = !S.logAll; render(); break;
@@ -1718,17 +1722,7 @@ function doAct(act, t){
       saveBooks(); render(); break;
     }
     case "audit3cdPdf": { const run = (S.books.audit || {}).last; if (run) printView(CO().name + " 3CD working " + run.from + "-" + run.to, "<style>@page{size:A4 portrait;margin:14mm}p{margin:0 0 6px}</style>" + Audit.form3cdHtml(Audit.form3cd(run))); break; }
-    case "audit3cdExcel": {
-      const run = (S.books.audit || {}).last; if (!run) break;
-      const d = Audit.form3cd(run);
-      ensureXlsx().then(() => {
-        const wb = XLSX.utils.book_new();
-        d.clauses.forEach(c => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Clause " + c.no + ". " + c.title], c.head].concat(c.rows).concat(c.note ? [[], [c.note]] : [])), ("Cl " + c.no).replace(/[\\/?*\[\]:]/g, " ").slice(0, 31)));
-        saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-3CD-working-" + run.from + "-" + run.to + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-        toast("Downloaded.");
-      }, e => toast("Could not build the file: " + (e && e.message)));
-      break;
-    }
+    case "audit3cdExcel": { const run = (S.books.audit || {}).last; if (run) Audit.form3cdExcel(run).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "auditReadLy": {
       const b = S.books, dr = Audit.defaultRange(b), r0 = S.auditRange || {from: Audit.iso(dr.from), to: Audit.iso(dr.to)};
       const f0 = Audit.ymd(r0.from), t0 = Audit.ymd(r0.to), lf = MIS.shift(f0, -1), lt = MIS.shift(t0, -1);
@@ -2257,7 +2251,7 @@ document.addEventListener("change", ev => {
   if (ev.target && ev.target.id && ["tallyIn", "booksIn", "mastersIn", "tbIn", "tbCheckIn", "twoBIn", "filedIn"].includes(ev.target.id)){ booksChange(ev.target); return; }
   if (ev.target && ev.target.id === "multiBooksIn"){ MultiUp.pick(ev.target); return; }
   if (ev.target && ev.target.dataset && S.books && gstFixChange(ev.target)) return;
-  if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) importMarketFile(f); return; }
+  if (ev.target && ev.target.id === "marketIn"){ const f = (ev.target.files || [])[0]; ev.target.value = ""; if (f) sheetStart([f], "sales"); return; }
   if (ev.target && ev.target.id === "salaryIn"){
     const f = (ev.target.files || [])[0]; ev.target.value = "";
     if (!f) return;
@@ -2267,7 +2261,7 @@ document.addEventListener("change", ev => {
       if (r.error){ toast(r.error); render(); return; }
       b.salary = r.rows; await saveBooks();
       const noPan = r.rows.filter(x => !/^[A-Z]{5}\d{4}[A-Z]$/.test(x.pan)).length;
-      toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + ".");
+      toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + (r.undated ? ", " + r.undated + " without a date (in no quarter): give a Month or Date column" : "") + ".");
       render();
     }, e => { b.busy = ""; toast("Could not read that sheet: " + ((e && e.message) || e)); render(); });
     return;

@@ -54,7 +54,10 @@ const TDSAudit = {
     const lr = rows.filter(r => r.ledgerRate);
     if (lr.length) add("ledrate", "info", lr.length + (lr.length === 1 ? " deduction" : " deductions") + " at another rate than its TDS ledger's (" + Array.from(new Set(lr.map(r => r.rate + "% on " + r.ledger))).join(", ") + "): the amount paid is read from the entry, at the rate deducted");
     // N13: one TDS entry for several bills, one row dated on the first
-    rows.filter(r => (r.bills || []).length > 1).forEach(r => add("bills", "info", (r.party || "?") + ": one TDS entry of " + this.day(r.date) + " covers " + r.bills.length + " bills (" + r.bills.map(z => this.day(z.date) + " " + this.money(z.amount)).join(", ") + "); the return has one row dated on the first bill"));
+    // (review of 22-Nov-2026) the first bill within the limit on its own (r.creditCheck, TDSSep.link): TDS fell due only when
+    // the year's total crossed the limit, so the date of credit and the 201(1A)(i) interest from it are a person's check
+    rows.filter(r => (r.bills || []).length > 1).forEach(r => add("bills", r.creditCheck ? "warn" : "info", (r.party || "?") + ": one TDS entry of " + this.day(r.date) + " covers " + r.bills.length + " bills (" + r.bills.map(z => this.day(z.date) + " " + this.money(z.amount)).join(", ") + "); the return has one row dated on the first bill" +
+      (r.creditCheck ? ". That bill is within the limit on its own: TDS fell due when the year's total crossed the limit. Check the date of credit, and the interest from it" : ""), r.creditCheck ? {vid: String(r.id).split("|")[0], date: r.date, no: r.voucher} : undefined));
     // N12: salary TDS is dated on the payroll entry (month end)
     if (form === "24Q" && rows.some(r => r.src === "payroll")) add("sal192", "info", "Salary TDS is dated on the payroll entry (the month's end), as the deduction at payment would be when salary is paid in the month; where it is paid later, its due date and interest are a month later");
     // M8: Tally's nature of payment still at a rate of a time gone (2020-21's reduced rates)
@@ -81,7 +84,7 @@ if (typeof TDS === "object") TDS.toExcel = async function(fy, q, form){
   const cs = [["Challans", "", "", "", "", "", ""], ["BSR code", "Challan serial", "Date deposited", "Tax", "Interest", "Total", "Allocated", "Left", "Used by this return", "Interest allocated here", "Fee allocated here"]]
     .concat(ch.map(c => [c.bsr, c.serial, d(c.date), num(c.tax), num(c.interest), r2(num(c.tax) + num(c.interest)), use[c.id] || 0, r2(num(c.tax) - (use[c.id] || 0)),
       r2(rows.filter(r => r.challan === c.id).reduce((a, r) => a + r.tds, 0)), part(c).interest, part(c).fee]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cs), "Challans");
+  XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(cs), "Challans");
   const head = ["Sl. No.", "Deductee code", "PAN of the deductee", "Name of the deductee", "Section code", "Date of payment or credit", "Amount paid or credited",
     "TDS", "Total tax deducted", "Date of deduction", "Rate at which deducted", "Reason for non-deduction or lower deduction", "Certificate number", "Voucher", "Challan BSR", "Challan serial", "Challan date", "Declaration UIN (Form 121 / 15G / 15H)"];
   const body = rows.map((r, i) => {
@@ -90,10 +93,10 @@ if (typeof TDS === "object") TDS.toExcel = async function(fy, q, form){
     return [i + 1, form === "26Q" ? dc : String(dc).padStart(2, "0"), pan, TDS26Q.fileName(r), form === "27EQ" ? r.code : TDS26Q.codeFor ? TDS26Q.codeFor(r) || TDS26Q.code(r.section) : TDS26Q.code(r.section),
       d(r.credit || r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, m.remark, m.certNo, r.voucher, c.bsr || "", c.serial || "", d(c.date || ""), m.uin || ""];
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
+  XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)([head].concat(body)), "Deductees");
   const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]
     .concat(this.summary(fy, q, form).map(s => [s.section, s.count, s.paid, s.tds, s.unallocated, s.noPan]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
+  XLSX.utils.book_append_sheet(wb, (typeof FC === "object" && FC.sheet ? FC.sheet : XLSX.utils.aoa_to_sheet)(sum), "Summary");
   const out = XLSX.write(wb, {bookType: "xlsx", type: "array"});
   saveFile(CO().name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + form + "-" + (q || "all") + "-" + (fy || "") + ".xlsx", new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
 };

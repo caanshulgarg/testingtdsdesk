@@ -8,7 +8,7 @@
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
-import { CatchUp } from "../../parts/Notes.jsx";
+import { CatchUp } from "../../parts/BookNotes.jsx";
 import { catchSoon } from "../../lib/catchSoon.js";
 import { behind } from "../../lib/behind.jsx";
 import { useAutoLine } from "../../lib/autoLine.js";
@@ -181,8 +181,10 @@ function Findings({ b, busy }) {
   // "worked out on 1231 entries… the books now hold 4" asked the user to press Run again)
   // (round 69: not while a finding's Recheck is running: that run is the one worked out again, and the table stays meanwhile)
   // next-audit-steps: the day's run on its own being worked out: it is the run worked out again, and its line says so
-  if (auto && Audit.stale(run)) return <><Head b={b} run={null} /><AutoLine j={auto} /></>;
-  if (!busy && Audit.stale(run) && !Object.values(S.auditRecheck || {}).some((x) => x.busy && x.co === S.coId)) {
+  // (review of 22-Nov-2026: each Audit.stale reads every entry of the period and the books' basis) asked once a drawing
+  const stale0 = Audit.stale(run);
+  if (auto && stale0) return <><Head b={b} run={null} /><AutoLine j={auto} /></>;
+  if (!busy && stale0 && !Object.values(S.auditRecheck || {}).some((x) => x.busy && x.co === S.coId)) {
     // next-speed-render: worked out behind the page, a check a step (Audit.runIn, the same run)
     if (!Audit._again) {
       Audit._again = true;
@@ -250,12 +252,22 @@ function Related({ b }) {
   </Confirm>;
 }
 
-// the Form 3CD draft, filled from the last run: Audit.form3cdHtml is also the PDF's template, so it stays HTML
+// the Form 3CD draft, filled from the last run: Audit.form3cdHtml is also the PDF's template, so it stays HTML. Worked out
+// once for a run and the books as they are (review of 22-Nov-2026: every drawing of the tab read every entry of the books
+// for clause 44, the TDS rows and the P&L again): kept while the run, the books' save (BOOKS_REV) and their basis are the same
+let f3Keep = null;
+function form3cdOf(b, run) {
+  const k = [run, run.code, run.at, typeof BOOKS_REV === "number" ? BOOKS_REV : 0, b];
+  if (f3Keep && f3Keep.k.every((x, i) => x === k[i]) && f3Keep.basis === MIS.basis(b)) return f3Keep.d;
+  const d = Audit.form3cd(run);
+  f3Keep = { k, basis: MIS.basis(b), d };
+  return d;
+}
 function Form3cd({ b }) {
   const run = (b.audit || {}).last;
   if (!run) return <div className="bk-none">The draft is filled from the audit, which has not been run yet. <button className="linkbtn" onClick={() => setAndShow("auditTab", "find")}>Open Findings</button></div>;
   return <section className="dash-card"><div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}><More label="Download" align="start" data-audit3cd-download="" items={[["Download the draft (PDF)", () => doAct("audit3cdPdf")], ["Excel", () => doAct("audit3cdExcel")]]} /></div>
-    <div className="audit3cd"><Legacy html={Audit.form3cdHtml(Audit.form3cd(run)).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></div></section>;
+    <div className="audit3cd"><Legacy html={Audit.form3cdHtml(form3cdOf(b, run)).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></div></section>;
 }
 
 // named Audit_ so the audit checks (the global Audit) stay in reach inside this file

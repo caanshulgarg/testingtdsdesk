@@ -12,6 +12,7 @@ import SyncActivity from "./TallySync.jsx";
 import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
+import { TALLY_CONN } from "../lib/tallyPort.js";
 import { lastEntry } from "../lib/tallyState.js";
 import CompaniesInTally, { companyRows, LinkedClients } from "../parts/TallyCompanies.jsx";
 import ConnectThisComputer, { CodeBox } from "../parts/TallyFirstLink.jsx";
@@ -126,7 +127,8 @@ function lineState(r, latest, owner) {
 // (migrations 35, 37, 54); its refusal is shown as it says it.
 const RS_CLS = { reading: "ok", paused: "warn", retrying: "warn", fincomstop: "bad", offline: "bad" };
 function Reqs({ r }) {
-  const q = r.reqs || {}, today = !q.day || q.day === new Date().toISOString().slice(0, 10);
+  // (audit 22-Nov-2026, tally-pages 8: the bridge's day is India's, not UTC's: istDay)
+  const q = r.reqs || {}, today = !q.day || q.day === (typeof istDay === "function" ? istDay(Date.now()) : new Date(Date.now() + 19800000).toISOString().slice(0, 10));
   const last = TCloud.reqSay(q.last), long = today ? TCloud.reqSay(q.longest) : "";
   if (!last && !long) return null;
   return <span className="note" data-reqs="">{[last && "Last request: " + last, long && "Longest today: " + long, today && q.over20 ? q.over20 + " over 20 s" : ""].filter(Boolean).join(" · ")}</span>;
@@ -440,6 +442,8 @@ function needOf(r, latest, owner, allStopped) {
   }
   if (rd.state === "paused") return { kind: "paused", text: "Reading is paused on " + pc + ". To resume: " + RESUME_TRAY, act: "check" };
   if (r.tally !== "open" && r.tally !== "busy") return { kind: "tally", text: "Tally is not open on " + pc + ". Open TallyPrime and the company there", act: "check" };
+  // (audit 22-Nov-2026, tally-pages 6: Tally open with no company is not "Connected": the same words as the other places)
+  if (r.tally === "open" && !(r.open || []).length) return { kind: "nocompany", text: "Tally is open on " + pc + ", but no company is open in it. Open the company in TallyPrime there", act: "check" };
   if (!r.main) return { kind: "main", text: "FinCom Bridge here only reads: another bridge on this computer posts", act: owner ? "makeMain" : "", say: owner ? "" : "An owner of the firm can make it the main bridge." };
   const base = (TCloud.baselines ? TCloud.baselines(r.device.id) : []).filter((x) => x.cur && x.cur.state === "needs_baseline");
   if (base.length) return { kind: "baseline", text: base[0].company + " needs a fresh starting point on " + pc + ": " + (base[0].cur.state_why || "no reason given"), act: owner && !p.noBaselineClear ? "baseline" : "", say: owner ? "" : "An owner of the firm clears it.", book: base[0].book, company: base[0].company };
@@ -1122,7 +1126,8 @@ export function BridgeSettings({ inDetails = false }) {
   return <>
     <div className="pane" data-connect-section=""><h3 style={{ marginTop: 0 }}>FinCom Bridge on this computer</h3><p className="note" style={{ margin: "0 0 12px" }}>This browser and FinCom Bridge on the same computer: the company open in Tally is followed, ledgers load straight from Tally, and entries are posted without files. Other computers post through FinCom’s cloud.</p>
       <div className="grid"><label className="f"><span>Bridge address</span><CommitBox data-bridge="url" aria-label="Bridge address" value={c.url} onCommit={(v) => bridgeSet("url", v)} /></label>
-        <label className="f"><span>Bridge key (filled in by Connect)</span><CommitBox data-bridge="key" data-fk="bridgekey" aria-label="Bridge key" value={c.key} autoComplete="off" placeholder="press Connect below" onCommit={(v) => bridgeSet("key", v)} /></label></div>
+        {/* audit 22-Nov-2026 (tally-pages 9): the key is a secret: shown masked, never typed over (Connect and Disconnect change it) */}
+        <label className="f"><span>Bridge key (filled in by Connect)</span><input type="text" readOnly data-bridge="key" data-fk="bridgekey" aria-label="Bridge key" value={c.key ? "•••• " + String(c.key).slice(-4) : ""} autoComplete="off" placeholder="press Connect below" /></label></div>
       <label className="chk" style={{ marginTop: 8 }}><input type="checkbox" checked={!!c.follow} onChange={(ev) => bridgeSet("follow", ev.target.checked)} /> Follow the company open in Tally (switch FinCom to it automatically)</label>
       <div className="row" style={{ marginTop: 10 }}><Act act={c.key ? "bridgeTest" : "bridgeConnect"} className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}</div>
       <div style={{ margin: "12px 0 0" }}><TallyStates co={S.coId ? CO() : null} /></div>
@@ -1131,7 +1136,7 @@ export function BridgeSettings({ inDetails = false }) {
         <p className="note" style={{ margin: "0 0 6px" }}>{"FinCom Bridge " + (st.version || "") + " connected" + (st.allowImport === false ? " (posting switched off in the bridge)" : "") + ". Checked " + fmtTime(st.at) + "."}</p>
         <p className="note" style={{ margin: "0 0 6px" }}>{MODE[st.mode] || ""}</p>
         {(st.clash || []).length > 0 && <p className="bk-warn">{st.clash.join(", ") + " is open in more than one Tally. Choose yours under Details (for support) with "}<b>Use this Tally</b>; until then nothing is read or posted for it.</p>}
-        {st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? null : <p className="bk-warn">TallyPrime is not answering. In TallyPrime: F1 Help → Settings → Connectivity → set “TallyPrime acts as” to Both.</p>}
+        {st.tallyUp || (Bridge.diag && (Bridge.diag.findings || []).length) ? null : <p className="bk-warn">{"TallyPrime is not answering. In TallyPrime: " + TALLY_CONN + " → Acts as Both, then restart Tally."}</p>}
         {!inDetails && <MoreToggle k="bridgeSupport" data-bridge-support="" label="Details (for support)" less="Hide details" />}
         {(inDetails || moreOpen("bridgeSupport")) && <div data-bridge-support-more="">
           <Sessions c={c} st={st} />

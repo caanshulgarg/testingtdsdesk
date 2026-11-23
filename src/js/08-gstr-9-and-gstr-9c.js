@@ -13,7 +13,13 @@ const GST9 = {
     const months = this.months(fy), have = new Set(GSTR.months()), inBooks = months.filter(m => have.has(m));
     const out = [], inn = [], t3 = {};
     inBooks.forEach(m => { GSTR.outward(m, reg).forEach(r => out.push(r)); GSTR.inward(m, reg).forEach(r => inn.push(Object.assign({ym: m}, r))); t3[m] = (typeof GSTF === "object" && GSTF.filed3b(m, reg)) || GSTR.threeBm(m, reg);
-      if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg) === "qrmp"){ const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } });
+      // next-fix-audit-gst: a QRMP quarter whose 3B is kept as filed is that one 3B (the three months'): at the quarter's end,
+      // its first two months nothing (else they were counted twice); otherwise each month's own, the quarter's payment at its end
+      if (typeof GSTSet === "object" && GSTSet.typeOf(m, reg) === "qrmp"){ const qe = GSTSet.qEnd(m), fq = typeof GSTF === "object" && GSTF.filed3b(qe, reg);
+        // (re-review: the quarter's last month in the books carries it, when the quarter's end is not in the books)
+        const qLast = inBooks.filter(x => GSTSet.qEnd(x) === qe).pop();
+        if (fq && fq.quarter) t3[m] = m === qLast ? fq : {net: {}, rcmOut: {}, pay: {cash: {}, use: {}}};
+        else { const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } } });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
     const T = {};
@@ -27,20 +33,24 @@ const GST9 = {
     T["4F"] = adv;
     T["4G"] = inBooks.reduce((a, m) => this.add(a, Object.assign({taxable: 0}, t3[m].rcmOut)), this.Z());
     T["4H"] = ["4A", "4B", "4C", "4D", "4E", "4F", "4G"].reduce((a, k) => this.add(a, T[k]), this.Z());
-    T["4I"] = S1(r => r.kind === "CDNR" && r.cls !== "exempt" && r.cls !== "nil" && r.cls !== "nongst" && !r.rcm);
-    T["4J"] = S1(r => r.kind === "DBNR" && !r.rcm);
+    // notes (next-fix-audit-gst): on a supply of table 5 (5A/5B zero rated without tax, 5C reverse charge, 5D-5F exempt,
+    // nil, non-GST) in 5H / 5I; on a supply of table 4 in 4I / 4J
+    const note = r => r.kind === "CDNR" || r.kind === "DBNR";
+    const five = r => r.rcm || r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst" || ((r.cls === "export" || r.cls === "sez") && !(r.igst > 0));
+    T["4I"] = S1(r => r.kind === "CDNR" && !five(r));
+    T["4J"] = S1(r => r.kind === "DBNR" && !five(r));
     const ty = this.typed(fy, reg), tz = k => Object.assign(this.Z(), ty[k] || {});
     T["4K"] = tz("4K"); T["4L"] = tz("4L");
     T["4N"] = this.add(this.add(this.add(this.add(T["4H"], T["4I"], -1), T["4J"]), T["4K"]), T["4L"], -1);
     T["5A"] = S1(r => r.cls === "export" && r.kind !== "CDNR" && r.kind !== "DBNR" && !(r.igst > 0));
     T["5B"] = S1(r => r.cls === "sez" && r.kind !== "CDNR" && r.kind !== "DBNR" && !(r.igst > 0));
-    T["5C"] = S1(r => r.rcm && r.kind !== "CDNR");
-    T["5D"] = S1(r => r.cls === "exempt" && r.kind !== "CDNR");
-    T["5E"] = S1(r => r.cls === "nil" && r.kind !== "CDNR");
-    T["5F"] = S1(r => r.cls === "nongst" && r.kind !== "CDNR");
+    T["5C"] = S1(r => r.rcm && !note(r));
+    T["5D"] = S1(r => r.cls === "exempt" && !note(r));
+    T["5E"] = S1(r => r.cls === "nil" && !note(r));
+    T["5F"] = S1(r => r.cls === "nongst" && !note(r));
     T["5G"] = ["5A", "5B", "5C", "5D", "5E", "5F"].reduce((a, k) => this.add(a, T[k]), this.Z());
-    T["5H"] = S1(r => r.kind === "CDNR" && (r.rcm || r.cls === "exempt" || r.cls === "nil" || r.cls === "nongst"));
-    T["5I"] = this.Z(); T["5J"] = tz("5J"); T["5K"] = tz("5K");
+    T["5H"] = S1(r => r.kind === "CDNR" && five(r));
+    T["5I"] = S1(r => r.kind === "DBNR" && five(r)); T["5J"] = tz("5J"); T["5K"] = tz("5K");
     T["5M"] = this.add(this.add(this.add(this.add(T["5G"], T["5H"], -1), T["5I"]), T["5J"]), T["5K"], -1);   // 5G - 5H + 5I + 5J - 5K
     T["5N"] = this.add(T["4N"], T["5M"]);
     // Part III: credit taken (6), reversed (7), and against 2B (8)
@@ -104,7 +114,8 @@ const GST9 = {
     const hin = {};
     GSTR.partsOf(inn).forEach(q => { const r = q.row, k = (q.hsn || "no HSN") + "|" + q.rate, x = hin[k] = hin[k] || {hsn: q.hsn || "", rate: q.rate, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}; ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { x[f] = r2(x[f] + num(q[f]) * sgn(r)); }); });
     // credit held back for 2B at the year's end explains a 6J difference
-    const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
+    // (re-review: less what 2B says is not available, held.na: held for good, not waiting for 2B)
+    const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - num(x.held.na) - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
     return {fy, reg, months, inBooks, missing: months.filter(m => !have.has(m)), T, pay, twoB, part6, heldEnd, typed: ty,
       hsnOut: Object.values(hsn).sort((a, c) => c.taxable - a.taxable), hsnIn: Object.values(hin).sort((a, c) => c.taxable - a.taxable)};
   },
@@ -223,17 +234,28 @@ async function gst9Excel(which){
     GST9.ROWS.forEach(r => { if (r.length === 3 && /^(II|III|IV|V|VI)$/.test(r[0])){ rows.push(["Part " + r[0], r[1] + ". " + r[2]]); return; } const x = d.T[r[0]] || GST9.Z(); rows.push([r[0].replace(/-.*/, ""), r[1], x.taxable, x.igst, x.cgst, x.sgst, x.cess]); });
     rows.push([]); rows.push(["Part IV", "9. Tax paid", "Tax payable", "Paid in cash", "Through IGST credit", "Through CGST credit", "Through SGST credit", "Through cess credit"]);
     [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]].forEach(([k, l]) => { const p = d.pay[k], by = p.by || {}; rows.push(["9", l, p.due, p.cash, by.igst || 0, by.cgst || 0, by.sgst || 0, by.cess || 0]); });
-    const T14 = d.T["14"] || {}; rows.push([]); rows.push(["14", "Differential tax paid on 10 and 11", "payable " + num(T14.payable), "paid " + num(T14.paid)]);
+    // (review of 22-Nov-2026) Table 14's figures as numbers under their headings, not the text "payable 1234.5"
+    const T14 = d.T["14"] || {}; rows.push([]); rows.push(["14", "Differential tax paid on 10 and 11", "Tax payable", "Paid"]); rows.push(["14", "", num(T14.payable), num(T14.paid)]);
     rows.push([]); rows.push(["Part VI", "15, 16 and 19", "Value / amount", "IGST", "CGST", "SGST", "Cess"]);
     GST9.TYPED.filter(([k]) => /^1[569]/.test(k)).forEach(([k, l]) => { const x = d.part6[k] || {}; rows.push([k, l.replace(/^\d+[A-Z]? /, ""), num(x.taxable), num(x.igst), num(x.cgst), num(x.sgst), num(x.cess)]); });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Rate", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnOut.map(x => [x.hsn, x.rate, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "17 HSN outward");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["HSN", "Taxable", "IGST", "CGST", "SGST", "Cess"]].concat(d.hsnIn.map(x => [x.hsn, x.taxable, x.igst, x.cgst, x.sgst, x.cess]))), "18 HSN inward");
   } else {
-    const c = GST9C.build(fy, reg), rows = [["Table", "Details", "Amount"], ["5A", "Turnover as per audited financial statements", c.a5]].concat(GST9C.ADJ.map(([k, l, sg]) => [k, l + (sg > 0 ? " (+)" : " (-)"), c.adjOf(k)]))
-      .concat([["5O", "Annual turnover after adjustments", c.o5], ["5P", "Turnover as per GSTR-9", c.p5], ["5Q", "Unreconciled", c.q5], ["6", "Reasons", c.st.reasons["6"] || ""],
-        ["7A", "Annual turnover after adjustments", c.o5], ["7B", "Exempted, nil, non-GST", c.exempt], ["7C", "Zero rated without payment", c.zero], ["7D", "Reverse charge supplies", c.rcm], ["7E", "Taxable turnover as per adjustments", c.e7], ["7F", "Taxable turnover as per GSTR-9", c.f7], ["7G", "Unreconciled", c.g7], ["8", "Reasons", c.st.reasons["8"] || ""],
-        ["12A", "ITC as per audited financial statements", c.itcBooks], ["12B", "ITC of earlier years claimed this year", num(c.st.adj["12B"])], ["12C", "ITC of this year to be claimed later", num(c.st.adj["12C"])], ["12D", "After adjustments", c.d12], ["12E", "ITC claimed in GSTR-9", c.e12], ["12F", "Unreconciled", c.f12], ["13", "Reasons", c.st.reasons["13"] || ""]]);
+    // (review of 22-Nov-2026) the derived lines as formulas on the lines above (5O, 5Q, 7A, 7E, 7G, 12D, 12F), each with its
+    // value, so a corrected 5A or adjustment in the working moves them
+    const c = GST9C.build(fy, reg), rows = [["Table", "Details", "Amount"]], at = {}, put = (k, l, v) => { rows.push([k, l, v]); at[k] = "C" + rows.length; };
+    const fx = (f, v) => ({t: "n", f, v});
+    put("5A", "Turnover as per audited financial statements", c.a5);
+    GST9C.ADJ.forEach(([k, l, sg]) => put(k, l + (sg > 0 ? " (+)" : " (-)"), c.adjOf(k)));
+    put("5O", "Annual turnover after adjustments", fx(at["5A"] + GST9C.ADJ.map(([k, , sg]) => (sg > 0 ? "+" : "-") + at[k]).join(""), c.o5)); put("5P", "Turnover as per GSTR-9", c.p5);
+    put("5Q", "Unreconciled", fx(at["5O"] + "-" + at["5P"], c.q5)); rows.push(["6", "Reasons", c.st.reasons["6"] || ""]);
+    put("7A", "Annual turnover after adjustments", fx(at["5O"], c.o5)); put("7B", "Exempted, nil, non-GST", c.exempt); put("7C", "Zero rated without payment", c.zero); put("7D", "Reverse charge supplies", c.rcm);
+    put("7E", "Taxable turnover as per adjustments", fx(at["7A"] + "-" + at["7B"] + "-" + at["7C"] + "-" + at["7D"], c.e7)); put("7F", "Taxable turnover as per GSTR-9", c.f7);
+    put("7G", "Unreconciled", fx(at["7E"] + "-" + at["7F"], c.g7)); rows.push(["8", "Reasons", c.st.reasons["8"] || ""]);
+    put("12A", "ITC as per audited financial statements", c.itcBooks); put("12B", "ITC of earlier years claimed this year", num(c.st.adj["12B"])); put("12C", "ITC of this year to be claimed later", num(c.st.adj["12C"]));
+    put("12D", "After adjustments", fx(at["12A"] + "+" + at["12B"] + "-" + at["12C"], c.d12)); put("12E", "ITC claimed in GSTR-9", c.e12);
+    put("12F", "Unreconciled", fx(at["12D"] + "-" + at["12E"], c.f12)); rows.push(["13", "Reasons", c.st.reasons["13"] || ""]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "GSTR-9C");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Rate", "Taxable", "Tax payable"]].concat(c.rates.map(x => [x.rate, x.taxable, x.tax]))), "9 Tax by rate");
   }

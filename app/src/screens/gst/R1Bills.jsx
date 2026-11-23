@@ -13,6 +13,7 @@ import SrcTag from "../../parts/SrcTag.jsx";
 import { R1_BY, r1Title } from "./portal.js";
 import { r1PortalData } from "./R1Portal.jsx";
 import { PosCell, PosFixed } from "./PosPick.jsx";
+import { r1BillsSheet } from "./r1BillsSheet.js";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -119,17 +120,7 @@ const thF = (k) => ((S.r1F || {})[k] ? "th-filtered" : undefined);
 // the bills' Excel: one row a document, then table 7's lines, a totals row of SUMs
 export async function r1BillsExcel(list, b2cs, title) {
   await ensureXlsx();
-  const X = XLSX, ws = {}, head = ["#", "Date", "Invoice no", "Customer", "GSTIN", "Part", "Place of supply", "Rate %", "Taxable", "IGST", "CGST", "SGST", "Total"];
-  const A = (c, r) => X.utils.encode_cell({ c, r }), s = (v) => ({ t: "s", v: String(v == null ? "" : v) }), m = (v, f) => (f ? { t: "n", v: r2(v), f, z: "#,##0.00" } : { t: "n", v: r2(num(v)), z: "#,##0.00" });
-  head.forEach((h, c) => { ws[A(c, 0)] = s(h); });
-  const lines = list.map((r, i) => [i + 1, day(r.date), r.no, r.party, r.gstin || "", R1_PARTS[partOf(r)], r.pos || "", r.rate, r.taxable, r.igst, r.cgst, r.sgst])
-    .concat(b2cs.map((x) => ["", "", "", "B2C others: summary by state and rate", "", R1_PARTS["7"], x.pos, x.rate, x.taxable, x.igst, x.cgst, x.sgst]));
-  lines.forEach((l, i) => { const y = i + 1, R = y + 1; l.forEach((v, c) => { ws[A(c, y)] = c >= 8 ? m(v) : c === 0 || c === 7 ? { t: "n", v: num(v) } : s(v); }); ws[A(12, y)] = m(total({ taxable: l[8], igst: l[9], cgst: l[10], sgst: l[11] }), "SUM(I" + R + ":L" + R + ")"); });
-  const T = lines.length + 1, last = lines.length + 1;
-  ws[A(3, T)] = s("Total: " + list.length + " bills" + (b2cs.length ? " + " + b2cs.length + " B2C summary lines" : ""));
-  ["I", "J", "K", "L", "M"].forEach((col, i) => { const c = 8 + i; ws[A(c, T)] = m(lines.reduce((a, l) => a + (c === 12 ? total({ taxable: l[8], igst: l[9], cgst: l[10], sgst: l[11] }) : num(l[c])), 0), "SUM(" + col + "2:" + col + last + ")"); });
-  ws["!ref"] = X.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: 12, r: T } });
-  ws["!cols"] = [5, 12, 16, 32, 17, 30, 16, 7, 14, 12, 12, 12, 14].map((w) => ({ wch: w }));
+  const X = XLSX, ws = r1BillsSheet(X, list, b2cs, { day, part: (r) => R1_PARTS[partOf(r)], sumPart: R1_PARTS["7"] });
   const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Bills");
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   return saveFile(title.replace(/[^A-Za-z0-9]+/g, "-") + "-bills.xlsx", new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));

@@ -15,7 +15,7 @@
 // A browser with no bridge (a laptop): "Do these steps on the computer or server where TallyPrime runs", with the firm's
 // state, and no per-login steps. Nothing new is asked of the bridge or Tally: what ownState() (lib/tallySimple.js), the
 // beats and the rows already hold. Never another login's company, and never the firm's state shown as this login's.
-import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, NO_CO_HELP, YES } from "./tallySimple.js";
+import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, NO_CO_HELP, YES, UNPAIRED, CLOUD_OFF } from "./tallySimple.js";
 import { tallyDevs } from "./tallyState.js";
 import { freePort, portHowWords } from "./tallyPort.js";
 
@@ -120,12 +120,15 @@ export function connectSteps(opts) {
   const b = own.own || null, ver = String((b && (b.version || (b.local && b.local.version))) || "");
   // (this login's own bridge, found and heard: done, whatever its version; an older one is said, never a block: one that
   // cannot tell whose Tally it reads on a shared computer is never taken as this login's, ownBridge)
-  if (own.state === "ok") put("bridge", true, "", null, ver && o0.latest && vk(ver) < vk(o0.latest) ? "older" : "", "FinCom Bridge" + (ver ? " " + ver : "") + " is running in this login" + (ver && o0.latest && vk(ver) < vk(o0.latest) ? " (" + o0.latest + " is ready: Download it to update)" : ""));
+  // (audit 22-Nov-2026: running here but FinCom's cloud refuses its key or does not hear it: step 1 with Connect this computer)
+  if (own.state === "ok" && own.cloud) put("bridge", false, CLOUD_OFF[own.cloud], { kind: "rekey" }, own.cloud);
+  else if (own.state === "ok") put("bridge", true, "", null, ver && o0.latest && vk(ver) < vk(o0.latest) ? "older" : "", "FinCom Bridge" + (ver ? " " + ver : "") + " is running in this login" + (ver && o0.latest && vk(ver) < vk(o0.latest) ? " (" + o0.latest + " is ready: Download it to update)" : ""));
   else if (own.state === "checking" || (localBridges() === null && !LOCALB.cut)) put("bridge", false, WORDS.checking, null, "checking");
   else {
     const s = own.say || bridgeSay() || { kind: "nothing" };
     if (s.kind === "blocked") put("bridge", false, BLOCKED, { kind: "check" }, "blocked");
     else if (s.kind === "old") put("bridge", false, s.words + " " + WORDS.update, { kind: "download" }, "old");
+    else if (own.state === "away" && own.unpaired) put("bridge", false, UNPAIRED, null, "code");
     else if (own.state === "away") put("bridge", false, WORDS.away, { kind: "check" }, "away");
     else if (first) put("bridge", false, WORDS.first, { kind: "download" }, "first");
     else put("bridge", false, (s.words ? s.words + " " + WORDS.install : WORDS.none), { kind: "download" }, s.kind || "none");

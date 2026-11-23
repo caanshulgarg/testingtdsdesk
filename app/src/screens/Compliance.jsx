@@ -11,7 +11,7 @@ async function saveForSure(co) {
   const bad = !!Store.failed; Store.failed = was || bad; return !bad;
 }
 import { useState, useRef, useEffect } from "react";
-import DueAll from "../parts/DueList.jsx";
+import DueAll from "../parts/DueAll.jsx";
 import { monthNow, TRACK_ASK, TRACK_NOTE } from "../parts/AddClient.jsx";
 import "../parts/returns.css";
 

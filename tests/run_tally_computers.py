@@ -60,7 +60,7 @@ STOPS = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on 
 SETUP = """([devs, stops, releases, role, extra]) => {
   extra = extra || {};
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
-  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date().toISOString().slice(0, 10) : v);
+  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date(Date.now() + 19800000).toISOString().slice(0, 10) : v);   // (the bridge's day is India's: audit 22-Nov-2026)
   window.__fix = fix; window.__devs = fix(devs); window.__stops = fix(stops); window.__releases = fix(releases); window.__rollbacks = fix(extra.rollbacks || []);
   window.__calls = []; window.__fail = null; window.__asked = [];
   window.__cursors = fix(extra.cursors || []); window.__books = fix(extra.books || []); window.__companies = fix(extra.companies || []); window.__old = !!extra.old;
@@ -257,14 +257,14 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     E("""() => TLight.beatIn({device: '%s', beat: {at: new Date().toISOString(), bridge: 'go-%s', paused: false, readStopped: null, tallyRetry: {words: 'Tally did not answer in time at 12:14; trying again by itself at 12:15', at: '', next: '', tries: 1},
-      reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, longest: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, over20: 1, n: 5}}})""" % (D2, D2))
+      reqs: {day: new Date(Date.now() + 19800000).toISOString().slice(0, 10), last: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, longest: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, over20: 1, n: 5}}})""" % (D2, D2))
     pg.wait_for_timeout(400)
     ok("Tally did not answer in time at 12:14; trying again by itself at 12:15" in line(D2), "a beat passed on at once: the line follows (%s)" % line(D2))
     # ---- device-sent text (the stop's reason, a request's kind) is shown as text, never as HTML (security review, 2.1.5)
     dialogs = []; pg.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
     XR, XK = "<img src=x onerror=alert(1)>", "<img src=y onerror=alert(2)>"
     E("""([d, xr, xk]) => TLight.beatIn({device: d, beat: {at: new Date().toISOString(), bridge: 'go-' + d, paused: false, readStopped: null, tallyRetry: {words: xr, at: '', next: '', tries: 1},
-      reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: xk, ms: 1500, at: new Date().toISOString()}, longest: {kind: xk, ms: 1500, at: new Date().toISOString()}, over20: 0, n: 2}}})""", [D2, XR, XK])
+      reqs: {day: new Date(Date.now() + 19800000).toISOString().slice(0, 10), last: {kind: xk, ms: 1500, at: new Date().toISOString()}, longest: {kind: xk, ms: 1500, at: new Date().toISOString()}, over20: 0, n: 2}}})""", [D2, XR, XK])
     pg.wait_for_timeout(600)
     l2 = line(D2)
     ok(XR in l2 and ("Last request: " + XK) in l2 and pg.locator('#app [data-computer="%s"] img' % D2).count() == 0 and not dialogs,

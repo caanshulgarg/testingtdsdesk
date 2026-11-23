@@ -313,8 +313,10 @@ const SYN = [
   ["ltb", /long[- ]term borrow|term loans?|unsecured loans|loans? from directors/], ["ltp", /long[- ]term prov|provision for gratuity/],
   ["sapp", /application money/], ["msw", /share warrant/], ["sc", /share capital/], ["rs", /reserves?\b|surplus|retained|securit(y|ies) premium|profit and loss (account|a\/c)|statement of profit and loss/],
   ["intang", /intangible|goodwill|computer software/], ["ppe", /property|plant|\btangible|fixed asset|furniture|machinery/],
-  ["tr", /trade receiv|debtor/], ["cash", /cash|bank/], ["tpo", /trade payable|sundry creditor|creditors/],
-  ["rev", /revenue|sales?\b|sale of|turnover/], ["mat", /material/], ["emp", /employee|salar|staff|wages|provident fund|directors'? remuneration/],
+  // (next-fix-audit-imports: a loan or borrowing taken is never cash for the word "bank", and an expense never revenue for
+  // the word "sales": a guess either way, marked to check)
+  ["tr", /trade receiv|debtor/], ["ltb", /\b(loans?|borrowings?)\b(?!.*\b(to|given|receivable)\b)/], ["cash", /cash|bank/], ["tpo", /trade payable|sundry creditor|creditors/],
+  ["rev", /^(?!.*\bexpenses?\b).*(revenue|sales?\b|sale of|turnover)/], ["mat", /material/], ["emp", /employee|salar|staff|wages|provident fund|directors'? remuneration/],
   ["exc", /exceptional/], ["exo", /extraordinary|prior period/], ["cur", /current tax|income tax|tax expense/], ["def", /deferred tax/],
   ["exp", /rent|audit fee|power and fuel|expenses?$/],
 ];

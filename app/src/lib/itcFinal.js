@@ -67,6 +67,15 @@ function build(reg) {
       party: p.party || d0.party, gstin: p.gstin || d0.gstin, no: p.no, bookNo: x.books.map((d) => d.no).join(", "), voucher: x.books.map((d) => d.voucher).join(", "), date: p.date || d0.date,
       tm: p.ym, bm: d0.ym, ims: p.ims, issues: x.issues, bTax: x.books.reduce((a, d) => add(a, d, d.dir || 1), z()), pTax: heads(p, p.dir || 1) };
     if (!docs.length) { r.fixed = why(d0) || "nothing to take"; rows.push(r); return; }
+    // next-fix-audit-gst: 2B says "ITC not available" (itcavl N: section 16(4), place of supply): not taken, as GSTR.threeBm
+    // holds it: in the month booked on the 2B basis, else in the month of the 2B that says so (as a bill rejected in IMS)
+    if (p.itcavl === "N" && !p.rej) {
+      const nd = docs.map((d) => Object.assign({}, d, { eb: on(d.ym) ? d.ym : p.ym > d.ym && on(p.ym) ? p.ym : "" })).filter((d) => d.eb);
+      if (!nd.length) { r.fixed = "2B: credit not available; taken as booked (no 2B for its month)"; rows.push(r); return; }
+      money(r, nd); r.bm = nd[0].eb; r.na = "2B: credit not available, 4(D)(2)";
+      r.full = r.lower = r.laterAmt = r.defAmt = nd.reduce((a, d) => add(a, d), z()); r.def = r.def2 = "";
+      rows.push(r); return;
+    }
     r.bm = docs[0].ym; money(r, docs);
     const full = docs.reduce((a, d) => add(a, d), z());
     let lower = full;
@@ -292,7 +301,7 @@ function apply(t, ym, reg) {
   if (!anyAdj && !hasDec && !has2b) return Object.assign(t, { itcBase: base, itcBaseIsd: baseI, itcAdj: A });
   const mo = has2b || hasDec ? month(reg, ym) : { cats: { held: [], excess: [], released: [], from2b: [], cn2b: [], rejBack: [] }, effect: z(), rows: [], rev: z(), revList: [] };
   const c0 = mo.cats, sp = (i) => { const o = {}; Object.keys(c0).forEach((k) => { o[k] = c0[k].filter((x) => isdRow(x.r, iT) === i); }); return o; }, iT = isdTest(), c = sp(false), cI = sp(true);
-  const held = sumCat(c0.held.concat(c0.excess)), released = sumCat(c0.released.concat(c0.from2b)), cn2b = sumCat(c0.cn2b), rejBack = sumCat(c0.rejBack);
+  const held = Object.assign(sumCat(c0.held.concat(c0.excess)), { na: R(c0.held.filter((x) => x.r.na).reduce((s, x) => s + tot(x.amt), 0)) }), released = sumCat(c0.released.concat(c0.from2b)), cn2b = sumCat(c0.cn2b), rejBack = sumCat(c0.rejBack);
   const hI = sumCat(cI.held.concat(cI.excess)), rI = sumCat(cI.released.concat(cI.from2b)), nI = sumCat(cI.cn2b), bI = sumCat(cI.rejBack);
   const other = Object.assign({}, t.other), isd = Object.assign({}, g(t.isd)), isdAdj = z();
   // (as GSTR.threeBm: 2B's decisions never take 4(A)(4) below nothing; the rest stays in 4(A)(5))
@@ -387,7 +396,7 @@ export const ITCF = {
       months: this.months(M).map((m) => [m, lab(m)]), decs: DECS, lines: LINES,
       rows: lines.map((r) => ({ key: r.key, chip: r.chip, status: (CHIPS.find((c) => c[0] === r.chip) || [])[1] || "", kind: r.fixed ? "fixed" : r.kind, party: r.party || "", gstin: r.gstin || "",
         no: r.no || "", bookNo: r.bookNo || "", date: r.date || "", bm: lab(r.bm), tm: lab(r.tm), bTax: g(r.bTax), pTax: g(r.pTax), dec: r.show.code ? DEC_LABEL[r.show.code] : "", takeIn: lab(r.show.ym), note: (r.s && r.s.note) || "",
-        def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", allow: r.allow,
+        def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", na: r.na || "", allow: r.allow,
         eff: g(r.eff), line: isdRow(r, iT) ? "4A4" : "4A5", elig: r.fixed ? "" : ELIG_LABEL[r.el] || "", defE: r.fixed ? "" : ELIG_LABEL[r.defE] || "Eligible", def2: lab(r.def2), blkM: g((r.blkBy || {})[M]), rev: g(r.rev) })),
       base: { "4A5": base, reclaim, "4A4": g(t.itcBaseIsd || t.isd), "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
       adj: Adj.list(reg, M).map((a) => ({ id: a.id, line: a.line, head: a.head, amt: a.amt, reason: a.reason })),

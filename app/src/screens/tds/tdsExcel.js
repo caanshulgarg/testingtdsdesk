@@ -28,7 +28,10 @@
 // data; "How to use" on top of About. What the upload reads (the columns, the keys, About's fields) is unchanged.
 //   allChallans(rows, meta) -> {buffer, name}; downloadAllChallans(rows, meta): All challans of a year as one Excel Table
 const G = globalThis;
-const LAST = 2002;          // the dropdowns and the totals reach this row
+// the dropdowns and the totals reach this row: 2002, or every row the file holds with its spare rows when more (review of
+// 22-Nov-2026: a return of 2,100 deductions had totals, challan use and the upload stop at row 2002). Set by build()
+const LAST0 = 2002;
+let LAST = LAST0;
 const SPARE = { ded: 300, ch: 60, dee: 60 };
 const NF = "#,##0.00;[Red]-#,##0.00", DF = "dd-mm-yyyy";
 const SH = { dor: "Deductor", ch: "Challans", ded: "Deductions", dee: "Deductees", sal: "Salary annexure II", sum: "Summary", chk: "Checks", about: "About", lists: "Lists" };
@@ -90,6 +93,7 @@ function fit(ws, cols, rows, lo = 6, hi = 46) {
 
 export async function build(ExcelJS, d, opts = {}) {
   const wb = new ExcelJS.Workbook(); wb.creator = "FinCom"; wb.created = new Date(); PRI = 1;
+  LAST = Math.max(LAST0, (d.deductions || []).length + SPARE.ded + 2, (d.challans || []).length + SPARE.ch + 2, (d.deductees || []).length + SPARE.dee + 2);
   const { form, fy, q } = d.meta, L = d.lists, tcs = form === "27EQ", sal = form === "24Q";
   const unit = tcs ? "collection" : sal ? "salary payment" : "deduction", TAXW = tcs ? "TCS" : "TDS";
   // ---- Lists (hidden; written first so every other sheet can point at it)
@@ -368,20 +372,20 @@ export async function read(src) {
   const wd = wb.getWorksheet(SH.dor);
   if (wd) wd.eachRow((r, i) => { if (i < 3) return; const k = String(txt(r.getCell(1))); if (k) out.deductor.push({ row: i, k, v: txt(r.getCell(3)) }); });
   const wc = wb.getWorksheet(SH.ch);
-  if (wc) for (let r = 3; r <= Math.min(LAST, wc.rowCount); r++) {
+  if (wc) for (let r = 3; r <= wc.rowCount; r++) {
     const g = (k) => val(cell(wc, CH[k], r));
     const y = { row: r, key: String(txt(cell(wc, CH.key, r))), bsr: pad(g("bsr"), 7), date: g("date"), serial: pad(g("serial"), 5), section: txt(cell(wc, CH.section, r)), minor: String(txt(cell(wc, CH.minor, r))),
       tax: g("tax"), interest: g("interest"), fee: g("fee"), others: g("others"), ia: g("ia"), fa: g("fa"), oa: g("oa"), mode: String(txt(cell(wc, CH.mode, r))) };
     if (y.key || y.bsr || y.serial || (y.date != null && y.date !== "") || (y.tax != null && y.tax !== "")) out.challans.push(y);
   }
-  for (let r = 3; r <= Math.min(LAST, wx.rowCount); r++) {
+  for (let r = 3; r <= wx.rowCount; r++) {
     const g = (k) => raw(cell(wx, DED[k], r)), pan = g("pan"), tds = g("tds");
     const y = { row: r, key: String(txt(cell(wx, DED.key, r))), date: g("date").v, credit: g("credit").v, party: String(txt(cell(wx, DED.party, r))), pan: pan.v == null ? "" : String(pan.v), panF: pan.f,
       section: String(txt(cell(wx, DED.section, r))), rate: g("rate").v, paid: g("paid").v, tds: tds.v === "" ? null : tds.v, tdsF: tds.f, remark: String(txt(cell(wx, DED.remark, r))), cert: String(txt(cell(wx, DED.cert, r))), challan: String(txt(cell(wx, DED.challan, r))) };
     if (y.key || y.party || y.section || (y.paid != null && y.paid !== "") || (y.date != null && y.date !== "") || y.challan) out.deductions.push(y);
   }
   const we = wb.getWorksheet(SH.dee), DM = deeCols(form);
-  if (we) for (let r = 3; r <= Math.min(LAST, we.rowCount); r++) {
+  if (we) for (let r = 3; r <= we.rowCount; r++) {
     const y = { row: r }; Object.keys(DM).forEach((k) => { const v = val(cell(we, DM[k], r)); y[k] = k === "declDate" ? v : v == null ? "" : v instanceof Date ? v : String(v).trim(); });
     delete y.n; delete y.tds; delete y.secs;
     if (y.key || y.name || y.pan) out.deductees.push(y);

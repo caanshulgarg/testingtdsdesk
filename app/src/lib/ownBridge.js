@@ -34,7 +34,8 @@ export function ownHint() {
 // 9100-9199 is asked at most once in this tab by itself, and again only on a person's ask (Connect this computer, I have
 // opened it: full)
 // next-tally-other-login (05-Nov-2026): gen, a new start (resetHere): a look begun before it never goes on to the range
-export const HERE = { busy: null, busyFull: false, fullAt: 0, n: 0, gen: 0 };
+// (refused: this browser's bridge holds a key FinCom's cloud does not know, as keyRefused last found: lib/tallyConnect.js)
+export const HERE = { busy: null, busyFull: false, fullAt: 0, n: 0, gen: 0, refused: false };
 // the last look's answer, when it found this login's bridge at this browser's address, in this start, a moment ago: every
 // caller takes it (no port asked again)
 export const baseNow = () => String((Bridge.cfg() || {}).url || "").replace(/\/+$/, "");
@@ -165,7 +166,7 @@ export const lookOnce = () => { if (!LOCALB.n || !LOCALB.page) look(); LOCALB.pa
 // Connect / I have opened it: asked again now
 // next-tally-connectfix (finding 4): and the one-click card's look of the whole range 9100-9199 (lib/tallyConnect.js
 // lookHere, otherwise once a tab) asked again with it
-export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); };   // (a person's ask: never a moment-old answer)
+export const rescanLocal = () => { HERE.again = true; HERE.askAt = Date.now(); HERE.last = null; look(); };   // (a person's ask: never a moment-old answer)
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {
   return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))
@@ -325,14 +326,43 @@ export function ownState() {
   const st = hereIfOwn(own), unsure = own.how === "unsure";
   // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
   const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
-  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: hereNames(st), untold: untoldOf(st) }, whyOf(st.tallyWhy != null ? st : own.beat)), upHere(st));
+  // audit 22-Nov-2026 (tally-pages 1): the bridge answers here, but FinCom's cloud refuses its key or has not heard its
+  // heartbeat for over 3 minutes: said (cloud), never a plain "Connected" (nothing it reads reaches FinCom, and postings
+  // queued on other computers never come to it)
+  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: hereNames(st), untold: untoldOf(st), cloud: cloudOff(st.beat, 0, fresh(own.at)), since: (st.beat || {}).missedSince || "" }, whyOf(st.tallyWhy != null ? st : own.beat)), upHere(st));
   const eb = elsewhereB(own.beat);   // (the beat's companies open only in a Tally the rule leaves out: worked out once)
   if (fresh(own.at)) return noCo(Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open.filter((n) => !eb.has(coKey(n)))), untold: untoldOf({ beat: own.beat || {} }), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat)),
     upBeat(own.beat || {}));
   // this browser holds the own bridge's key, its first answer not read yet
   const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
   if (!own.local && c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
-  return { state: "away", own, unsure, say };
+  // audit 22-Nov-2026 (tally-pages 2): this login's bridge answers here, but this browser holds no key for it yet: it
+  // is running, only not connected to this browser (the code box), never "not running"
+  return { state: "away", own, unsure, say, unpaired: !!own.local && typeof Bridge === "object" && !Bridge.on() };
+}
+// audit 22-Nov-2026 (tally-pages 4): the whole range (100 ports; on a shared server each other login's bridge reads its
+// TCP table for each /ping) was asked every 30 s for as long as the panel (parts/TallyFirstLink.jsx) stayed open. Now every 30 s for the first 2
+// minutes of the watch (or of a person's Check again: HERE.askAt), every 2 minutes until 10 minutes, then no more by
+// itself; the light look (this browser's address and this login's own port) goes on every 5 s, and nothing while the
+// tab is hidden
+export function fullDue(now, from, fullAt) {
+  const age = now - (from || now), gap = now - (fullAt || 0);
+  return age < 120000 ? gap > 30000 : age < 600000 ? gap > 120000 : false;
+}
+// FinCom's cloud and this browser's bridge: "refused" (its key not known: keyRefused), "nobeat" (its heartbeat not heard
+// for over 3 minutes, by the bridge's own /status beat), else ""
+export function cloudOff(beat, now, heard) {
+  const b = beat || {}, since = Date.parse(b.missedSince || ""), last = Date.parse(b.last || "");
+  // (a refusal found before is over once FinCom answers the bridge's heartbeat again, or FinCom's cloud has heard the
+  // bridge in the last 3 minutes (heard): a new key taken meanwhile)
+  if (HERE.refused === true && !heard && !(b.on && last && !b.missedSince && (now || Date.now()) - last < 120000)) return "refused";
+  return b.on && since && (now || Date.now()) - since > 3 * 60000 ? "nobeat" : "";
+}
+// the company's Tally status (tallyHereNow): the same "refusal is over" checks as the icon (re-review 22-Nov-2026)
+function refusedNow() {
+  if (HERE.refused !== true) return false;
+  let heard = false; try { const o = ownBridge(); heard = !!o && fresh(o.at); } catch (e) { heard = false; }
+  return cloudOff(((typeof Bridge === "object" && Bridge.st) || {}).beat, 0, heard) === "refused";
 }
 // "yes" | "no" | "checking" | "away" | "none" for a company (own: ownState(), read once for the whole table)
 export function localOpen(company, own) {
@@ -363,8 +393,15 @@ export const has = (company) => { try { return localOpen(company, mineState()) =
 //   green  Connected: a company is open in their own Tally        amber  their bridge answers, Tally closed or no company
 //   grey   their bridge is not connected now · No Tally on this computer (no bridge of theirs: never another's) · Checking
 export const NO_TALLY = "No Tally on this computer", NOT_HERE = "Not connected on this computer";
+export const UNPAIRED = "FinCom Bridge is running in this Windows login. Connect this browser to it: type the 6-digit code it shows (right-click the FinCom icon near the clock → Connect FinCom on this computer…).";
+export const CLOUD_OFF = {
+  refused: "FinCom Bridge runs here, but FinCom’s cloud does not accept its computer key any more (for example after the firm’s data was reset), so nothing it reads reaches FinCom. Press Connect this computer: FinCom gives it a new key.",
+  nobeat: "FinCom Bridge runs here, but FinCom’s cloud has not heard from it for over 3 minutes, so what it reads does not reach FinCom and postings from other computers do not come to it. Check this computer’s internet; if it stays, press Connect this computer.",
+};
 export function icon() {
   const o = mineState();
+  if (o.state === "ok" && o.cloud) return { icon: "waiting", word: "Needs you", line: CLOUD_OFF[o.cloud] };
+  if (o.state === "away" && o.unpaired) return { icon: "none", word: "Not connected", line: UNPAIRED };
   if (o.state === "ok") return o.names.size ? { icon: "linked", word: "Connected", line: "Connected to Tally" }
     : { icon: "waiting", word: "Waiting for Tally", line: o.noCo ? "Open a company in your Tally." : "Open your Tally to connect." };
   if (o.state === "away") return { icon: "none", word: "Not connected", line: AWAY + "." };
@@ -378,7 +415,7 @@ export const sees = (devId) => { try { if (S.account && S.account.me && S.accoun
 // (k: the link as its asker already has it; tallyLine, src/js/49, gives its own: tallyLinkOf asks tallyLine)
 export const line = (co, k) => { try { return farLine(lastEntry(co, k || (typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null))); } catch (e) { return farLine(""); } };
 if (typeof window === "object") {
-  window.FCOwn = { state: mineState, bridge: mineBridge, place: placeOf, has, icon, sees, line, LOCALB };
+  window.FCOwn = { state: mineState, bridge: mineBridge, place: placeOf, has, icon, sees, line, LOCALB, refused: refusedNow };
   // the look on this computer, once for this tab: after the firm's computers are first read (their bridges' ports are
   // asked too), or 6 s; the page is drawn with the answer (look), and now with what is remembered
   let n = 0;

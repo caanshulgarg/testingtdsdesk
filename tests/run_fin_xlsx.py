@@ -254,6 +254,17 @@ else:
     nz = [(ws.cell(r, 2).value, ws.cell(r, 3).value) for r in range(chk + 1, ws.max_row + 1) if ws.cell(r, 2).value and ws.cell(r, 3).value != 0]
     ok(ws["E6"].value == "(All amounts in Rupees lakhs, unless otherwise stated)" and len(tots) == 2 and same(tots[0], lakhs["bs"]["total"]["eqL"]["cy"]) and same(tots[1], tots[0]) and not nz,
        "the unit changed in the workbook (thousands -> lakhs on Inputs!E4): the balance sheet tallies at %s as FinSt's in lakhs, checks 0 %s" % (tots, nz))
+    # (review of 22-Nov-2026) a ledger added on the trial balance, under its Total row (made up: Suspense, 50,000, no code):
+    # the checks see it, as the statements' whole-column sums do; the TB's checks were fixed ranges and still read nil
+    ad = os.path.join(OUT, "tb-added.xlsx"); strip_values(src[3], ad)
+    wba = openpyxl.load_workbook(ad); tbs = wba["Trial Balance"]
+    tr = [r for r in range(1, tbs.max_row + 1) if tbs.cell(r, 1).value == "Total"][0] + 1
+    tbs.cell(tr, 1).value = "Suspense (made up)"; tbs.cell(tr, 4).value = 50000; tbs.cell(tr, 6).value = "=D%d+E%d" % (tr, tr); tbs.cell(tr, 8).value = "=F%d/UNIT" % tr; tbs.cell(tr, 9).value = 0; wba.save(ad)
+    lv = openpyxl.load_workbook(recalc([ad])[ad], data_only=True); ws = lv["Inputs"]
+    chk = [r for r in range(1, ws.max_row + 1) if ws.cell(r, 2).value == "Checks (all should be zero)"][0]
+    cv = {ws.cell(r, 2).value: ws.cell(r, 3).value for r in range(chk + 1, ws.max_row + 1) if ws.cell(r, 2).value}
+    tbk = [k for k in cv if k.lower().startswith("trial balance total (cy")]; unk = [k for k in cv if "without a code" in k.lower()]
+    ok(tbk and same(cv[tbk[0]], 50000) and unk and cv[unk[0]] not in (0, None), "a ledger added under the trial balance: the TB total check reads %s and the uncoded check %s, not nil" % (cv.get(tbk[0]) if tbk else None, cv.get(unk[0]) if unk else None))
     sv = openpyxl.load_workbook(rc[os.path.join(OUT, "sample.xlsx")], data_only=True)
     ok(sv["Inputs"]["E6"].value == "(All amounts in Rupees thousand, unless otherwise stated)", "the downloaded workbook recalculates too: " + str(sv["Inputs"]["E6"].value))
 

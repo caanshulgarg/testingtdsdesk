@@ -1148,7 +1148,7 @@ async function postBankToTally(ids){
   const movedBack = b.rows.filter(r => readyBefore.has(r.id) && ["attention", "suggested"].includes(r.state)).length;
   // checked again: a line marked Possible repeat that became ready during the awaits above is not sent
   let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && !bankRepOpen(r) && !(r.notTally && !r.userSet));
-  const failed = [];
+  const failed = [], xmlOf = new Map();
   rows = rows.filter(r => {
     // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)
     if (isOwnBank(r, r.ledger)){ dropOwnBank(r); failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: OWN_BANK}); return false; }
@@ -1166,6 +1166,15 @@ async function postBankToTally(ids){
     }
     r.ledger = exactLedger(r.ledger);
     if (r.tdsAtPay) r.tdsLedger = exactLedger(r.tdsLedger || bankLedgers(co).tds);
+    // re-review of the bank audit: a voucher that does not add up (a split with TDS at payment, a split other than the
+    // amount) is held back on its own line, to Needs you; it never stops the others going (bankVoucherXml throws on it)
+    let why = typeof bankLineProblem === "function" ? bankLineProblem(r) : "";
+    if (!why) try { xmlOf.set(r.id, bankVoucherXml(r, acc, co)); } catch (e){ why = e.message; }
+    if (why){
+      r.postError = why; r.state = "attention"; r.why = [why.replace(/^[^:]*: /, "") + "."];
+      failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: why});
+      return false;
+    }
     return true;
   });
   if (!rows.length){
@@ -1182,7 +1191,7 @@ async function postBankToTally(ids){
     const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       // round 15: bank: true tells bridge 2.1.8 to batch these by its bank-lines-per-request setting (bills carry nothing)
-      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co), bank: true})),
+      vouchers: rows.map(r => ({id: r.id, xml: xmlOf.get(r.id), bank: true})),
       // 30-Oct-2026: lines a check with Tally released (src/js/96): the bridge on this computer lets each go once more
       // (it looks in Tally for it first); the cloud's queue judges releases itself
       released: postReleased(rows)}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
