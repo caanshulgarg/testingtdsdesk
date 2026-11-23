@@ -7,7 +7,8 @@ TDS Desk build: puts the source files together into the one-file app, for live a
 
 The source is kept in its live form. The test build differs only in:
   - browser storage: tdsdesk:* -> tdsdesk-test:*, and the databases tdsdesk-bank / tdsdesk-work -> ...-test
-  - the TEST mark: an orange top edge, a fixed orange bar, and "TEST" under the brand (build/test-style.html)
+  - the TEST mark: an orange top edge (build/test-style.html); the words (testing site, staging database) are the
+    tooltip on the sidebar's "Synced" line and in Settings' About line, not a bar (the owner, 23-Nov-2026)
   - APP_VERSION starts with "TEST · "
   - it works on the staging database (tds-desk-staging), never on live
 Nothing else may differ; the checks below stop the build if a rule is broken.
