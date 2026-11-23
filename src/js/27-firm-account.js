@@ -92,11 +92,8 @@ const Cloud = {
     // fresh page, before anything of this one is shown or sent with their sign-in
     const uid = j.user && j.user.id;
     if (LocalOwner.other(uid)){ LocalOwner.switchTo(uid, "", (j.user && j.user.email) || String(email).trim()); return new Promise(() => {}); }
-    // next-speed-2 (the speed plan, #15): the firm's members asked beside the two-step check (one wait, not two); used only
-    // when no code is due (with one due, the answer is dropped: nothing of the firm is kept or shown before the code)
-    const rows = this.api("members?select=user_id,firm_id,name,email,role,active").then(r => ({r}), e => ({e}));
     if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
-    await this.whoAmI(rows);
+    await this.whoAmI();
     return true;
   },
   // refreshToken(used): src/js/43 (one at a time across tabs; a network error never signs out)
@@ -166,10 +163,8 @@ const Cloud = {
     if (!r.ok) throw new Error(j.msg || j.message || j.error_description || ("Could not change the password (" + r.status + ")"));
     return true;
   },
-  async whoAmI(asked){
-    const got = asked ? await asked : null;
-    if (got && got.e) throw got.e;
-    const rows = got ? got.r : await this.api("members?select=user_id,firm_id,name,email,role,active");
+  async whoAmI(){
+    const rows = await this.api("members?select=user_id,firm_id,name,email,role,active");
     const me = (rows || []).find(m => m.user_id === (this.sess() || {}).user_id) || (rows || [])[0];
     // the copy here is this person's in this firm, or theirs is opened (LocalOwner, src/js/00) before the firm is set
     if (me && !(await LocalOwner.ensure((this.sess() || {}).user_id || me.user_id, me.firm_id, (this.sess() || {}).email || me.email))) return new Promise(() => {});

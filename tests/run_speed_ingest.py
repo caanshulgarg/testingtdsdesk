@@ -2,12 +2,12 @@
 under Deno, against the stand-in for Supabase, fake_supabase.py), every answer of the stand-in WAIT_MS late (default 40: a
 round trip inside the cloud's region plus the database's own time), so a call's time shows its round trips one after another.
 Checks:
-  1. a bridge id found the computer's own (tally_bridge_bind {own: true}) is not asked again on every call for a minute
-     (BIND_KEEP_MS): the second beat asks it no more; a call with another bridge id is asked; an id another computer holds
-     ({own: false}) is never kept: refused every time, and asked every time;
-  2. a revoked key is refused at once, on its very next call, even with its bridge id kept (the key is looked up every call);
-  3. the beat's time and its requests one after another, before and after (printed; the beat at least one round trip
-     quicker than with the bind asked, its last_seen written as before);
+  1. the bridge id is checked (tally_bridge_bind) on every call, so a moved or refused id is refused at once (the
+     coordinator, 23-Nov-2026: no keep); a call with another bridge id is asked; an id another computer holds is refused
+     every time, and asked every time;
+  2. a revoked key is refused at once, on its very next call;
+  3. the beat's time and its requests one after another, before and after (printed; the reads side by side, its
+     last_seen written as before);
   4. the older entries' pace (#1): by day a bridge whose Tally has been left alone a minute or more (the typing gate quiet:
      lightIdle) is handed up to 30 days, the pace said to the database still "day" (p_night false); typing 20 s ago, or a
      beat that says nothing of its typing gate: 3 as before; at night 30 as before.
@@ -75,11 +75,11 @@ try:
     plain = dict(base, kind="beat", tally=True, open=["MADE UP CO"], companies=[{"name": "MADE UP CO", "open": True, "guid": CG}])
     call(plain); time.sleep(5.3)
 
-    print("== 1. the bridge id found this computer's own is kept a minute")
+    print("== 1. the bridge id is checked on every call (never kept)")
     n0 = binds(); c1, _ = call(plain); time.sleep(5.3); n1 = binds(); c2, _ = call(plain); n2 = binds()
     ok(c1 == 200 and c2 == 200, "1. both beats answered (%s %s)" % (c1, c2))
     ok(n1 - n0 == 1 or n0 >= 1, "1. the bind asked when not yet kept (%d -> %d)" % (n0, n1))
-    ok(n2 == n1, "1. the next beat within the minute does not ask the bind again (%d -> %d)" % (n1, n2))
+    ok(n2 == n1 + 1, "1. the next beat within the minute asks the bind again: checked on every call (%d -> %d)" % (n1, n2))
     other = dict(GA, id="go-bbbbbb301301")
     c, _ = call(dict(plain, bridge=other)); ok(binds() == n2 + 1, "1. another bridge id on the same key is asked (%d)" % binds())
     # the first computer's id named by the second key: another computer's, refused, never kept

@@ -546,15 +546,6 @@ async function bookForBeat(firm: string, name: string) {
 // cloud without 146 (asked again after 10 minutes) or on any error: the beat answers as before
 let servingMissing = 0;
 let guidFillMissing = 0;     // migration 155 found missing (asked again 10 minutes later)
-// next-speed (the speed plan, #3): a bridge id the database has just found this computer key's own (tally_bridge_bind
-// {own: true}) is not asked again for BIND_KEEP_MS on this worker: every call of the bridge asked it, a write each time.
-// Only "own" is kept, by key and bridge id; a refusal ({own: false}) or an error is never kept, so another computer's id
-// is refused every time, as before. The key itself is still looked up on every call: a revoked key is refused at once
-const BIND_KEEP_MS = 60000;
-const bindKept = new Map<string, number>();
-function bindOwnKept(device: string, bridge: string, now = Date.now()) { const t = bindKept.get(device + "|" + bridge); return t !== undefined && now - t < BIND_KEEP_MS; }
-function bindOwnKeep(device: string, bridge: string, now = Date.now()) { if (bindKept.size > 5000) bindKept.clear(); bindKept.set(device + "|" + bridge, now); }
-function bindOwnDrop(bridge: string) { for (const k of [...bindKept.keys()]) if (k.endsWith("|" + bridge)) bindKept.delete(k); }
 const servingMemo = new Map<string, { serving: any[]; t: number }>();
 async function servingFor(firm: string, b: any): Promise<Map<string, { book: string; serving: any[] }>> {
   const out = new Map<string, { book: string; serving: any[] }>();
@@ -1357,8 +1348,6 @@ async function ownKey(dev: any, firm: string, body: any) {
   const bid = String(me.id || ""), oldKey = String(body.oldKey || "").trim();
   if (!/^go-[0-9a-f]{6,32}$/.test(bid)) return reply(400, { ok: false, error: "Not a FinCom Bridge id." });
   if (!/^fcd_[0-9a-f]{48}$/.test(oldKey)) return reply(400, { ok: false, error: "The old computer key is missing." });
-  // next-speed: the id is moving to another key: what this worker kept of its binding (bindOwnKept) is dropped first
-  bindOwnDrop(bid);
   const { data: old } = await db.from("tally_devices").select("id, firm_id, revoked").eq("key_hash", await sha256(oldKey)).maybeSingle();
   // migration 115 (the owner, 27-Oct-2026: the bridge follows the FinCom login using it): an old key of ANOTHER firm, with
   // a switch a member of this firm who may write asked for (tally_bridge_follow_ask): the old firm's binding released and
@@ -4802,12 +4791,9 @@ Deno.serve(sentry.wrap(async (req) => {
       // Fix 2c: the words (naming the computer and Windows user the id belongs to) go to the bridge, which shows them in
       // its tray; the database keeps them on this computer's line and one bell alert for the owners
       let bound: any = null, be: any = null;
-      // next-speed: found this key's own in the last minute on this worker: not asked again (bindOwnKept)
-      if (bindOwnKept(String(dev.id), bid)) bound = { own: true };
-      else try {
+      try {
         const bq = db.rpc("tally_bridge_bind", { p_device: dev.id, p_bridge: bid });
         ({ data: bound, error: be } = await (isPostOk ? bq.abortSignal(AbortSignal.timeout(Math.max(1, postOkLeft() - 300))) : bq));
-        if (!be && bound && typeof bound === "object" && bound.own === true) bindOwnKeep(String(dev.id), bid);
       } catch (e) { be = { message: String((e as Error)?.message || e) }; }
       if (isPostOk && be && be.code !== "PGRST202" && !missingFn(String(be.message || ""))) return postOkUnsure();   // (post_ok: not had in time)
       // 2.3.1 (2.3.0 review round 1 L1): only a cloud without the function (PGRST202) goes on unchecked; any other error

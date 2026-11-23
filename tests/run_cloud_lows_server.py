@@ -74,17 +74,14 @@ try:
     # A. the bind check
     c, r = call(BEAT)
     ok(c == 200, "A. a beat with the bind working: 200 (%s %s)" % (c, r.get("error")))
-    # (next-speed-2: a bridge id found this computer's own is not asked again for a minute on the same worker, so the failing
-    # check is met with a bridge id not asked yet)
-    BID2 = "go-aaaaaa111112"
-    BIND_FAIL[0] = True; n = len(log); before = json.dumps(dev.get("info", {}).get("bridges", {}).get(BID2, {}).get("at"))
-    c, r = call(dict(BEAT, open=["SOMETHING NEW"], bridge=dict(BR, id=BID2)))
+    BIND_FAIL[0] = True; n = len(log); before = json.dumps(dev.get("info", {}).get("bridges", {}).get(BRID, {}).get("at"))
+    c, r = call(dict(BEAT, open=["SOMETHING NEW"]))
     ok(c == 503 and r.get("ok") is False and not r.get("idRefused"), "A. the bind check failing (a database error, not a missing function): refused 503, ask again (%s %s)" % (c, r))
-    ok(json.dumps(dev.get("info", {}).get("bridges", {}).get(BID2, {}).get("at")) == before, "A. nothing of that beat is kept")
+    ok(json.dumps(dev.get("info", {}).get("bridges", {}).get(BRID, {}).get("at")) == before, "A. nothing of that beat is kept")
     ok(logged("tally_bridge_bind", n), "A. the error is logged (%s)" % [l.strip() for l in log[n:]][:3])
     BIND_FAIL[0] = False
     F.NO_FN.add("tally_bridge_bind")
-    c, r = call(dict(BEAT, bridge=dict(BR, id="go-aaaaaa111113")))
+    c, r = call(BEAT)
     ok(c == 200, "A. a cloud without tally_bridge_bind (migration 54 not run): as before (%s)" % c)
     F.NO_FN.discard("tally_bridge_bind")
 

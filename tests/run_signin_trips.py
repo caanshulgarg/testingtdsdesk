@@ -1,9 +1,10 @@
 """python3 run_signin_trips.py - next-speed-2 (the speed plan of 22-Nov-2026, #15): signing in asks the cloud fewer times one
 after another. A stand-in for Supabase (as run_signin_session.py), every answer TRIPS_WAIT seconds late (default 0.3).
-  1. signed in with the password, no two-step: the two-step check (mfa_status) and the firm's members are asked side by
-     side (one wait, not two); mfa_status once (it was asked again by the sync started right after); my_account once (the
+  1. signed in with the password, no two-step: the firm's members only after the two-step check (mfa_status) has
+     answered; mfa_status once (it was asked again by the sync started right after); my_account once (the
      sign-in's and the sync's, which were two side by side); the time to the firm shown printed, before and after;
-  2. with two-step on: the code is asked for, and nothing of the firm is kept or shown before it (no members, no account).
+  2. with two-step on: the code is asked for, and nothing of the firm is asked, kept or shown
+     before it (no members request, no account).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_signin_trips.py"""
 import os, sys, json, time, threading, functools, http.server
 from urllib.parse import urlparse, parse_qs
@@ -100,7 +101,7 @@ with sync_playwright() as p:
             m, w = calls("/rest/v1/rpc/mfa_status"), calls("/rest/v1/members")
             ok(len(m) == 1, "1. the two-step check asked once (%d)" % len(m))
             ok(len(calls("/rest/v1/rpc/my_account")) == 1, "1. my_account asked once (%d)" % len(calls("/rest/v1/rpc/my_account")))
-            ok(bool(m and w) and w[0][2] < m[0][3], "1. the members asked while the two-step check was out (side by side)")
+            ok(bool(m and w) and w[0][2] >= m[0][3], "1. the members asked only after the two-step check answered")
         else:
             print("== 2. two-step on")
             pg.wait_for_timeout(5000)
@@ -108,6 +109,7 @@ with sync_playwright() as p:
             ok(st["mfa"] == "code", "2. the code is asked for (%s)" % st)
             ok(not st["firm"] and not st["members"] and not st["account"], "2. nothing of the firm kept before the code (%s)" % st)
             ok(not calls("/rest/v1/rpc/my_account"), "2. the account not asked before the code")
+            ok(not calls("/rest/v1/members"), "2. the firm's members not asked before the code (%d)" % len(calls("/rest/v1/members")))
         ctx.close()
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
