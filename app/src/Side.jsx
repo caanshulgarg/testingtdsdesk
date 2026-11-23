@@ -204,6 +204,11 @@ export function FootLine() {
   return <span className="side-quiet" data-trust-line="" title={t}>{t}</span>;
 }
 
+// the testing site's words (vite.config.js, meta fincom-site; "" on the live site): no bar at the foot since 23-Nov-2026,
+// so support finds them on the "Synced" line's tooltip, under its ⓘ and in Settings' About line
+export const siteWords = () => { try { const m = document.querySelector('meta[name="fincom-site"]'), w = m ? m.content : "";
+  return w && document.documentElement.hasAttribute("data-trial") ? "TRIAL · a new build on trial · " + w : w; } catch (e) { return ""; } };
+
 // the foot in one line: "Saved here · Sign in" (or "Synced 10:42"), ⓘ opens the full words, today's date and Your data
 function Foot() {
   const signed = typeof Cloud === "object" && Cloud.on();
@@ -212,10 +217,10 @@ function Foot() {
   const short = signed ? (off ? "Offline · kept here" : st.lastSync ? "Synced " + fmtTime(st.lastSync) : "Syncing…") : off ? "Saved here · offline" : "Saved here";
   const signIn = () => { S.view = "home"; S.homeTab = "rules"; S.settingsTab = "account"; render(); };
   return <div className="side-foot" data-side-foot="">
-    <span className="side-foot-line"><span data-trust-short="">{short}</span>{!signed && <> · <button type="button" className="linkbtn side-data" aria-label="Sign in: share the work with the firm" onClick={signIn}>Sign in</button></>}</span>
+    <span className="side-foot-line"><span data-trust-short="" title={siteWords() || undefined}>{short}</span>{!signed && <> · <button type="button" className="linkbtn side-data" aria-label="Sign in: share the work with the firm" onClick={signIn}>Sign in</button></>}</span>
     <details className="side-foot-more">
       <summary aria-label="Where your work is kept, and today's date" title="Where your work is kept, and today's date">ⓘ</summary>
-      <div className="side-foot-pop" data-side-foot-more=""><FootLine /><span>Today {fmtDate(new Date())} · <button type="button" className="linkbtn side-data" data-your-data="" aria-label="Your data: where your work is kept and who can see it" onClick={yourData}>Your data</button></span></div>
+      <div className="side-foot-pop" data-side-foot-more=""><FootLine /><span>Today {fmtDate(new Date())} · <button type="button" className="linkbtn side-data" data-your-data="" aria-label="Your data: where your work is kept and who can see it" onClick={yourData}>Your data</button></span>{siteWords() && <span data-site-words="">{siteWords()}</span>}</div>
     </details>
   </div>;
 }

@@ -2,7 +2,7 @@
 newer one at /next/ of one site, served as Cloudflare serves main (tests/cf_pages.py, with cloudflare/_headers.main, the
 _headers main is to have), the service worker on. Builds: A = app/dist-test as it is (at review/), B and C = the same
 files with a new build id (at next/; C is the next publish to next/). Copies are hard links: no disk space.
-  1. /review/ and /next/ both open (no CSP or Permissions-Policy message); /next/'s strip says TRIAL, /review/'s does not;
+  1. /review/ and /next/ both open (no CSP or Permissions-Policy message); /next/'s words say TRIAL (the sidebar's Synced tooltip; no strip along the foot), /review/'s do not;
   2. two workers, one per address (scope /review/ and /next/), each with its own caches (fincom-shell:/review/:A,
      fincom-shell:/next/:B); signing out at /next/ clears only /next/'s kept files;
   3. opening /next/, and a new build there (B -> C, the page reloaded twice), never touches a /review/ tab: it is not
@@ -81,7 +81,11 @@ def controlled(pg, path, ms=20000):
     except Exception: return False
 CTL = "() => navigator.serviceWorker.controller ? new URL(navigator.serviceWorker.controller.scriptURL).pathname : ''"
 KEYS = "() => caches.keys().then((k) => k.filter((x) => x.startsWith('fincom-')).sort())"
-STRIP = "() => getComputedStyle(document.body, '::after').content"
+# the testing site's words (no strip along the foot since 23-Nov-2026): what Side.jsx siteWords shows in the sidebar's
+# Synced tooltip, TRIAL first on a page served from /next/ (data-trial); and no bar drawn along the foot
+STRIP = """() => { const m = document.querySelector('meta[name="fincom-site"]'), w = m ? m.content : '', a = getComputedStyle(document.body, '::after').content;
+  return (w && document.documentElement.hasAttribute('data-trial') ? 'TRIAL · ' : '') + w + (a && a !== 'none' && a !== 'normal' ? ' BAR ' + a : ''); }"""
+EDGE = "() => getComputedStyle(document.querySelector('header.top') || document.body).boxShadow"
 def wait_cache(pg, key, ms=30000):
     """a new build's worker is installed after its page (the browser looks for a new sw.js at each open): its cache, waited for"""
     t0 = time.time()
@@ -109,13 +113,15 @@ try:
         shellA = "fincom-shell:/review/:" + IDA
         nA = shell_count(R, shellA)
         ok(nA > 0, "/review/'s kept files: %s (%d)" % (shellA, nA))
-        ok("TRIAL" not in R.evaluate(STRIP) and R.evaluate("() => !document.documentElement.hasAttribute('data-trial')"), "/review/'s strip does not say TRIAL (%s)" % R.evaluate(STRIP)[:60])
+        ok("TRIAL" not in R.evaluate(STRIP) and R.evaluate("() => !document.documentElement.hasAttribute('data-trial')"), "/review/'s words do not say TRIAL (%s)" % R.evaluate(STRIP)[:60])
 
         N = ctx.new_page(); N.on("pageerror", lambda e: errs.append("next: " + str(e)))
         N.goto(BASE + "/next/")
         ok(drawn(N) and build_of(N) == "B", "/next/ opens, build B (%s)" % build_of(N))
         ok(controlled(N, "/next/"), "/next/'s own worker in charge of it (%s)" % N.evaluate(CTL))
-        ok("TRIAL" in N.evaluate(STRIP) and N.evaluate("() => document.documentElement.hasAttribute('data-trial')"), "/next/'s strip says TRIAL (%s)" % N.evaluate(STRIP)[:70])
+        ok("TRIAL" in N.evaluate(STRIP) and N.evaluate("() => document.documentElement.hasAttribute('data-trial')"), "/next/'s words say TRIAL (%s)" % N.evaluate(STRIP)[:70])
+        ok(" BAR " not in N.evaluate(STRIP) and " BAR " not in R.evaluate(STRIP), "no bar along the foot at /next/ or /review/")
+        ok("180, 35, 24" in N.evaluate(EDGE), "/next/ keeps its red top edge (%s)" % N.evaluate(EDGE))
         N.wait_for_timeout(1500)
 
         print("2. two workers, two sets of caches")
