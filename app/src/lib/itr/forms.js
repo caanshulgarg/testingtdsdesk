@@ -3,6 +3,7 @@
 // from the computation so a new schema version changes only this file. fill.js completes the JSON (zeros for amounts
 // FinCom does not map; questions for anything else), validate.js checks it against the official schema.
 import { put } from "./fill.js";
+import { salarySchedule, tdsSalary, hpSchedule, cgSchedule, siSchedule, tiCapGain, alSchedule, faSchedule, shSchedule, al6Schedule, bsIndAs, ociIndAs } from "./sched.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -128,6 +129,7 @@ function lossSchedules(X, o) {
   put(o, "ScheduleCYLA/BusProfExclSpecProf", row(H.pgbp, { HPlossCurYrSetoff: R(so.hp.pgbp) }, A.pgbp));
   put(o, "ScheduleCYLA/" + osC, row(H.os, { HPlossCurYrSetoff: R(so.hp.os), BusLossSetoff: R(so.bus.os) }, A.os));
   put(o, "ScheduleCYLA/STCG20Per", row(H.c111A, { HPlossCurYrSetoff: R(so.hp.c111A), BusLossSetoff: R(so.bus.c111A) }, A.c111A));
+  put(o, "ScheduleCYLA/STCGAppRate", row(H.cOth, { HPlossCurYrSetoff: R(so.hp.cOth), BusLossSetoff: R(so.bus.cOth) }, A.cOth));
   put(o, "ScheduleCYLA/LTCG12_5Per", row(H.c112A + H.c112, { HPlossCurYrSetoff: R(N(so.hp.c112A) + N(so.hp.c112)), BusLossSetoff: R(N(so.bus.c112A) + N(so.bus.c112)) }, A.c112A + A.c112));
   const busSet = Object.values(so.bus).reduce((a, v) => a + N(v), 0), hpSet = Object.values(so.hp).reduce((a, v) => a + N(v), 0);
   put(o, "ScheduleCYLA/TotalCurYr", { TotHPlossCurYr: R(hpL), TotBusLoss: R(busL), TotOthSrcLossNoRaceHorse: 0 });
@@ -139,6 +141,7 @@ function lossSchedules(X, o) {
   put(o, "ScheduleBFLA/BusProfExclSpecProf", brow(A.pgbp, so.bf, so.ud.pgbp, F.pgbp));
   put(o, "ScheduleBFLA/OthSrcExclRaceHorse", brow(A.os, null, so.ud.os, F.os));
   put(o, "ScheduleBFLA/STCG20Per", brow(A.c111A, 0, so.ud.c111A, F.c111A));
+  put(o, "ScheduleBFLA/STCGAppRate", brow(A.cOth, 0, so.ud.cOth, F.cOth));
   put(o, "ScheduleBFLA/LTCG12_5Per", brow(A.c112A + A.c112, 0, N(so.ud.c112A) + N(so.ud.c112), F.c112A + F.c112));
   const udSet = Object.values(so.ud).reduce((a, v) => a + N(v), 0);
   put(o, "ScheduleBFLA/TotalBFLossSetOff", { TotBFLossSetoff: R(so.bf), TotUnabsorbedDeprSetoff: R(udSet), TotAllUs35cl4Setoff: 0 });
@@ -149,13 +152,13 @@ function lossSchedules(X, o) {
   // year's unabsorbed depreciation (that part goes to Schedule UD, section 32(2): carried without limit). Earlier years'
   // rows are not mapped: coverage() blocks the JSON when there are any.
   const C = S.carry || {}, cy = (C.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0);
-  if (cy || N(C.hp)) {
-    const lsd = (hp, bus) => { const d = { TotalHPPTILossCF: R(hp) }; d[X.form === "ITR-6" ? "BroughtFrwdBusLossSetOffDrYr" : "BusLossOthThanSpecLossCF"] = R(bus); d.LossFrmSpecBusCF = 0; d.LossFrmSpecifiedBusCF = 0; if (X.form === "ITR-6") d.LossFrmLifeInsBusUs115B = 0; d.TotalSTCGPTILossCF = 0; d.TotalLTCGPTILossCF = 0; d.OthSrcLossRaceHorseCF = 0; return { LossSummaryDetail: d }; };
-    put(o, "ScheduleCFL/CurrentAYloss", lsd(C.hp, cy));
-    if (X.form !== "ITR-3") put(o, "ScheduleCFL/CurrentYearLossCF", lsd(C.hp, cy));
-    put(o, "ScheduleCFL/TotalOfBFLossesEarlierYrs", lsd(0, 0));
-    put(o, "ScheduleCFL/AdjTotBFLossInBFLA", lsd(0, R(so.bf)));
-    put(o, "ScheduleCFL/TotalLossCFSummary", lsd(C.hp, cy));
+  if (cy || N(C.hp) || N(C.stcl) || N(C.ltcl)) {
+    const lsd = (hp, bus, stcl, ltcl) => { const d = { TotalHPPTILossCF: R(hp) }; d[X.form === "ITR-6" ? "BroughtFrwdBusLossSetOffDrYr" : "BusLossOthThanSpecLossCF"] = R(bus); d.LossFrmSpecBusCF = 0; d.LossFrmSpecifiedBusCF = 0; if (X.form === "ITR-6") d.LossFrmLifeInsBusUs115B = 0; d.TotalSTCGPTILossCF = R(stcl); d.TotalLTCGPTILossCF = R(ltcl); d.OthSrcLossRaceHorseCF = 0; return { LossSummaryDetail: d }; };
+    put(o, "ScheduleCFL/CurrentAYloss", lsd(C.hp, cy, C.stcl, C.ltcl));
+    if (X.form !== "ITR-3") put(o, "ScheduleCFL/CurrentYearLossCF", lsd(C.hp, cy, C.stcl, C.ltcl));
+    put(o, "ScheduleCFL/TotalOfBFLossesEarlierYrs", lsd(0, 0, 0, 0));
+    put(o, "ScheduleCFL/AdjTotBFLossInBFLA", lsd(0, R(so.bf), 0, 0));
+    put(o, "ScheduleCFL/TotalLossCFSummary", lsd(C.hp, cy, C.stcl, C.ltcl));
   }
   // Schedule UD: this year's row (CurBalCFNY: the year's depreciation not absorbed), and the totals (column 5 is the
   // sum of the rows' balances, this year's included: validation rules 626, 628, 629). Earlier years' rows are not
@@ -170,7 +173,7 @@ function lossSchedules(X, o) {
 export function carriedInMap(o, form) {
   const g = (path) => path.split("/").reduce((a, k) => (a == null ? a : a[k]), o);
   const d = g("ScheduleCFL/CurrentAYloss/LossSummaryDetail") || {}, ud = g(form === "ITR-3" ? "ITR3ScheduleUD" : "ITRScheduleUD") || {};
-  return { bus: R(N(form === "ITR-6" ? d.BroughtFrwdBusLossSetOffDrYr : d.BusLossOthThanSpecLossCF)), hp: R(N(d.TotalHPPTILossCF)), ud: R(N(ud.CurBalCFNY)) };
+  return { bus: R(N(form === "ITR-6" ? d.BroughtFrwdBusLossSetOffDrYr : d.BusLossOthThanSpecLossCF)), hp: R(N(d.TotalHPPTILossCF)), ud: R(N(ud.CurBalCFNY)), stcl: R(N(d.TotalSTCGPTILossCF)), ltcl: R(N(d.TotalLTCGPTILossCF)) };
 }
 // Part A-OI: the disallowances by section, from the computation's own lines (audit cases)
 function partAOI(X, o, base) {
@@ -203,10 +206,14 @@ export function coverage(X, map) {
   const add = (key, title, text) => out.push({ key, title, text });
   const claimed = (k) => (k === "80G" ? (Array.isArray(d["80G"]) ? d["80G"] : []).some((x) => N(x.amt)) : k === "80D" ? N(d["80D_self"]) + N(d["80D_parents"]) > 0 : N(d[k]) > 0);
   const H = S.heads || {};
-  if (H.hp) add("hp", "Schedule HP (house property)", "House property income of " + R(H.hp) + ": Schedule HP (the property, its tenant, municipal tax, interest) is not filled by FinCom yet.");
-  if (H.sal && f === "ITR-3") add("salary", "Schedule S (salary)", "Salary of " + R(H.sal) + ": Schedule S (employer, TAN, allowances) is not filled by FinCom yet.");
-  if (f === "ITR-4" && H.c112A && !M.cg112A) add("ltcg112a", "LTCG under 112A (sale and cost)", "Long-term gains under 112A: give the total sale consideration and cost on Data.");
-  if (f !== "ITR-4" && (H.c111A || H.c112A || H.c112 || H.cOth)) add("cg", "Schedule CG and SI (capital gains)", "Capital gains of " + R(H.cg) + ": Schedule CG asks asset by asset (dates, cost, sale): not filled by FinCom yet.");
+  // the heads with schedules: filled from their rows (Schedules S, HP, CG); a figure without its rows blocks
+  if ((H.hp || M.hp) && !M.hpHead) add("hp", "Schedule HP (house property)", "House property income of " + R(H.hp) + " has no houses behind it: give each house on Schedules.");
+  if (H.sal && (f === "ITR-3" || f === "ITR-4") && !M.salaryHead) add("salary", "Schedule S (salary)", "Salary of " + R(H.sal) + " has no employer behind it: give each employer (or bring in Form 16) on Schedules.");
+  if (f === "ITR-4" && H.c112A && !M.cg112A) add("ltcg112a", "LTCG under 112A (sale and cost)", "Long-term gains under 112A: give the sales on Schedules.");
+  if (f !== "ITR-4" && (H.c111A || H.c112A || H.c112 || H.cOth) && !M.cgHead) add("cg", "Schedule CG and SI (capital gains)", "Capital gains of " + R(H.cg) + " have no sales behind them: give each sale on Schedules.");
+  if (f === "ITR-4" && M.cgHead && M.cgHead.rows.some((x) => x.bucket !== "s112A")) add("cg_itr4", "Capital gains in ITR-4", "ITR-4 takes only long-term gains under 112A: the other sales need ITR-3 / ITR-5.");
+  if (f === "ITR-4" && M.hpHead && M.hpHead.props.length > 1) add("hp_itr4", "More than one house in ITR-4", "ITR-4 is for one house property: two or more need ITR-3.");
+  if (M.salaryHead && M.entity !== "P") add("salary_ent", "Salary for this person", "Only an individual has salary income (Schedule S is blank for an HUF, rule 199).");
   ["80C", "80D", "80DD", "80DDB", "80U", "80E", "80EE", "80EEA", "80EEB", "80G", "80GGA", "80GGC"].forEach((k) => { if (claimed(k)) add("via_" + k, "Schedule " + k + " (details)", "Section " + k + " is claimed: the schema's own Schedule " + k + " (each policy, donee or loan) is not filled by FinCom yet."); });
   if ((f === "ITR-5" || f === "ITR-6") && R(S.ded)) add("via_entity", "Schedule VIA and its details (firm / company)", "Deductions under Chapter VI-A of " + R(S.ded) + ": the firm's / company's Schedule VIA and its detail schedules are not filled by FinCom yet.");
   if (S.viaCapped) add("via_cap", "Chapter VI-A above the gross total income", "The deductions are limited to the gross total income: say which sections take the cut.");
@@ -221,6 +228,8 @@ export function coverage(X, map) {
     if (got.bus !== cyBus) miss.push("business loss " + cyBus + " (the JSON has " + got.bus + ")");
     if (got.ud !== R(C.cyUd)) miss.push("unabsorbed depreciation " + R(C.cyUd) + " (the JSON has " + got.ud + ")");
     if (got.hp !== R(C.hp)) miss.push("house property loss " + R(C.hp) + " (the JSON has " + got.hp + ")");
+    if (got.stcl !== R(C.stcl)) miss.push("short-term capital loss " + R(C.stcl) + " (the JSON has " + got.stcl + ")");
+    if (got.ltcl !== R(C.ltcl)) miss.push("long-term capital loss " + R(C.ltcl) + " (the JSON has " + got.ltcl + ")");
     if (miss.length) add("cf_unmapped", "Losses carried forward not in the JSON", "This year's " + miss.join(", ") + ": Schedules CFL and UD do not carry it.");
     if (bfLeft && !((M.losses || {}).business || []).length) add("cfl_prior", "Schedule CFL, earlier years", "Earlier years' losses are carried forward: their rows in Schedule CFL are not filled by FinCom yet.");
   }
@@ -228,15 +237,18 @@ export function coverage(X, map) {
   if (f !== "ITR-4" && M.business && N(M.business.itDep) && !((M.business.itBlocks || []).length)) add("dep", "Schedules DPM / DOA (depreciation by block)", "Depreciation under section 32 of " + R(M.business.itDep) + " has no block detail: fill Statements › Fixed assets.");
   if (f !== "ITR-4" && M.business && (M.business.itBlocks || []).length && R((M.business.itBlocks || []).filter((b) => BLOCK_PATH[b.key]).reduce((a, b) => a + N(b.dep), 0)) !== R(M.business.itDep)) add("dep_sum", "Schedules DPM / DOA add up", "The blocks' depreciation does not add up to the depreciation claimed.");
   if (M.audit && f !== "ITR-4" && !(P.auditor && P.auditor.firm && P.auditor.reportDate && P.auditor.ack)) add("audit_info", "Audit report details", "A tax audit applies: give the auditor's firm, PAN, the date of the report and its acknowledgement number on Data.");
-  if (f === "ITR-3" && S.ti > 10000000) add("al", "Schedule AL (assets and liabilities)", "Total income above Rs 1 crore: Schedule AL is not filled by FinCom yet.");
-  if (P.foreignAssets === "YES") add("fa", "Schedule FA (foreign assets)", "Foreign assets: Schedule FA is not filled by FinCom yet.");
+  if (f === "ITR-3" && S.ti > 10000000 && !M.al) add("al", "Schedule AL (assets and liabilities)", "Total income above Rs 1 crore: give the assets and liabilities at 31-03-2026 (other than the business's) on Schedules (validation rule 905).");
+  const faRows = M.fa ? Object.values(M.fa).filter(Array.isArray).reduce((a, v) => a + v.filter((r) => r && Object.keys(r).length).length, 0) : 0;
+  if (P.foreignAssets === "YES" && !faRows) add("fa", "Schedule FA (foreign assets)", "Foreign assets are said to be held: give each on Schedules (Schedule FA, calendar year 2025).");
+  if (faRows && P.foreignAssets !== "YES") add("fa_flag", "Assets outside India", "Schedule FA has rows: answer Yes to assets outside India (Part B-TTI) on Data.");
   if (X.gstRegistered && !(X.gstTurnover || []).length && f !== "ITR-4") add("gst", "Schedule GST (turnover by GSTIN)", "The client is registered under GST: the turnover by GSTIN (from the filed returns) is not in FinCom.");
   if (f === "ITR-5") (M.partnersDetail || []).forEach((p, i) => { if (!(p.name && p.pan && p.share != null && p.city && p.state && p.pin)) add("partner_" + i, "Partner details", "Partner " + (p.name || i + 1) + ": name, PAN, share and address are needed for the partners' list."); });
   if (f === "ITR-5" && !(M.partnersDetail || []).length) add("partners", "Partners", "List the partners (name, PAN, share, address) on Data.");
   if (f === "ITR-6") {
-    if (P.indAs === true) add("indas", "Ind AS balance sheet and P&L", "The company follows Ind AS: Part A-BS / P&L Ind AS are not filled by FinCom yet.");
+    if (P.indAs === true && !X.sched) add("indas", "Ind AS balance sheet and P&L", "The company follows Ind AS: the books are needed for Part A-BS / P&L Ind AS.");
     if (P.indAs == null) add("indas_q", "Ind AS or not", "Say whether the company follows Ind AS (Data).");
-    if (P.listed !== true) add("sh", "Schedule SH (shareholding of an unlisted company)", "An unlisted company: Schedule SH (each shareholder) is not filled by FinCom yet.");
+    const shRows = M.sh ? ["DtlsSHEndPreviousYearUC", "DtlsEquityShareEndPrvYr", "SHDtlsAnyTimePrevYearUC"].reduce((a, k) => a + (Array.isArray(M.sh[k]) ? M.sh[k].length : 0), 0) + (M.sh.startup ? Object.values(M.sh.startup).filter(Array.isArray).reduce((a, v) => a + v.length, 0) : 0) : 0;
+    if (P.listed !== true && !shRows) add("sh", "Schedule SH (shareholding of an unlisted company)", "An unlisted company: give each shareholder at 31-03-2026 on Schedules (Schedule SH-1).");
     if (P.authorised == null) add("auth", "Authorised share capital", "Give the authorised share capital (Data).");
     if (N(M.matCredit) && !(M.matCredits || []).length) add("matc", "Schedule MATC, earlier years", "MAT credit brought forward: give it year by year (Data).");
   }
@@ -272,6 +284,7 @@ function itr4(X) {
   put(o, "IncomeDeductions/DeductUndChapVIA", Object.assign(viaAllowed(S, VIA4), { TotalChapVIADeductions: R(S.ded) }));
   if (M.salary) put(o, "IncomeDeductions/DeductionUs16ia", R(M.salary.std));
   if (h.c112A && M.cg112A) put(o, "LTCG112A", { TotSaleCnsdrn: R(M.cg112A.sale), TotCstAcqisn: R(M.cg112A.cost), LongCap112A: R(h.c112A) });
+  salarySchedule(X, o, "itr4"); hpSchedule(X, o, "itr4");
   put(o, "IncomeDeductions/TotalIncome", R(S.ti));
   const t = S.tax || {}, gross = R(t.normalTax + t.specialTax);
   put(o, "TaxComputation/TotalTaxPayable", gross); put(o, "TaxComputation/Rebate87A", R(t.rebate)); put(o, "TaxComputation/TaxPayableOnRebate", R(gross - t.rebate));
@@ -296,7 +309,7 @@ function itr4(X) {
   const g = X.gstTurnover || [];
   if (g.length) { put(o, "ScheduleBP/TurnoverGrsRcptForGSTIN", g.map((x) => ({ GSTINNo: x.gstin, AmtTurnGrossRcptGSTIN: R(x.amt) }))); put(o, "ScheduleBP/TotalTurnoverGrsRcptGSTIN", R(g.reduce((s, x) => s + N(x.amt), 0))); }
   const F = X.fin44; if (F) put(o, "ScheduleBP/FinanclPartclrOfBusiness", F);
-  taxPaidLists(X, o, "", "itr4");
+  taxPaidLists(X, o, "", "itr4"); tdsSalary(X, o, "itr4");
   verification(P, o, "Verification", "itr4");
   return o;
 }
@@ -406,15 +419,19 @@ function bp(X, o, base, othKey) {
   const by = (xs, slot) => R(xs.filter((a) => a.bp === slot).reduce((s, a) => s + N(a.amt), 0));
   const B = base + "/BusinessIncOthThanSpec";
   const pbt = R(M.business ? M.business.pbt : 0), os = by(less, "IncRecCredPLOthHeadDtls.OtherSources");
+  const hpIn = by(less, "IncRecCredPLOthHeadDtls.HouseProperty"), cgIn = by(less, "IncRecCredPLOthHeadDtls.CapitalGains"), hpEx = by(adds, "ExpDebToPLOthHeadDtls.HouseProperty");
   put(o, B + "/ProfBfrTaxPL", pbt);
   put(o, B + "/IncRecCredPLOthHeadDtls/OtherSources", os); put(o, B + "/IncRecCredPLOthHeadDtls/OtherThanDividend", os);
-  const bal = pbt - os;
-  put(o, B + "/BalancePLOthThanSpecBus", bal); put(o, B + "/AdjustedPLOthThanSpecBus", bal);
+  // rent and capital gains in the P&L go to their heads (A3b, A3c); their expenses are added back (A7b)
+  put(o, B + "/IncRecCredPLOthHeadDtls/HouseProperty", hpIn); put(o, B + "/IncRecCredPLOthHeadDtls/CapitalGains", cgIn);
+  put(o, B + "/ExpDebToPLOthHeadDtls/HouseProperty", hpEx); put(o, B + "/TotExpDebPL", hpEx);
+  const bal = pbt - os - hpIn - cgIn;
+  put(o, B + "/BalancePLOthThanSpecBus", bal); put(o, B + "/AdjustedPLOthThanSpecBus", bal + hpEx);
   const bookDep = by(adds, "DepreciationDebPLCosAct");
   put(o, B + "/DepreciationDebPLCosAct", bookDep);
   const itd = R(S.itDep);
   put(o, B + "/DepreciationAllowITAct32", { DepreciationAllowUs32_1_ii: itd, TotDeprAllowITAct: itd });
-  const after = bal + bookDep - itd;
+  const after = bal + hpEx + bookDep - itd;
   put(o, B + "/AdjustPLAfterDeprOthSpecInc", after);
   const a36 = by(adds, "AmtDebPLDisallowUs36"), a37 = by(adds, "AmtDebPLDisallowUs37"), a40 = by(adds, "AmtDebPLDisallowUs40") + R(L("add:40b_int")) + R(L("add:40b_rem")), a40A = by(adds, "AmtDebPLDisallowUs40A"), a43B = by(adds, "AmtDebPLDisallowUs43B"), oth = by(adds, "OthItemDisallowUs28To44DA");
   put(o, B + "/AmtDebPLDisallowUs36", a36); put(o, B + "/AmtDebPLDisallowUs37", a37); put(o, B + "/AmtDebPLDisallowUs40", a40); put(o, B + "/AmtDebPLDisallowUs40A", a40A); put(o, B + "/AmtDebPLDisallowUs43B", a43B);
@@ -441,7 +458,8 @@ function partBTI(X, o, base, kind) {
   put(o, base + "/BroughtFwdLossesSetoff", R(lineOf(S, "bfla_bp") + lineOf(S, "bfla_ud")));
   put(o, base + "/GrossTotalIncome", R(S.gti));
   // the total of this year's losses in Schedule CFL (validation rule 934)
-  const Cc = S.carry || {}; put(o, base + "/LossesOfCurrentYearCarriedFwd", R((Cc.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0) + N(Cc.hp)));
+  const Cc = S.carry || {}; put(o, base + "/LossesOfCurrentYearCarriedFwd", R((Cc.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0) + N(Cc.hp) + N(Cc.stcl) + N(Cc.ltcl)));
+  tiCapGain(X, o, base);
   put(o, base + "/IncChargeTaxSplRate111A112", R(S.special));
   put(o, base + "/DeductionsUndSchVIADtl", { PartBchapterVIA: R(S.ded), TotDeductUndSchVIA: R(S.ded) });
   put(o, base + "/TotalIncome", R(S.ti));
@@ -502,6 +520,7 @@ function itr3(X) {
   partBTTI(X, o, "PartB_TTI", "ind");
   put(o, "PartB_TTI/AssetOutIndiaFlag", P.foreignAssets || undefined);
   depSchedules(X, o); osSchedule(X, o); lossSchedules(X, o);
+  salarySchedule(X, o, "itr3"); tdsSalary(X, o, "itr3"); hpSchedule(X, o); cgSchedule(X, o); siSchedule(X, o); alSchedule(X, o); faSchedule(X, o);
   const dd = M.deductions || {}, usr = {}; Object.keys(VIA3).forEach((k) => { usr[VIA3[k]] = k === "80D" ? R(N(dd["80D_self"]) + N(dd["80D_parents"])) : k === "80G" ? R((Array.isArray(dd["80G"]) ? dd["80G"] : []).reduce((t, x) => t + N(x.amt), 0)) : R(dd[k]); });
   if (R(X.comp.ded) || Object.values(usr).some((v) => v)) { put(o, "ScheduleVIA/UsrDeductUndChapVIA", Object.assign(usr, { TotalChapVIADeductions: Object.values(usr).reduce((a, v) => a + v, 0) })); put(o, "ScheduleVIA/DeductUndChapVIA", Object.assign(viaAllowed(X.comp, VIA3), { TotalChapVIADeductions: R(X.comp.ded) })); }
   if (M.audit) { partAOI(X, o, "PARTA_OI"); auditInfo(X, o, "PartA_GEN2/AuditInfo"); }
@@ -525,6 +544,7 @@ function itr5(X) {
   partBTI(X, o, "PartB-TI", "firm");
   partBTTI(X, o, "PartB_TTI", "firm");
   depSchedules(X, o); osSchedule(X, o); lossSchedules(X, o);
+  hpSchedule(X, o); cgSchedule(X, o); siSchedule(X, o); faSchedule(X, o);
   const pd = (M.partnersDetail || []).filter((p) => p.name && p.pan);
   if (pd.length) put(o, "PartA_GEN2/PartnerOrMemberInfo", pd.map((p) => Object.assign({ PartnerOrMemberName: p.name, PAN: p.pan, SharePercentage: N(p.share), RemunerationPaid: R(p.remuneration), RateOfInterest: N(p.rate),
     AddressDetailWithZipCode: { AddrDetail: p.addr || p.city, CityOrTownOrDistrict: p.city, StateCode: String(p.state || "").padStart(2, "0"), CountryCode: "91", PinCode: +p.pin } }, p.status ? { Status: p.status } : {})));
@@ -589,14 +609,16 @@ function itr6(X) {
   if (P.returnSec) put(o, "PartA_GEN1/FilingStatus/ReturnFileSec/IncomeTaxSec", +P.returnSec);
   put(o, "PartA_GEN1/FilingStatus/ItrFilingDueDate", M.tp ? "2026-11-30" : "2026-10-31");
   put(o, "PartA_GEN2For6/LiableSec44ABflg", M.audit ? "Y" : "N");
-  if (sc) bs6(X, o, P);
-  if (sc) { trading(X, o, "TradingAccount"); plMain(X, o, "PARTA_PL", "itr6"); }
+  // a company under Ind AS files Part A-BS / P&L Ind AS (the Division I parts stay at 0); the others the reverse
+  if (sc && P.indAs === true) { bsIndAs(X, o, P); trading(X, o, "TradingAccountIndAS"); plMain(X, o, "PARTA_PLIndAS", "itr6"); ociIndAs(X, o); }
+  else if (sc) { bs6(X, o, P); trading(X, o, "TradingAccount"); plMain(X, o, "PARTA_PL", "itr6"); }
   mat6(X, o);
   if (sc) put(o, "CorpScheduleBP/BusinessIncOthThanSpec/ProfBfrTaxPL", R(sc.totals.pbt));
   bp(X, o, "CorpScheduleBP", "OthItemDisallowUs28To44DA");
   partBTI(X, o, "PartB-TI", "co");
   partBTTI(X, o, "PartB_TTI", "co");
   depSchedules(X, o); osSchedule(X, o); lossSchedules(X, o);
+  hpSchedule(X, o); cgSchedule(X, o); siSchedule(X, o); faSchedule(X, o); shSchedule(X, o); al6Schedule(X, o);
   if (M.audit) { partAOI(X, o, "PARTA_OI"); auditInfo(X, o, "PartA_GEN2For6/AuditInfo"); }
   gstSchedule(X, o, "ScheduleGST");
   taxPaidLists(X, o, "", "itr6");
@@ -607,5 +629,5 @@ function itr6(X) {
 export function mapReturn(X) {
   const f = { "ITR-3": itr3, "ITR-4": itr4, "ITR-5": itr5, "ITR-6": itr6 }[X.form];
   if (!f) throw new Error("no map for " + X.form);
-  return f(X);
+  return f(Object.assign({}, X, { root: ROOT[X.form] }));
 }

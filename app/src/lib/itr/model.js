@@ -3,6 +3,7 @@
 // from; what is not known stays empty and the checks say so.
 import { FORM_OF } from "./law.js";
 import { pf36va, settle36va, settle43B, settleMsme, adjustments } from "./books.js";
+import { salaryHead, houseHead, capitalGains } from "./heads.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -10,7 +11,7 @@ const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sig
 // files: the store's list -> {ais, tis, as26, prefill, ecr[], pfc[], esi[]}
 export function importsOf(files) {
   const one = (k) => files.find((f) => f.kind === k) || null;
-  return { ais: one("ais"), tis: one("tis"), as26: one("as26"), prefill: one("prefill"), ecr: files.filter((f) => f.kind === "ecr"), pfc: files.filter((f) => f.kind === "pfchallan"), esi: files.filter((f) => f.kind === "esic") };
+  return { ais: one("ais"), tis: one("tis"), as26: one("as26"), prefill: one("prefill"), ecr: files.filter((f) => f.kind === "ecr"), pfc: files.filter((f) => f.kind === "pfchallan"), esi: files.filter((f) => f.kind === "esic"), f16: files.filter((f) => f.kind === "form16") };
 }
 
 // the head of income a TDS section's receipt belongs to (Schedule TDS2 HeadOfIncome)
@@ -62,17 +63,51 @@ export function buildModel(c) {
   const interestBooks = bk ? bk.sched.pl.interestInc.cy : 0;
   M.os = { interest: R(interestBooks + N(st.osInterest)), dividend: R(st.osDividend), other: R(st.osOther) };
   M.interestSrc = "the books' interest income" + (N(st.osInterest) ? " + " + R(st.osInterest) + " entered" : "");
-  if (st.salary && N(st.salary.gross)) M.salary = { gross: N(st.salary.gross), std: Math.min(N(st.salary.gross), M.regime === "old" ? 50000 : 75000) };
-  if (st.hp != null && st.hp !== "") M.hp = N(st.hp);
-  if (st.cg) M.cg = st.cg;
-  if (st.cg112A && N(st.cg112A.sale)) M.cg112A = { sale: N(st.cg112A.sale), cost: N(st.cg112A.cost) };
+  // the heads with schedules of their own (heads.js): Schedule S from the salaries (Form 16), HP from the houses, CG
+  // from the sales; check.js works each again from the same rows
+  const hctx = { regime: M.regime, entity, resident: M.resident };
+  if (Array.isArray(st.salaries) && st.salaries.length && (entity === "P")) {
+    const sh = salaryHead(st.salaries, hctx);
+    M.salaryRows = st.salaries; M.salaryHead = sh;
+    M.salary = { gross: sh.gross, std: sh.std, net: sh.income, basicDa: sh.basicDa, src: "Schedule S (" + sh.rows.length + " employer" + (sh.rows.length === 1 ? "" : "s") + ")" };
+  } else if (st.salary && N(st.salary.gross)) M.salary = { gross: N(st.salary.gross), std: Math.min(N(st.salary.gross), M.regime === "old" ? 50000 : 75000) };
+  if (Array.isArray(st.houses) && st.houses.length) {
+    const hh = houseHead(st.houses, hctx);
+    M.houseRows = st.houses; M.hpHead = hh; M.hp = hh.total; M.hpRent = hh.rentOwn;
+  } else if (st.hp != null && st.hp !== "") M.hp = N(st.hp);
+  if (Array.isArray(st.cgRows) && st.cgRows.length) {
+    const g = capitalGains(st.cgRows, hctx);
+    M.cgRows = st.cgRows; M.cgHead = g;
+    M.cg = { s111A: g.s111A, s112A: g.s112A, s112: g.s112, other: g.stApp, relief112: g.relief112, cfStcl: g.cfStcl, cfLtcl: g.cfLtcl, at: g.at, reliefAt: g.reliefAt };
+    const a = g.rows.filter((x) => x.bucket === "s112A");
+    if (a.length) M.cg112A = { sale: R(a.reduce((s, x) => s + x.fullValue, 0)), cost: R(a.reduce((s, x) => s + x.costUsed + x.imp + x.exp, 0)) };
+  } else {
+    if (st.cg) M.cg = st.cg;
+    if (st.cg112A && N(st.cg112A.sale)) M.cg112A = { sale: N(st.cg112A.sale), cost: N(st.cg112A.cost) };
+  }
+  // the lists the official schedules take as they are (the page's editors follow the schema): AL, FA, SH, AL-1, OCI
+  ["al", "fa", "sh", "al6"].forEach((k) => { if (st[k]) M[k] = st[k]; });
+  if (st.indAsOci) M.oci = st.indAsOci;
+  M.indAs = (st.profile || {}).indAs; M.listed = (st.profile || {}).listed;
+  // rent or a capital gain credited to the books' profit and loss account (and expenses debited for them) belong to
+  // their own head: taken out of business income (Schedule BP A3b / A3c, A7b / A7c)
+  if (M.business) {
+    const hin = R((st.houses || []).reduce((s, h) => s + N(h.inBooks), 0)), hexp = R((st.houses || []).reduce((s, h) => s + N(h.inBooksExp), 0));
+    const cin = R((st.cgRows || []).reduce((s, x) => s + N(x.inBooks), 0));
+    if (hin) M.business.less.push({ key: "hp_inbooks", label: "rent credited to the profit and loss account (taxed under house property)", amt: hin, bp: "IncRecCredPLOthHeadDtls.HouseProperty", src: "Schedule HP: rent in the books", trace: [] });
+    if (cin) M.business.less.push({ key: "cg_inbooks", label: "capital gains credited to the profit and loss account (taxed under capital gains)", amt: cin, bp: "IncRecCredPLOthHeadDtls.CapitalGains", src: "Schedule CG: gains in the books", trace: [] });
+    if (hexp) M.business.adds.push({ key: "hp_inbooksexp", label: "expenses of the let-out property debited to the profit and loss account", amt: hexp, bp: "ExpDebToPLOthHeadDtls.HouseProperty", src: "Schedule HP: expenses in the books", trace: [] });
+  }
   if (Array.isArray(st.matCredits)) M.matCredits = st.matCredits;
   // taxes paid: the 26AS lines (they carry the TAN and BSR the JSON needs); the books' figures are checked against them
   const as26 = im.as26 && im.as26.data;
-  M.paid = { tds: [], tcs: [], advance: [], selfAssessment: [] };
+  M.paid = { tds: [], tdsSal: [], tcs: [], advance: [], selfAssessment: [] };
   if (as26) {
     // only lines TRACES shows as finally booked (status F) are claimed; U, P, O and a status not read are asked (verify.js)
-    M.paid.tds = as26.tds.filter((r) => String(r.status || "").toUpperCase() === "F").map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date, head: headOf(r.sec, M) }));
+    const booked = as26.tds.filter((r) => String(r.status || "").toUpperCase() === "F"), isSal = (r) => /^192/.test(String(r.sec || ""));
+    M.paid.tds = booked.filter((r) => !isSal(r)).map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date, head: headOf(r.sec, M) }));
+    // TDS on salary (192): Schedule TDS1, against the employer's income chargeable under the head
+    M.paid.tdsSal = booked.filter(isSal).map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax, date: r.date }));
     M.paid.tcs = as26.tcs.map((r) => ({ tan: r.tan, name: r.name, sec: r.sec, gross: r.amount, amt: r.tax }));
     as26.paid.forEach((p) => { const x = { bsr: p.bsr, date: p.date, serial: p.serial, amt: p.amount }; if (p.kind === "advance") M.paid.advance.push(x); else if (p.kind === "self") M.paid.selfAssessment.push(x); });
     M.tdsSrc = "Form 26AS (the books' TDS receivable is checked against it)"; M.advSrc = "Form 26AS challans";

@@ -125,15 +125,16 @@ export function compute(inp) {
   pgbp = R(pgbp);
 
   // 2. Other heads
-  const sal = inp.salary ? R(pos(N(inp.salary.gross) - N(inp.salary.std))) : 0;
-  if (inp.salary) line("salary", "Income from salary", sal, { sec: "oh", src: inp.salary.src });
+  // salary: the income under the head as Schedule S works it (heads.js), else gross less the standard deduction
+  const sal = inp.salary ? R(inp.salary.net != null ? pos(inp.salary.net) : pos(N(inp.salary.gross) - N(inp.salary.std))) : 0;
+  if (inp.salary) line("salary", "Income from salary", sal, { sec: "oh", src: inp.salary.src || "Sections 15-17, 16" });
   const hp = inp.hp != null ? R(inp.hp) : 0;
-  if (inp.hp != null) line("hp", "Income from house property", hp, { sec: "oh" });
+  if (inp.hp != null) line("hp", "Income from house property", hp, { sec: "oh", src: "Sections 22-27 (Schedule HP)" });
   const os = inp.os ? R(sum(Object.values(inp.os).filter((v) => typeof v === "number"))) : 0;
   if (inp.os) line("os", "Income from other sources", os, { sec: "oh", src: inp.os.src, parts: inp.os });
   const cg = inp.cg || {};
   const c111A = R(N(cg.s111A)), c112A = R(N(cg.s112A)), c112 = R(N(cg.s112)), cOth = R(N(cg.other));
-  if (c111A || c112A || c112 || cOth) line("cg", "Capital gains", c111A + c112A + c112 + cOth, { sec: "oh" });
+  if (c111A || c112A || c112 || cOth) line("cg", "Capital gains", c111A + c112A + c112 + cOth, { sec: "oh", src: "Sections 45-55A, 111A, 112, 112A (Schedule CG)" });
 
   // 3. Set-off of the year's losses (section 70, 71): business loss against any head but salary; house property loss
   // up to Rs 2 lakh against other heads (old regime; none in the new regime, 115BAC(2))
@@ -172,7 +173,10 @@ export function compute(inp) {
   if (udUsed) line("bfla_ud", "Unabsorbed depreciation set off (section 32(2))", udUsed, { sec: "sl", sign: -1, src: L.LOSS.src });
   const late = !!(inp.filingDate && inp.filingDate > dueDate(inp));
   // section 80: a belated return carries no business loss of the year forward (unabsorbed depreciation still goes)
-  S.carry = { business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), cyUd: R(cyUnabDep), bfUd: R(N(bf.unabsorbedDep)), bfUdLeft: R(ud), udUsed: R(udUsed), cyBus: R(cyBizLoss), hp: cfHp, lostS80: late ? cyBizLoss : 0 };
+  // capital losses left after the set-off within the head (74), none from a belated return (80)
+  const stcl = late ? 0 : R(N(cg.cfStcl)), ltcl = late ? 0 : R(N(cg.cfLtcl));
+  S.carry = { business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), cyUd: R(cyUnabDep), bfUd: R(N(bf.unabsorbedDep)), bfUdLeft: R(ud), udUsed: R(udUsed), cyBus: R(cyBizLoss), hp: cfHp, stcl, ltcl, lostS80: late ? cyBizLoss : 0, lostCg: late ? R(N(cg.cfStcl) + N(cg.cfLtcl)) : 0 };
+  if (late && (N(cg.cfStcl) || N(cg.cfLtcl))) S.warn.push({ key: "s80cg", text: "The return is after the due date: this year's capital loss of " + R(N(cg.cfStcl) + N(cg.cfLtcl)) + " cannot be carried forward (section 80)." });
   if (cyBizLoss && inp.filingDate && inp.filingDate > dueDate(inp)) S.warn.push({ key: "s80", text: "The return is after the due date: this year's business loss of " + cyBizLoss + " cannot be carried forward (section 80). Unabsorbed depreciation still is." });
   if (bfLeft.some((x) => x.lapsed)) S.warn.push({ key: "lapsed", text: "A brought-forward business loss older than eight years has lapsed and is not set off." });
 
@@ -188,10 +192,10 @@ export function compute(inp) {
   const normal = Math.max(0, ti - special);
 
   // 6. Tax
-  const t = taxOn(inp, { ti, normal, s111A: h.c111A, s112A: h.c112A, s112: h.c112 }, S);
+  const t = taxOn(inp, { ti, normal, s111A: h.c111A, s112A: h.c112A, s112: h.c112, relief: R(N(cg.relief112)) }, S);
   const inr = (x) => { const v = String(Math.round(x)), l3 = v.slice(-3), r = v.slice(0, -3); return (r ? r.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," : "") + l3; };
   line("tax_normal", "Tax on " + inr(normal) + " at the " + t.rateName, t.normalTax, { sec: "tx", src: t.src });
-  if (t.specialTax) line("tax_special", "Tax on special-rate income (111A 20%, 112A 12.5% above Rs 1.25 lakh, 112 12.5%)", t.specialTax, { sec: "tx", src: "Sections 111A, 112, 112A" });
+  if (t.specialTax) line("tax_special", "Tax on special-rate income (111A 20%, 112A 12.5% above Rs 1.25 lakh, 112 12.5%)" + (t.relief112 ? ", after " + t.relief112 + " ignored under the proviso to 112(1)(a)" : ""), t.specialTax, { sec: "tx", src: "Sections 111A, 112, 112A; proviso to 112(1)(a)" });
   if (t.rebate) line("rebate", "Less: rebate under section 87A", t.rebate, { sec: "tx", sign: -1, src: L.REBATE.src });
   if (t.sur) line("surcharge", "Surcharge" + (t.relief ? " (after marginal relief of " + t.relief + ")" : ""), t.sur, { sec: "tx", src: L.SRC_SUR });
   line("cess", "Health and Education Cess at 4%", t.cess, { sec: "tx", src: L.SRC_SUR });
@@ -202,9 +206,15 @@ export function compute(inp) {
 
   // 7. Taxes paid and interest
   const paid = inp.paid || {};
-  const tds = R(sum(paid.tds, (x) => x.amt)), tcs = R(sum(paid.tcs, (x) => x.amt)), adv = R(sum(paid.advance, (x) => x.amt)), sat = R(sum(paid.selfAssessment, (x) => x.amt));
+  const tds = R(sum(paid.tds, (x) => x.amt) + sum(paid.tdsSal, (x) => x.amt)), tcs = R(sum(paid.tcs, (x) => x.amt)), adv = R(sum(paid.advance, (x) => x.amt)), sat = R(sum(paid.selfAssessment, (x) => x.amt));
   const due = dueDate(inp), filing = inp.filingDate || due;
-  const i = interest({ liability, tds, tcs, advance: paid.advance || [], sa: paid.selfAssessment || [], due, filing, presumptive: !!(pres && inp.presumptive && (inp.presumptive.ad || inp.presumptive.ada)), ti });
+  // 234C, proviso (a): a shortfall from capital gains not foreseen is not interest-bearing when the tax on them is paid in
+  // the remaining instalments; the tax on the income as it stood at each instalment date (heads.js: what had accrued)
+  const liabAt = {};
+  if (cg.at && !inp.noInterest) Object.keys(cg.at).forEach((d) => { const a = cg.at[d]; if (a.s111A === c111A && a.s112A === c112A && a.s112 === c112 && a.stApp === cOth) return;
+    const sub = Object.assign({}, inp, { noInterest: true, paid: {}, cg: { s111A: a.s111A, s112A: a.s112A, s112: a.s112, other: a.stApp, relief112: N((cg.reliefAt || {})[d]) } });
+    liabAt[d] = compute(sub).liability; });
+  const i = inp.noInterest ? { a: 0, b: 0, c: 0, f: 0, cParts: [] } : interest({ liability, tds, tcs, advance: paid.advance || [], sa: paid.selfAssessment || [], due, filing, presumptive: !!(pres && inp.presumptive && (inp.presumptive.ad || inp.presumptive.ada)), ti, liabAt });
   if (i.a) line("i234a", "Interest under section 234A (" + i.monthsA + " months)", i.a, { sec: "in", src: L.INTEREST.src });
   if (i.b) line("i234b", "Interest under section 234B (" + i.monthsB + " months)", i.b, { sec: "in", src: L.INTEREST.src });
   if (i.c) line("i234c", "Interest under section 234C", i.c, { sec: "in", src: L.INTEREST.src });
@@ -219,7 +229,7 @@ export function compute(inp) {
     heads: { sal, hp, pgbp, os, cg: c111A + c112A + c112 + cOth, c111A, c112A, c112, cOth }, after: h, afterCyla, setoff, itDep,
     gti, ded, ti, normal, special, tax: t, liability, tds, tcs, adv, sat, interest: i, net: R(net), payable, refund, due, filing,
     // the figures the second computation must agree with, to the rupee
-    key: { gti, ti, normalTax: t.normalTax, specialTax: t.specialTax, rebate: t.rebate, sur: t.sur, cess: t.cess, liability, i234a: i.a, i234b: i.b, i234c: i.c, f234f: i.f, payable, refund, cfBus: late ? 0 : R(cyBizLoss), cfUd: R(cyUnabDep), cfHp: R(cfHp) },
+    key: { gti, ti, sal, hp, cg: c111A + c112A + c112 + cOth, normalTax: t.normalTax, specialTax: t.specialTax, rebate: t.rebate, sur: t.sur, cess: t.cess, liability, i234a: i.a, i234b: i.b, i234c: i.c, f234f: i.f, payable, refund, cfBus: late ? 0 : R(cyBizLoss), cfUd: R(cyUnabDep), cfHp: R(cfHp), cfStcl: stcl, cfLtcl: ltcl },
   });
   return S;
 }
@@ -283,8 +293,11 @@ function deductions(inp, room, S) {
 }
 
 // tax on each special-rate part (after any exemption set against it)
+// the proviso to 112(1)(a): the excess of 12.5% over 20% with indexation (land or building bought before 23-07-2024,
+// resident individual / HUF: heads.js) is ignored, at most the 112 tax charged
 function specialParts(p) {
-  return { t111A: R(N(p.s111A) * L.SPECIAL.s111A), t112: R(N(p.s112) * L.SPECIAL.s112), t112A: R(Math.max(0, N(p.s112A) - L.SPECIAL.s112AExempt) * L.SPECIAL.s112A) };
+  const t112 = R(N(p.s112) * L.SPECIAL.s112), rel = Math.min(t112, R(N(p.relief)));
+  return { t111A: R(N(p.s111A) * L.SPECIAL.s111A), t112: t112 - rel, t112A: R(Math.max(0, N(p.s112A) - L.SPECIAL.s112AExempt) * L.SPECIAL.s112A), relief112: rel };
 }
 function specialTax(p) { const t = specialParts(p); return t.t111A + t.t112 + t.t112A; }
 
@@ -295,10 +308,10 @@ function baseTax(inp, p) {
   if (ent === "P" || ent === "H") {
     const slabs = slabsFor(inp), ex = exemptOf(slabs);
     let left = Math.max(0, ex - p.normal);
-    const sp = { s111A: p.s111A, s112A: p.s112A, s112: p.s112 };
+    const sp = { s111A: p.s111A, s112A: p.s112A, s112: p.s112, relief: p.relief };
     // the unused exemption first where it saves most: 111A (20%), then 112 (12.5%), then 112A (12.5% above 1.25 lakh)
     if (inp.resident !== false) for (const k of ["s111A", "s112", "s112A"]) { const u = Math.min(left, sp[k]); sp[k] -= u; left -= u; }
-    return { normalTax: slabTax(p.normal, slabs), specialTax: specialTax(sp), parts: specialParts(sp), rateName: inp.regime === "new" ? "new regime slab rates (115BAC)" : "old regime slab rates", src: inp.regime === "new" ? L.SRC_SLABS.new : L.SRC_SLABS.old };
+    return { normalTax: slabTax(p.normal, slabs), specialTax: specialTax(sp), parts: specialParts(sp), relief112: specialParts(sp).relief112, rateName: inp.regime === "new" ? "new regime slab rates (115BAC)" : "old regime slab rates", src: inp.regime === "new" ? L.SRC_SLABS.new : L.SRC_SLABS.old };
   }
   if (ent === "C") {
     const r = inp.regime === "115BAA" ? L.CO_RATE.baa : inp.smallCo === false ? L.CO_RATE.other : L.CO_RATE.small;
@@ -420,10 +433,15 @@ export function interest(o) {
     inst.forEach(([md, share, months]) => {
       const date = (md === "0315" ? fy0 + 1 : fy0) + md;
       const paid = sum((o.advance || []).filter((x) => x.date <= date), (x) => x.amt);
-      const safe = !o.presumptive && L.INTEREST.safe[md] != null && paid >= L.INTEREST.safe[md] * assessed;
-      const short = safe ? 0 : D100(share * assessed - paid);
+      // proviso (a) to 234C: the instalment on the income as it stood on its date, when the tax on the capital gains
+      // after it was paid in the remaining instalments (by 31 March)
+      let base = assessed;
+      const la = (o.liabAt || {})[date];
+      if (la != null) { const later = sum((o.advance || []).filter((x) => x.date > date && x.date <= fy0 + 1 + "0331"), (x) => x.amt); if (later >= N(o.liability) - la) base = Math.max(0, la - credit); }
+      const safe = !o.presumptive && L.INTEREST.safe[md] != null && paid >= L.INTEREST.safe[md] * base;
+      const short = safe ? 0 : D100(share * base - paid);
       const v = R(short * L.INTEREST.rate * months);
-      out.cParts.push({ date, due: R(share * assessed), paid: R(paid), short, months, v });
+      out.cParts.push({ date, due: R(share * base), paid: R(paid), short, months, v });
       out.c += v;
     });
   }

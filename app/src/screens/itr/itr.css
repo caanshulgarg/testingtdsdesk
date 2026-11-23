@@ -106,3 +106,10 @@
 .itr-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .itr-answer-l { flex: 1 1 220px; min-width: 0; display: flex; gap: 8px; justify-content: space-between; }
 .itr-answer input[type=date] { max-width: 160px; }
+/* schedules (Schedules.jsx) */
+.itr .itr-edit { gap: 10px; }
+.itr .itr-sub2 { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--itr-soft); padding-top: 8px; }
+.itr .itr-sub2-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; color: var(--itr-ink); }
+.itr .itr-subrow { padding: 8px 10px; border-radius: 8px; background: var(--itr-tint); align-items: end; }
+.itr .itr-rm { align-self: start; font-size: 12px; }
+@media (max-width: 640px) { .itr .itr-file-more.itr-edit { padding-left: 0; } .itr .itr-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }

@@ -4,7 +4,7 @@
 // It follows the same conventions as tax.js where the law leaves a choice (docs/ITR-MODULE.md, "Conventions"):
 // rupee rounding of each tax figure (each special-rate part on its own), total income to the nearest 10, the final payable / refund to the nearest 10,
 // interest month by month on the amount rounded down to 100, MAT shown in the tax heads when it is payable.
-export const KEYS = ["gti", "ti", "normalTax", "specialTax", "rebate", "sur", "cess", "liability", "i234a", "i234b", "i234c", "f234f", "payable", "refund", "cfBus", "cfUd", "cfHp"];
+export const KEYS = ["gti", "ti", "sal", "hp", "cg", "normalTax", "specialTax", "rebate", "sur", "cess", "liability", "i234a", "i234b", "i234c", "f234f", "payable", "refund", "cfBus", "cfUd", "cfHp", "cfStcl", "cfLtcl"];
 
 function n(v) { v = Number(v); return isFinite(v) ? v : 0; }
 function rup(v) { v = n(v); const s = v < 0 ? -1 : 1; const r = s * Math.round(Math.abs(v) + 1e-9); return r === 0 ? 0 : r; }
@@ -82,7 +82,7 @@ function business(inp) {
   return { inc: rup(inc), dep, pres: false };
 }
 
-function taxParts(inp, ti, normal, s111A, s112A, s112) {
+function taxParts(inp, ti, normal, s111A, s112A, s112, rel) {
   const ent = inp.entity;
   let nt, st, t111A = 0, t112 = 0;
   if (ent === "P" || ent === "H") {
@@ -95,16 +95,16 @@ function taxParts(inp, ti, normal, s111A, s112A, s112) {
       u = Math.min(unused, c); c -= u; unused -= u;
       u = Math.min(unused, b); b -= u; unused -= u;
     }
-    t111A = rup(a * 0.2); t112 = rup(c * 0.125);
+    t111A = rup(a * 0.2); t112 = rup(c * 0.125); t112 -= Math.min(t112, rup(rel));
     st = t111A + t112 + rup(b > 125000 ? (b - 125000) * 0.125 : 0);
   } else if (ent === "C") {
     let rate = 0.25;
     if (inp.regime === "115BAA") rate = 0.22; else if (inp.smallCo === false) rate = 0.3;
     nt = rup(normal * rate);
-    t111A = rup(s111A * 0.2); t112 = rup(s112 * 0.125); st = t111A + t112 + rup(s112A > 125000 ? (s112A - 125000) * 0.125 : 0);
+    t111A = rup(s111A * 0.2); t112 = rup(s112 * 0.125); t112 -= Math.min(t112, rup(rel)); st = t111A + t112 + rup(s112A > 125000 ? (s112A - 125000) * 0.125 : 0);
   } else {
     nt = rup(normal * 0.3);
-    t111A = rup(s111A * 0.2); t112 = rup(s112 * 0.125); st = t111A + t112 + rup(s112A > 125000 ? (s112A - 125000) * 0.125 : 0);
+    t111A = rup(s111A * 0.2); t112 = rup(s112 * 0.125); t112 -= Math.min(t112, rup(rel)); st = t111A + t112 + rup(s112A > 125000 ? (s112A - 125000) * 0.125 : 0);
   }
   // rebate 87A
   // section 87A: new regime, total income (special-rate income in it) at most 12,00,000, the rebate up to 60,000 out of the
@@ -140,8 +140,8 @@ function surchargeOn(inp, parts, r) {
   const nt = Math.max(0, parts.nt - parts.reb), st = Math.max(0, parts.st - Math.max(0, parts.reb - parts.nt));
   return rup(nt * r + st * (indlike ? Math.min(r, 0.15) : r));
 }
-function grossTax(inp, ti, normal, a, b, c) {
-  const p = taxParts(inp, ti, normal, a, b, c);
+function grossTax(inp, ti, normal, a, b, c, rel) {
+  const p = taxParts(inp, ti, normal, a, b, c, rel);
   const s = surchargeRate(inp, ti);
   let sur = s.r ? surchargeOn(inp, p, s.r) : 0;
   if (s.r && s.at) {
@@ -151,7 +151,7 @@ function grossTax(inp, ti, normal, a, b, c) {
     u = Math.min(cut, bb); bb -= u; cut -= u;
     u = Math.min(cut, cc); cc -= u; cut -= u;
     u = Math.min(cut, aa); aa -= u; cut -= u;
-    const q = taxParts(inp, s.at, nn, aa, bb, cc), s2 = surchargeRate(inp, s.at);
+    const q = taxParts(inp, s.at, nn, aa, bb, cc, rel), s2 = surchargeRate(inp, s.at);
     const atThr = q.nt + q.st - q.reb + (s2.r ? surchargeOn(inp, q, s2.r) : 0);
     const mine = p.nt + p.st - p.reb + sur;
     if (mine > atThr + (ti - s.at)) sur = rup(sur - Math.min(sur, mine - atThr - (ti - s.at)));
@@ -175,16 +175,137 @@ function monthStart(from, k) {
   return String(yy) + String(mm + 1).padStart(2, "0") + String(Math.min(d, last)).padStart(2, "0");
 }
 
+
+// ---- the heads with schedules, worked again from the owner's rows (heads.js does the same for tax.js) ----
+// salary: sections 15-17, the exemptions of section 10 (none of 10(5), 10(13A), 10(14) in the new regime), 16(ia)
+// 75,000 new / 50,000 old (once, at most the salary), 16(ii) and 16(iii) in the old regime only
+function salaryAgain(rows, regime) {
+  const old = regime === "old";
+  let net = 0, ent = 0, pt = 0, any = false;
+  for (const r of rows || []) {
+    any = true;
+    const p1 = rup(r.s171), gross = p1 + rup(r.s172) + rup(r.s173);
+    const sal = r.basicDa != null && r.basicDa !== "" ? rup(r.basicDa) : p1;
+    const govt = r.nature === "CGOV" || r.nature === "SGOV" || r.nature === "PE" || r.nature === "PESG";
+    let ex = 0;
+    for (const e of r.exempt || []) {
+      let v = rup(e.amt);
+      if (e.sec === "10(13A)" && r.hra) { const h = r.hra; const x1 = rup(h.received), x2 = rup(Math.max(0, n(h.rent) - sal / 10)), x3 = rup(sal * (h.metro ? 50 : 40) / 100); v = x1 < x2 ? (x1 < x3 ? x1 : x3) : (x2 < x3 ? x2 : x3); }
+      if (!old && (e.sec === "10(5)" || e.sec === "10(13A)" || e.sec === "10(14)(i)" || e.sec === "10(14)(ii)")) v = 0;
+      const cap = { "10(10)": govt ? 2500000 : 2000000, "10(10AA)": govt ? Infinity : 2500000, "10(10C)": 500000, "10(10B)(i)": 500000, "10(10B)(ii)": 500000, "10(14)(ii)(115BAC)": 38400 }[e.sec];
+      if (cap != null && v > cap) v = cap;
+      if (v > p1 && !["10(10)", "10(10A)", "10(10AA)", "10(10C)"].includes(e.sec)) v = p1;
+      ex += v;
+    }
+    if (ex > gross) ex = gross;
+    net += gross - ex;
+    if (old) { if (govt) ent += rup(Math.min(n(r.ent), 5000, sal / 5)); pt += rup(Math.min(Math.max(0, n(r.ptax)), 5000)); }
+  }
+  if (!any) return 0;
+  const sd = Math.min(old ? 50000 : 75000, net);
+  return Math.max(0, rup(net - sd - ent - pt));
+}
+// house property: annual value = rent - unrealised rent - municipal tax (23), the owner's share (26), 30% (24(a)),
+// interest (24(b); self-occupied together at most 2,00,000 or 30,000, none in the new regime), arrears at 70% (25A)
+function houseAgain(rows, regime) {
+  let total = 0, room = null;
+  for (const p of rows || []) {
+    const sh = p.share == null || p.share === "" ? 100 : Math.min(100, Math.max(0, n(p.share)));
+    let int = 0; for (const l of p.loans || []) int += rup(l.interest);
+    let inc = 0;
+    if (p.kind === "S") {
+      if (room === null) room = p.oldLoan ? 30000 : 200000;
+      let allow = regime === "old" && sh > 0 ? Math.min(int, room) : 0;
+      if (regime === "old") room -= allow;
+      inc = -allow;
+    } else {
+      const rent = rup(p.rent), unr = Math.min(rup(p.unrealised), rent), mt = rent > 0 ? rup(p.muniTax) : 0;
+      const av = Math.max(0, rent - unr - mt), mine = rup(av * sh / 100);
+      inc = mine - rup(mine * 3 / 10) - (sh > 0 ? int : 0);
+    }
+    total += inc + rup(n(p.arrears) * 7 / 10);
+  }
+  return rup(total);
+}
+// capital gains: long-term after 12 months (listed shares, equity funds, listed bonds, zero coupon bonds, listed
+// shares bought back) or 24 (the rest), 50AA always short-term; 50C / 50CA full value; 55(2)(ac) for equity bought
+// before 1-02-2018; 55(2)(b) FMV of 1-04-2001; improvements from 2001-02; exemptions at most the gain (54EC 50 lakh,
+// 54 / 54F 10 crore, 54 / 54EC / 54F long-term only); 70(3) the long-term loss first against 112, 112A, then 70(2) the
+// short-term loss against normal-rate, 111A, 112, 112A gains; the proviso to 112(1)(a) for land or building bought
+// before 23-07-2024 by a resident individual / HUF: 12.5% above 20% with indexation ignored
+const INDEX = [100, 105, 109, 113, 117, 122, 129, 137, 148, 167, 184, 200, 220, 240, 254, 264, 272, 280, 289, 301, 317, 331, 348, 363, 376];   // FY 2001-02 to 2025-26
+function idxOf(fyStart) { let k = fyStart - 2001; if (k < 0) k = 0; if (k > INDEX.length - 1) k = INDEX.length - 1; return INDEX[k]; }
+function fyStartOf(d) { const y = Number(String(d).slice(0, 4)), m = Number(String(d).slice(4, 6)); return m < 4 ? y - 1 : y; }
+function heldLong(kind, acq, sale, listed) {
+  if (kind === "mf50AA" || !acq || !sale) return false;
+  const need = kind === "eq" || kind === "eqNoStt" || kind === "bond" || kind === "zcb" || (kind === "buyback" && listed !== false) ? 12 : 24;
+  const y = Number(acq.slice(0, 4)), m = Number(acq.slice(4, 6)) - 1 + need, d = Number(acq.slice(6, 8));
+  const yy = y + Math.floor(m / 12), mm = m % 12, last = new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate();
+  const lim = String(yy) + String(mm + 1).padStart(2, "0") + String(d > last ? last : d).padStart(2, "0");
+  return String(sale) > lim;
+}
+function gainsAgain(rows, ent, resident, upto) {
+  const one = (list) => {
+    const pot = { o: 0, a: 0, c: 0, b: 0 }; let rel = 0;
+    for (const r of list) {
+      const kind = r.kind || "other", acq = String(r.acq || ""), sale = String(r.sale || ""), lng = heldLong(kind, acq, sale, r.listed);
+      const val = kind === "buyback" ? 0 : rup(r.value), sd = rup(r.sdv);
+      let full = val; if (kind === "land" && sd > val * 1.1) full = sd; if (kind === "unlisted" && sd > val) full = sd;
+      let cost = rup(r.cost); if (acq && acq < "20010401" && r.fmv2001 != null && r.fmv2001 !== "" && kind !== "eq") cost = rup(r.fmv2001);
+      const stt = kind === "eq" && r.stt !== false;
+      let used = cost;
+      if (stt && lng && acq && acq < "20180201" && n(r.fmv2018) > 0) { const f = rup(r.fmv2018), cap = f < full ? f : full; used = cost > cap ? cost : cap; }
+      let imps = Array.isArray(r.improve) ? r.improve : r.improveCost ? [{ fy: String(fyStartOf(acq || "20200401")), amt: r.improveCost }] : [];
+      imps = imps.filter((x) => Number(x.fy) >= 2001);
+      let im = 0; for (const x of imps) im += n(x.amt); im = rup(im);
+      const ex0 = rup(r.expenses), gain = full - used - im - ex0;
+      let claim = 0;
+      for (const e of r.exempt || []) { let v = rup(e.amt); if (!lng && (e.sec === "54" || e.sec === "54EC" || e.sec === "54F")) v = 0; if (e.sec === "54EC" && v > 5000000) v = 5000000; if ((e.sec === "54" || e.sec === "54F") && v > 100000000) v = 100000000; claim += v; }
+      const net = gain - Math.min(claim, gain > 0 ? gain : 0);
+      const where = kind === "mf50AA" ? "o" : lng ? (stt ? "b" : "c") : (stt ? "a" : "o");
+      pot[where] += net;
+      if (where === "c" && kind === "land" && lng && acq < "20240723" && (ent === "P" || ent === "H") && resident) {
+        const s = idxOf(fyStartOf(sale)), base = idxOf(fyStartOf(acq) < 2001 ? 2001 : fyStartOf(acq));
+        let ii = 0; for (const x of imps) ii += rup(n(x.amt) * s / idxOf(Number(x.fy)));
+        const ig = full - rup(cost * s / base) - rup(ii) - ex0, inet = ig - Math.min(claim, ig > 0 ? ig : 0);
+        const ta = rup((net > 0 ? net : 0) * 0.125), tb = rup((inet > 0 ? inet : 0) * 0.2);
+        if (ta > tb) rel += ta - tb;
+      }
+    }
+    // the long-term loss first (against 112, then 112A), then the short-term loss
+    const move = (from, to) => { if (pot[from] < 0 && pot[to] > 0) { const u = Math.min(-pot[from], pot[to]); pot[from] += u; pot[to] -= u; } };
+    move("c", "b"); move("b", "c");
+    for (const f of ["o", "a"]) for (const t of ["o", "a", "c", "b"]) if (f !== t) move(f, t);
+    const stl = rup(Math.max(0, -pot.o) + Math.max(0, -pot.a)), ltl = rup(Math.max(0, -pot.c) + Math.max(0, -pot.b));
+    return { a: rup(Math.max(0, pot.a)), b: rup(Math.max(0, pot.b)), c: rup(Math.max(0, pot.c)), o: rup(Math.max(0, pot.o)), rel: rup(rel), stl, ltl };
+  };
+  const all = one(rows || []);
+  if (!upto) return all;
+  // what had accrued by a date: the gains of the sales up to it, never more than the year's and never less than at the
+  // instalment before
+  const run = { a: 0, b: 0, c: 0, o: 0 };
+  for (const d of ["20250615", "20250915", "20251215", "20260315", "20260331"]) {
+    if (d > upto) break;
+    const q = one((rows || []).filter((r) => r.sale && String(r.sale) <= d));
+    for (const k of ["a", "b", "c", "o"]) run[k] = Math.min(all[k], Math.max(run[k], q[k]));
+    run.rel = q.rel;
+  }
+  return run;
+}
+
 export function check(inp) {
   inp = inp || {};
   const ent = inp.entity;
   const bz = business(inp);
-  const sal = inp.salary ? Math.max(0, rup(n(inp.salary.gross) - n(inp.salary.std))) : 0;
-  let hp = inp.hp != null ? rup(inp.hp) : 0;
+  const sal = inp.salaryRows ? salaryAgain(inp.salaryRows, inp.regime) : inp.salary ? Math.max(0, rup(inp.salary.net != null ? inp.salary.net : n(inp.salary.gross) - n(inp.salary.std))) : 0;
+  let hp = inp.houseRows ? houseAgain(inp.houseRows, inp.regime) : inp.hp != null ? rup(inp.hp) : 0;
+  const hp0 = hp;
   let os = 0; if (inp.os) for (const k of Object.keys(inp.os)) if (typeof inp.os[k] === "number") os += inp.os[k];
   os = rup(os);
-  const cg = inp.cg || {};
-  let a = rup(cg.s111A), b = rup(cg.s112A), c = rup(cg.s112), o = rup(cg.other), bp = bz.inc;
+  const cgx = inp.cgRows ? gainsAgain(inp.cgRows, ent, inp.resident !== false, null) : { a: rup((inp.cg || {}).s111A), b: rup((inp.cg || {}).s112A), c: rup((inp.cg || {}).s112), o: rup((inp.cg || {}).other), rel: rup((inp.cg || {}).relief112), stl: rup((inp.cg || {}).cfStcl), ltl: rup((inp.cg || {}).cfLtcl) };
+  let a = cgx.a, b = cgx.b, c = cgx.c, o = cgx.o, bp = bz.inc;
+  const a0 = a, b0 = b, c0 = c, o0 = o;
+  const cgHead = a + b + c + o;
   // this year's losses; what is left is carried forward: up to the year's depreciation as unabsorbed depreciation
   // (32(2), carried without limit, even in a belated return), the rest as business loss (72; none in a belated return, 80)
   const dueC = inp.tp ? "20261130" : (inp.audit || ent === "C") ? "20261031" : "20260831", lateC = !!inp.filingDate && inp.filingDate > dueC;
@@ -264,7 +385,7 @@ export function check(inp) {
   if (ded > gti - spec) ded = rup(Math.max(0, gti - spec));
   const ti = ten(Math.max(0, gti - ded));
   const normal = Math.max(0, ti - spec);
-  let g = grossTax(inp, ti, normal, a, b, c);
+  let g = grossTax(inp, ti, normal, a, b, c, cgx.rel);
   let out = { normalTax: g.nt, specialTax: g.st, rebate: g.reb, sur: g.sur, cess: g.cess }, liability = g.tot;
   // MAT
   if (ent === "C" && inp.regime !== "115BAA" && inp.bookProfit != null) {
@@ -281,37 +402,47 @@ export function check(inp) {
   }
   // paid
   const P = inp.paid || {};
-  const tds = rup(total(P.tds)), tcs = rup(total(P.tcs)), adv = rup(total(P.advance)), sat = rup(total(P.selfAssessment));
+  const tds = rup(total(P.tds) + total(P.tdsSal)), tcs = rup(total(P.tcs)), adv = rup(total(P.advance)), sat = rup(total(P.selfAssessment));
   const due = inp.tp ? "20261130" : (inp.audit || ent === "C") ? "20261031" : "20260831";
   const filing = inp.filingDate || due;
   const assessed = Math.max(0, liability - tds - tcs);
   const saList = P.selfAssessment || [];
   const saBy = (date) => { let x = 0; for (const p of saList) if (String(p.date) <= date) x += n(p.amt); return x; };
   let i234a = 0, i234b = 0, i234c = 0, f234f = 0;
-  if (filing > due) {
+  if (filing > due && !inp.noInterest) {
     const m = monthsCount(due, filing);
     for (let k = 0; k < m; k++) i234a += hundredDown(assessed - adv - saBy(monthStart(due, k))) / 100;
     i234a = rup(i234a);
     f234f = ti <= 500000 ? 1000 : 5000;
   }
-  if (assessed >= 10000 && adv < assessed * 0.9) {
+  if (assessed >= 10000 && adv < assessed * 0.9 && !inp.noInterest) {
     const m = monthsCount("20260331", filing);
     for (let k = 0; k < m; k++) i234b += hundredDown(assessed - adv - saBy(monthStart("20260331", k))) / 100;
     i234b = rup(i234b);
   }
-  if (assessed >= 10000) {
+  if (assessed >= 10000 && !inp.noInterest) {
     const advBy = (date) => { let x = 0; for (const p of P.advance || []) if (String(p.date) <= date) x += n(p.amt); return x; };
-    if (bz.pres) i234c = rup(hundredDown(assessed - advBy("20260315")) / 100);
+    // proviso (a) to 234C: an instalment is on the income as it stood on its date (the capital gains accrued by then)
+    // when the tax on the later gains was paid by the remaining instalments up to 31 March
+    const baseOn = (date) => {
+      if (!inp.cgRows) return assessed;
+      const g2 = gainsAgain(inp.cgRows, ent, inp.resident !== false, date);
+      if (g2.a === a0 && g2.b === b0 && g2.c === c0 && g2.o === o0) return assessed;
+      const lw = check(Object.assign({}, inp, { cgRows: null, cg: { s111A: g2.a, s112A: g2.b, s112: g2.c, other: g2.o, relief112: g2.rel }, paid: {}, noInterest: true })).liability;
+      return advBy("20260331") - advBy(date) >= liability - lw ? Math.max(0, lw - tds - tcs) : assessed;
+    };
+    if (bz.pres) i234c = rup(hundredDown(baseOn("20260315") - advBy("20260315")) / 100);
     else {
       const jun = advBy("20250615"), sep = advBy("20250915"), dec = advBy("20251215"), mar = advBy("20260315");
-      if (!(jun >= 0.12 * assessed)) i234c += rup(hundredDown(0.15 * assessed - jun) * 3 / 100);
-      if (!(sep >= 0.36 * assessed)) i234c += rup(hundredDown(0.45 * assessed - sep) * 3 / 100);
-      i234c += rup(hundredDown(0.75 * assessed - dec) * 3 / 100);
-      i234c += rup(hundredDown(assessed - mar) / 100);
+      const bj = baseOn("20250615"), bs = baseOn("20250915"), bd = baseOn("20251215"), bm = baseOn("20260315");
+      if (!(jun >= 0.12 * bj)) i234c += rup(hundredDown(0.15 * bj - jun) * 3 / 100);
+      if (!(sep >= 0.36 * bs)) i234c += rup(hundredDown(0.45 * bs - sep) * 3 / 100);
+      i234c += rup(hundredDown(0.75 * bd - dec) * 3 / 100);
+      i234c += rup(hundredDown(bm - mar) / 100);
     }
   }
   const net = liability + i234a + i234b + i234c + f234f - tds - tcs - adv - sat;
-  return Object.assign(out, { cfBus: rup(cfBus), cfUd: rup(cfUd), cfHp: rup(cfHp), gti, ti, liability, i234a, i234b, i234c, f234f, payable: net > 0 ? ten(net) : 0, refund: net < 0 ? ten(-net) : 0 });
+  return Object.assign(out, { sal, hp: hp0, cg: cgHead, cfStcl: lateC ? 0 : cgx.stl, cfLtcl: lateC ? 0 : cgx.ltl, cfBus: rup(cfBus), cfUd: rup(cfUd), cfHp: rup(cfHp), gti, ti, liability, i234a, i234b, i234c, f234f, payable: net > 0 ? ten(net) : 0, refund: net < 0 ? ten(-net) : 0 });
 }
 
 // the two computations side by side: [] when they agree on every figure

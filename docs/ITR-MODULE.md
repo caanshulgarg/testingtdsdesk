@@ -8,15 +8,16 @@ Branch `next-itr` (off `staging-next`). Staging only: nothing here is published,
 
 ## 1. The design
 
-One page per client, under Books in the sidebar: **Income tax return**. Four steps, each a books tab with its own address
-(`#/c/<client>/books/itr`, `itr-comp`, `itr-checks`, `itr-json`):
+One page per client, under Books in the sidebar: **Income tax return**. Five steps, each a books tab with its own address
+(`#/c/<client>/books/itr`, `itr-sch`, `itr-comp`, `itr-checks`, `itr-json`):
 
 | Step | What it shows | Details on expand |
 |---|---|---|
 | 1 Data | The portal files (AIS, TIS, 26AS, pre-filled data, PF ECR and challans, ESI challans), one line each; "Bring in files"; the form, regime, filing date, tax audit; the books' revenue, profit and whether the balance sheet tallies | What each file held (counts and totals by section, PAN, AY, stored or not); the return's details (date of birth, verifier, place, software ID, partners, presumptive receipts) with where each came from |
-| 2 Computation | The CA's Computation of Income: business income with every addition and deduction, other heads, set-off, total income, tax, rebate, surcharge, cess, interest, taxes paid, refund or payable. "Checked twice" when the second computation agrees. PDF and Excel | Click a line: its source (section, schedule) and the ledgers behind it |
-| 3 Checks | Counts of Matched / Difference / Missing data / Needs you; the open checks by group | Click a check: both sides with their amounts and sources, the lines behind them, what to do, and "Accept" with a note (or "Confirm" with an answer) |
-| 4 JSON | Not yet / Ready for Winman, with three ticks: the official schema passes, the two computations agree, every check settled | The schema's own questions (Yes/No and choices FinCom cannot know), what the schema says if it fails, the versions made |
+| 2 Schedules | Salary (S, from Form 16), house property (HP), capital gains (CG, the AIS's sales offered as rows), other sources outside the books, AL (ITR-3), FA, SH and AL-1 (ITR-6, unlisted), other comprehensive income (ITR-6, Ind AS); each head's figure as worked | Click an item: its fields, the lines behind its figure (annual value, 30%, interest; full value, cost, indexation, the excess ignored) |
+| 3 Computation | The CA's Computation of Income: business income with every addition and deduction, other heads, set-off, total income, tax, rebate, surcharge, cess, interest, taxes paid, refund or payable. "Checked twice" when the second computation agrees. PDF and Excel | Click a line: its source (section, schedule) and the ledgers behind it |
+| 4 Checks | Counts of Matched / Difference / Missing data / Needs you; the open checks by group | Click a check: both sides with their amounts and sources, the lines behind them, what to do, and "Accept" with a note (or "Confirm" with an answer) |
+| 5 JSON | Not yet / Ready for Winman, with three ticks: the official schema passes, the two computations agree, every check settled | The schema's own questions (Yes/No and choices FinCom cannot know), what the schema says if it fails, the versions made |
 
 The calm style of the client pages: few words, one chip in the heading ("7 to look at" / "JSON ready"), details on expand.
 The page is one lazy chunk (`ITR-*.js`, about 50 KB gzip, with `ITR-*.css` 2 KB); nothing of it is in `legacy.js` or the
@@ -36,6 +37,9 @@ app's first file. Code: `app/src/screens/itr/ITR.jsx`, `itr.css`; the working, a
 | `forms.js` | The mapping layer: FinCom's figures -> the official schema's fields, form by form |
 | `fill.js`, `validate.js`, `json.js` | Completing the JSON (zeros for unmapped amounts, questions for the rest), the draft-04 validator, one JSON with its report |
 | `appData.js`, `sheet.js` | The page's reads of GST / TDS / 3CD; the sheet's PDF and Excel |
+| `heads.js` | The heads with schedules of their own, from their rows: salary (sections 15-17, 10, 16), house property (22-27), capital gains (45-55A, 111A, 112 and its proviso, 112A, 70, 74); the 234C accrual of the gains |
+| `sched.js` | Schedules S, TDS1, HP, CG / 112A / SI (Tables E and F), AL, FA, SH, AL-1 and the Ind AS parts of ITR-6, form by form (fit(): only what the form's schema has) |
+| `screens/itr/Schedules.jsx` | Step 2: the schedules' lists; FA, SH and AL-1 drawn from the official schema's own fields |
 
 ## 2. Data sources
 
@@ -58,6 +62,7 @@ app's first file. Code: `app/src/screens/itr/ITR.jsx`, `itr.css`; the working, a
 | TIS | JSON, PDF | Category, processed and derived value |
 | Form 26AS | TRACES text export ("^"), PDF | TDS (Part I), TCS (Part VI), advance and self-assessment tax challans (BSR, date, serial, minor head 100 / 300); a self-check against each deductor's own totals |
 | Pre-filled data | e-filing JSON | Date of birth, address, email, mobile, bank accounts, TDS lines, challans |
+| Form 16 | TRACES Form 16 (Part A and B), PDF or text; one per employer (TAN) | Employer, TAN, the employee's PAN, AY, 17(1) / 17(2) / 17(3), section 10 exemptions, section 16 deductions, chargeable salary, TDS; taken into Schedule S on Schedules ("Take it") |
 | PF ECR | EPFO upload text (`#~#`), the statement CSV | Members, wages, employee share, employer share; the wage month (from the file, or its name) |
 | PF challan | EPFO payment receipt (text, PDF) | TRRN, establishment, wage month, A/c 01-22, date of credit |
 | ESI challan | ESIC challan (text, PDF) | Employer code, period, challan number, employee and employer share, paid date |
@@ -132,6 +137,23 @@ business loss forward (80).
 | ITR-4 | Resident individual / HUF / firm (not LLP), presumptive, TI up to 50L | 44AD 6% of digital receipts + 8% of others (limit 2 Cr, 3 Cr if cash up to 5%); 44ADA 50% (50L, 75L if cash up to 5%; not HUF); 44AE Rs 1,000 a ton a month (heavy) / Rs 7,500 a month, at most 10 vehicles. Declared below the minimum, above the limit, wrong entity, TI above 50L, a tax audit or capital gains beyond 112A 1.25L: Needs you (ITR-3 / ITR-5) |
 | ITR-5 | Firm / LLP | 30%, surcharge 12% above 1 Cr with marginal relief, no 87A. 40(b): interest to partners at most 12% simple; working partners' remuneration up to Rs 3 lakh or 90% of book profit on the first Rs 6 lakh (or a loss), 60% on the rest; book profit = business income before the remuneration (Explanation 3); a sleeping partner's remuneration not allowed |
 | ITR-6 | Company | 25% if FY 2023-24 turnover up to Rs 400 crore, else 30%: asked, and the JSON is blocked until answered; surcharge 7% / 12% above 1 / 10 Cr with marginal relief. 115BAA: 22% + 10% + 4% (25.168%), no MAT, no MAT credit, Chapter VI-A only 80JJAA and 80M (115BAA(2)(ii); 80IAC and 80G not allowed). MAT 15% of book profit (+ surcharge, marginal relief, cess) when higher; else MAT credit set off down to the MAT (115JAA). The book profit must be entered with the 115JB Explanation 1 adjustments and confirmed (Needs you until then) |
+
+### The schedules built in `next-itr-schedules` (heads.js, sched.js)
+
+| Schedule | Rows from | Rules (and the checks) |
+|---|---|---|
+| S (ITR-3; ITR-4's salary lines) | Form 16 ("Take it"), else entered: employer, TAN, kind, 17(1), 17(2), 17(3), basic + DA, section 10 exemptions, HRA (metro, received, rent), professional tax, entertainment allowance, address | Gross = 17(1)+(2)+(3); exemptions within their limits (10(10) Rs 20 lakh, 25 lakh for government; 10(10AA) Rs 25 lakh; 10(10B), 10(10C) Rs 5 lakh; 10(13A) the least of the HRA received, rent less 10% of salary and 50% / 40% of salary, rule 2A); new regime: no 10(5), 10(13A), 10(14) (115BAC(2), rule 198), no 16(ii) / 16(iii); 16(ia) Rs 75,000 new / Rs 50,000 old, once, at most the salary. TDS on salary (192) from 26AS goes to Schedule TDS1 with each employer's chargeable salary. Checks: Form 16 against S (gross, by TAN), Form 16 TDS against 26AS, AIS salary against S |
+| HP (ITR-3, 5, 6; ITR-4's one house) | Entered: let out / self-occupied / deemed let out, own share and co-owners, tenants, rent, unrealised rent, municipal tax paid, arrears (25A), loans (lender, account, date, amount, outstanding, interest) | Annual value = rent - unrealised - municipal tax (23); own share (26, rule 212); 30% (24(a)); interest (24(b)): self-occupied together at most Rs 2 lakh (Rs 30,000 for an old loan), none in the new regime; at most two self-occupied (23(4)); arrears at 70% (25A); a firm or company has no self-occupied house (ITR-5/6 let-out codes Y / D). Loss: set off up to Rs 2 lakh in the old regime (71(3A)), none in the new, carried forward (71B). Rent credited in the books' P&L is taken out of business (BP A3b), its expenses added back (A7b). Checks: AIS rent (194I / 194IB) against the owner's share of the rent |
+| CG, 112A, SI (ITR-3 ScheduleCGFor23, ITR-5 / 6 ScheduleCG; ITR-4 LTCG112A) | The AIS's sales (SFT-17 securities and units, SFT-12 / 194IA property) offered as rows ("Add as a sale"), else entered: what was sold, dates, sale value, stamp duty value / FMV, cost, FMV on 31-01-2018 / 1-04-2001, improvements by year, expenses, 54-series exemptions, buyers | FY 2025-26 is wholly after 23-07-2024: long-term after 12 months for listed securities and equity fund units, 24 for the rest (2(42A)); 50AA assets always short-term; 50C (stamp duty value above 110%) and 50CA; 55(2)(ac) grandfathering of equity bought before 1-02-2018; 55(2)(b) FMV of 1-04-2001; improvements from 2001-02; 111A 20%, 112A 12.5% above Rs 1.25 lakh, 112 12.5% without indexation; proviso to 112(1)(a): land or building bought before 23-07-2024 by a resident individual or HUF, the tax above 20% with indexation (CII 376 for FY 2025-26) is ignored (per property, Schedule CG's TaxSec1121a / TaxSec1121aiiB / ExcessAmtSec1121a, taken off the 112 tax); buy-back from 1-10-2024: the cost a capital loss, the money dividend (46A, 2(22)(f)); 54EC at most Rs 50 lakh, 54 / 54F Rs 10 crore. Set-off within the head (70(2), 70(3)): the long-term loss first, then the short-term loss against normal-rate, 111A, 112, 112A gains (Table E); what is left carried forward (74; Schedule CFL), none from a belated return (80). 234C, proviso (a): an instalment is on the income as it stood on its date when the tax on the later gains was paid in the remaining instalments; Table F gives each rate's income by period. Checks: AIS sale of securities and of property against the rows; a buy-back's dividend asked |
+| AL (ITR-3) | Entered | Total income above Rs 1 crore (validation rule 905): required, else the JSON is blocked. Assets other than those in Part A-BS, at cost. Checks: an AL figure equal to the books' cash or bank to the rupee is asked (likely the business's own); an interest in a firm is asked to be confirmed against the firm's balance sheet |
+| FA (ITR-3, 5, 6) | Entered, the schema's own lists | Required when assets outside India are said; calendar year 2025. Checks: TCS 206C(1G) remittances with no FA asked; FA for a non-resident refused |
+| SH, AL-1 (ITR-6, unlisted) | Entered, the schema's own lists (and the start-up lists) | SH-1 required for every unlisted company (blocked until given). Checks: shares x face value against the paid-up capital (3A, 3B); AL-1 loans given, shares and securities, loans taken against the balance sheet (38D / 12G / 12H, 36A / 37A, 30B / 33B); no AL-1 asked |
+| Ind AS (ITR-6) | The books' codes; OCI entered | Part A-BS / P&L Ind AS from the same codes as Division I, the Division I parts left at 0 (and the reverse for a non-Ind AS company). Checks: the placing confirmed against the audited Ind AS statements (with the 115JB(2A) book profit) |
+| OS (other sources outside the books) | Entered on Schedules | Interest not in the books, dividends (the AIS's shown), a buy-back's money |
+
+Both computations work every head from the same rows (tax.js through heads.js; check.js with its own code), and must agree
+on 22 figures (the 17 before, and the salary, house property and capital gains heads, and the short- and long-term
+capital losses carried forward).
 
 **AOP / BOI and other ITR-5 persons:** not covered yet (Needs you). Firm or LLP is asked in the return (Client setup has
 "Firm or LLP" as one choice); never read from the name. 234C: one instalment by 15 March only for 44AD / 44ADA (44AE alone
@@ -214,6 +236,7 @@ there (never Matched); or Needs you.
 | TDS returns | Deducted (26Q / 24Q) = credited to TDS payable; deducted = deposited by the due date; consistency: the return's 40(a)(ia) / 40(a)(i) = the same worked out from the TDS records; independent: FinCom's records = the 26Q / 27Q returns as filed (the copy kept when each was marked filed), FinCom's challans = TRACES (consolidated file / challan status file), else Missing data; non-resident or not asked |
 | 43B and 43B(h) | Consistency: the return's 43B = this year's charge unpaid by the due date (each ledger: charge, payments, dates, employer's part); the return's 43B(h) = the MSME bills paid after their limit. Independent: the PF / ESI payments after the year end in the bank entries = the March challans; the bills settled by their references (the ageing) = the bills settled by the payment vouchers oldest first. Asked (blocking until answered): payment dates not shown, the employer's part of a joint PF / ESI ledger, the year's charge not read, earlier years' 43B paid; asked with a note: an old balance not reduced in the year (never added back); GST / TDS payable unpaid: asked |
 | PF and ESI | An ECR for every month; a challan for every ECR; employer's PF in the books = the ECRs (+ admin charges); employees' share credited by the 15th of the next month (36(1)(va)); the dates feed 43B |
+| Salary, house property, capital gains, AL, FA, SH | Form 16 against Schedule S (by TAN); Form 16 TDS against 26AS (192); AIS salary, rent, sale of securities and of property against S, HP, CG; the heads' own cuts (an exemption above its limit, a 54EC above Rs 50 lakh, an FMV of 31-01-2018 not given) as differences; three self-occupied houses; a buy-back's dividend; AL against Part A-BS; an interest in a firm; AL-1 and SH against the balance sheet; LRS remittances (206C(1G)) and FA; the Ind AS placing |
 | Tax audit (3CD) | Where a tax audit applies: the 3CD drafted from the SAVED Audit run of the whole year (clauses 21(b)(ii)(A), 21(d)(A)) against the ITR's schedules as worked out now; no saved run for the year: Missing data |
 | The computation | The right form; firm or LLP; regime and rates (and the company's FY 2023-24 turnover) answered; every deduction within its limit; loss set-off and carry-forward (a belated return's loss lost; this year's unabsorbed depreciation split confirmed); ITR-4 limits; Form 10-IEA; MAT book profit confirmed; the two computations agree on all 17 figures |
 | The JSON | Every schedule that has figures is filled by FinCom; one that is not blocks the JSON, said by name (below) |
@@ -238,13 +261,15 @@ there (never Matched); or Needs you.
    (ITR-3, ITR-5; ITR-6 Schedule III balance sheet and P&L in full), Schedule BP, DPM / DOA / DEP by block, OS, VIA (ITR-3,
    the allowed amounts), CYLA, BFLA, this year's rows of CFL and UD (and their totals), Part A-OI (audit cases), the audit report details, Schedule
    GST (from the filed GSTR-1), TDS2 (head of income from the section), IT, TCS, Part B-TI / TTI, ITR-4's 16(ia), VI-A
-   (allowed amounts) and 112A (with the sale and cost entered), ITR-5's partners, ITR-6's MAT and MATC. Not yet filled, so
-   blocking when they have figures: Schedule S (salary, ITR-3), HP, CG / SI (capital gains), the VI-A detail schedules
+   (allowed amounts) and 112A (with the sale and cost entered), ITR-5's partners, ITR-6's MAT and MATC; from
+   `next-itr-schedules`: Schedules S and TDS1, HP, CG / 112A / SI, AL, FA, SH, AL-1 and the Ind AS parts (a head's figure
+   without its rows, AL above Rs 1 crore not given, foreign assets said with FA empty, an unlisted company without SH,
+   still block). Not yet filled, so blocking when they have figures: the VI-A detail schedules
    (80C, 80D, 80DD, 80DDB, 80U, 80E, 80EE/A/B, 80G, 80GGA, 80GGC), UD and CFL rows of earlier years (and any loss or
    depreciation carried forward that the JSON does not hold; ITR-4 carries none),
-   AL (income above Rs 1 crore), FA, ITR-5 / ITR-6 Schedule VIA, ITR-6 SH (every unlisted company: ITR-6 is blocked until
-   it is built), Ind AS parts (an Ind AS company); also the authorised capital, the Ind AS question and the loans' purpose
-   when not answered.
+   ITR-5 / ITR-6 Schedule VIA; capital losses and house property losses of earlier years (CFL rows of earlier years),
+   virtual digital assets (115BBH) and the NRI parts of Schedule CG are not covered; also the authorised capital, the
+   Ind AS question and the loans' purpose when not answered.
 6. Each JSON downloaded carries its version: the return JSON exactly as the schema has it (a key outside the schema would
    make it invalid), and beside it `<form>_<PAN>_AY2026-27_checks.json`: FinCom's version (`fincom-itr-2026.1`), the
    schema file, the computation's totals, every check with its status, amounts, sources and accepted note, and the JSON's
@@ -298,6 +323,33 @@ To confirm:
 12. **Imports:** a file naming neither a PAN nor an establishment code (an ECR upload file) is taken only after the person
     says it is the client's; the AIS PAN is read from its taxpayer header (Part A) only.
 
+### Owner decisions from `next-itr-schedules` (to confirm)
+
+13. **Schedule AL threshold: Rs 1 crore, not Rs 50 lakh.** The brief said "AL when income > 50 L"; the AY 2026-27 ITR-3
+    validation rule 905 (CBDT, V1.0) reads "Total Income is greater than Rs. 1 crore then Schedule AL is required". FinCom
+    requires AL above Rs 1 crore and fills it whenever it is entered (so the firm can give it from 50 lakh as its own
+    practice). Confirm.
+14. **The proviso to 112(1)(a) with set-off.** FinCom works the excess per property on its gain after the 54-series
+    exemption (12.5% without indexation less 20% with indexation, CII 376 / the year of purchase) and takes it off the 112
+    tax, at most the 112 tax charged. Where a loss or the unused basic exemption absorbs part of the gain, the excess is
+    not cut in proportion. Run one such return through Winman and the utility and confirm.
+15. **The order of set-off within capital gains (sections 70(2), 70(3)).** The long-term loss first (112, then 112A), then
+    the short-term loss against normal-rate gains, 111A, 112, 112A. For a person on a slab rate below 20%, setting the
+    short-term loss against 111A first would save more: FinCom does not choose by the slab. Confirm, or say the order.
+16. **234C proviso (a).** Applied only when the advance tax paid after an instalment date (up to 31 March) covers the extra
+    tax from the capital gains that accrued after it; the proviso for dividends is not applied yet.
+17. **ITR-3's Schedule AL is "other than those included in Part A-BS"**: FinCom asks when an AL figure equals the
+    business's cash or bank to the rupee, and never treats the capital account as an AL item. Confirm the reading.
+18. **Ind AS parts placed from Division I codes** (preference shares kept in equity, tax assets with current assets);
+    asked per return (`indas_map`). An Ind AS company's Division I parts are left at 0, a non-Ind AS company's Ind AS
+    parts at 0: confirm Winman takes the JSON so.
+19. **Cost inflation index 376 for FY 2025-26** (363 for 2024-25): confirm against the notification.
+20. **Form 16 and the AIS's salary / sale codes** (TDS-192; SFT-17 sales; SFT-12 sales and TDS-194IA) are read from the
+    published layouts: confirm on the first real files.
+21. **Gratuity of a government employee**: the utility (rule 181) caps 10(10) at Rs 25 lakh though 10(10)(i) exempts it
+    in full; FinCom follows the utility. Professional tax above Rs 2,500 (Article 276) is said, not cut.
+22. **An unlisted company with no AL-1 asset**: asked with a note (`al6_none`), the JSON then carries no AL-1. Confirm.
+
 ## 8. Tests
 
 All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
@@ -309,6 +361,8 @@ All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
 | `node tests/run_itr_schema.mjs` | Pinned schema files; every form and scenario passes ajv and the page's validator alike; planted faults rejected by both; non-amount fields asked, never filled; the JSON's figures are the computation's; the review's loss cases (PBT -1 lakh / -5 lakh with depreciation of 4 lakh) carried in Schedules UD and CFL for ITR-3, 5 and 6; a carry-forward the map does not hold blocks |
 | `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; consistency checks labelled; 43B on this year's charge (the 30 lakh leave provision), employer / employees' PF ledgers by their usual names, admin charges and EDLI, PF by wage month and the old balance asked (the review's 2 lakh arrears), one payment per challan, earlier years' 43B (43B(h) bill by bill); payment dates answered item by item changing the computation; the gate |
 | `python3 tests/run_itr_ui.py` | The page, desktop and phone: Data, a file brought in, a wrong PAN refused, re-import, the sheet with its ledgers, PDF, Excel, the checks, a difference opened, accepting only with a note, the JSON offered only when settled, the download passing ajv; fits the width. `ITR_SHOTS=<dir>` saves the design screenshots |
+| `node tests/run_itr_schedules.mjs` | The schedules by hand: salary in both regimes (HRA by rule 2A, one standard deduction, gratuity cap), house property (annual value, 30%, the self-occupied cap, co-owners, arrears, three self-occupied), capital gains (CII, holding periods, 55(2)(ac), 50C at 110%, indexation and the proviso's 2,93,630, no proviso for a non-resident or a company, set-off within the head and carry forward, buy-back, 54EC cap, the 234C accrual); whole ITR-3 / ITR-4 / ITR-5 / ITR-6 returns through both computations and ajv (Schedules S, HP, CG, 112A, SI, CFL, AL, FA, SH, AL-1, Ind AS); the checks (Form 16, AIS salary / rent / sales, AL, SH, Ind AS); 300 random returns with salary, houses and sales: both computations agree |
+| `python3 tests/run_itr_schedules_ui.py` | The Schedules step, desktop and phone: the Form 16 on Data, each head's figure, a sale opened, an AIS sale taken, an employer taken from Form 16, a house added, FA's lists from the schema, the Computation and the Checks group; ITR-6's SH, AL-1 and OCI. `ITR_SHOTS=<dir>` saves the screenshots |
 | `run_every_screen.py`, `run_legacy_room.py` | The four steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |
 
 Run `sh tools/itr-schemas.sh` before building and before the schema test.
