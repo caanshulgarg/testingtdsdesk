@@ -37,6 +37,8 @@ the rest of the proposal (`docs/UX-QUICKBOOKS-OF-INDIA.md`). Use `index.html?s=<
 5. **Today's cloud copy is the starting point.** The bridge already fills it, and the Tally path stays unchanged. The copy
    (`tally_*` tables, and Zoho's rows in them) becomes the **landing zone**. A deterministic **mirror builder** turns it into
    FinCom Books rows (`fb_*`, `source = tally | zoho`), in the same transaction as each landing write.
+   **Changed by the owner on 23-Nov-2026 (after the P1 measurement): FinCom Books follows within 10 minutes**, not in the
+   same transaction; see docs/FINCOM-BOOKS-P1.md. Where this plan says "same transaction" below, read "within 10 minutes".
 6. **The gaps to close for a complete mirror** are listed in section 3.4: opening bill-wise, voucher-type masters, non-payroll
    cost-centre masters, the post-dated flag, multi-GSTIN, stock masters and godown / batch detail, and a Tally-side trial
    balance read for the tie-out. Each one that needs a **new bridge request to Tally needs the owner's OK**. Each must also keep
