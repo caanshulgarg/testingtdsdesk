@@ -30,20 +30,25 @@ const TCloud = {
   // (re-review 22-Nov-2026: a row removed or merged above a page boundary moved the list up by one and a row was skipped
   // without a word. Each later page now starts one row back: that row must be the last row already read, else the list
   // moved (up or down) between the pages, and it is read again the same way)
+  // (release review 23-Nov-2026: the database answers 1,000 rows at most, so a later page asked as 1,001 came back
+  // 1,000 with the overlap row taken off: 999, read as the last page, and a list of more than 1,999 rows was cut short.
+  // Every page is now asked as 1,000 (CAP) starting on the last row read; only a page shorter than CAP is the last)
   async rpcAll(fn, args, again){
-    let out = [], off = 0, seen = new Set(), twice = false;
+    const CAP = 1000;
+    let out = [], seen = new Set(), twice = false;
     for (;;){
-      const page = await this.rpc(fn, args, off ? "?limit=1001&offset=" + (off - 1) : "?limit=1000&offset=0") || [];
+      const off = out.length ? out.length - 1 : 0;
+      const page = await this.rpc(fn, args, "?limit=" + CAP + "&offset=" + off) || [];
       if (!Array.isArray(page)) throw Error("not a list: " + fn);   // (never paged through for ever)
-      if (off){
+      const full = page.length >= CAP;
+      if (out.length){
         const head = page.shift();
         if (!head || JSON.stringify(head) !== JSON.stringify(out[out.length - 1])) twice = true;
         const k = page.map(r => JSON.stringify(r)); twice = twice || k.some(x => seen.has(x)); k.forEach(x => seen.add(x));
       }
-      else if (page.length >= 1000) page.forEach(r => seen.add(JSON.stringify(r)));
+      else if (full) page.forEach(r => seen.add(JSON.stringify(r)));
       out = out.concat(page);
-      if (page.length < 1000) break;
-      off += 1000;
+      if (!full || twice) break;
     }
     if (!twice) return out;
     if (again) throw Error("The books changed while " + fn + " was read; try again in a moment.");

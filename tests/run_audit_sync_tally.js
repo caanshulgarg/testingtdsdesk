@@ -275,41 +275,55 @@ const base = (c) => { Object.assign(c, {setTimeout, clearTimeout, Promise, crypt
     base(ctx);
     ctx.num = v => Number(v) || 0; ctx.fmtDateTime = v => String(v); ctx.fmtTime = v => String(v); ctx.istDay = v => new Date(v).toISOString().slice(0, 10);
     let calls = 0;
+    // (release review 23-Nov-2026) the stand answers as the real database does: never more than 1,000 rows, whatever
+    // limit is asked (49-tally-cloud.js rpcAll; PostgREST max-rows). A list of 2,600 rows: three pages and a short one
+    const N9 = 2600, cap9 = p => Math.min(1000, Number((p.match(/limit=(\d+)/) || [])[1] || 1000));
     const row = i => ({ledger: "LEDGER " + String(i).padStart(5, "0"), dr: i, cr: 0});
     ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
       // the first read: a ledger written between page 1 and page 2 moves page 2 by one; read again: steady
-      const all = []; for (let i = 0; i < 1500; i++) all.push(row(i));
+      const all = []; for (let i = 0; i < N9; i++) all.push(row(i));
       if (calls === 2) all.unshift(row(-1));
-      return all.slice(off, off + 1000); }};
+      return all.slice(off, off + cap9(p)); }};
     let out = null, err = "";
     try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
     const names = (out || []).map(r => r.ledger), dup = names.length - new Set(names).size;
-    ok(out && dup === 0 && names.length === 1500, "9. a trial balance read while it moved: read again, " + names.length + " ledgers, " + dup + " twice" + (err ? " (" + err + ")" : ""));
+    ok(out && dup === 0 && names.length === N9, "9. a trial balance read while it moved: read again, " + names.length + " ledgers, " + dup + " twice" + (err ? " (" + err + ")" : ""));
     // (re-review) a ledger removed (merged) above the page boundary between two pages: the list moves up by one and
     // a row would be skipped without a word; read again, every ledger once
     calls = 0;
     ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
-      const all = []; for (let i = 0; i < 1500; i++) all.push(row(i));
+      const all = []; for (let i = 0; i < N9; i++) all.push(row(i));
       if (calls === 2) all.splice(10, 1);
-      return all.slice(off, off + Number((p.match(/limit=(\d+)/) || [])[1] || 1000)); }};
+      return all.slice(off, off + cap9(p)); }};
     out = null; err = "";
     try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
     const n2 = (out || []).map(r => r.ledger);
-    ok(out && n2.length === 1500 && new Set(n2).size === 1500, "9. a ledger removed between two pages: read again, " + n2.length + " ledgers (1500)" + (err ? " (" + err + ")" : ""));
+    ok(out && n2.length === N9 && new Set(n2).size === N9, "9. a ledger removed between two pages: read again, " + n2.length + " ledgers (" + N9 + ")" + (err ? " (" + err + ")" : ""));
     // moving on every read: an error, never a list short of a ledger
     calls = 0;
     ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
-      const all = []; for (let i = 0; i < 1500; i++) all.push(row(i));
+      const all = []; for (let i = 0; i < N9; i++) all.push(row(i));
       if (off) all.splice(10, 1);
-      return all.slice(off, off + Number((p.match(/limit=(\d+)/) || [])[1] || 1000)); }};
+      return all.slice(off, off + cap9(p)); }};
     out = null; err = "";
     try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
     ok(!out && /changed while/.test(err), "9. still moving when read again: an error (" + (err || (out || []).length + " rows") + ")");
+    // (release review) a steady list longer than 1,999 rows: every row read once, whatever the length at a page edge
+    for (const n of [1999, 2000, 2600, 2997, 2998, 3001]){
+      calls = 0;
+      ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
+        const all = []; for (let i = 0; i < n; i++) all.push(row(i));
+        return all.slice(off, off + cap9(p)); }};
+      out = null; err = "";
+      try { out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"}); } catch (e){ err = e.message; }
+      const nn = (out || []).map(r => r.ledger);
+      ok(out && nn.length === n && new Set(nn).size === n && nn[n - 1] === row(n - 1).ledger, "9. a steady list of " + n + " rows (the server gives 1,000 at most): " + nn.length + " read, " + calls + " pages" + (err ? " (" + err + ")" : ""));
+    }
     // a list of exactly 1000 and a short one: as before
     calls = 0;
     ctx.Cloud = {api: async p => { calls++; const off = Number((p.match(/offset=(\d+)/) || [])[1] || 0);
       const all = []; for (let i = 0; i < 1000; i++) all.push(row(i));
-      return all.slice(off, off + Number((p.match(/limit=(\d+)/) || [])[1] || 1000)); }};
+      return all.slice(off, off + cap9(p)); }};
     out = await x.TCloud.rpcAll("tally_tb", {p_book: "b1"});
     ok(out.length === 1000 && new Set(out.map(r => r.ledger)).size === 1000, "9. exactly 1000 ledgers: " + out.length);
     ctx.Cloud.api = async () => [row(1), row(2)];
