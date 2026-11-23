@@ -91,6 +91,10 @@ with sync_playwright() as p:
     st = A.evaluate(STATE)
     ok(st[0]["st"] == "intally" and st[0]["err"] == "", "In Tally, the red note gone (%s)" % st)
     ok(st[0]["opt"], "said to be an Optional voucher in Tally (%s)" % st)
+    # an invoice found in Tally before this fix kept the red note: not shown on an In Tally invoice
+    A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.postError = 'Failed: not found in Tally when read back.'; SL().filter = 'done'; SL().openId = id; render(); }", vid); A.wait_for_timeout(500)
+    ok("not found in Tally" not in A.inner_text("#app"), "an old red note on an In Tally invoice is not shown, on the row or the panel")
+    A.evaluate("() => { SL().openId = null; render(); }")
 
     print("5. the same number twice: neither copy is posted")
     A.evaluate("() => { SL().list = []; window.__inTally = []; window.__sent = []; window.__toasts = []; }")
