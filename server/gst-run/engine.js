@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.12";
+export const REV = "171.13";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -69,6 +69,7 @@ export function books(rows) {
   // the app's tplFor, which reads the firm's other clients)
   b.map = E.Books.mapLedgers(b.vouchers, b.map || {});
   try { E.LedMaster.refresh(b); } catch (e) { /* as the app: a refresh that fails leaves the guesses */ }
+  const seen = seenOf(rows.salesSeen); if (seen) b.salesSeen = seen;
   return b;
 }
 
@@ -87,7 +88,7 @@ export function boxes(t) {
 // the engine's own text: a result worked out by another engine is worked out again
 export const ENGINE = (() => {
   let s = REV + "|" + books.toString() + boxes.toString() + step.toString() + gst3bPrint.toString() + ctxOf.toString() + contextOf.toString() + shares.toString() + engineSums.toString()
-    + itcRow.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString();
+    + itcRow.toString() + seenOf.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString();
   const add = (v) => { if (typeof v === "function") s += v.toString(); else if (v && typeof v === "object") Object.keys(v).sort().forEach((k) => { const x = v[k]; s += k + (typeof x === "function" ? x.toString() : typeof x === "object" && x && !(x instanceof Map) && !(x instanceof WeakMap) ? JSON.stringify(x) : ""); }); };
   Object.keys(E).sort().forEach((k) => add(E[k]));
   Object.keys(names).sort().forEach((k) => add(names[k]));
@@ -344,7 +345,7 @@ export function engineMonth(rows, ym, reg, o) {
 // order (gst_itc_month). The engine reads these through S.books.shareSrc (GSTR.months, threeBm's base and its
 // outward month-level parts, GST2B.run's documents, GSTF's bills and the suppliers' ledgers, GSTRev's turnover and common
 // credit, GSTR.creditIn's credit carried in). inp:
-//   {client, co, items (client_book_items), ctx (gst_share_ctx), sales (records), runs ({"<gstin>|<fy>": run}),
+//   {client, co, items (client_book_items), ctx (gst_share_ctx), sales (records), salesSeen (data.ts), runs ({"<gstin>|<fy>": run}),
 //    first, last (the book's first and last month), gstins (the registrations its entries carry), months ({ym: gst_month
 //    rows, every registration}), docs ([gst_itc_doc rows]), moves ({ledger: [[ym, amount]]}), carry ({ym: {igst, cgst,
 //    sgst, cess}} the credit a month carried out, as kept), out ({ym: {adv, amd, cust}}: the outward side's month-level
@@ -413,6 +414,12 @@ export function shareSrc(inp) {
     carry(prev) { return carry[prev] ? { pay: { carry: Object.assign({}, carry[prev]) } } : null; },
   };
 }
+// (re-review of ffd1402d0) the marketplace invoices the cloud copy's entries show (data.ts salesSeen) as GSTR.booksSeen
+// reads them: the FinCom ids, and each sale's number and date (GSTR.saleNoKey); none read: null
+function seenOf(x) {
+  if (!x || (!(x.fids || []).length && !(x.heads || []).length)) return null;
+  return { fids: (x.fids || []).map(String), nos: (x.heads || []).filter((h) => h && h.vno && E.Books.isSale({ type: h.vtype || "", ent: [] })).map((h) => E.GSTR.saleNoKey(h.vno, h.day)) };
+}
 // the books the month step reads: the client's work as books() puts it, the context (ledger list, groups, GSTINs, places
 // of supply typed) over it, no entries, and shareSrc
 function monthBook(inp) {
@@ -425,6 +432,7 @@ function monthBook(inp) {
   Object.assign(b, { map: c.map || {}, under: c.under || {}, groups: c.groups || {}, gstins: c.gstins || {}, gstPosFix: c.gstPosFix || {}, isdTyped: c.isdTyped || [] });
   if (c.stateOf) b.stateOf = c.stateOf;
   b.meta = Object.assign({}, b.meta || {}, { bills: 1, gstins: (inp.gstins || []).slice().sort() });
+  const seen = seenOf(inp.salesSeen); if (seen) b.salesSeen = seen;
   b.shareSrc = shareSrc(inp);
   return b;
 }

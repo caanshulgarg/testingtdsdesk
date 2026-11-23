@@ -62,6 +62,28 @@ export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unkno
     const dec = (await rest("/rest/v1/gst_2b_decisions?select=pair_id,decision&" + w).catch(() => [])) || [];
     runs[g + "|" + fy] = { id: run.id, status: run.status, at: run.done_at || run.queued_at, result: run.result, decisions: Object.fromEntries(dec.map((r: any) => [r.pair_id, r.decision])) };
   }
-  return { client, co, book, heads, lines, bills, made: made || null, fromPrep: !!made, ledgers, groups, items, sales: sales.map((r: any) => r.data).filter(Boolean), runs, unpackMs };
+  const salesData = sales.map((r: any) => r.data).filter(Boolean);
+  return { client, co, book, heads, lines, bills, made: made || null, fromPrep: !!made, ledgers, groups, items, sales: salesData, salesSeen: await salesSeen(rest, bk, salesData), runs, unpackMs };
+}
+// (re-review of ffd1402d0) which marketplace invoices of Sales the book's entries show (GSTR.inBooks: an invoice in the
+// books is counted as its entry, else from Sales): the entries carrying their FinCom ids (tally_vouchers.fincom_id,
+// migration 37, read by the bridge from the whole narration), and, for one found already in Tally (intally), the sales of
+// its number. The month step has no entries of its own to look in. A cloud that cannot answer: none seen (each counted
+// from Sales, as before it was posted)
+async function salesSeen(rest: Rest, bk: string, sales: any[]) {
+  const ms = sales.filter((v: any) => v && v.source === "market" && v.status !== "ignored" && v.id);
+  const fids: string[] = [], heads: any[] = [];
+  if (!ms.length) return { fids, heads };
+  const q = (xs: string[]) => xs.map((x) => enc('"' + String(x).replace(/"/g, "") + '"')).join(",");
+  const ids = ms.map((v: any) => String(v.id)), nos = Array.from(new Set(ms.filter((v: any) => v.status === "intally").map((v: any) => String((v.x || {}).number || "").trim()).filter(Boolean)));
+  for (let i = 0; i < ids.length; i += 40) {
+    const r = await rest("/rest/v1/tally_vouchers?select=fincom_id&" + bk + "&deleted_at=is.null&fincom_id=in.(" + q(ids.slice(i, i + 40)) + ")").catch(() => []);
+    (Array.isArray(r) ? r : []).forEach((x: any) => { if (x && x.fincom_id) fids.push(String(x.fincom_id)); });
+  }
+  for (let i = 0; i < nos.length; i += 40) {
+    const r = await rest("/rest/v1/tally_vouchers?select=vno,day,vtype&" + bk + "&deleted_at=is.null&vno=in.(" + q(nos.slice(i, i + 40)) + ")").catch(() => []);
+    (Array.isArray(r) ? r : []).forEach((x: any) => { if (x && x.vno) heads.push({ vno: x.vno, day: x.day, vtype: x.vtype }); });
+  }
+  return { fids, heads };
 }
 export { fyOf };

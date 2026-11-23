@@ -36,6 +36,7 @@ const SAY = {
   "Invoice numbers longer than 16 characters": ["Invoice number too long", "invoice", "The portal takes at most 16 characters in an invoice number.", VNO],
   "Invoice numbers with characters the portal does not take": ["Invoice number has characters the portal refuses", "invoice", "Only letters, digits, / and - are allowed, and a number cannot be only zeros.", VNO],
   "Invoice numbers used twice in the financial year": ["Invoice number used twice", "invoice", "Each invoice, and each credit or debit note, needs its own number in the financial year.", VNO],
+  "Posted to Tally but not in the books read since \u2014 check it wasn't deleted": ["Posted to Tally, not in the books", "invoice", "FinCom posted these marketplace invoices to Tally, but the books read since have no entry of them. Meanwhile they are counted from Sales, once.", "In Tally: look in the Day Book on the invoice's date (or search the narration TDSDesk:). If it was deleted, post it again from Sales, or ignore the invoice there if the sale is not to be reported."],
   "Purchases with no supplier GSTIN": ["Supplier GSTIN missing", "purchase", "A bill with GST but no supplier GSTIN can never match 2B, so its credit is at risk.", SUP_GSTIN],
   "Supplier GSTINs that are not valid": ["Supplier GSTIN not valid", "purchase", "The GSTIN fails its check digit or its form, so the bill can never match 2B.", SUP_GSTIN],
 };
