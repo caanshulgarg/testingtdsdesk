@@ -169,6 +169,8 @@ export async function editEntry(e) {
 export const sendEmail = (cid, ids) => Cloud.fn("assistant-send", { client_id: cid, ask_ids: ids });
 // the server decides whether it was a test (real sending off, or not the client's own number) and logs it
 export const markWhatsApp = (cid, ids, to) => rpc("ask_whatsapp_opened", { p_client: cid, p_ids: ids, p_to: to });
+// the firm's sending setting alone (Settings › Email and messages, the new look): the same row Daily Check loads
+export const loadMail = () => api("assistant_mail?select=real_send,test_to,test_whatsapp").then((r) => (r || [])[0] || { real_send: false, test_to: "", test_whatsapp: "" });
 export const setMail = (real, testTo, testWa) => rpc("assistant_mail_set", { p_real: real, p_test_to: testTo || "", p_test_whatsapp: testWa || "" });
 
 // contacts (Client setup)

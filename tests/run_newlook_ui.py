@@ -19,7 +19,11 @@ a switch per person, off unless turned on. Offline, made-up data only:
      the Settings tab holds Post automatically and Books in the cloud;
   7. Settings: six plain groups, no Connect Tally / Books in the cloud / Sent to Tally / Post automatically, a Look
      section; an old address (#/settings/postlog) opens the Tally page's tab;
-  8. a phone (390 px): no sideways scroll on Bank, + New and search in the top bar.
+  8. a phone (390 px): no sideways scroll on Bank, + New and search in the top bar;
+  9. the owner's decisions (23-Nov-2026), signed in to the firm account (a stand-in for the cloud): GST portal links leave
+     Settings for the firm's GST page (Due dates › GST portal links; #/settings/gstapi opens it); a group "Email and
+     messages" holds Daily Check's sending switch and the firm's test email and WhatsApp (the same assistant_mail_set
+     call, the owner only); Academy batches stay. Off, Settings keeps GST API and has no Email and messages.
 Screenshots of every changed screen (desktop 1366x768 and phone 390, deviceScaleFactor 2) go to TDSDESK_SHOTS when set.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_newlook_ui.py"""
 import os, threading, functools, http.server, re
@@ -60,6 +64,14 @@ VIS = """() => { const t = document.querySelector('#app table.bk-table'); if (!t
   return [...t.querySelectorAll('tbody tr[data-rid]')].filter((r) => { const b = r.getBoundingClientRect(); return b.top >= top - 1 && b.bottom <= bot + 1; }).length; }"""
 SIDE = "() => [...document.querySelectorAll('#side .side-link[data-side]')].filter((e) => e.offsetParent !== null || getComputedStyle(e).display !== 'none').map((e) => e.dataset.side)"
 NL_ON = "try { localStorage.setItem('fincom:newlook:local', 'on'); } catch (e) {}"
+
+CLOUD = """(role) => { window.__calls = []; S.firm.firmName = "Sample & Co"; S.account = {me: {role, name: "Made-up Owner"}, firm: {}};
+  Cloud.on = () => true;
+  Cloud.api = async (path, o) => { o = o || {}; window.__calls.push([path, o.method || "GET", o.body || null]); const t = path.split("?")[0];
+    if (t === "assistant_mail") return [{real_send: false, test_to: "office@samplefirm.example", test_whatsapp: "+91 90000 00000"}];
+    if (t.startsWith("rpc/")) return {ok: true}; return []; };
+  GSTAPI.on = () => true; GSTAPI.firmStatus = async () => ({sessions: [], returns: [], accounts: []});
+  render(); return true; }"""
 
 def page(br, w=1366, h=768, nl=False, phone=False):
     ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, is_mobile=phone, has_touch=phone)
@@ -254,6 +266,47 @@ with sync_playwright() as p:
     ok(pg.locator("[data-set-newlook]").is_checked(), "Look: the switch, on")
     go(pg, "goSettings('postlog')", 1500)
     ok(pg.evaluate("S.homeTab") == "tally" and pg.evaluate("S.tallyTab") == "sent", "an old address (#/settings/postlog) opens Tally › Sent to Tally")
+    ctx.close()
+
+    print("9. the owner's decisions: GST portal links to the GST page, Email and messages")
+    ctx, pg = page(br)
+    pg.evaluate(CLOUD, "owner"); go(pg, "goSettings(null)", 1500)
+    labels = pg.evaluate("() => [...document.querySelectorAll('[data-set-item]')].map((e) => e.dataset.setItem)")
+    groups = pg.evaluate("() => [...document.querySelectorAll('.setgroup-t')].map((e) => e.textContent)")
+    ok("gstapi" in labels and "mail" not in labels and "Email and messages" not in groups, "off: Settings as before (GST API there, no Email and messages) (%s)" % labels)
+    ctx.close()
+    ctx, pg = page(br, nl=True)
+    pg.evaluate(CLOUD, "owner"); go(pg, "goSettings(null)", 1500)
+    labels = pg.evaluate("() => [...document.querySelectorAll('[data-set-item]')].map((e) => e.dataset.setItem)")
+    groups = pg.evaluate("() => [...document.querySelectorAll('.setgroup-t')].map((e) => e.textContent)")
+    ok("gstapi" not in labels, "GST portal links are not in Settings (%s)" % labels)
+    ok("batches" in labels, "Academy batches stay in Settings")
+    ok("Email and messages" in groups and "mail" in labels, "a group Email and messages with its section (%s)" % groups)
+    go(pg, "goSettings('mail')", 1500)
+    box = pg.locator("[data-nl-mail]")
+    ok(box.count() == 1, "Email and messages opens")
+    ok(box.locator("[data-mail-real]").count() == 1 and not box.locator("[data-mail-real]").is_checked(), "the sending switch, read from the firm's setting (off: test mode)")
+    ok(box.locator("[data-mail-to]").input_value() == "office@samplefirm.example", "the firm email for tests, read from the firm's setting")
+    shot(pg, "desktop-17-settings-mail")
+    box.locator("[data-mail-to]").fill("accounts@samplefirm.example"); box.locator("[data-mail-save]").click(); pg.wait_for_timeout(800)
+    sets = [c for c in pg.evaluate("() => window.__calls") if c[0] == "rpc/assistant_mail_set"]
+    ok(len(sets) == 1 and sets[0][2] == {"p_real": False, "p_test_to": "accounts@samplefirm.example", "p_test_whatsapp": "+91 90000 00000"}, "Save: the same call as Daily Check's (assistant_mail_set), real sending still off (%s)" % sets)
+    go(pg, "goSettings('gstapi')", 2000)
+    ok(pg.evaluate("S.homeTab") == "compliance" and pg.evaluate("S.nlDueTab") == "gstapi", "an old address (#/settings/gstapi) opens the GST page's GST portal links")
+    tabs = pg.evaluate("() => [...document.querySelectorAll('[data-nl-duetab]')].map((e) => e.textContent)")
+    ok(tabs == ["Due dates", "GST portal links"], "the firm's GST page: Due dates · GST portal links (%s)" % tabs)
+    ok(pg.locator('[data-pane="gstapi-all"]').count() == 1, "GST portal links: every client's GST portal link, as it was in Settings")
+    shot(pg, "desktop-18-gst-portal-links")
+    pg.locator('[data-nl-duetab="due"]').click(); pg.wait_for_timeout(1200)
+    ok(pg.locator('[data-pane="gstapi-all"]').count() == 0 and pg.evaluate("S.nlDueTab") == "due", "Due dates: the list of what is due, as before")
+    pg.evaluate(CLOUD, "staff"); go(pg, "goSettings('mail')", 1200)
+    ok(pg.locator("[data-nl-mail] [data-mail-save]").count() == 0 and "owner" in pg.locator("[data-nl-mail]").inner_text(), "staff: only the owner changes sending")
+    ctx.close()
+    ctx, pg = page(br, 390, 844, nl=True, phone=True)
+    pg.evaluate(CLOUD, "owner"); go(pg, "goSettings('mail')", 1500); shot(pg, "phone-09-settings-mail")
+    go(pg, "S.nlDueTab = 'gstapi'; navHome('compliance')", 2000)
+    ok(pg.evaluate("document.scrollingElement.scrollWidth - innerWidth") <= 1, "phone: GST portal links, no sideways scroll")
+    shot(pg, "phone-10-gst-portal-links")
     ctx.close()
 
     print("8. a phone")

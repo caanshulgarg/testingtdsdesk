@@ -132,9 +132,10 @@ export function NLTop() {
 const lc = (s) => String(s || "").toLowerCase();
 function pagesOf() {
   const co = coOpen(), out = [
-    ["Home", () => navHome("today")], ["Clients", () => navHome("clients")], ["Due dates", () => navHome("compliance")], ["Daily Check", () => navHome("daily")],
+    ["Home", () => navHome("today")], ["Clients", () => navHome("clients")], ["Due dates", () => { S.nlDueTab = "due"; navHome("compliance"); }], ["Daily Check", () => navHome("daily")],
     ["Tally", tallyGo("")], ["Tally: sent to Tally", () => goTallyPage("sent")], ["Settings", () => goSettings(null)], ["Settings: people", () => goSettings("account")],
-    ["Settings: plan and credit", () => goSettings("plan")], ["Help", () => navHome("help")]];
+    ["Settings: plan and credit", () => goSettings("plan")], ["Help", () => navHome("help")],
+    ...(typeof Cloud === "object" && Cloud.on() ? [["GST portal links", () => { S.nlDueTab = "gstapi"; navHome("compliance"); }], ["Settings: email to clients", () => goSettings("mail")]] : [])];
   if (co) {
     const n = " · " + co.name;
     [["Home", "dash"], ["Bank", "bank"], ["Purchase", "bills"], ["Sales", "sales"]].forEach(([w, to]) => out.push([w + n, () => goClient(to)]));

@@ -23,6 +23,7 @@ const DailyCheck = lazy(() => import("./screens/daily/DailyCheck.jsx"));
 import { newLook } from "./newlook/flag.js";
 const NLBank = lazy(() => import("./newlook/Bank.jsx"));
 const NLTally = lazy(() => import("./newlook/Tally.jsx"));
+const NLDue = lazy(() => import("./newlook/Due.jsx"));
 const NLTabs = lazy(() => import("./newlook/Shell.jsx").then((m) => ({ default: m.NLTabs })));
 const PausedPage = lazy(() => import("./parts/GateBanner.jsx").then((m) => ({ default: m.PausedPage })));
 
@@ -58,7 +59,7 @@ function Screen() {
     return <Export />;
   }
   const t = S.homeTab;
-  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? (newLook() ? <NLTally /> : <TallyHome />) : t === "integrations" ? <Integrations /> : t === "meetings" ? <Meetings /> : t === "daily" ? <DailyCheck /> : t === "rules" ? <FirmSettings /> : <Clients />;
+  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? (newLook() ? <NLDue /> : <Compliance />) : t === "inbox" ? <InboxAll /> : t === "tally" ? (newLook() ? <NLTally /> : <TallyHome />) : t === "integrations" ? <Integrations /> : t === "meetings" ? <Meetings /> : t === "daily" ? <DailyCheck /> : t === "rules" ? <FirmSettings /> : <Clients />;
 }
 
 // the bar at the foot of a client's bank, sales or bills

@@ -52,6 +52,7 @@ import "./settings-layout.css";
 import "../../../src/js/99-pending-suppliers.js";
 // the new look (newlook/flag.js): Settings in six plain groups, Tally out of it
 import { newLook, setNewLook } from "../newlook/flag.js";
+const NLMail = lazy(() => import("../newlook/Mail.jsx"));
 import { density, setDensity } from "../parts/density.js";
 
 // the list on the left: groups of sections; each section one line, its label and, at the right, where it stands now
@@ -89,7 +90,7 @@ const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstA
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
 const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
-  plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here." };
+  plan: "Nothing to save here.", mail: "Nothing to save here: the form has its own Save.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here." };
 
 // the Save bar's own words, for a section that asks for them (GST settings, the owner's redesign of 17-Nov-2026)
 const SEC_BAR = { gstset: { count: true, discardText: "Undo my changes" } };
@@ -245,10 +246,14 @@ function nlGroups(groups) {
   const pick = (...ids) => ids.map((id) => by[id]).filter(Boolean);
   const people = by.account && Object.assign({}, by.account, { label: "People and sign-in" });
   const look = { id: "look", label: "Look", about: "The new look of FinCom, and how close the rows of a table sit. For you only.", status: newLook() ? "new look" : "classic" };
+  // (the owner, 23-Nov-2026) GST portal links are on the firm's GST page (Due dates › GST portal links); Daily Check's
+  // sending to clients is here, under Email and messages; Academy batches stay
+  const mail = Cloud.on() ? { id: "mail", label: "Email to clients", about: "Daily Check’s questions to clients: test mode or for real, and the firm’s test email and WhatsApp.", status: "" } : null;
   return [
     { title: "Firm", items: [by.firm, people, by.batches].filter(Boolean) },
     { title: "My account", items: [look] },
-    { title: "Client defaults", items: pick("rates", "gstapi").map((i) => (i.id === "gstapi" ? Object.assign({}, i, { label: "GST portal links" }) : i)) },
+    { title: "Client defaults", items: pick("rates") },
+    { title: "Email and messages", items: [mail].filter(Boolean) },
     { title: "Billing", items: pick("plan") },
     { title: "Advanced", items: pick("reading", "ai", "moves") },
   ].filter((g) => g.items.length);
@@ -301,6 +306,8 @@ export function FirmSettings() {
   const nl = newLook();
   // an old address of a section now on the Tally page (#/settings/bridge, …) opens it there
   if (nl && NL_MOVED[S.settingsTab]) { const t = NL_MOVED[S.settingsTab]; S.settingsTab = null; setTimeout(() => goTallyPage(t), 0); }
+  // GST portal links: on the firm's GST page (Due dates › GST portal links)
+  if (nl && S.settingsTab === "gstapi") { S.settingsTab = null; setTimeout(() => { S.nlDueTab = "gstapi"; navHome("compliance"); }, 0); }
   const sig = firmSignals(), groups = nl ? nlGroups(firmGroups(sig)) : firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));
   // no section asked for (Settings in the sidebar, #/settings): Firm details on a computer, the list on a phone
   const list = !ids.includes(S.settingsTab);
@@ -323,6 +330,7 @@ export function FirmSettings() {
     autopost: () => <AutoPostSettings />,
     moves: () => <MoveSwitches />,
     look: () => <LookSection />,
+    mail: () => <Suspense fallback={null}><NLMail /></Suspense>,
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
   return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}
