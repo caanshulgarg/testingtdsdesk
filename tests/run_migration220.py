@@ -9,10 +9,11 @@ PostgreSQL (pg_stand), with made-up books from tests/fbooks_fixture.mjs (node) l
   4. the mirror equals the copy: every ledger's balance (a debit positive: the copy's sign negated), voucher counts,
      bill-wise references, cost-centre splits; optional = memo, cancelled kept with its number, the unbalanced entry
      held and named, the entry with no lines a memo; the tie-out is in step except for the held entry
-  5. SAME TRANSACTION: a write to the copy that commits has its FinCom Books rows at once; one that rolls back leaves
-     nothing; a change makes version 2 (version 1's lines kept); a deletion cancels (number kept); a ledger rename makes
-     a new version; an older-year change moves the openings; a mirror failure never fails the copy's write (logged,
-     "Not in step")
+  5. WITHIN 10 MINUTES (owner decision 23-Nov-2026): a write to the copy only notes what changed; the catch-up
+     (fb_mirror_catchup_run, every 3 minutes) mirrors it; one that rolls back notes nothing; a change makes version 2
+     (version 1's lines kept); a deletion cancels (number kept); a ledger rename makes a new version; an older-year change
+     moves the openings; a mirror failure never touches the copy's write (logged, kept noted; "Not in step" only once a
+     book is more than 10 minutes behind)
   6. Dr = Cr and the other commit rules, by the database: unbalanced, one line, cost centres or bill refs off by a paisa
      all refused, even for a superuser's direct insert; a balanced one goes in
   7. the edit log: a row for every change, chained; UPDATE / DELETE / TRUNCATE refused for everyone; a corrupted row
@@ -24,9 +25,11 @@ PostgreSQL (pg_stand), with made-up books from tests/fbooks_fixture.mjs (node) l
      entry is out of every total and listed
  10. RLS: another firm sees nothing; a book that names its people (fb_grants) is hidden from staff not named
  11. the readers: the trial balance ties and equals the copy; a ledger's running balance and closing; the day book
- 12. the review of 23-Nov-2026: a re-run of 220 takes no lock that stops the copy's writes; a landing trigger that cannot
-     look at fb_books never fails the copy's write (the catch-up's sweep finds the change); the flush waits at most 2 s;
-     a big statement is left to the catch-up; a no-change update notes nothing; the mirror's actor label does not leak
+ 12. the reviews of 23-Nov-2026: a re-run of 220 takes no lock that stops the copy's writes; a landing trigger that cannot
+     look at fb_books never fails the copy's write (the miss sweeps that copy book's FinCom book only); a change missed
+     behind a sweep under way is not lost; if even the miss cannot be written, a sequence tick starts a sweep; the copy's
+     write never waits for the catch-up; a note made again during the catch-up is kept; a no-change update notes nothing;
+     the actor label does not leak
 PG_PORT (55620). FB_BIG=n also mirrors a book of n made-up vouchers and times it."""
 import os, sys, json, time, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -82,7 +85,7 @@ try:
        "2. members and the service role read; nobody inserts, changes, deletes or empties a fb_* table directly")
     ok(fx("authenticated", "fb_tb(uuid, date)") and fx("authenticated", "fb_enroll(text)") and not fx("anon", "fb_tb(uuid, date)") and not fx("authenticated", "fb_mirror_catchup(uuid, integer)")
        and not fx("authenticated", "fb_tieout_all()") and fx("service_role", "fb_tieout_all()") and not fx("authenticated", "fb_mirror_voucher(uuid, text)") and not fx("service_role", "fb_mirror_voucher(uuid, text)")
-       and not fx("anon", "fb_flush()") and not fx("authenticated", "fb_source_figures_put(uuid, text, date, jsonb, text)"),
+       and not fx("anon", "fb_mirror_triage()") and not fx("authenticated", "fb_source_figures_put(uuid, text, date, jsonb, text)"),
        "2. members call the readers and fb_enroll; the service role the catch-up and the tie-out; the builder's parts nobody")
     e = err(lambda: db.sql("set role service_role; insert into fb_books (firm_id, client_id, source) values ('%s', 'c1', 'own');" % F1))
     ok("permission denied" in e, "2. the service role cannot insert a book directly")
@@ -148,20 +151,32 @@ try:
     kinds = {x["kind"] for x in json.loads(db.one("select differences from fb_tieouts where id = %s" % tie["id"]))}
     ok(kinds == {"ledger_day", "held"}, "4. its differences are the held entry's day and the entry itself (%s)" % sorted(kinds))
 
-    # 5. the same transaction
+    # 5. within 10 minutes
     N0 = int(db.one("select count(*) from fb_vouchers where book_id = '%s'" % BK))
-    # what tally-ingest does for a day: delete the day's lines and bills, upsert the entries, insert again, in one transaction
-    ingest = lambda body: db.sql("begin;\n" + body + "\ncommit;")
+    run = lambda: db.sql("call fb_mirror_catchup_run(5000)")   # what the timer does every 3 minutes
+    # what tally-ingest does for a day: delete the day's lines and bills, upsert the entries, insert again, in one transaction;
+    # then (catch=True) the timer's next run
+    def ingest(body, catch=True):
+        db.sql("begin;\n" + body + "\ncommit;")
+        if catch: run()
+    stat = lambda: json.loads(one(OWN, "select fb_status('c1')"))["books"][0]
     ingest("""insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party) values ('%s', '%s', 'g-new-1', '2026-11-21', 90001, 'Sales', 'S/9001', 'Alpha Demo Stores');
       insert into tally_lines (book_id, firm_id, guid, day, ledger, amount) values ('%s', '%s', 'g-new-1', '2026-11-21', 'Alpha Demo Stores', -1180), ('%s', '%s', 'g-new-1', '2026-11-21', 'Sales @ 18%%', 1000),
         ('%s', '%s', 'g-new-1', '2026-11-21', 'Output CGST', 90), ('%s', '%s', 'g-new-1', '2026-11-21', 'Output SGST', 90);
-      insert into tally_bills (book_id, firm_id, guid, day, ledger, name, type, amount, bill_date, credit_days, due) values ('%s', '%s', 'g-new-1', '2026-11-21', 'Alpha Demo Stores', 'S/9001', 'New Ref', -1180, '2026-11-21', 30, '2026-12-21');""" % ((TB1, F1) * 6))
+      insert into tally_bills (book_id, firm_id, guid, day, ledger, name, type, amount, bill_date, credit_days, due) values ('%s', '%s', 'g-new-1', '2026-11-21', 'Alpha Demo Stores', 'S/9001', 'New Ref', -1180, '2026-11-21', 30, '2026-12-21');""" % ((TB1, F1) * 6), catch=False)
+    st0 = stat()
+    ok(db.one("select count(*) from fb_vouchers where source_ref = 'g-new-1'") == "0" and db.one("select count(*) from fb_mirror_dirty where book_id = '%s' and key = 'g-new-1'" % BK) == "1"
+       and st0["counts"]["waiting"] == 1 and st0["behind_since"] and st0["late"] is False,
+       "5. a new entry written to the copy: the write only notes it (FinCom Books is 'updating', not late; %s waiting)" % st0["counts"]["waiting"])
+    run()
     v = q("select id, version, status, number, source_alter from fb_vouchers where book_id = 'BK' and source_ref = 'g-new-1'")
-    ok(len(v) == 1 and v[0]["status"] == "posted" and v[0]["version"] == "1" and v[0]["source_alter"] == "90001", "5. a new entry written to the copy is in FinCom Books when the transaction commits")
+    ok(len(v) == 1 and v[0]["status"] == "posted" and v[0]["version"] == "1" and v[0]["source_alter"] == "90001", "5. the catch-up's next run mirrors it")
     VID = v[0]["id"]
     ok(db.one("select count(*) from fb_audit_log where voucher_id = '%s' and actor_kind = 'system:mirror'" % VID) == "6", "5. ... with its edit-log rows (the voucher, its four lines, its bill), by the mirror")
     db.sql("begin; insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno) values ('%s', '%s', 'g-rolled', '2026-11-21', 90002, 'Journal', 'J/RB'); rollback;" % (TB1, F1))
-    ok(db.one("select count(*) from fb_vouchers where source_ref = 'g-rolled'") == "0", "5. a write that rolls back leaves nothing in FinCom Books")
+    ok(db.one("select count(*) from fb_vouchers where source_ref = 'g-rolled'") == "0" and db.one("select count(*) from fb_mirror_dirty where key = 'g-rolled'") == "0", "5. a write that rolls back notes nothing")
+    st1 = stat()
+    ok(st1["behind_since"] is None and st1["late"] is False and st1["mirrored_at"] and st1["counts"]["waiting"] == 0, "5. up to date: nothing behind; fb_status gives the last time it caught up")
     ingest("""update tally_vouchers set alter_id = 90010, narration = 'changed in Tally (made up)' where book_id = '%s' and guid = 'g-new-1';
       delete from tally_lines where book_id = '%s' and guid = 'g-new-1';
       insert into tally_lines (book_id, firm_id, guid, day, ledger, amount) values ('%s', '%s', 'g-new-1', '2026-11-21', 'Alpha Demo Stores', -2360), ('%s', '%s', 'g-new-1', '2026-11-21', 'Sales @ 18%%', 2000),
@@ -189,35 +204,40 @@ try:
     ingest("update tally_lines set amount = amount - 10 where book_id = '%s' and guid = '%s' and ledger = 'Cash'; update tally_lines set amount = amount + 10 where book_id = '%s' and guid = '%s' and ledger = 'Demo Bank Current A/c';" % (TB1, old["guid"], TB1, old["guid"]))
     after = db.one("select o.amount from fb_openings o join fb_ledgers g on g.id = o.ledger_id where o.book_id = '%s' and g.name = 'Cash'" % BK)
     ok(round(float(after) - float(before), 2) == 10.0, "5. an entry of the older year changed: the opening at 01-Apr-2025 moves with it (%s to %s)" % (before, after))
-    # a mirror failure never fails the copy's write
+    # a mirror failure never touches the copy's write
     db.sql("alter table fb_vouchers add constraint test_break check (narration <> 'BREAK THE MIRROR')")
     ingest("update tally_vouchers set narration = 'BREAK THE MIRROR', alter_id = alter_id + 1 where book_id = '%s' and guid = '%s';" % (TB1, B["vouchers"][-5]["guid"]))
+    stb = stat()
     ok(db.one("select narration from tally_vouchers where book_id = '%s' and guid = '%s'" % (TB1, B["vouchers"][-5]["guid"])) == "BREAK THE MIRROR"
        and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK) == "1"
-       and db.one("select in_step from fb_books where book_id = '%s'" % BK) == "f",
-       "5. the mirror fails on a change: the copy's write still commits; the failure is logged and the book is Not in step")
-    ok(db.one("select count(*) from fb_mirror_dirty where txid <> 0") == "0" and db.one("select count(*) from fb_mirror_dirty where txid = 0 and book_id = '%s'" % BK) == "1",
-       "5. ... the failed flush leaves no rows of its own behind; its entry is kept for the catch-up")
+       and db.one("select count(*) from fb_mirror_dirty where book_id = '%s'" % BK) == "1" and stb["late"] is False,
+       "5. the catch-up fails on a change: the copy's write committed; the failure is logged and the entry stays noted (within 10 minutes: not late)")
+    db.sql("update fb_mirror_dirty set first_at = now() - interval '11 minutes' where book_id = '%s'" % BK)
+    stb = stat(); fw = json.loads(one(STAFF, "select fb_filing_warning('c1', '2026-04-01', '2026-11-30')"))
+    ok(stb["late"] is True and stb["behind_minutes"] >= 11 and fw["warn"] and fw["block"] is False and "minutes behind" in fw["words"],
+       "5. more than 10 minutes behind: fb_status says late (%s minutes); the filing warning warns ('%s')" % (stb["behind_minutes"], fw["words"][:90]))
     db.sql("alter table fb_vouchers drop constraint test_break")
-    r = json.loads(db.one("set role service_role; select fb_mirror_catchup('%s', 100)" % BK))
-    ok(r["by"].get("changed") == 1 and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK) == "0", "5. the catch-up applies it later and clears the error")
-    # review B1: a copy change WITHOUT a new AlterID (the copy's rename re-points lines, tally_ledger_rename) whose flush fails
+    run()
+    ok(db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (BK, B["vouchers"][-5]["guid"])) == "BREAK THE MIRROR"
+       and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK) == "0" and stat()["late"] is False,
+       "5. the catch-up applies it once it can and clears the error; no longer behind")
+    # review B1: a copy change WITHOUT a new AlterID (the copy's rename re-points lines, tally_ledger_rename) that the catch-up cannot apply at first
     n_sw = int(db.one("select count(distinct guid) from tally_lines where book_id = '%s' and ledger = 'Staff Welfare Exp' and day >= '2025-04-01'" % TB1))
-    db.sql("alter table fb_lines add constraint rv_once check (ledger_id > 0 and current_setting('rv.fail', true) is distinct from 'y')")
-    ingest("""set local rv.fail = 'y'; insert into tally_ledgers (book_id, firm_id, name, parent, open) values ('%s', '%s', 'Staff Welfare Expenses', 'Indirect Expenses', 0);
+    db.sql("alter table fb_lines add constraint rv_once check (false) not valid")
+    ingest("""insert into tally_ledgers (book_id, firm_id, name, parent, open) values ('%s', '%s', 'Staff Welfare Expenses', 'Indirect Expenses', 0);
       update tally_lines set ledger = 'Staff Welfare Expenses' where book_id = '%s' and ledger = 'Staff Welfare Exp';
       update tally_ledgers set merged_into = 'Staff Welfare Expenses' where book_id = '%s' and name = 'Staff Welfare Exp';""" % (TB1, F1, TB1, TB1))
     db.sql("alter table fb_lines drop constraint rv_once")
-    ok(n_sw >= 2 and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK) == "1"
-       and int(db.one("select count(*) from fb_mirror_dirty where txid = 0 and book_id = '%s' and kind = 'v'" % BK)) == n_sw,
-       "5. B1: a rename in the copy (no new AlterID) whose flush fails: logged, and its %d entries kept for the catch-up" % n_sw)
-    for _ in range(2): json.loads(db.one("set role service_role; select fb_mirror_catchup_all(5000)"))
+    ok(n_sw >= 2 and int(db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK)) >= 1
+       and int(db.one("select count(*) from fb_mirror_dirty where book_id = '%s' and kind = 'v'" % BK)) == n_sw,
+       "5. B1: a rename in the copy (no new AlterID) the catch-up cannot apply yet: logged, and its %d entries stay noted" % n_sw)
+    run()
     old_left = db.one("select count(*) from fb_lines l join fb_vouchers v on v.id = l.voucher_id and v.version = l.version join fb_ledgers g on g.id = l.ledger_id where v.book_id = '%s' and g.name = 'Staff Welfare Exp'" % BK)
     tie = json.loads(db.one("set role service_role; select fb_tieout('%s')" % BK))
     bad_days = [x for x in json.loads(db.one("select differences from fb_tieouts where id = %s" % tie["id"])) if x["kind"] == "ledger_day" and x.get("cause") != "held"]
     ok(old_left == "0" and not bad_days and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK) == "0"
        and db.one("select count(*) from fb_mirror_dirty") == "0",
-       "5. B1: the catch-up re-mirrors them: no line on the old name, no ledger-day difference, the error cleared, nothing left (%s, %d)" % (old_left, len(bad_days)))
+       "5. B1: the next run mirrors them: no line on the old name, no ledger-day difference, the error cleared, nothing left (%s, %d)" % (old_left, len(bad_days)))
     # a cost-centre split on the second line of the same ledger lands on that line (tally_cost_allocs.line_no)
     ingest("""insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno) values ('%s', '%s', 'g-cc-2', '2026-11-21', 90020, 'Journal', 'J/CC2');
       insert into tally_lines (book_id, firm_id, guid, day, ledger, amount) values ('%s', '%s', 'g-cc-2', '2026-11-21', 'Office Rent', -100), ('%s', '%s', 'g-cc-2', '2026-11-21', 'Office Rent', -50), ('%s', '%s', 'g-cc-2', '2026-11-21', 'Cash', 150);
@@ -330,7 +350,7 @@ try:
     ingest("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = '%s';" % (TB1, gd["guid"]))
     ok(json.loads(db.one("set role service_role; select fb_tieout('%s')" % BK))["in_step"], "9. the next read brings it: in step again")
     # D7: an opening difference
-    db.sql("begin; insert into tally_ledgers (book_id, firm_id, name, parent, open) values ('%s', '%s', 'Old Difference (made up)', 'Suspense A/c', 37.5); commit;" % (TB1, F1))
+    ingest("insert into tally_ledgers (book_id, firm_id, name, parent, open) values ('%s', '%s', 'Old Difference (made up)', 'Suspense A/c', 37.5);" % (TB1, F1))
     tie = json.loads(db.one("set role service_role; select fb_tieout('%s')" % BK))
     ok(not tie["in_step"] and "Difference in opening balances" in tie["words"] and "₹37.50" in tie["words"], "9. D7: the openings do not add up: Not in step ('%s')" % tie["words"])
     e = err(lambda: as_(STAFF, "select fb_opening_signoff('%s', 'known')" % BK))
@@ -340,9 +360,9 @@ try:
     r = json.loads(one(OWN, "select fb_opening_signoff('%s', 'difference carried from the old software (made up)')" % BK))
     ok(r["in_step"] and db.one("select count(*) from fb_audit_log where book_id = '%s' and entity = 'fb_books' and reason like 'difference carried%%'" % BK) == "1",
        "9. D7: the owner accepts it with a reason: in step; the reason is in the edit log")
-    db.sql("begin; update tally_ledgers set open = 40 where book_id = '%s' and name = 'Old Difference (made up)'; commit;" % TB1)
+    ingest("update tally_ledgers set open = 40 where book_id = '%s' and name = 'Old Difference (made up)';" % TB1)
     ok(not json.loads(db.one("set role service_role; select fb_tieout('%s')" % BK))["in_step"], "9. D7: the difference then changes: Not in step again (the acceptance was for that amount)")
-    db.sql("begin; update tally_ledgers set open = 37.5 where book_id = '%s' and name = 'Old Difference (made up)'; commit;" % TB1)
+    ingest("update tally_ledgers set open = 37.5 where book_id = '%s' and name = 'Old Difference (made up)';" % TB1)
     # the TODO hook: Tally's own primary-group closings (bridge 2.5.19, after the owner's OK)
     grp = {x["p"]: x["s"] for x in db.rows("select g.primary_name p, sum(c.bal) s from fb_closing('%s', '2026-11-20') c join fb_ledgers l on l.id = c.ledger_id join fb_groups g on g.id = l.group_id group by 1" % BK)}
     db.sql("set role service_role; select fb_source_figures_put('%s', 'group_closing', '2026-11-20', '%s'::jsonb, 'test (made up)')" % (BK, json.dumps(grp)))
@@ -403,56 +423,89 @@ try:
     has = lambda g: db.one("select count(*) from tally_vouchers where book_id = '%s' and guid = '%s'" % (TB1, g)) == "1"
     fbh = lambda g: db.one("select count(*) from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (BK, g)) == "1"
     catch = lambda: json.loads(db.one("set role service_role; select fb_mirror_catchup('%s', 5000)" % BK))
-    # a re-run of 220 while the copy is written: no lock that stops the copy's write or the mirror
+    # a second enrolled book (made up), to show that a miss on one copy book sweeps only its FinCom book
+    TB4 = "bbbbbbbb-0000-0000-0000-000000000004"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('%s', '%s', 'c4', 'Small Demo (made up)', '2025-04-01')" % (TB4, F1))
+    db.sql(load_sql(TB4, F1, books(30, 3)))
+    BK4 = json.loads(one(OWN, "select fb_enroll('c4')"))["books"][0]["book"]
+    run()
+    noted = lambda g: db.one("select count(*) from fb_mirror_dirty where book_id = '%s' and key = '%s'" % (BK, g)) == "1"
+    def missed_change(sql, lock="lock table fb_books in access exclusive mode;"):
+        a = bg("begin; " + lock + " select pg_sleep(1.5); commit;"); time.sleep(0.5)
+        r = err(lambda: db.sql(sql)); a.stdout.read(); a.wait(); return r
+    # a re-run of 220 while the copy is written: no lock that stops the copy's write
     a = bg(mig.replace("\ncommit;", "\nselect pg_sleep(5);\ncommit;")); time.sleep(3)
     heavy = db.rows("select c.relname, l.mode from pg_locks l join pg_class c on c.oid = l.relation where l.granted and l.pid <> pg_backend_pid() and l.mode in ('AccessExclusiveLock', 'ExclusiveLock', 'ShareRowExclusiveLock', 'ShareLock') and (c.relname like 'fb\\_%' or c.relname like 'tally\\_%')")
     t = time.time(); b = bg("set lock_timeout = '1s'; begin; " + vsql("RR-1") + " commit;"); out_b = b.stdout.read(); b.wait(); dt = time.time() - t
     out_a = a.stdout.read(); a.wait()
     ok(not heavy, "12. a re-run of 220 holds no lock that blocks the copy's writes (%s)" % heavy)
-    ok(b.returncode == 0 and has("RR-1") and fbh("RR-1") and dt < 2.5 and a.returncode == 0, "12. ... a copy write during it commits at once (%.1f s) and is mirrored (%s)" % (dt, (out_b + out_a).strip()[-160:]))
-    # B2: fb_books held by something else (ACCESS EXCLUSIVE): the landing trigger never waits; the copy's write commits; the sweep finds it
+    ok(b.returncode == 0 and has("RR-1") and noted("RR-1") and dt < 2.5 and a.returncode == 0, "12. ... a copy write during it commits at once (%.1f s) and is noted (%s)" % (dt, (out_b + out_a).strip()[-160:]))
+    run()
+    ok(fbh("RR-1"), "12. ... and the next run mirrors it")
+    # B2 (+ review 6): fb_books held by something else: the landing trigger never waits; the copy's write commits; the miss names the copy's book, so only that FinCom book is swept
     a = bg("begin; lock table fb_books in access exclusive mode; select pg_sleep(4); commit;"); time.sleep(0.7)
     t = time.time(); b = bg("set lock_timeout = '1s'; begin; " + vsql("RR-2") + " commit;"); out_b = b.stdout.read(); b.wait(); dt = time.time() - t; a.stdout.read(); a.wait()
-    ok(b.returncode == 0 and has("RR-2") and not fbh("RR-2") and db.one("select count(*) from fb_mirror_errors where kind = 'missed' and resolved_at is null") != "0",
-       "12. B2: fb_books locked by another session: the copy's write still commits (%.1f s); the miss is logged (%s)" % (dt, out_b.strip()[-120:]))
-    for _ in range(3): json.loads(db.one("set role service_role; select fb_mirror_catchup_all(5000)"))
-    ok(fbh("RR-2") and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0" and db.one("select sweep_after from fb_books where book_id = '%s'" % BK) in (None, ""),
+    ok(b.returncode == 0 and has("RR-2") and not fbh("RR-2") and db.one("select count(*) from fb_mirror_errors where kind = 'missed' and resolved_at is null and key = '%s'" % TB1) != "0",
+       "12. B2: fb_books locked by another session: the copy's write still commits (%.1f s); the miss is logged with its copy book (%s)" % (dt, out_b.strip()[-120:]))
+    db.one("set role service_role; select fb_mirror_triage()")
+    ok(db.one("select count(*) from fb_mirror_errors where book_id = '%s' and kind = 'missed'" % BK) != "0" and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and kind = 'missed'" % BK4) == "0",
+       "12. review 6: the miss becomes a sweep of that copy book's FinCom book only, not of every enrolled book")
+    run(); run()
+    ok(fbh("RR-2") and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0" and db.one("select sweep_after from fb_mirror_state where book_id = '%s'" % BK) in (None, ""),
        "12. B2: the catch-up's sweep (by content) mirrors it and clears the miss")
-    # (1) the flush waits at most 2 s for the book's lock (the catch-up holding it), then leaves the entry to the catch-up
-    a = bg("begin; select pg_advisory_xact_lock(hashtextextended('fb_mirror:%s', 0)); select pg_sleep(6); commit;" % BK); time.sleep(0.7)
-    t = time.time(); b = bg("begin; " + vsql("RR-3") + " commit;"); b.stdout.read(); b.wait(); dt = time.time() - t; a.stdout.read(); a.wait()
-    ok(b.returncode == 0 and has("RR-3") and not fbh("RR-3") and dt < 4.5 and db.one("select count(*) from fb_mirror_dirty where txid = 0 and key = 'RR-3'") == "1",
-       "12. the book's mirror lock held elsewhere: the copy's write commits in %.1f s (not 6), the entry kept for the catch-up" % dt)
-    catch()
-    ok(fbh("RR-3") and db.one("select count(*) from fb_mirror_dirty") == "0", "12. ... and the catch-up mirrors it")
-    # ... and with the copy's own statement_timeout shorter than that wait: the timeout inside the flush never fails the COMMIT
-    a = bg("begin; select pg_advisory_xact_lock(hashtextextended('fb_mirror:%s', 0)); select pg_sleep(5); commit;" % BK); time.sleep(0.7)
-    b = bg("set statement_timeout = '1s'; begin; " + vsql("RR-5") + " commit;"); out_b = b.stdout.read(); b.wait(); a.stdout.read(); a.wait()
-    ok(b.returncode == 0 and has("RR-5") and db.one("select count(*) from fb_mirror_dirty where txid = 0 and key = 'RR-5'") == "1",
-       "12. the copy's statement_timeout (1 s): Postgres stops it before COMMIT, so it never cancels the flush; the flush's own 2 s lock wait ends; the write commits, the entry kept (%s; %s)" % (out_b.strip()[-120:], db.one("select error from fb_mirror_errors order by id desc limit 1")))
-    catch()
-    # (2) a big statement (over the cap) is left to the catch-up instead of the copy's COMMIT
+    # review 1: a change missed BEHIND the position of a sweep under way is not lost (the sweep resolves only the misses it started with)
+    gs = [r["guid"] for r in db.rows("select v.guid from tally_vouchers v where v.book_id = '%s' and v.day >= '2025-04-01' and not v.cancelled and not v.optional and v.vno not like 'J/ODD%%' order by v.guid" % TB1)]
+    early, late = gs[2], gs[-3]
+    nar = lambda g: db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (BK, g))
+    missed_change("update tally_vouchers set narration = 'M1 late (made up)' where book_id = '%s' and guid = '%s'" % (TB1, late))
+    db.one("set role service_role; select fb_mirror_catchup_all(40)")
+    pos = db.one("select sweep_after from fb_mirror_state where book_id = '%s'" % BK)
+    missed_change("update tally_vouchers set narration = 'M2 early (made up)' where book_id = '%s' and guid = '%s'" % (TB1, early))
+    for i in range(40):
+        db.one("set role service_role; select fb_mirror_catchup_all(40)")
+        if db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0" and db.one("select sweep_after from fb_mirror_state where book_id = '%s'" % BK) in (None, ""): break
+    ok(pos and early < pos and nar(late) == "M1 late (made up)" and nar(early) == "M2 early (made up)",
+       "12. review 1: a change missed behind the sweep's position (%s < %s) is mirrored by the next sweep, not lost (%d runs)" % (early[:12], (pos or "")[:12], i + 2))
+    # review 2: even the 'missed' row cannot be written: the sequence tick makes the next catch-up sweep
+    seq0 = db.one("select last_value from fb_missed_seq")
+    e = missed_change(vsql("RR-6"), lock="lock table fb_books in access exclusive mode; lock table fb_mirror_errors in access exclusive mode;")
+    ok(e == "" and has("RR-6") and not fbh("RR-6") and db.one("select last_value from fb_missed_seq") != seq0, "12. review 2: fb_books and fb_mirror_errors both locked: the copy's write commits; fb_missed_seq ticks (%s)" % e[-80:])
+    run(); run()
+    ok(fbh("RR-6") and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0", "12. review 2: the next runs see the tick, sweep, and mirror it")
+    # the copy's write never waits for the catch-up: the book's mirror lock held by a run
+    a = bg("begin; select pg_advisory_xact_lock(hashtextextended('fb_mirror:%s', 0)); select pg_sleep(4); commit;" % BK); time.sleep(0.7)
+    t = time.time(); b = bg("set statement_timeout = '1s'; begin; " + vsql("RR-3") + " commit;"); b.stdout.read(); b.wait(); dt = time.time() - t; a.stdout.read(); a.wait()
+    ok(b.returncode == 0 and has("RR-3") and noted("RR-3") and dt < 1.0, "12. a catch-up holding the book: the copy's write commits in %.2f s and is noted" % dt)
+    run()
+    ok(fbh("RR-3") and db.one("select count(*) from fb_mirror_dirty") == "0", "12. ... and the next run mirrors it")
+    # a note made again while the catch-up mirrors that entry is kept (seq), so the newer change is mirrored next time
+    g9 = gs[10]
+    ingest("update tally_vouchers set narration = 'first change (made up)' where book_id = '%s' and guid = '%s';" % (TB1, g9), catch=False)
+    a = bg("begin; update tally_vouchers set narration = 'second change (made up)' where book_id = '%s' and guid = '%s'; select pg_sleep(3); commit;" % (TB1, g9)); time.sleep(0.7)
+    catch(); a.stdout.read(); a.wait()
+    ok(nar(g9) == "first change (made up)" and noted(g9), "12. a change noted again while the catch-up was mirroring that entry: its note is kept")
+    run()
+    ok(nar(g9) == "second change (made up)" and not noted(g9), "12. ... and the next run mirrors the newer change")
+    # many entries at once (a cascade, a rename, a backfill) only note: the copy's statement is not held by FinCom Books
     big = [x["guid"] for x in db.rows("select guid from tally_vouchers where book_id = '%s' and day >= '2026-01-01' and not cancelled order by guid limit 20" % TB1)]
-    vers = db.one("select sum(version) from fb_vouchers where book_id = '%s' and source_ref in (%s)" % (BK, ",".join("'%s'" % g for g in big)))
-    ingest("set local fincom.fb_sync_cap = '5'; update tally_vouchers set narration = narration || ' (bulk, made up)' where book_id = '%s' and guid in (%s);" % (TB1, ",".join("'%s'" % g for g in big)))
-    ok(db.one("select sum(version) from fb_vouchers where book_id = '%s' and source_ref in (%s)" % (BK, ",".join("'%s'" % g for g in big))) == vers
-       and db.one("select count(*) from fb_mirror_dirty where txid = 0 and book_id = '%s'" % BK) == "20", "12. a statement touching more entries than the cap (5 here, 2,000 by default): left to the catch-up (20 waiting)")
-    ok(json.loads(one(OWN, "select fb_status('c1')"))["books"][0]["counts"]["waiting"] == 20, "12. ... fb_status counts them as waiting")
-    catch()
-    ok(int(db.one("select sum(version) from fb_vouchers where book_id = '%s' and source_ref in (%s)" % (BK, ",".join("'%s'" % g for g in big)))) == int(vers) + 20
-       and db.one("select count(*) from fb_mirror_dirty") == "0", "12. ... the catch-up mirrors them (each a new version)")
+    ingest("update tally_vouchers set narration = narration || ' (bulk, made up)' where book_id = '%s' and guid in (%s);" % (TB1, ",".join("'%s'" % g for g in big)), catch=False)
+    ok(json.loads(one(OWN, "select fb_status('c1')"))["books"][0]["counts"]["waiting"] == 20, "12. a bulk change of 20 entries: noted, fb_status counts 20 waiting")
+    run()
+    ok(db.one("select count(*) from fb_mirror_dirty") == "0", "12. ... the next run mirrors them")
     # an update that changes nothing notes nothing
-    n0 = db.rows("begin; update tally_vouchers set alter_id = alter_id where book_id = '%s' and day >= '2026-01-01'; update tally_ledgers set open = open where book_id = '%s'; select count(*) n from fb_mirror_dirty where txid = txid_current(); rollback;" % (TB1, TB1))
+    run()
+    n0 = db.rows("begin; update tally_vouchers set alter_id = alter_id where book_id = '%s' and day >= '2026-01-01'; update tally_ledgers set open = open where book_id = '%s'; select count(*) n from fb_mirror_dirty; rollback;" % (TB1, TB1))
     ok(n0 and n0[-1]["n"] == "0", "12. an update of the copy that changes nothing (the same day sent again) notes nothing for the mirror (%s)" % n0)
     # (6) the actor label: the mirror's never stays on later writes of the same transaction
-    db.sql("begin; set constraints all immediate; " + vsql("RR-4") + " update fb_books set legal_name = 'Demo Books Pvt Ltd (made up)' where book_id = '%s'; commit;" % BK)
+    ingest(vsql("RR-4"), catch=False)
+    db.sql("begin; select fb_mirror_catchup('%s', 100); update fb_books set legal_name = 'Demo Books Pvt Ltd (made up)' where book_id = '%s'; commit;" % (BK, BK))
     ak = db.rows("select actor_kind from fb_audit_log where book_id = '%s' and entity = 'fb_books' order by seq desc limit 1" % BK)[0]["actor_kind"]
-    ok(fbh("RR-4") and ak == "system", "12. a write after the mirror in the same transaction is logged as itself, not as the mirror (%s)" % ak)
+    ok(fbh("RR-4") and ak == "system", "12. a write after the catch-up in the same transaction is logged as itself, not as the mirror (%s)" % ak)
     e = err(lambda: db.sql("do $$ begin perform fb_mirror_catchup('%s', 10); perform fb_tieout('%s'); if coalesce(current_setting('fincom.fb_actor', true), '') <> '' then raise exception 'leaked %%', current_setting('fincom.fb_actor', true); end if; end $$;" % (BK, BK)))
     ok(e == "", "12. the catch-up and the tie-out put the actor label back (%s)" % e.strip()[-80:])
     # the timer's runner commits book by book
     db.sql("call fb_mirror_catchup_run(5000)")
-    ok(True, "12. fb_mirror_catchup_run runs (a procedure: one transaction per book)")
+    ok(True, "12. fb_mirror_catchup_run runs (a procedure: one transaction per book and chunk)")
     ok(json.loads(one(OWN, "select fb_audit_client_info('%s', 0, 5)" % BK)) is not None and "Only the firm's owner" in err(lambda: one(STAFF, "select fb_audit_client_info('%s', 0, 5)" % BK)),
        "12. the edit log's client_info: the owner reads it, staff cannot")
 
