@@ -1011,6 +1011,9 @@ function billSetTaxLed(e, key, value){
   const cid = S.coId;
   e.taxLed = Object.assign({}, e.taxLed || {});
   if (String(value || "").trim()) e.taxLed[key] = value; else delete e.taxLed[key];
+  // (re-review of bac94a801) more than one GSTIN: a reverse charge ledger picked on a bill to another GSTIN is kept for it
+  const co = CO(cid), rg = co && co.multiGstin && /^rcm-/.test(key) && String(value || "").trim() ? billReg(e, co) : "";
+  if (rg){ co.gstByReg = co.gstByReg || {}; co.gstByReg[rg.slice(0, 2)] = Object.assign({}, co.gstByReg[rg.slice(0, 2)], {[key]: value}); Store.saveCompany(co); }
   billSaveLater(e, cid); later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }

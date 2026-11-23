@@ -35,7 +35,7 @@ const NAMES = ["num", "r2", "fmtDate", "INR", "NORM_CACHE", "normNameRaw", "norm
   "RCM_LEDGER_DEFAULTS", "RCM_CATS", "BLOCK_CATS", "rcmTaxOf", "catRate", "catLabel", "SKIP_REASONS", "tdsSkipOf", "skipText", "itcCheck", "compute", "DOC_KIND_TEXT",
   "RCM_KEYS", "ENTRY_REV", "RENDER_GEN", "REACT_SCOPE", "reactScope", "reactScopeEnd", "perRender", "memoJob", "approve", "unapply", "statsRev", "draftNeedsCheck", "refreshStats", "notReadYet", "retryNotRead", "GST_STATES", "salesPan", "salesGstinOfPan",
   "docqFinish"];
-const opt = ["ruleOn", "RULE_OLD", "ownGstins", "partyIdx", "draftParties", "keepFile", "pagesOf", "STATS_HOLD", "statsHeldFor", "statsHeld"];
+const opt = ["billSetTaxLed", "billReg", "ruleOn", "RULE_OLD", "ownGstins", "partyIdx", "draftParties", "keepFile", "pagesOf", "STATS_HOLD", "statsHeldFor", "statsHeld"];
 const src = require("fs").readFileSync(HTML, "utf8");
 const have = opt.filter(n => new RegExp("\\n(?:async function|function|const|let|var) " + n + "\\b").test(src));
 const {ctx, x} = load(HTML, NAMES.concat(have));
@@ -228,6 +228,13 @@ guard("P8", () => {
   const cR = comp(e), gr = cR.lines.filter(l => l.role === "gst");
   ok(def && gr.every(l => l.ledger && /GSTIN 24/.test(l.why)) && !cR.missing.some(m => /GSTIN 24/.test(m)), "MG2 set for 24: the bill takes them (" + gr.map(l => l.head + " " + l.ledger + " (" + l.why + ")").join(", ") + ")");
   ok(comp(Object.assign({}, e, {x: Object.assign({}, e.x, {buyerGstin: ""})})).lines.filter(l => l.role === "gst").every(l => !/GSTIN 24/.test(l.why)), "MG2 a bill to the client's own GSTIN: its usual ledgers, not 24's (the pick is the registration's)");
+  // reverse charge on a bill to that GSTIN: asked on the first bill, then kept for that GSTIN (not asked on every bill)
+  const r0 = ctx.__realGL(e, co, "c1", "CGST", "rcm-in");
+  ok(!r0.ledger && /kept for its next bills/.test(r0.ask), "MG2 reverse charge for GSTIN 24, none kept: asked on the bill (" + r0.ask + ")");
+  Object.assign(ctx, {billSaveLater(){}, later(){}, window: {}}); e.status = "draft"; ctx.billSetTaxLed(e, "rcm-in:cgst", "RCM Input CGST GJ");
+  const e3 = bill({x: Object.assign(amt(5000, 450), {buyerGstin: gj, vendorGstin: sup, vendorPan: "AAACH3333M", vendorName: "Heron Supplies Pvt Ltd"}), e: {natureId: "goods", expenseLedger: "Purchases"}});
+  const r1 = ctx.__realGL(e3, co, "c1", "CGST", "rcm-in");
+  ok(co.gstByReg["24"]["rcm-in:cgst"] === "RCM Input CGST GJ" && r1.ledger === "RCM Input CGST GJ" && /GSTIN 24/.test(r1.why), "MG2 picked on one bill, kept for GSTIN 24: the next bill takes it (" + JSON.stringify(r1) + ")");
   delete co.gstByReg; ctx.gstLedgerFor = stub;
   co.multiGstin = false;
   ok(comp(e).missing.some(m => /GST ledgers/.test(m)), "MG the setting off again: the bill waits for the word once more");

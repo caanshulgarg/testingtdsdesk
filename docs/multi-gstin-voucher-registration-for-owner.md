@@ -1,30 +1,53 @@
-# One Tally company, several GSTINs: naming the registration on the entry (for the owner's OK)
+# One Tally company, several GSTINs: naming the registration on the entry
 
-Prepared 23-Nov-2026 (review of the owner decisions branch). **A draft only. Nothing is built.** No request the bridge
-sends has changed, and nothing has gone into `allowlist.go` or `pinned.go`.
+Drafted 23-Nov-2026. **Approved by the owner on 23-Nov-2026** (purchase and sales entries). Built on the
+next-owner-decisions branch. **Not released until the manual check below has passed.**
 
 ## In plain words (for the owner)
 
-- Client setup now has the tick "This Tally company has more than one GSTIN". With it ticked, a purchase bill made out to
-  another of the client's GSTINs is posted to **that GSTIN's own GST ledgers**, picked once in Client setup (CGST, SGST
-  and IGST input for each other GSTIN). A bill to a GSTIN whose ledgers are not picked waits, with a plain line saying so;
-  it is never posted to the client's main GST ledgers.
-- That is all FinCom does today. The entry it sends to Tally is **the same shape as before**: Tally learns the
-  registration only from the ledgers used.
-- TallyPrime (3.0 and later) can also keep the registration on the entry itself (the "GST Registration" shown on a
-  voucher when a company has several). If FinCom filled that in, Tally's own GSTR-1 / GSTR-3B reports for each
-  registration would place the entry without relying on the ledgers.
+- Client setup has the tick "This Tally company has more than one GSTIN". With it ticked:
+  - a purchase bill made out to another of the client's GSTINs is posted to **that GSTIN's own GST ledgers** (CGST, SGST,
+    IGST and cess input, set once in Client setup; reverse charge ledgers are picked on the first such bill and kept for
+    that GSTIN). A bill to a GSTIN whose ledgers are not set waits, with a plain line saying so;
+  - **every purchase and sales entry FinCom sends to Tally names its GST registration**: the GSTIN, and the registration's
+    name as Tally has it (Client setup › "name in Tally" for each GSTIN; empty, FinCom uses TallyPrime's own default
+    "<State> Registration").
+- A company with one GSTIN (the tick off) gets **exactly the entry it got before, byte for byte** (checked by the app's
+  posting shapes, `tests/fixtures/post-shapes`: the eight files of one GSTIN did not change).
+- FinCom cannot read from Tally which GSTIN a ledger belongs to, so Client setup asks the CA to check each ledger is that
+  GSTIN's.
 
-## What would change (needs your OK)
+## What the entry carries (tick on only)
 
-- The purchase entry FinCom sends would carry one more field: the registration the bill is made out to (the company's
-  registration name for that GSTIN, and the GSTIN), only when the tick is on and the bill is to another GSTIN.
-- This is a change to a Tally request's shape, so under our rules it is not built without your OK. Before building, it
-  would be checked on the test machines on every TallyPrime version we support (3.0, 4.1, 5.1, 6.2, 7.1, test data only):
-  - that Tally takes the entry and shows the right registration on it;
-  - that an older Tally, or a company with one GSTIN, is sent the entry exactly as today.
+Inside the `<VOUCHER>`, before the narration:
 
-## Questions
+```xml
+<CMPGSTIN>29AAACZ1234Z1Z1</CMPGSTIN>                       (purchase; sales already carried it)
+<GSTREGISTRATION TAXTYPE="GST" TAXREGISTRATION="29AAACZ1234Z1Z1">Karnataka Registration</GSTREGISTRATION>
+```
 
-1. Should FinCom name the registration on the entry when the tick is on, or keep relying on the ledgers alone?
-2. Should sales invoices do the same? They already pick the output GST ledgers by "Our GSTIN".
+Made-up GSTIN. The shapes are `tests/fixtures/post-shapes/purchase-bill-multi-gstin.xml` and
+`sales-invoice-multi-gstin.xml` (`node tests/gen_post_shapes.js`).
+
+## FinCom Bridge
+
+No change needed. The bridge's Import pin (`bridge-go/pinned.go`, `importRebuild`) accepts any VOUCHER object without a
+request's own markup, and these two elements are not on its never-list. The bridge's own tests pass on the new shapes:
+`TestPostShapesCurrent`, `TestRealPostingShapesPass` (the real posting path, pin included), `TestPostingRuleAndPinAgree`.
+
+## Manual check before release (not done yet)
+
+On the test machines, test data only, on each of **TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1**, a company with two GSTINs
+(two GST registrations in Tally) and a company with one:
+
+1. Post the purchase shape and the sales shape for the second GSTIN: Tally accepts each, and the voucher shows that
+   registration (and Tally's GSTR-3B for that registration counts it).
+2. The same with the registration's name in Tally different from "<State> Registration" (set in Client setup).
+3. A registration name that Tally does not have: note what Tally answers (refused, or created without a registration).
+4. The company with one GSTIN: entries posted as today, nothing new in them.
+5. TallyPrime versions that do not know several registrations (if any of the five): note what Tally answers.
+
+## Still the owner's
+
+- Point 3 above decides whether FinCom should check the registration name against Tally before posting (that would be a
+  new read request, so it needs your OK too).

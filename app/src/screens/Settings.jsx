@@ -322,9 +322,13 @@ function EntityType({ co }) {
 
 function OtherRegLedgers({ co }) {
   const others = (String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || []).filter((g) => g !== String(co.gstin || "").toUpperCase());
-  if (!others.length) return <p className="note" data-gst-by-reg="">Add the other GSTINs above to set their GST ledgers.</p>;
-  return <div data-gst-by-reg="" style={{ marginTop: 6 }}><p className="note" style={{ margin: 0 }}>Set them here once. A bill to a GSTIN without them waits.</p>
-    {others.map((g) => <div key={g} className="grid" data-reg={g.slice(0, 2)}>{["cgst", "sgst", "igst"].map((h) => <CoText key={h} label={g + ": input " + h.toUpperCase()} path={"gstByReg." + g.slice(0, 2) + "." + h} />)}</div>)}</div>;
+  const all = [String(co.gstin || "").toUpperCase()].filter(Boolean).concat(others), st = (g) => (typeof GST_STATES === "object" && GST_STATES[g.slice(0, 2)]) || g.slice(0, 2);
+  // (the owner's approval of 23-Nov-2026) each GSTIN's registration name in Tally goes on every entry (src/js/01 vchGstReg)
+  return <div data-gst-by-reg="" style={{ marginTop: 6 }}>
+    <p className="note" style={{ margin: 0 }}>Each entry sent to Tally names its GST registration. Give each name as in Tally (Company › GST Registration Details).</p>
+    <div className="grid">{all.map((g) => <CoText key={g} label={g + ": name in Tally"} path={"gstRegName." + g.slice(0, 2)} placeholder={st(g) + " Registration"} />)}</div>
+    {others.length > 0 && <p className="note" style={{ margin: "6px 0 0" }}>Input GST ledgers of each other GSTIN, set once; a bill to a GSTIN without them waits. FinCom cannot read which GSTIN a ledger is for in Tally: check each is that GSTIN’s.</p>}
+    {others.map((g) => <div key={g} className="grid" data-reg={g.slice(0, 2)}>{["cgst", "sgst", "igst", "cess"].map((h) => <CoText key={h} label={g + ": input " + h.toUpperCase()} path={"gstByReg." + g.slice(0, 2) + "." + h} />)}</div>)}</div>;
 }
 
 function Company() {

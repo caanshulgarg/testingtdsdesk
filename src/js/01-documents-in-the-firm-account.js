@@ -2229,8 +2229,9 @@ function gstLedgerFor(e, co, cid, head, kind, rate){
   // (review of ad4be74c3) one Tally company with several GSTINs: a bill to another of them takes that GSTIN's ledgers, set
   // once in Client setup (co.gstByReg); none set, it is held (never the client's own GST ledgers)
   const rg = co.multiGstin ? billReg(e, co) : "";
-  if (rg){ const v = kind === "gst" ? ((co.gstByReg || {})[rg.slice(0, 2)] || {})[head.toLowerCase()] : "";
-    if (!v) return {ledger: "", ask, bad: kind === "gst" ? "the " + head + " input ledger of GSTIN " + rg + " (Client setup)" : ""};
+  // (reverse charge: picked on the first such bill, kept for that GSTIN: billSetTaxLed)
+  if (rg){ const m = (co.gstByReg || {})[rg.slice(0, 2)] || {}, v = kind === "gst" ? m[head.toLowerCase()] : m[lk];
+    if (!v) return {ledger: "", ask: kind === "gst" ? ask : ask + " (for GSTIN " + rg + ": kept for its next bills)", bad: kind === "gst" ? "the " + head + " input ledger of GSTIN " + rg + " (Client setup)" : ""};
     const c = gstLedgerCheck(cid, v, head, kind); return c.ok ? {ledger: c.name, why: "Client setup: GSTIN " + rg} : {ledger: v, bad: c.msg}; }
   const sk = kind === "gst" ? head.toLowerCase() : (RCM_KEYS[kind] || {})[head];
   const setv = kind === "gst" ? (co.gst || {})[sk] || "" : sk ? rcmLedger(co, sk) : "";
@@ -3243,6 +3244,14 @@ function remoteIdFor(e, co){
 function remoteIdTrial(co){
   return !!(co && String(co.postRemoteIdFixed || "").trim() && remoteIdFor({id: "x"}, co));
 }
+// (the owner's approval of 23-Nov-2026, docs/multi-gstin-voucher-registration-for-owner.md) one Tally company with several
+// GSTINs (Client setup's tick): the entry names the GST registration it is for (its name in Tally: Client setup, else
+// "<State> Registration", TallyPrime's own); a company of one GSTIN gets exactly the entry it got before
+function vchGstReg(co, g){
+  if (!co.multiGstin || !g) return "";
+  const st = GST_STATES[g.slice(0, 2)] || "", nm = (co.gstRegName || {})[g.slice(0, 2)] || (st ? st + " Registration" : g);
+  return '<GSTREGISTRATION TAXTYPE="GST" TAXREGISTRATION="' + xesc(g) + '">' + xesc(nm) + "</GSTREGISTRATION>\n";
+}
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
   const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : vchTypeOf(e, co)), d = toTallyDate(e.x.invoiceDate);
@@ -3261,6 +3270,7 @@ function voucherXml(e, co){
   x += "<REFERENCE>" + xesc(e.x.invoiceNo) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n";
   x += "<PARTYLEDGERNAME>" + xesc(tallyLedgerName(e.partyLedger)) + "</PARTYLEDGERNAME>\n";
   const nar0 = e.narration || narrationFor(e), nar = remoteIdTrial(co) && !/^TRIAL \| /.test(nar0) ? "TRIAL | " + nar0 : nar0;
+  if (co.multiGstin){ const g = billReg(e, co) || String(co.gstin || "").toUpperCase(); if (g) x += "<CMPGSTIN>" + xesc(g) + "</CMPGSTIN>\n" + vchGstReg(co, g); }
   x += "<NARRATION>" + xesc(nar + " | TDSDesk:" + e.id) + "</NARRATION>\n";
   x += "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISINVOICE>No</ISINVOICE>\n";
   x += "<ISOPTIONAL>" + (co.createOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";
