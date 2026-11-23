@@ -559,7 +559,9 @@ async function cloudApplyNow(rows){
   for (let r of rows){
     const k = cloudKey(r);
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
-      marks[k] = fpHash(JSON.stringify(r.data));
+      // next-db-load: the mark of the copy HERE (the server's comes in its own key order: marked by it, the record was
+      // sent again at every sync)
+      marks[k] = fpHash(JSON.stringify(mineData.get(k)));
       if (r.kind === "client") await ClientBase.set(r.id, r.data); else baseSet(k, JSON.stringify(r.data));
       continue;
     }
