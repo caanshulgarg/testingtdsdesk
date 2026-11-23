@@ -118,7 +118,7 @@ export function prepare(o) {
   const L = o.ledgers || [], payable = co.payrollPayable && L.includes(co.payrollPayable) ? co.payrollPayable : o.payable && L.includes(o.payable) ? o.payable : payableOf(co, L);
   const read = emps.length > 0 || Object.keys(heads).length > 0;
   const no = o.partNo || ((i) => i + 1);
-  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, no(i) - 1), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
+  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, (o.idNo || no)(i) - 1), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
     payable, rows: o.rows || [], plan, employees: emps, skip: o.skip, partNo: o.partNo, parts: o.parts });
   let problems = out.problems.filter((p) => !/^Pick the pay head for /.test(p));
   if (!read) problems = ["FinCom has not read this company’s payroll from Tally yet (its employees and pay heads). Open the company in Tally and read the books again"];
@@ -200,38 +200,26 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   // the id was not there (dayGone)
   if (prevSent && !(prevSent.answered === "gone" && prevSent.dayGone) && (!prevSent.via || !via.id || prevSent.via !== via.id))
     return stop("Part " + v.part + " was sent through " + (prevSent.where || "another computer") + " and its answer never came; it goes again only through that computer. Open FinCom Bridge there, or wait for Tally’s copy of the books to show it.");
-  // (sixth, seventh reviews) a part found not in Tally (its day read after the send) goes once more released: the sending
-  // computer's record (posted-ids.json) lets it go once per release (bridge-go releaseFor). Straight to the bridge: the
-  // release in the payload. Through the cloud's queue the bridge's releases come only from the posting it takes (its own
-  // tally_post_ids released by a member), so the earlier posting itself is released (tally_post_owner_release) and sent
-  // again as its own Retry (tally_post_enqueue with its id), the very XML it holds; one still waiting, taken or running
-  // is on its way
-  const rel = prevSent && prevSent.answered === "gone" && prevSent.release && prevSent.release.at ? [prevSent.release] : [];
-  let again = null;
-  if (rel.length && via.cloud) {
-    if (prevSent.xml !== xml) return stop("Part " + v.part + " was sent before with other contents than the part built now, and is not in Tally. FinCom can send it again only as it was sent; put the sheet back as it was for part " + v.part + ", or ask FinCom support.");
-    const ex = (((was.results || {})[v.id]) || {}).job, J = await partJob(g, co.id, v.id, company, ex || was.job);
-    if (!J) return stop("FinCom cannot find the earlier posting of part " + v.part + " in its cloud, so it cannot send it again safely. Nothing was sent; ask FinCom support.");
-    if (["waiting", "taken", "running"].includes(J.status)) { const res = stop("", { state: "sent", onWay: true, job: J.id, msg: "It is still queued in FinCom’s cloud." }); return res; }
-    const k = await g.TCloud.rpc("tally_post_owner_release", { p_job: J.id, p_id: v.id, p_why: rel[0].why }).catch((err) => ({ ok: false, error: errWords(err) }));
-    if (!k || k.ok === false) return /still being sent/i.test(String((k && k.error) || "")) ? stop("", { state: "sent", onWay: true, job: J.id, msg: "It is still being sent to Tally." }) : stop("FinCom could not release part " + v.part + " in the cloud’s queue (" + String((k && k.error) || "no answer") + "). Nothing was sent.");
-    again = J.id;
-  }
+  // (sixth to eighth reviews) a part proven not in Tally is never sent under its id again: Approve retires it and posts
+  // its people under fresh part numbers (above), so nothing here needs releasing
   const d = draftOf(co, e, v, A, at);
   d.state = "posting"; d.sent = { xml, at: at(), via: via.id, where: via.where };
   d.results = Object.assign({}, d.results, { [v.id]: { ok: false, state: "sent", msg: "", at: at() } });
   await A.Drafts.save(co.id, d, "pressed Approve (Tally Payroll): " + v.employees.length + " employees, net " + v.net.toFixed(2) + " to " + company + (v.parts > 1 ? ", part " + v.part + " of " + v.parts : ""));
   if (before) await before();
   let out = null, x = null, kept = null;
-  if (again) { d.job = again; await A.Drafts.save(co.id, d, "Tally Payroll: part " + v.part + " released and sent again in its own posting (" + again.slice(0, 8) + ")"); }
   try {
     // (seventh review) the posting's id kept the moment the cloud's queue takes it (CloudPost.run tells it first), so a
     // lost answer still leaves the posting to follow and to release
-    out = again ? await retryJob(g, co.id, again, v.id) : await g.Bridge.post(Object.assign({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, rel.length ? { released: rel } : {}), (pj) => {
+    out = await g.Bridge.post({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, (pj) => {
       if (pj && pj.job && d.job !== pj.job) { d.job = pj.job; kept = A.Drafts.save(co.id, d, "Tally Payroll: part " + v.part + " queued in FinCom’s cloud (posting " + String(pj.job).slice(0, 8) + ")").catch(() => false); }
       try { progress && progress(v, pj); } catch (err) { /* only words */ } });
     x = [].concat((out && out.results) || []).find((r) => r && r.id === v.id) || null;
-  } catch (err) { x = { id: v.id, ok: false, message: errWords(err) || "The posting did not go through." }; }
+  } catch (err) {
+    // (eighth review) the queue's own refusal can come back as a piece of its SQL: said in plain words
+    const m = errWords(err);
+    x = { id: v.id, ok: false, message: /PL\/pgSQL|::jsonb|jsonb_|coalesce\(|tally_post_|duplicate key|violates|SQL statement/i.test(m) ? "FinCom’s cloud did not queue part " + v.part + ": an earlier posting of it is still held there. Nothing was sent; open Post to Tally to see that posting, or try again later." : m || "The posting did not go through." };
+  }
   if (kept) await kept;
   if (out && out.job && out.job.id) d.job = out.job.id;
   let r = resultOf(x, out, A, (m) => plainPayrollWhy(m, (s) => A.plainWhy(s, co.id)));
@@ -268,19 +256,6 @@ export async function partJob(g, cid, id, company, known) {
     const j = js.find((x) => !said(x).alreadySent) || js[0];
     return j ? { id: String(j.id), status: String(j.status || "") } : null;
   } catch (x) { return null; }
-}
-// the earlier posting sent again as its own Retry, followed as CloudPost.run follows a posting (30 minutes at most; then
-// it stays queued and posts by itself) -> Bridge.post's answer
-async function retryJob(g, cid, job, id) {
-  const r = await g.TCloud.rpc("tally_post_enqueue", { p_id: job, p_client: cid, p_payload: {} });
-  if (!r || !r.ok || !r.retry) throw new Error("FinCom’s cloud did not queue the earlier posting again: " + String((r && r.error) || "it was not failed or cancelled") + ". Nothing was sent.");
-  const sleep = g.payrollSleep || ((ms) => new Promise((ok) => setTimeout(ok, ms))), t0 = Date.now();
-  for (;;) {
-    await sleep(2500);
-    let j = null; try { j = ((await g.Cloud.api("tally_post_jobs?select=id,status,results,checking,message&id=eq." + encodeURIComponent(job))) || [])[0]; } catch (x) { /* the internet: tried again */ }
-    if (j && ["done", "failed", "cancelled"].includes(j.status) && !j.checking) return { ok: true, results: [].concat(j.results || []).filter((x) => x && x.id === id).slice(-1), job: { id: job, status: j.status } };
-    if (Date.now() - t0 > 30 * 60000) return { ok: true, results: [{ id, ok: false, held: true, job, message: "It stays queued in FinCom’s cloud and posts by itself." }], job: { id: job } };
-  }
 }
 async function holdNext(co, e, v, A) {
   const was = A.Drafts.get(co.id, v.id);
@@ -424,11 +399,17 @@ export async function settleParts(co, e, drafts, built, A, g = G, o = {}) {
     d.state = "posted";
     await A.Drafts.save(co.id, d, "Tally Payroll: part " + partNoOf(id) + " found in Tally" + (same ? "" : " with other figures"));
   };
-  // every part in Tally (by its FinCom id), with or without a draft
-  for (const [id, t] of Object.entries(parts)) if (t.found) await found(mine.find((d) => d.id === id), t, id);
+  // every part in Tally (by its FinCom id), with or without a draft. (eighth review) a part retired as not in Tally that
+  // is in Tally after all: everything stops, the owner checks Tally (its people were posted again in other parts)
+  for (const [id, t] of Object.entries(parts)) {
+    if (!t.found) continue;
+    const d = mine.find((x) => x.id === id);
+    if (d && d.retiredBy) { waits.push("Part " + (d.part || partNoOf(id)) + " (" + id + ") was set aside as not in Tally, but Tally has it now (voucher no. " + (t.no || "?") + "), and its people were posted again in " + ((d.replacedBy || []).join(", ") || "other parts") + ". Check Tally (Day Book) and delete one of them: FinCom posts nothing more for this month until then."); continue; }
+    await found(d, t, id);
+  }
   for (const d of mine) {
     const r = (d.results || {})[d.id] || {}, unc = unconfirmedR(r), open = unanswered(d) || unc, wasOk = !!r.ok && !unc, t = parts[d.id];
-    if (t && t.found) continue;
+    if ((t && t.found) || d.retiredBy) continue;
     if (!open && !(wasOk && o.forJournal) && !(wasOk && t && t.deleted)) continue;
     // (seventh review) a send whose answer was lost carries no posting id: the cloud's posting holding its FinCom id
     const job = r.job || d.job || (open ? ((await partJob(g, co.id, d.id, o.company)) || {}).id : "");
@@ -439,7 +420,7 @@ export async function settleParts(co, e, drafts, built, A, g = G, o = {}) {
     // (sixth review) sent before, the day read since, the id still not in Tally: the owner checks Tally first (Needs you)
     const ver = String(r.at || "-");
     if (unc && !retried.has("sent:" + e.dedupe + ":" + ver)) { waits.push("Not confirmed in Tally: part " + (d.part || "") + " was sent before (the posting computer says so) but is not in Tally’s copy read since. Check Tally (Day Book), then answer it on Needs you."); continue; }
-    d.sent = Object.assign({}, d.sent || {}, { answered: "gone", dayGone: day, goneAt: at(), release: { id: d.id, at: at(), by: (A.me ? A.me() : "") || "FinCom", why: (unc ? "Not in Tally: offer it again; " : "") + "not in Tally's copy of " + day + " read after the send" } });
+    d.sent = Object.assign({}, d.sent || {}, { answered: "gone", dayGone: day, goneAt: at() });
     d.results = Object.assign({}, d.results, { [d.id]: { ok: false, state: "failed", msg: "Not in Tally (read from Tally)", said: "not in Tally", at: at() } });
     d.state = "failed";
     await A.Drafts.save(co.id, d, "Tally Payroll: part " + (d.part || "") + " is not in Tally (its day read from Tally after it was sent)");
@@ -520,10 +501,18 @@ export async function approveTallyPayroll(e, env = {}) {
   // (review B2) a part in Tally counts only when it is the very part built now (its saved XML, byte for byte). (re-review 4)
   // one that is not: what changed is said exactly; the owner may accept the parts in Tally as they are and post the rest,
   // only when the rest can be built without anyone in those parts and the parts add up to the night's entry
+  // (eighth review) a part proven not in Tally (its day read from Tally at least 5 minutes after the send, its id not
+  // there, no posting of it running: settleParts' dayGone) is RETIRED: never sent under that id again (neither the
+  // posting computer's record nor the cloud's list of ids would let it go, and nothing needs releasing). Its people are
+  // posted under fresh part numbers (the next ids of the month no posting has used), the parts' "part i of n" counted
+  // again as when parts in Tally are accepted; the old draft says it was retired and by which parts it was replaced
   let plan = p.vouchers;
   const nPart = (d) => Number(d.part) || Number(String(d.id).split("-").pop()) || 0;
   const differs = inTally.filter((d) => sentXmlOf(d) !== byId.get(d.id));
-  if (differs.length) {
+  const retired = mine.filter((d) => !(((d.results || {})[d.id]) || {}).ok && (d.retiredBy || (d.sent && d.sent.answered === "gone" && d.sent.dayGone)));
+  const usedIds = new Set(retired.concat(inTally).map((d) => partNoOf(d.id)));
+  const reuse = p.vouchers.some((v) => !done.has(v.id) && usedIds.has(partNoOf(v.id)) && !inTally.some((d) => d.id === v.id));
+  if (differs.length || reuse) {
     const kept = inTally.map((d) => ({ d, x: readVoucherXml(sentXmlOf(d)), no: nPart(d) }));
     const skip = kept.flatMap((k) => k.x.employees.map((x) => x.name)), used = new Set(kept.map((k) => k.no));
     const keptNet = kept.reduce((s, k) => s + P(k.x.net), 0), keptGross = kept.reduce((s, k) => s + P(((k.d.vouchers || [])[0] || {}).gross), 0);
@@ -535,8 +524,9 @@ export async function approveTallyPayroll(e, env = {}) {
     else {
       const all = skip.length >= onSheet.size;
       const r0 = all ? { vouchers: [], problems: [], missing: [] } : prepare(Object.assign({}, base, { skip }));
-      const freeNo = (k) => { const out = []; for (let i = 1; out.length < k; i++) if (!used.has(i)) out.push(i); return out; };
-      const nos = freeNo(r0.vouchers.length), r1 = all || !r0.vouchers.length ? r0 : prepare(Object.assign({}, base, { skip, partNo: (i) => nos[i], parts: kept.length + r0.vouchers.length }));
+      const freeNo = (k, u) => { const out = []; for (let i = 1; out.length < k; i++) if (!u.has(i)) out.push(i); return out; };
+      const nos = freeNo(r0.vouchers.length, used), idn = freeNo(r0.vouchers.length, new Set(Array.from(usedIds).concat(Array.from(used))));
+      const r1 = all || !r0.vouchers.length ? r0 : prepare(Object.assign({}, base, { skip, partNo: (i) => nos[i], idNo: (i) => idn[i], parts: kept.length + r0.vouchers.length }));
       const rg = r1.vouchers.reduce((s, v) => s + P(v.gross), 0), rn = r1.vouchers.reduce((s, v) => s + P(v.net), 0);
       if (r1.problems.length || r1.missing.length) canWhy = r1.problems[0] || "a pay head to pick";
       else if (keptNet + rn !== net || keptGross + rg !== gross) canWhy = "the parts in Tally have other amounts than the sheet";
@@ -544,9 +534,10 @@ export async function approveTallyPayroll(e, env = {}) {
     }
     // (third review) what was accepted is kept as a fingerprint of the differences (each employee's amounts by pay head
     // among them): anything else differing since is asked again
-    const changes = differs.map((d) => (differs.length > 1 || inTally.length > 1 || p.vouchers.length > 1 ? "part " + nPart(d) + ": " : "") + partChanges(readVoucherXml(sentXmlOf(d)), p.vouchers, d.id).join("; "));
+    const changes = !differs.length ? [] : differs.map((d) => (differs.length > 1 || inTally.length > 1 || p.vouchers.length > 1 ? "part " + nPart(d) + ": " : "") + partChanges(readVoucherXml(sentXmlOf(d)), p.vouchers, d.id).join("; "));
     const fp = fpOf(changes.join("|") + "#" + (rest || []).map(TP.payrollVoucherXml).join(""));
     const accepted = env.accept || differs.every((d) => d.accepted && d.accepted.fp === fp);
+    if (!differs.length && !rest) return no("FinCom cannot post the rest of " + monLabel(ym) + " in new parts (" + canWhy + "). Nothing was sent.");
     if (!accepted || !rest) {
       const label = differs.length === 1 ? "Part " + nPart(differs[0]) : "Parts " + differs.map(nPart).join(" and ");
       return no(label + " in Tally differs from the sheet now: " + changes.join(". ") + ". " + (rest ? "On Payroll you can accept " + label.toLowerCase() + " as it is in Tally and post the rest." : "Correct it in Tally or on the sheet first (" + canWhy + "); FinCom posts nothing until they agree."),
@@ -562,6 +553,13 @@ export async function approveTallyPayroll(e, env = {}) {
       await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + (fresh ? " accepted as it is in Tally" : " of " + total));
     }
     plan = kept.map((k) => ({ id: k.d.id, part: k.no, parts: kept.length + rest.length, employees: k.x.employees, net: k.x.net, kept: true })).concat(rest).sort((a, c) => a.part - c.part);
+    // the retired parts say so (and the parts that replace them); a part never sent that is not in the plan now goes
+    const nowIds = new Set(plan.map((v) => v.id)), by = rest.map((v) => v.id);
+    for (const d of mine) {
+      if (retired.includes(d) && !d.retiredBy) { d.retiredBy = { at: new Date().toISOString(), by: A.me ? A.me() : "", why: "not in Tally’s copy of " + (d.sent.dayGone || "its day") + " read after the send" }; d.replacedBy = by; d.state = "failed";
+        await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + " (" + d.id + ") retired, not in Tally; posted again as " + by.join(", ")); }
+      else if (!nowIds.has(d.id) && !d.sent && !d.retiredBy && !d.removed && !(((d.results || {})[d.id]) || {}).ok) { d.removed = true; await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + " not needed in the new split"); }
+    }
   }
   const todo = plan.filter((v) => !done.has(v.id));
   // (third review) a part sent before whose answer never came (the page closed, the answer lost) goes again only as the

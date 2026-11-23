@@ -1,22 +1,19 @@
-"""python3 tests/run_payroll_cloud_resend.py - next-payroll (seventh review): a Tally Payroll part sent through FinCom's
-cloud queue whose posting computer recorded it (posted-ids.json) while Tally never got it is sent again only as that
-posting's own Retry, so the release reaches the bridge. The queue's SQL (migrations 32 -> 203, as run_migration203.py builds
-it) on a throwaway PostgreSQL (pg_stand, port 31377 unless PGPAY_PORT, its data under /tmp/payroll7 unless TMPDIR; never a
-real database), and the real tally-ingest (server/tally-cloud/index.ts, under Deno) handing the posting out (posts_take:
-the posting and its released ids), its database calls for the queue answered by that PostgreSQL (fake_supabase.py for the
-rest). Made-up firm, client, company and entries only.
-  1. the part queued (tally_post_enqueue) and handed out by tally-ingest with no release; the bridge's report: not in
-     Tally (failed, recorded as sent on that computer)
-  2. a NEW posting of the same part is refused, or carries no release (why a new posting can never get it into Tally:
-     the computer answers "already sent")
-  3. the earlier posting released by a member (tally_post_owner_release: its id not live, released by 'owner') and sent
-     again as its own Retry (tally_post_enqueue with its id): waiting again on the same computer, the same XML
-  4. tally-ingest hands that posting out WITH the release ([{id, at, by, why}] of that part), which the bridge's
-     releaseFor honours once (bridge-go/accepted.go)
-  5. a posting still waiting cannot be released (the page then says it is on its way)
+"""python3 tests/run_payroll_cloud_resend.py - next-payroll (seventh, eighth reviews): a Tally Payroll part sent through
+FinCom's cloud queue that is proven not in Tally (its day read after the send, its id not there) is RETIRED and its people
+posted under a fresh part id (dc-tp-<ym>-<next free n>), which neither the posting computer's record nor the cloud's list
+of ids has seen. The queue's SQL (migrations 32 -> 203, as run_migration203.py builds it) on a throwaway PostgreSQL
+(pg_stand, port 31377 unless PGPAY_PORT, its data under /tmp/payroll8 unless TMPDIR; never a real database), and the real
+tally-ingest (server/tally-cloud/index.ts, under Deno) handing the postings out (posts_take), its database calls for the
+queue answered by that PostgreSQL (fake_supabase.py for the rest). Made-up firm, client, company and entries only.
+  1. the part queued (tally_post_enqueue) and handed out by tally-ingest; the bridge's report: not in Tally (failed,
+     recorded as sent on that computer)
+  2. a NEW posting of the same id is refused by the queue (its id still live) or carries no release: never the way
+  3. the part under a fresh id (its people, "part 1 of 2" again): queued although the first posting holds the old id,
+     handed out by tally-ingest with nothing to release, the same computer; Tally takes it: done
+  4. the same when the first posting ended "done" (Tally said created, the part not in Tally after all)
 Needs Deno (DENO, or deno on the PATH)."""
 import os, sys, json, time, shutil, hashlib, subprocess, threading, urllib.request, tempfile
-os.environ.setdefault("TMPDIR", "/tmp/payroll7")
+os.environ.setdefault("TMPDIR", "/tmp/payroll8")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 DENO = os.environ.get("DENO") or shutil.which("deno")
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
@@ -64,7 +61,7 @@ FS.rpc = pg_rpc
 def ids_from_pg():   # tally_post_ids as PostgREST would read them (tally-ingest selects the posting's released ids)
     FS.T["tally_post_ids"] = json.loads(db.one("select coalesce(json_agg(t), '[]')::text from (select job_id::text, fincom_id, entry_id, live, released_at, released_by, released_why from tally_post_ids) t") or "[]")
 FS.start()
-wrap = tempfile.mkdtemp(prefix="payroll7-ingest-")
+wrap = tempfile.mkdtemp(prefix="payroll8-ingest-")
 PORT = int(os.environ.get("INGEST_PORT") or 8377)
 open(os.path.join(wrap, "serve.ts"), "w").write("const s = Deno.serve; (Deno as any).serve = (h: any) => s({ port: %d, onListen() {} }, h);\nawait import(%s);\n"
                                                   % (PORT, json.dumps("file://" + os.path.abspath(os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")))))
@@ -109,26 +106,32 @@ ok((not r.get("ok") and not t2) or (t2 and t2.get("id") == J2 and t2.get("releas
 if t2: report(J2, [{"id": PART, "kind": "voucher", "ok": False, "alreadySent": True, "refused": True, "sent": True, "state": "failed", "sentJob": J1, "message": "already sent from this computer"}])
 db.sql("update tally_post_jobs set status = 'cancelled' where id = %s and status <> 'failed'" % q(J2))
 
-print("== 3. the earlier posting released by a member and sent again as its own Retry")
-k = member("select tally_post_owner_release(%s::uuid, %s, %s)::text" % (q(J1), q(PART), q("not in Tally's copy of 2026-10-31 read after the send")))
-rel = json.loads(db.one("select to_jsonb(t)::text from (select live, released_by, released_at is not null as at from tally_post_ids where job_id = %s and fincom_id = %s) t" % (q(J1), q(PART))) or "{}")
-ok(k.get("ok") is True and k.get("released") is True and rel == {"live": False, "released_by": "owner", "at": True}, "released: %s; its id %s" % (k, rel))
-r = member("select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J1))
-j = job(J1)
-ok(r.get("ok") is True and r.get("retry") is True and j["status"] == "waiting" and str(j["device_id"]) == DA and j["payload"]["vouchers"][0]["xml"] == XML, "Retry: waiting again on the same computer, the same XML (%s)" % r)
+print("== 3. the part under a fresh id: queued, handed out with nothing to release; Tally takes it")
+FRESH_ID = "dc-tp-202610-3"
+def fresh(jid, xml_id):
+    pay = PAY.replace(PART, xml_id)
+    r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(jid), q(pay)))
+    t = take() if r.get("ok") else None
+    return r, t, pay
+J4 = "00000000-0000-4000-8000-0000000000a4"
+r, t, pay4 = fresh(J4, FRESH_ID)
+v = ((t or {}).get("payload") or {}).get("vouchers", [{}])[0]
+ok(r.get("ok") is True and not r.get("dupes") and t and t.get("id") == J4 and t.get("released") == [] and v.get("id") == FRESH_ID and "TDSDesk:" + FRESH_ID in v.get("xml", "") and str(job(J4)["device_id"]) == DA,
+   "queued although posting J1 holds the old id; handed out on the same computer, nothing released (%s)" % (r if not r.get("ok") else json.dumps(t)[:160]))
+db.sql("set role service_role; update tally_post_jobs set status = 'done', results = %s::jsonb, done = 1 where id = %s" % (q(json.dumps([{"id": FRESH_ID, "kind": "voucher", "ok": True, "created": 1, "vchId": "61", "state": "in_tally"}])), q(J4)))
+ok(job(J4)["status"] == "done" and job(J1)["status"] in ("failed", "done"), "Tally took it: done; the old posting left as it was (%s)" % job(J1)["status"])
 
-print("== 4. handed out WITH the release")
+print("== 4. the first posting ended done (Tally said created), the part not in Tally after all: a fresh id still queued")
+J5, J6 = "00000000-0000-4000-8000-0000000000a5", "00000000-0000-4000-8000-0000000000a6"
+P2 = "dc-tp-202612-1"
+r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(J5), q(PAY.replace(PART, P2).replace("20261031", "20261231"))))
 t = take()
-rl = (t or {}).get("released") or []
-ok(t and t.get("id") == J1 and len(rl) == 1 and rl[0].get("id") == PART and rl[0].get("at") and rl[0].get("by") == "owner" and "not in Tally" in str(rl[0].get("why")), "tally-ingest hands posting J1 out with its release: %s" % json.dumps(rl))
-
-print("== 5. a posting still waiting is not released")
-J3 = "00000000-0000-4000-8000-0000000000a3"
-db.sql("update tally_post_jobs set status = 'done' where id = %s" % q(J1))
-PAY3 = PAY.replace(PART, "dc-tp-202611-1").replace("20261031", "20261130")
-r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(J3), q(PAY3)))
-k = member("select tally_post_owner_release(%s::uuid, %s, %s)::text" % (q(J3), q("dc-tp-202611-1"), q("why")))
-ok(r.get("ok") is True and k.get("ok") is False and "still being sent" in str(k.get("error")), "refused while waiting: %s" % k)
+db.sql("set role service_role; update tally_post_jobs set status = 'done', results = %s::jsonb, done = 1 where id = %s" % (q(json.dumps([{"id": P2, "kind": "voucher", "ok": True, "created": 1, "vchId": "62", "state": "in_tally"}])), q(J5)))
+r2 = member("select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J5))
+ok(r.get("ok") is True and t and t.get("id") == J5 and job(J5)["status"] == "done" and r2.get("ok") is True and not r2.get("retry"), "the first posting done: a Retry of it queues nothing (%s), the dead end the fresh id avoids" % r2)
+r, t, _ = fresh(J6, "dc-tp-202612-2")
+ok(r.get("ok") is True and t and t.get("id") == J6 and t.get("released") == [], "the part under its fresh id: queued and handed out (%s)" % (r if not r.get("ok") else t.get("id")))
+db.sql("update tally_post_jobs set status = 'done' where id = %s" % q(J6))
 
 print("\n" + ("all passed" if not fails else "%d FAILED" % len(fails)))
 sys.exit(1 if fails else 0)

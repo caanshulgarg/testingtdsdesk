@@ -454,12 +454,14 @@ function tallyOne(ym, rows, inp, c) {
   const drafts = (inp.drafts || []).map((d) => (!d ? d : inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" })
     : /^dc-tp-/.test(String(d.vid || "")) && (d.state === "pending" || d.state === "unconfirmed") ? Object.assign({}, d, { state: tpDayRead(inp, Object.assign({ date }, d)) ? "unconfirmed" : "pending" }) : d));
   { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you, "sent to Tally (the posting computer says so) but not in Tally’s copy of its day read since"); if (sc) return sc; }
-  const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")));
+  // (eighth review) a part retired as not in Tally (posted again under fresh ids) is replaced: neither missing nor counted
+  const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")) && !(d.retired && !inBooks.has(String(d.vid))));
   if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
   const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));
   inBooks.forEach((x) => done.add(x));
+  // the month is done when as many of its parts are in Tally as it has (the parts' ids need not run 1..n once one is retired)
   const parts = Math.max(tagParts, ...mine.map((d) => Number(d.parts) || 0));
-  if (parts > 0 && Array.from({ length: parts }, (_, i) => TP_ID(ym) + "-" + (i + 1)).every((x) => done.has(x))) return null;
+  if (parts > 0 && done.size >= parts) return null;
   // 1. the sheet
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you(T + ": the sheet has surcharge or cess on TDS. Book it by hand.");
   const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });

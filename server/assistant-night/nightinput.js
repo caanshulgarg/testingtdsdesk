@@ -98,7 +98,7 @@ export function draftsOf(recs, jobs, prior, now) {
     const vid = String(r.data.id || ""), own = (r.data.results || {})[vid] || {};
     const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, ver: String(own.at || "-"), at: String(own.at || r.updated_at || ""),
       parts: Number(r.data.parts) || 0,   // next-payroll: a Tally Payroll month's part says how many parts the month has
-      date: String((((r.data.vouchers || [])[0]) || {}).date || ""), sentAt: String((r.data.sent || {}).at || "") };   // (sixth review) its day, and when it was sent
+      date: String((((r.data.vouchers || [])[0]) || {}).date || ""), sentAt: String((r.data.sent || {}).at || ""), retired: !!r.data.retiredBy };   // (eighth review) retired: replaced by fresh parts   // (sixth review) its day, and when it was sent
     d.state = draftState(d, jobs, now, retried); return d;
   }).filter((d) => d.dedupe);
 }

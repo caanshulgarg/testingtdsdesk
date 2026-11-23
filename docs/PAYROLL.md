@@ -336,6 +336,17 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   holds the part's day (a split year's March in last year's book), the night's month-ends in India's time, and a
   computer FinCom cannot name waits. `tests/run_payroll_cloud_resend.py` runs the route on the queue's SQL with the real
   tally-ingest handing the posting out with its release.
+- **Eighth review (23-Nov-2026)**: the release and Retry of the seventh review dead-ended (a posting that ended "done"
+  is never queued again; a part whose sheet changed could not go at all). Replaced: a part proven not in Tally (its day
+  read from Tally at least 5 minutes after the send, its id not there, no posting of it running) is RETIRED, never sent
+  under that id again, and its people are posted under fresh part ids (the month's next `dc-tp-<yyyymm>-<n>` neither a
+  part in Tally nor a retired one has used), which neither the posting computer's record nor the cloud's list of ids has
+  seen: nothing to release. The parts are counted again as when parts in Tally are accepted ("part i of n" for the new
+  parts; the parts in Tally keep theirs, their drafts the new count); the old draft keeps `retiredBy` and `replacedBy`,
+  and a never-sent draft not in the new split is removed. The night counts the month done when as many parts as it has
+  are in Tally (retired ones neither missing nor counted). A retired id that shows up in Tally after all stops the month
+  ("Check Tally and delete one of them"). The queue's refusal that comes back as a piece of SQL is said in plain words.
+  `tests/run_payroll_cloud_resend.py` runs the fresh-id route on the queue's SQL with the real tally-ingest.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: the app (legacy.js: `CloudPost.run` tells the posting id), the `assistant-night` function
   (dailyjournals.js, tpparts.js, nightinput.js, handler.ts) and
