@@ -13,7 +13,7 @@ const shared = ["server/_shared/names.js", "server/_shared/gst3b.js"].map(f => f
 const html = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "oo-")), "index.html");
 fs.writeFileSync(html, '<script id="app-main">\n' + shared.concat(ORDER.map(f => fs.readFileSync(path.join(SRC, f), "utf8"))).join("\n") + "\n</script>");
 const {ctx, x} = load(html, ["uid", "GSTIN_RE", "GST_DEFAULTS", "TDS_LEDGER_DEFAULTS", "EXPENSE_DEFAULTS", "newCompany", "xesc", "r2", "num", "amt", "toTallyDate", "fmtDate",
-  "MONTHS", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial", "salesVoucherXml", "GST_STATES", "stateOfGstin", "fpHash", "vchTypeOf", "billVt", "salesVt", "salesAgainstOf", "coCommit"]);
+  "MONTHS", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial", "salesVoucherXml", "GST_STATES", "stateOfGstin", "fpHash", "vchTypeOf", "billVt", "salesVt", "salesAgainstOf", "coCommit", "bankOptSet"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 Object.assign(ctx, {tallyLedgerName: n => n, narrationFor: e => e.narr, exactLedger: n => n, knownLedgers: () => new Map(), B: () => ({salesRef: []}),
@@ -54,5 +54,11 @@ x.coCommit("createOptional", true);
 ok(co.createOptional === true && typeof co.createOptionalAt === "string" && co.createOptionalAt >= before, "ticked in Client setup: on, with the time it was chosen (" + co.createOptionalAt + ")");
 x.coCommit("createOptional", false);
 ok(co.createOptional === false && co.createOptionalAt >= before, "unticked: off, stamped too");
+// bank entries' own tick (Bank settings, bankOptSet): stamped the same way (bankOptionalAt)
+const b0 = new Date().toISOString();
+x.bankOptSet("bankOptional", true);
+ok(co.bankOptional === true && typeof co.bankOptionalAt === "string" && co.bankOptionalAt >= b0, "bank entries ticked Optional: on, with when (" + co.bankOptionalAt + ")");
+x.bankOptSet("bankAuto", false);
+ok(co.bankAuto === false && !("bankAutoAt" in co), "another bank tick: no stamp");
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

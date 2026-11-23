@@ -707,7 +707,8 @@ function bankFocusGo(title, ids, note){ bankFocus(title, [].concat(ids || []), n
 function reconPick(i, on){ if (!S.recon) return; if (on) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); }
 function bankSettingsShow(on){ B().showSettings = on; render(); }
 function bankStdLedger(k, v){ const b = B(), co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[k] = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-function bankOptSet(k, on){ const co = CO(); co[k] = on; Store.saveCompany(co); render(); }
+// bank entries as Optional ticked on purpose: when (bankOptionalAt; src/js/27 clientOptKeep)
+function bankOptSet(k, on){ const co = CO(); co[k] = on; if (k === "bankOptional") co.bankOptionalAt = new Date().toISOString(); Store.saveCompany(co); render(); }
 function ruleAct(what, id){
   if (what === "copy"){ const r = clientRules().find(x => x.id === id); if (r) copyRulesTo([r]); return; }
   const inClient = clientRules().some(x => x.id === id);

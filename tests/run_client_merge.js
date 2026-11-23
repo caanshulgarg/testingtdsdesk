@@ -135,6 +135,49 @@ const push = async id => x.cloudPushClient({kind: "client", id, data: clone(ctx.
   await x.cloudApply([{kind: "client", id: "o1", client_id: "o1", data: clone(server.o1.data), deleted: false}]);
   ok(ctx.S.companies.o1.createOptional === false, "a pull: the server's newer off is taken over an older on held here");
 
+  // 10. review of 23-Nov-2026: the rule both ways. Tab A ticks it on (stamped T); tab B still holds an old OFF copy with
+  // no stamp and the shared base is already the server's on/T: tab B's save keeps on/T (a side with no stamp never beats
+  // a stamped side); the newer stamp decides when both have one; the same for bank entries (bankOptional/bankOptionalAt)
+  const T = "2026-11-24T09:00:00.000Z";
+  server.o2 = {data: {id: "o2", name: "ZZ Two Tabs", createOptional: true, createOptionalAt: T, roundOff: "Round Off"}, updated_at: stamp()};
+  await ctx.BankDB.set("cbase:o2", server.o2.data);
+  ctx.S.companies.o2 = {id: "o2", name: "ZZ Two Tabs", createOptional: false, roundOff: "Round Off B"};          // tab B: old off, no stamp
+  await push("o2");
+  ok(server.o2.data.createOptional === true && server.o2.data.createOptionalAt === T, "an old OFF copy (no stamp) does not wipe a deliberate ON (stamped): " + JSON.stringify([server.o2.data.createOptional, server.o2.data.createOptionalAt]));
+  ok(server.o2.data.roundOff === "Round Off B", "and tab B's own change still goes");
+  ok(ctx.S.companies.o2.createOptional === true && ctx.S.companies.o2.createOptionalAt === T, "and tab B now holds on/T");
+  // the newer stamp decides: unticked here later
+  ctx.S.companies.o2 = Object.assign(clone(server.o2.data), {createOptional: false, createOptionalAt: "2026-11-25T09:00:00.000Z"});
+  await push("o2");
+  ok(server.o2.data.createOptional === false && server.o2.data.createOptionalAt === "2026-11-25T09:00:00.000Z", "unticked later (newer stamp): saved as off");
+  // an older stamp here does not beat a newer one there
+  server.o2.data = Object.assign(clone(server.o2.data), {createOptional: true, createOptionalAt: "2026-11-26T09:00:00.000Z"}); server.o2.updated_at = stamp();
+  ctx.S.companies.o2 = Object.assign(clone(server.o2.data), {createOptional: false, createOptionalAt: "2026-11-25T09:00:00.000Z"});
+  await ctx.BankDB.set("cbase:o2", Object.assign(clone(server.o2.data), {createOptional: true, createOptionalAt: "2026-11-24T09:00:00.000Z"}));
+  await push("o2");
+  ok(server.o2.data.createOptional === true && server.o2.data.createOptionalAt === "2026-11-26T09:00:00.000Z", "an older stamp here loses to a newer one there");
+  // the pull path: an unsent change here holding an old OFF with no stamp; the server's on/T comes in and stays
+  server.o2.data = Object.assign(clone(server.o2.data), {createOptional: true, createOptionalAt: T}); server.o2.updated_at = stamp();
+  ctx.S.companies.o2 = {id: "o2", name: "ZZ Two Tabs", createOptional: false, roundOff: "Round Off C"};
+  await ctx.BankDB.set("cbase:o2", clone(server.o2.data));
+  marks["client|o2|o2"] = "an older mark";
+  await x.cloudApply([{kind: "client", id: "o2", client_id: "o2", data: clone(server.o2.data), deleted: false}]);
+  ok(ctx.S.companies.o2.createOptional === true && ctx.S.companies.o2.createOptionalAt === T && ctx.S.companies.o2.roundOff === "Round Off C", "a pull: on/T kept over an unsent old OFF here, the unsent change kept");
+  // bank entries: the same rule on bankOptional / bankOptionalAt
+  const MB = "2026-11-23T10:00:00.000Z";
+  server.b1 = {data: {id: "b1", name: "ZZ Bank Traders", bankOptional: false, bankOptionalAt: MB}, updated_at: stamp()};
+  await ctx.BankDB.set("cbase:b1", server.b1.data);
+  ctx.S.companies.b1 = {id: "b1", name: "ZZ Bank Traders", bankOptional: true, bankAuto: false};                 // an old copy, on, no stamp
+  await push("b1");
+  ok(server.b1.data.bankOptional === false && server.b1.data.bankOptionalAt === MB && server.b1.data.bankAuto === false, "bank: an old ON copy does not undo the off (migration 213), its other change goes");
+  ctx.S.companies.b1 = Object.assign(clone(server.b1.data), {bankOptional: true, bankOptionalAt: "2026-11-24T10:00:00.000Z"});
+  await push("b1");
+  ok(server.b1.data.bankOptional === true, "bank: ticked on later (newer stamp): saved");
+  ctx.S.companies.b1 = Object.assign(clone(server.b1.data), {bankOptional: false}); delete ctx.S.companies.b1.bankOptionalAt;
+  await ctx.BankDB.set("cbase:b1", clone(server.b1.data));                                // the base is already the server's on
+  await push("b1");
+  ok(server.b1.data.bankOptional === true && server.b1.data.bankOptionalAt === "2026-11-24T10:00:00.000Z", "bank: an old OFF copy (no stamp) does not wipe a deliberate ON");
+
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

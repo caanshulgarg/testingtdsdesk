@@ -392,14 +392,20 @@ function clientKeepChoices(data, mine, theirs){
   });
   return data;
 }
-// Optional vouchers, off in every client (owner, 23-Nov-2026; migration 213 turned the server's copies off, stamped
-// createOptionalAt): an "on" held here is taken over the server's "off" only when ticked here later than that stamp,
-// never from an old copy (another tab, a copy from before) that still holds the old default
+// Optional vouchers (bills and sales: createOptional; bank entries: bankOptional), off in every client (owner,
+// 23-Nov-2026; migration 213 turned the server's copies off, stamped <key>At). A tick stamps when it was chosen; the
+// newer stamp decides, and a side with no stamp never beats a stamped one (an old copy in another tab, on or off, never
+// undoes a deliberate choice). Neither stamped: an "on" here never turns the server's "not on" on (the old default)
 function clientOptKeep(data, mine, theirs){
-  if (!plainObj(data) || !plainObj(theirs) || data.createOptional !== true || theirs.createOptional === true) return data;
-  if (String((mine && mine.createOptionalAt) || "") > String(theirs.createOptionalAt || "")) return data;
-  data = Object.assign({}, data, {createOptional: false});
-  if (theirs.createOptionalAt) data.createOptionalAt = theirs.createOptionalAt; else delete data.createOptionalAt;
+  if (!plainObj(data) || !plainObj(theirs)) return data;
+  mine = plainObj(mine) ? mine : {};
+  ["createOptional", "bankOptional"].forEach(k => {
+    const at = k + "At", m = String(mine[at] || ""), t = String(theirs[at] || "");
+    const take = m > t ? mine : t > m ? theirs : !t && data[k] === true && theirs[k] !== true ? {} : null;
+    if (!take || (data[k] === !!take[k] && (data[at] || "") === (take[at] || ""))) return;
+    data = Object.assign({}, data, {[k]: !!take[k]});
+    if (take[at]) data[at] = take[at]; else delete data[at];
+  });
   return data;
 }
 const ClientBase = {
