@@ -122,10 +122,13 @@ function salesSetKind(id, k){
 // next-fix-sales-readsoff (the owner, 23-Nov-2026): FinCom Bridge here may refuse reading entries from Tally (its ReadDays
 // is off by default; /vouchers answers "Reading entries from Tally is off on this computer ..."). That answer, and only
 // that one, sends the duplicate check to FinCom's cloud copy (CloudTally.call, the read used from any other computer); no
-// new Tally request. No cloud copy, or it does not answer: nothing is posted, said plainly. Returns a note for the result
-// when the copy's last read is old (else ""); any other error of the check is thrown as before. Post to Tally and Post
+// new Tally request. Nothing is posted (said plainly) when there is no cloud copy, when it does not answer, or when an
+// invoice's date is a day the copy does not hold (with reads off, history comes only from Day Book uploads). When the
+// copy's last read is old, each invoice checked on it keeps the note (v.copyCheck, shown on its row and panel) and the
+// note is returned for the result (else ""). Any other error of the check is thrown as before. Post to Tally and Post
 // one by one both check this way
 const SALES_COPY_OLD = 10 * 60000;
+const SALES_NO_COPY = "Not posted: FinCom could not check Tally for these invoice numbers. Turn on reading entries in FinCom Bridge on this computer, or upload the Day Book. Nothing was sent.";
 const SALES_NO_CHECK = "Not posted: FinCom could not check Tally for these invoice numbers (reading entries from Tally is off on this computer and FinCom's cloud copy is not available). Nothing was sent; try again in a minute or post from another computer.";
 function salesReadsOff(e){ return !!e && /Reading entries from Tally is off/i.test(String(e.message || "")); }
 // the cloud copy's last read from Tally: the latest of the bridge's read, its check of the copy against Tally, the last
@@ -134,18 +137,30 @@ function salesCopyAt(cid){
   const bk = TCloud.book(cid), st = (bk && bk.state) || {};
   return [st.readAt, st.seen, bk && bk.daysAt].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || "";
 }
+// the invoices' dates (yyyy-mm-dd) the cloud copy does not hold, as src/js/51-tally-queue.js (TallyGone.check) and
+// booksFresh count its days: before the book's start, after the later of its end and the last day read (state.doneTo),
+// or a day not read (state.skipped)
+function salesCopyMissing(cid, list){
+  const bk = TCloud.book(cid) || {}, st = bk.state || {}, d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+  const from = d8(bk.from), to = [d8(bk.to), d8(st.doneTo)].filter(Boolean).sort().pop() || "", skipped = new Set([].concat(st.skipped || []).map(d8));
+  return [...new Set(list.map(v => String(v.x.date || "").slice(0, 10)).filter(Boolean))].sort()
+    .filter(d => { const k = d8(d); return (from && k < from) || !to || k > to || skipped.has(k); });
+}
 async function salesCheckSafe(list){
   const co = CO(SL().cid);
-  try { await salesCheckTally(list); return ""; }
+  try { await salesCheckTally(list); list.forEach(v => { delete v.copyCheck; }); return ""; }
   catch (e){ if (!salesReadsOff(e) || tallyVia(co) !== "bridge") throw e; }
-  const stop = {code: "check_off", message: SALES_NO_CHECK};
-  if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) throw stop;
+  if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) throw {code: "check_off", message: SALES_NO_COPY};
+  const miss = salesCopyMissing(co.id, list);
+  if (miss.length) throw {code: "check_off", message: "Not posted: FinCom's copy of Tally has no entries for " + miss.map(fmtDate).join(", ") + ", so these invoice numbers could not be checked. Upload the Day Book for those dates, or turn on reading entries in FinCom Bridge on this computer."};
   // (an answer of the cloud copy's cap for one day stays its own message; anything else: the copy is not available)
   try { await salesCheckTally(list, (c, u) => CloudTally.call(c, u)); }
-  catch (e){ throw e && e.code === "check_cap" ? e : stop; }
+  catch (e){ throw e && e.code === "check_cap" ? e : {code: "check_off", message: SALES_NO_CHECK}; }
   const at = salesCopyAt(co.id);
-  if (at && Date.now() - Date.parse(at) <= SALES_COPY_OLD) return "";
-  return "Checked against FinCom's copy of Tally (" + (at ? "updated " + tallyHm(at) : "its last update is not known") + ").";
+  if (at && Date.now() - Date.parse(at) <= SALES_COPY_OLD){ list.forEach(v => { delete v.copyCheck; }); return ""; }
+  const note = "Checked against FinCom's copy of Tally, last updated " + (at ? tallyHm(at) : "at a time not known") + ". Invoices entered in Tally after that were not checked.";
+  list.forEach(v => { v.copyCheck = {at, note}; });
+  return note;
 }
 // "Post one by one to find the cause": each invoice Tally refused in a batch is sent again on its own, through the same
 // posting path (Bridge.post: the same voucher XML, one voucher a request). Allowed because "created 0" is a definite
@@ -158,11 +173,11 @@ async function salesPostOneByOne(ids){
   if (!list.length){ toast(ids ? "This invoice is not waiting to be tried again." : "No invoice refused in a batch is waiting."); return; }
   if (!(await ensureTallyCompany(co))) return;
   const tn = tallyCoName(co), out = [];
-  let said = "";
+  let copyNote = "";
   s.oneByOne = {at: new Date().toISOString(), rows: out};
   try {
     s.busy = "Checking Tally for invoices already booked\u2026"; render();
-    try { said = await salesCheckSafe(list); }
+    try { copyNote = await salesCheckSafe(list); }
     catch (e){ toast((e && e.message) || "Tally could not be checked, so nothing was posted."); return; }
     list.filter(v => v.status === "intally").forEach(v => { delete v.refused; out.push({id: v.id, number: v.x.number, ok: true, word: "Already in Tally: not posted again"}); });
     list.filter(v => v.status !== "intally" && salesDupOf(v)).forEach(v => out.push({id: v.id, number: v.x.number, ok: false, word: salesDupWords(salesDupOf(v)) + " Not posted: press “Post duplicate anyway” on it to post it."}));
@@ -178,24 +193,26 @@ async function salesPostOneByOne(ids){
         masters.forEach(l => { const m = by.get("led:" + l.name); if (m && m.ok){ l.sent = true; l.sentAt = now; } });
         r = by.get(v.id) || null;
       } catch (e){ r = {ok: false, outcomeUnknown: true, message: (e && e.message) || String(e)}; }
-      const no = salesRefusal(r), said = plainMsg(r && r.message) || "";
+      const no = salesRefusal(r), tallySaid = plainMsg(r && r.message) || "";
       // Tally said why and made nothing (a line error with created 0): its words, the invoice put right and posted again
       const told = r && r.ok === false && !r.outcomeUnknown && !r.held && r.created != null && r.created !== "" && num(r.created) === 0 && !num(r.altered) && [].concat(r.lineError || []).some(x => String(x || "").trim());
       let word;
       delete v.refused; delete v.needsCheck;
       if (postTaken(r)){ v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); word = "Posted"; }
-      else if (r && r.held){ v.status = "ready"; v.postError = said; v.postJob = r.job; word = "Queued: " + said; }
+      else if (r && r.held){ v.status = "ready"; v.postError = tallySaid; v.postJob = r.job; word = "Queued: " + tallySaid; }
       else if (no){ salesMarkRefused(v, r, {n: 1, exceptions: no.exceptions}, true); word = "Refused by Tally on its own, with no reason given: this voucher is one that stops the batch"; }
-      else if (told){ v.postError = said; mapInvoice(v); word = "Not posted: " + said; }
+      else if (told){ v.postError = tallySaid; mapInvoice(v); word = "Not posted: " + tallySaid; }
       // (no answer, a timeout, an answer not read back, anything else: it may be in Tally; held until the check runs again)
-      else { v.needsCheck = true; v.postError = "Not confirmed: check Tally before posting again" + (said ? " [" + said + "]" : ""); mapInvoice(v); word = "Not confirmed: check Tally before posting again"; }
+      else { v.needsCheck = true; v.postError = "Not confirmed: check Tally before posting again" + (tallySaid ? " [" + tallySaid + "]" : ""); mapInvoice(v); word = "Not confirmed: check Tally before posting again"; }
       salesOverrideSpent([v]);   // (a "Post duplicate anyway" is good for this one attempt)
       out.push({id: v.id, number: v.x.number, ok: v.status === "posted", word});
       saveSales();
     }
   } finally { s.busy = ""; saveBank({newLed: true}); saveSales(); render(); }
+  // (checked on an old cloud copy: the note on each row of the result too)
+  if (copyNote) out.forEach(x => { x.word += " " + copyNote; });
   const okN = out.filter(x => x.ok).length;
-  toast("One by one: " + okN + " of " + out.length + " posted" + (okN < out.length ? "; the rest say why under To review" : "") + "." + (said ? " " + said : ""));
+  toast("One by one: " + okN + " of " + out.length + " posted" + (okN < out.length ? "; the rest say why under To review" : "") + "." + (copyNote ? " " + copyNote : ""));
   render();
 }
 // The owner (16-Nov-2026): every ledger FinCom set on an invoice can be changed by a person, on the invoice (a searchable

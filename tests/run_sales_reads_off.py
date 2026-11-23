@@ -6,10 +6,13 @@ computer); with no cloud copy nothing is sent, said plainly. Made-up data only.
   1. reads off here, the cloud copy fresh: the check reads the cloud copy; the invoice already there is In Tally, the
      other posted; no note;
   2. the cloud copy's last read old: the result says "Checked against FinCom's copy of Tally (updated <time>)";
-  3. no cloud copy: nothing sent, the plain message, the invoices still Ready;
-  4. the cloud copy fails to answer: the same;
+  3. no cloud copy: nothing sent, the plain message (turn on reading, or upload the Day Book), the invoices still Ready;
+  4. the cloud copy fails to answer: nothing sent, said plainly;
   5. another bridge error (not reads off): not sent to the cloud copy, nothing posted, as before;
-  6. Post one by one: the same rule (cloud copy used; none: the plain message, nothing sent).
+  6. Post one by one: the same rule (cloud copy used; none: the plain message, nothing sent);
+  7. an invoice dated on a day the cloud copy does not hold (before its start, after the later of its end and the last
+     day read, or a skipped day): nothing posted, the days said; the cloud copy not asked.
+  The note of an old copy is kept on each invoice checked so (its panel), not only in the message.
 Run on the React build: TDSDESK_SITE=../app/dist-test SYNC_PORT=8961 python3 run_sales_reads_off.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -24,8 +27,14 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 
+NOCOPY = ("Not posted: FinCom could not check Tally for these invoice numbers. Turn on reading entries in FinCom Bridge on this "
+          "computer, or upload the Day Book. Nothing was sent.")
 NOCHECK = ("Not posted: FinCom could not check Tally for these invoice numbers (reading entries from Tally is off on this computer "
            "and FinCom's cloud copy is not available). Nothing was sent; try again in a minute or post from another computer.")
+NOTE = "Checked against FinCom's copy of Tally, last updated "
+NOTE_END = ". Invoices entered in Tally after that were not checked."
+def nodays(days): return ("Not posted: FinCom's copy of Tally has no entries for " + days + ", so these invoice numbers could not be checked. "
+                          "Upload the Day Book for those dates, or turn on reading entries in FinCom Bridge on this computer.")
 READY = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
 GST = """() => { const mk = (b) => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; };
   return {up: mk('09AAACZ1234Q1Z'), k: mk('27AAACK5678P1Z')}; }"""
@@ -46,18 +55,19 @@ STUB = """() => { window.__toasts = []; const t0 = window.toast; window.toast = 
     if (window.__bridge === "off") throw {code: "bridge", message: "Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."};
     if (window.__bridge === "down") throw {code: "bridge", message: "Tally did not answer in time."};
     return {ok: true, vouchers: []}; };
-  window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []};
-  const bk = () => ({book: "bk-zz", from: "2026-04-01", company: "ZZ Test Readsoff Traders", daysAt: window.__cloud.at, state: {seen: window.__cloud.at}});
+  window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; window.__held = {to: "2026-11-30", doneTo: "", skipped: []};
+  const bk = () => ({book: "bk-zz", from: "2026-04-01", to: window.__held.to, company: "ZZ Test Readsoff Traders", daysAt: window.__cloud.at,
+    state: {seen: window.__cloud.at, doneTo: window.__held.doneTo, skipped: window.__held.skipped}});
   TCloud.on = () => true; TCloud.has = () => !!window.__cloud.has; TCloud.book = () => window.__cloud.has ? bk() : null;
   CloudTally.call = async (co, url) => { window.__ccalls.push(url); if (window.__cloud.fail) throw {code: "cloud", message: "Failed to fetch"};
     return {ok: true, via: "cloud", vouchers: window.__cloud.vouchers}; };
   Bridge.post = async (p) => { window.__sent.push(p.vouchers.map(v => v.id)); return {ok: true, company: "ZZ Test Readsoff Traders",
     results: p.vouchers.map(v => ({id: v.id, ok: true, byReply: true, verified: false}))}; }; }"""
-STATE = "() => SL().list.map(v => ({n: v.x.number, st: v.status, err: v.postError || ''}))"
-IN_CLOUD = "[{guid: 'g-1', masterId: '1', date: '20261102', type: 'Sales', number: 'ZR/1', party: 'Kappa Retail', amount: '1180', cancelled: 'No'}]"
-def fresh(A, *nos):
-    A.evaluate("() => { SL().list = []; window.__sent = []; window.__bcalls = []; window.__ccalls = []; window.__toasts = []; }")
-    return [A.evaluate(ADD, [n, "2026-11-02", G["k"]]) for n in nos]
+STATE = "() => SL().list.map(v => ({n: v.x.number, st: v.status, err: v.postError || '', copy: (v.copyCheck && v.copyCheck.note) || ''}))"
+IN_CLOUD = "[{guid: 'g-1', masterId: '1', date: '20261102', type: 'Sales', number: 'ZR/1', party: 'Kappa Retail', cancelled: 'No', entries: [{ledger: 'Kappa Retail', amount: '-1180.00'}, {ledger: 'Sales Account', amount: '1000.00'}, {ledger: 'Output IGST', amount: '180.00'}]}]"
+def fresh(A, *nos, d="2026-11-02"):
+    A.evaluate("() => { SL().list = []; window.__held = {to: '2026-11-30', doneTo: '', skipped: []}; window.__sent = []; window.__bcalls = []; window.__ccalls = []; window.__toasts = []; }")
+    return [A.evaluate(ADD, [n, d, G["k"]]) for n in nos]
 last = lambda A: A.evaluate("() => window.__toasts.slice(-1)[0] || ''")
 
 with sync_playwright() as p:
@@ -78,6 +88,7 @@ with sync_playwright() as p:
     ok(len(sent) == 1 and len(sent[0]) == 1, "only ZR/2 sent to Tally (%s)" % sent)
     t = last(A)
     ok(t.startswith("1 posted to Tally") and "FinCom's copy" not in t, "the result: 1 posted, no note for a fresh copy (%s)" % t)
+    ok(all(x["copy"] == "" for x in st), "no note on the invoices for a fresh copy (%s)" % st)
 
     print("2. the cloud copy's last read old: said in the result")
     fresh(A, "ZR/3")
@@ -85,7 +96,13 @@ with sync_playwright() as p:
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
     st = A.evaluate(STATE); t = last(A)
     ok(st[0]["st"] == "posted", "posted on the cloud copy's check (%s)" % st)
-    ok("Checked against FinCom's copy of Tally (updated " in t, "the note: checked against FinCom's copy, with its time (%s)" % t)
+    ok(NOTE in t and NOTE_END in t, "the note: checked against FinCom's copy, with its time (%s)" % t)
+    ok(st[0]["copy"].startswith(NOTE) and st[0]["copy"].endswith(NOTE_END), "the note kept on the invoice (%s)" % st[0]["copy"])
+    A.evaluate("() => { SL().openId = SL().list[0].id; render(); }"); A.wait_for_timeout(500)
+    ok(A.locator("[data-sales-copy-note]").count() == 1 and NOTE in A.inner_text("[data-sales-copy-note]"), "the note shown on the invoice's panel")
+    A.evaluate("() => { SL().openId = null; SL().filter = 'done'; render(); }"); A.wait_for_timeout(500)
+    ok(A.locator("[data-sales-copy]").count() == 1, "and marked on its row")
+    A.evaluate("() => { SL().filter = 'all'; render(); }")
 
     print("3. no cloud copy: nothing sent, said plainly")
     fresh(A, "ZR/4", "ZR/5")
@@ -93,7 +110,7 @@ with sync_playwright() as p:
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
     st = A.evaluate(STATE); t = last(A)
     ok(A.evaluate("() => window.__sent") == [], "nothing sent to Tally")
-    ok(t == NOCHECK, "the plain message (%s)" % t)
+    ok(t == NOCOPY, "the plain message (%s)" % t)
     ok([x["st"] for x in st] == ["ready", "ready"] and not A.evaluate("() => SL().busy"), "the invoices still Ready, not busy (%s)" % st)
 
     print("4. the cloud copy fails to answer: the same")
@@ -118,14 +135,37 @@ with sync_playwright() as p:
     st = A.evaluate(STATE); t = last(A)
     ok(len(A.evaluate("() => window.__ccalls")) >= 1, "one by one: the cloud copy read")
     ok([x["st"] for x in st] == ["intally", "posted"] and len(A.evaluate("() => window.__sent")) == 1, "ZR/1 In Tally, ZR/8 posted alone (%s)" % st)
-    ok("Checked against FinCom's copy of Tally (updated " in t, "one by one: the old copy said (%s)" % t)
+    ok(NOTE in t, "one by one: the old copy said (%s)" % t)
+    ok(all(x["copy"].startswith(NOTE) for x in st), "one by one: the note kept on each invoice (%s)" % [x["copy"][:30] for x in st])
+    ok(all(NOTE in r for r in A.evaluate("() => SL().oneByOne.rows.map(r => r.word)")), "one by one: the note on each row of the result")
     ids = fresh(A, "ZR/9")
     A.evaluate("(ids) => ids.forEach(id => { const v = SL().list.find(v => v.id === id); v.status = 'review'; v.refused = {n: 2, said: 'Tally created nothing'}; })", ids)
     A.evaluate("() => { window.__cloud = {has: false, fail: false, at: '', vouchers: []}; }")
     A.evaluate("() => salesPostOneByOne()"); A.wait_for_timeout(600)
     st = A.evaluate(STATE)
-    ok(A.evaluate("() => window.__sent") == [] and last(A) == NOCHECK, "one by one, no cloud copy: nothing sent, the plain message (%s)" % last(A))
+    ok(A.evaluate("() => window.__sent") == [] and last(A) == NOCOPY, "one by one, no cloud copy: nothing sent, the plain message (%s)" % last(A))
     ok(st[0]["st"] == "review", "still To review (%s)" % st)
+
+    print("7. invoice dates the cloud copy does not hold: nothing posted")
+    A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+    for label, held, dates, said in [
+        ("after the later of its end and the last day read", {"to": "2026-11-05", "doneTo": "2026-11-10", "skipped": []}, ["2026-11-08", "2026-11-12", "2026-11-14"], ["2026-11-12", "2026-11-14"]),
+        ("a skipped day", {"to": "2026-11-30", "doneTo": "", "skipped": ["20261103"]}, ["2026-11-02", "2026-11-03"], ["2026-11-03"]),
+        ("before its start", {"to": "2026-11-30", "doneTo": "", "skipped": []}, ["2026-03-31", "2026-04-02"], ["2026-03-31"])]:
+        A.evaluate("() => { SL().list = []; window.__sent = []; window.__ccalls = []; window.__toasts = []; }")
+        for i, d in enumerate(dates): A.evaluate(ADD, ["ZD/%d" % (i + 1), d, G["k"]])
+        A.evaluate("(h) => { window.__held = h; }", held)
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
+        st = A.evaluate(STATE); t = last(A)
+        ok(A.evaluate("() => window.__sent") == [] and A.evaluate("() => window.__ccalls") == [], label + ": nothing sent, the copy not asked")
+        ok(t == nodays(A.evaluate("(ds) => ds.map(d => fmtDate(d)).join(', ')", said)), label + ": the days said (%s)" % t)
+        ok(all(x["st"] == "ready" for x in st), label + ": still Ready (%s)" % [x["st"] for x in st])
+    A.evaluate("() => { SL().list = []; window.__toasts = []; window.__sent = []; }")
+    ids = fresh(A, "ZD/9", d="2026-11-20")
+    A.evaluate("(ids) => ids.forEach(id => { const v = SL().list.find(v => v.id === id); v.status = 'review'; v.refused = {n: 2, said: 'Tally created nothing'}; })", ids)
+    A.evaluate("() => { window.__held = {to: '2026-11-10', doneTo: '', skipped: []}; }")
+    A.evaluate("() => salesPostOneByOne()"); A.wait_for_timeout(600)
+    ok(A.evaluate("() => window.__sent") == [] and last(A).startswith("Not posted: FinCom's copy of Tally has no entries for "), "one by one: the same (%s)" % last(A))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
