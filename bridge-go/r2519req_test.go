@@ -838,6 +838,7 @@ func TestR2519ResentLookFailedTwiceHeld(t *testing.T) {
 // N1: a re-sent entry with nothing to look for (no FinCom mark) is held for a person, never sent unchecked; and the
 // look's 2 s stop stays whatever RecorderLimitMs says
 func TestR2519ResentNoMarkHeld(t *testing.T) {
+	standBridge(t, newStandTally(t), "") // (the log in the test's own folder, never the package's)
 	if left, rs := resentLookFirst(1, zz, []M{{"id": "r83", "kind": "voucher", "xml": "<VOUCHER><DATE>20261123</DATE></VOUCHER>"}}, map[string]bool{"r83": true}); len(left) != 0 || len(rs) != 1 || rs[0]["needsReview"] != true {
 		t.Fatalf("an entry with no mark: left %v, results %v", left, rs)
 	}
