@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s239feb9887ba88a1";
+const GST3B_SRC = "se5f54bd755e4ea35";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -2306,9 +2306,10 @@ const GSTR = {
   // (the owner, 23-Nov-2026) zero: 3.1(b)'s IGST and cess (exports and SEZ supplies with payment of tax, section 16(3)(b)
   // IGST Act) are output tax payable like 3.1(a)'s (section 49(4) and (5), section 49A, rule 88A): added to the liability
   // of their head before the set-off, so they are set off, paid in cash and carried as negative liability with it; due
-  // is that liability (6.1's "tax payable", other than reverse charge). Left out, as an older caller does: no 3.1(b)
+  // is that liability (6.1's "tax payable", other than reverse charge; liab itself when 3.1(b) has no tax). Left out, as an
+  // older caller does: no 3.1(b)
   setOff(liab, rcm, credit, opening, zero){
-    if (zero) liab = {igst: r2(num((liab || {}).igst) + num(zero.igst)), cgst: num((liab || {}).cgst), sgst: num((liab || {}).sgst), cess: r2(num((liab || {}).cess) + num(zero.cess))};
+    if (zero && (Math.abs(num(zero.igst)) >= .005 || Math.abs(num(zero.cess)) >= .005)) liab = Object.assign({}, liab, {igst: r2(num((liab || {}).igst) + num(zero.igst)), cess: r2(num((liab || {}).cess) + num(zero.cess))});
     const L = {}, C = {}, use = {igst: {igst: 0, cgst: 0, sgst: 0}, cgst: {cgst: 0, igst: 0}, sgst: {sgst: 0, igst: 0}, cess: {cess: 0}};
     const g0 = (opening || {}).neg || {}, neg = {}, negAdj = {}, nz = o => this.HEADS.some(h => o[h] >= .005);
     this.HEADS.forEach(h => { const l = r2(num(liab[h])), g = Math.max(0, num(g0[h])), v = r2(l - g); L[h] = Math.max(0, v); neg[h] = Math.max(0, -v); negAdj[h] = Math.min(g, Math.max(0, l));

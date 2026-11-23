@@ -328,7 +328,7 @@ function Company() {
     {/* (the owner, 23-Nov-2026) one Tally company with the GST ledgers of each registration: a bill to the client's other
         GSTIN then goes on without the per-bill "the GST ledgers are that GSTIN's" (compute, src/js/01) */}
     <div data-multi-gstin="" style={{ marginTop: 8 }}><CoCheck path="multiGstin" on={!!co.multiGstin}>This Tally company has more than one GSTIN</CoCheck>
-      <p className="note" style={{ margin: "2px 0 0" }}>Tick this when this one Tally company keeps the GST ledgers of each of the client’s GSTINs. Bills made out to another of its GSTINs then go on without asking each time.</p></div>
+      <p className="note" style={{ margin: "2px 0 0" }}>Its GST ledgers cover each GSTIN: bills to its other GSTINs go on without asking.</p></div>
     {/* review of 02-Oct-2026: a GSTIN or PAN cannot be emptied by a sync (the server keeps it); an owner clears a wrong one
         here, with a reason that is kept */}
     {owner && (co.gstin || co.pan) && <div className="row" data-clear-ids="" style={{ gap: 8, marginTop: 8 }}>
