@@ -7,6 +7,7 @@
 // "AI" tag on the line); the owner, 24-Oct-2026: "this should not even show every time and every month in 2B .. why
 // confuse the user". Match again is under ⋯; what the AI costs is under Settings, AI usage.
 // The matching is GST2B (src/js/11); the decisions ITCDec (app/src/lib/itcSync.js); the credit ITCF (app/src/lib/itcFinal.js).
+import "../../../../src/js/99-screen-parts.js";
 import GstApiCard from "../GstApiCard.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import TwoBPortal from "./TwoBPortal.jsx";

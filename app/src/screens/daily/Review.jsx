@@ -5,20 +5,20 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, Mail, MessageCircle } from "lucide-react";
 import { sendable, message, waLink } from "../../../../server/_shared/asks.js";
-import { nameOf, isOwner, askEdit, sendEmail, markWhatsApp, setMail, testSite } from "./data.js";
-/* global toast, S */
+import { nameOf, isOwner, askEdit, sendEmail, markWhatsApp, testSite } from "./data.js";
+import MailForm from "./MailForm.jsx";
+import { newLook } from "../../newlook/flag.js";
+/* global toast, S, goSettings */
 
 const say = (m) => { try { toast(m); } catch (e) { /* no toast here */ } };
 const week = () => { const t = new Date(); t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return t.getDate() + "-" + t.toLocaleString("en-GB", { month: "short" }) + "-" + t.getFullYear(); };
 
 function Sending({ mail, done }) {
-  const [real, setReal] = useState(!!mail.real_send), [to, setTo] = useState(mail.test_to || ""), [wa, setWa] = useState(mail.test_whatsapp || ""), [busy, setBusy] = useState(false);
+  // the new look (the owner, 23-Nov-2026): sending's settings are in Settings › Email and messages; here, a link there
+  if (newLook()) return <p className="note" data-send-settings-moved="">Sending to clients, and the firm’s test email and WhatsApp: <button type="button" className="linkbtn" onClick={() => goSettings("mail")}>Settings › Email and messages</button></p>;
   return <details className="dc-settings" data-send-settings="">
     <summary className="linkbtn">Settings</summary>
-    <label className="f"><span>Firm email for tests</span><input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="office@yourfirm" /></label>
-    <label className="f"><span>Firm WhatsApp for tests</span><input type="tel" value={wa} onChange={(e) => setWa(e.target.value)} placeholder="+91 …" /></label>
-    <label className="chk"><input type="checkbox" checked={real} onChange={() => setReal(!real)} /> Send to clients for real</label>
-    <div><button type="button" className="btn small" disabled={busy} onClick={() => { setBusy(true); setMail(real, to, wa).then(() => { say("Saved."); done({ real_send: real, test_to: to, test_whatsapp: wa }); }, (e) => say(String(e.message || e))).finally(() => setBusy(false)); }}>Save</button></div>
+    <MailForm mail={mail} done={done} />
   </details>;
 }
 
@@ -44,7 +44,7 @@ export default function Review({ cid, data, back }) {
   };
   const whatsapp = async (k) => {
     const to = waTest ? mail.test_whatsapp : k.whatsapp;
-    if (!to) { say("Add the firm's WhatsApp number for tests in Settings below."); return; }
+    if (!to) { say(newLook() ? "Add the firm's WhatsApp number for tests in Settings › Email and messages." : "Add the firm's WhatsApp number for tests in Settings below."); return; }
     try { await keepEdits(); } catch (e) { say(String(e.message || e)); return; }
     window.open(waLink(to, (waTest ? "[TEST]\n" : "") + m.wa), "_blank", "noopener");
     markWhatsApp(cid, ids, to).catch(() => null);

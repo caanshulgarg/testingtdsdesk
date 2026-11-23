@@ -30,7 +30,7 @@ const Payroll = {
     let emp = [], heads = [], allocs = [], pays = [], vs = [];
     try { emp = await TCloud.restPages("tally_employees?select=guid,name,parent,category,is_group,pan,joined,left_on,designation,gone_at" + B + "&order=name.asc"); }
     catch (e){ if (!/42P01|PGRST20|does not exist|schema cache/i.test(String(e && e.message || e))) throw e; return 0; }      // a cloud without migration 74: nothing of payroll (as before); another error is said (PayLoad)
-    try { heads = await TCloud.restPages("tally_ledgers?select=name,pay_type,pay_stat_type,it_component,for_payroll&for_payroll=eq.true" + B + "&order=name.asc"); } catch (e){ heads = []; }
+    try { heads = await TCloud.restPages("tally_ledgers?select=name,pay_type,pay_stat_type,it_component,for_payroll&for_payroll=eq.true&merged_into=is.null&deleted_at=is.null" + B + "&order=name.asc"); } catch (e){ heads = []; }
     const names = heads.map(h => h.name);
     for (let i = 0; i < names.length; i += 30){
       const ln = "&ledger=in.(" + names.slice(i, i + 30).map(x => encodeURIComponent('"' + String(x).replace(/"/g, '\\"') + '"')).join(",") + ")";
@@ -40,7 +40,7 @@ const Payroll = {
     const guids = Array.from(new Set(allocs.map(a => a.guid).concat(pays.map(p => p.guid))));
     for (let i = 0; i < guids.length; i += 40){
       const g = "&guid=in.(" + guids.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
-      vs = vs.concat(await TCloud.restPages("tally_vouchers?select=guid,alter_id,day,vtype,vno,cancelled,optional,deleted_at" + B + g + "&order=guid.asc"));
+      vs = vs.concat(await TCloud.restPages("tally_vouchers?select=guid,alter_id,day,vtype,vno,narration,cancelled,optional,deleted_at" + B + g + "&order=guid.asc"));
     }
     return this.take(b, {book, employees: emp, heads, allocs, pays, vouchers: vs});
   },
@@ -48,7 +48,7 @@ const Payroll = {
   // optional; the cost centres of the AlterID the entry holds now)
   take(b, x){
     const V = {};
-    (x.vouchers || []).forEach(v => { if (v && v.guid && !v.deleted_at && !v.cancelled && !v.optional) V[v.guid] = {alter: num(v.alter_id), day: TDS.ymd(v.day), type: v.vtype || "", no: v.vno || ""}; });
+    (x.vouchers || []).forEach(v => { if (v && v.guid && !v.deleted_at && !v.cancelled && !v.optional) V[v.guid] = {alter: num(v.alter_id), day: TDS.ymd(v.day), type: v.vtype || "", no: v.vno || "", narr: String(v.narration || "")}; });
     const live = (r) => V[r.guid] && (r.alter_id == null || num(r.alter_id) === V[r.guid].alter);
     const H = {};
     (x.heads || []).forEach(h => { if (h && h.name) H[h.name] = {type: String(h.pay_type || ""), stat: String(h.pay_stat_type || ""), it: String(h.it_component || "")}; });
@@ -446,12 +446,6 @@ const PayTax = {
 
 // 24Q's text file (TDS24Q_FILE) and its download (payFvuDownload) are src/js/73-tds-24q-file.js, with the TDS screens
 
-/* ---------- the page's actions (app/src/screens/tds/Payroll.jsx) ---------- */
-function payDetailSet(guid, k, v){
-  const e = Payroll.employees().find(x => x.guid === guid);
-  if (!Payroll.setDetail(e, k, v)) return;
-  saveBooks(); render();
-}
 // round 92 (A): "This pay head is TDS" / "Not TDS": the person's choice, kept in the ledger map as a confirmed choice (payTds),
 // so the books read the head as TDS under 192 too; saved with the books
 function payTdsHead(name, yes){
@@ -465,9 +459,4 @@ function payTdsHead(name, yes){
   b.mapV = (b.mapV || 0) + 1;
   if (typeof toast === "function") toast(yes ? "“" + name + "” is the TDS pay head: each employee's TDS is read from it." : "“" + name + "” is not taken as TDS.");
   saveBooks(); render();
-}
-// F: pay heads read before Bridge 2.4.4 (no type): the ledgers read from Tally again, the existing ledgers-only wake
-async function payAskLedgers(){
-  try { const r = await Ledgers.askTally(S.coId); toast(r && r.via ? "Tally was asked for the ledgers; the pay heads' types come with them." : "FinCom Bridge or FinCom's cloud is not reaching the Tally computer now."); }
-  catch (e){ toast("Could not ask Tally: " + (e && e.message || e)); }
 }

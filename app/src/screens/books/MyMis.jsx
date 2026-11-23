@@ -8,6 +8,7 @@
 // Every figure is a button: its ledger rows open in the detail drawer. A look-only member sees the report read-only.
 //
 // State: S.myMis = {cid, def, sel (the block open in the form), saved (the id it was saved as), msg, unknown, desc}.
+import "../../../../src/js/99-screen-parts.js";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2, Wand2 } from "lucide-react";
 import Button from "../../parts/Button.jsx";

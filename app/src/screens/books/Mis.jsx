@@ -6,6 +6,7 @@
 //
 // State: S.misRange, S.misTab, S.misQ / S.misF / S.misCat (filters), S.misOpen (a party opened), S.misOpenHead,
 // a ledger's entries (the detail drawer, openDetail("misLed", ledger)), S.misCf, S.misWeek, S.misCc (rows opened), S.misBudPct.
+import "../../../../src/js/99-screen-parts.js";
 import NotRead from "../../parts/NotRead.jsx";
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";

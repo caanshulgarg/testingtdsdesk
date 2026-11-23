@@ -10,6 +10,7 @@
 //     challan), Annexure II in the fourth quarter (Employees & declarations), To fix, Return file (the text file, built to the current layout and
 //     marked "check before filing").
 // Nothing here is worked out by AI; every figure is Tally's or FinCom's own rule, to the paisa.
+import "../../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import { MarkFiled } from "./Filed.jsx";

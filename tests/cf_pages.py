@@ -96,9 +96,9 @@ class PagesHandler(http.server.SimpleHTTPRequestHandler):
         if p.endswith(".html") and os.path.isfile(fs(p)):
             return self._redirect(p[:-len(".html")] + q)
         if p.endswith("/") and os.path.isfile(fs(p + "index.html")):
-            self.path = p + "index.html"; return super().send_head()
+            self.path = p + "index.html"; return self._gz(fs(p + "index.html")) or super().send_head()
         if not p.endswith("/") and os.path.isfile(fs(p)):
-            return super().send_head()
+            return self._gz(fs(p)) or super().send_head()
         if not p.endswith("/") and os.path.isfile(fs(p + ".html")):
             self.path = p + ".html"; return super().send_head()
         if not p.endswith("/") and os.path.isfile(fs(p + "/index.html")):
@@ -111,6 +111,17 @@ class PagesHandler(http.server.SimpleHTTPRequestHandler):
                 break
             d = os.path.dirname(d)
         return self._file(fs("/index.html"), 200)   # no /404.html: Pages' single-page mode
+
+    # CF_GZIP=1 (tests/run_speed_open.py on a throttled line): text files sent gzip'd (level 6), as Pages sends them, so the
+    # bytes on the line are the real ones; otherwise as before
+    def _gz(self, f):
+        if os.environ.get("CF_GZIP") != "1" or "gzip" not in (self.headers.get("Accept-Encoding") or ""): return None
+        ctype = self.guess_type(f)
+        if not re.search(r"(javascript|css|html|json|svg|text/)", ctype): return None
+        import gzip, io
+        body = gzip.compress(open(f, "rb").read(), 6)
+        self.send_response(200); self.send_header("Content-Type", ctype); self.send_header("Content-Encoding", "gzip"); self.send_header("Content-Length", str(len(body))); self.end_headers()
+        return io.BytesIO(body)
 
     def _file(self, f, status):
         body = open(f, "rb").read()

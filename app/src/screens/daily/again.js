@@ -4,7 +4,7 @@
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
 /* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
-import { journals, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
+import { journals, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK, payrollSettings } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const CHANGED = "Changed since last night. Run again.";
@@ -13,7 +13,10 @@ const P = (x) => Math.round((Number(x) || 0) * 100);
 const key = (ls) => (ls || []).map((l) => l.ledger + "|" + (P(l.dr) ? "D" + P(l.dr) : "C" + P(l.cr))).sort().join(";");
 // India's date, as the night has it
 export const todayIn = (d = new Date()) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
+// a Tally Payroll month (next-payroll): its totals, its employees' count, the payable ledger and the voucher type
+const tpKey = (v) => [v.kind, v.type, v.party, v.period, v.n, P(v.gross), P(v.net)].concat(["tds", "pt", "pf", "esi", "other"].map((k) => P((v.ded || {})[k]))).join("|");
 export function sameJournal(a, b) {
+  if (a && b && (a.kind === "tallyPayroll" || b.kind === "tallyPayroll")) return d8(a.date) === d8(b.date) && tpKey(a) === tpKey(b);
   return !!a && !!b && a.type === b.type && d8(a.date) === d8(b.date) && key(a.lines) === key(b.lines);
 }
 // the night's input, made from what the app holds for the client (S.books opened from the cloud; the ledgers of the cloud
@@ -31,8 +34,12 @@ export function inputOf(cid, o) {
     ledgers: o.ledgers || [], booksFrom: d8(o.booksFrom || ""), salary: b.salary || [],
     closed: closedTo ? [{ from: "19000101", to: closedTo }] : [],
     gst: typeof GSTR === "object" && typeof GSTF === "object" ? gstMonths({ GSTR, GSTF, GSTSet: typeof GSTSet === "object" ? GSTSet : null }, months) : [],
-    drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed })),
-    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "",
+    drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed, vid: String(d.id), parts: Number(d.parts) || 0, at: String((((d.results || {})[d.id]) || {}).at || d.savedAt || d.at || ""),
+      date: String((((d.vouchers || [])[0]) || {}).date || ""), sentAt: String((d.sent || {}).at || ""), retired: !!d.retiredBy })),
+    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "", clientId: String(cid || ""),
+    // next-payroll: how the client books salary, and Tally's pay heads (the cloud copy's payroll, S.books.payroll)
+    daysAt: o.daysAt || {},   // (sixth review) when each Tally Payroll part's day was last read from Tally (tally_days.at)
+    payroll: payrollSettings(co, Object.entries(((b.payroll || {}).heads) || {}).map(([name, h]) => ({ name, type: (h && h.type) || "" }))),
   };
 }
 // "" when the entry is still exactly what last night made; else why not
@@ -57,7 +64,15 @@ export async function recheck(e, o = {}) {
   drafts = drafts.filter((d) => !(d.dedupe === e.dedupe && d.state === "failed"));
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed && d.state === "unconfirmed")) return "Sent to Tally but not confirmed there. Check Tally (Needs you).";
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed)) return "Already approved: it is on its way to Tally.";
-  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId }));
+  // (sixth review) the days of the Tally Payroll parts on record (their voucher date, else the month-end), as last read
+  const tpDays = Array.from(new Set(drafts.filter((d) => /^dc-tp-\d{6}-/.test(String(d.id || ""))).map((d) => { const x = String((((d.vouchers || [])[0]) || {}).date || "").slice(0, 10), ym = String(d.id).slice(6, 12);
+    return /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-" + String(new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(4, 6), 0)).getUTCDate()).padStart(2, "0"); })));
+  // (seventh review) each from the book that holds the day (of the client's books, the one beginning latest on or before
+  // it: a split year's March in last year's book), else the books opened here
+  const holder = (day) => { try { const bs = ((TCloud.st[cid] || {}).books || []).filter((x) => x && x.book && String(x.from || "").replace(/-/g, "").slice(0, 8) <= day.replace(/-/g, "")).sort((a, c) => String(c.from).replace(/-/g, "").localeCompare(String(a.from).replace(/-/g, ""))); return String((bs[0] || {}).book || bookId || ""); } catch (x) { return bookId || ""; } };
+  const daysAt = o.daysAt || (tpDays.length ? await (async () => { const out = {}; for (const day of tpDays) { const bk = holder(day); if (!bk) continue;
+    try { ((await Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(bk) + "&day=eq." + day)) || []).forEach((r) => { out[String(r.day).slice(0, 10)] = String(r.at || ""); }); } catch (x) { /* not read: the part holds the journal back */ } } return out; })() : {});
+  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId, daysAt }));
   const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);
   if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;
   return "";

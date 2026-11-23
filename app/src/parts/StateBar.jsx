@@ -15,6 +15,7 @@ import tabs from "@/registry/components/tabs/tabs.module.css";
 import HelpButton from "./HelpButton.jsx";
 import Button from "./Button.jsx";
 import { FinComNav } from "../nav.js";
+import { newLook, NL_STATE } from "../newlook/flag.js";
 // the reading queue's buttons (jobAction: src/js/99, kept out of legacy.js)
 import "../../../src/js/99-bill-suppliers.js";
 
@@ -31,12 +32,12 @@ export function StateBar() {
   // row of noughts; Purchase keeps its row (To review's empty state is under it)
   const help = <span className="statebar-help"><HelpButton page small /></span>;
   if (!states.length || (page !== "bills" && states.every(([, , n]) => !n))) return <div className="sbar-band statebar-none" data-states={page} data-states-none="">{help}</div>;
-  const now = pageState(page), bills = page === "bills";
+  const now = pageState(page), bills = page === "bills", nl = newLook();
   return <div className="sbar-band"><nav className="sbar statebar" aria-label="Status" data-states={page} data-post-tabs={bills ? "" : undefined} data-bill-filters={bills ? "" : undefined}>
     <Tabs value={now || ""} onValueChange={() => {}} activationMode="manual"><TabsPrimitive.List aria-label="Status" className={tabs.list}>
       {states.map(([id, words, n]) => <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger + (id === "errors" ? " st-errors" : "")} data-state={id}
         data-step={STEP[id]} data-post-tab={bills ? POST[id] : undefined} onClick={() => FinComNav.go(() => goState(id, page))}>
-        {words} <span className={"sbar-n" + (id === "errors" ? " attn" : "")} data-state-n="" data-step-n={STEP[id] ? "" : undefined} data-tab-n={bills && POST[id] ? "" : undefined}>{n}</span>
+        {(nl && NL_STATE[id]) || words} <span className={"sbar-n" + (id === "errors" ? " attn" : "")} data-state-n="" data-step-n={STEP[id] ? "" : undefined} data-tab-n={bills && POST[id] ? "" : undefined}>{n}</span>
       </TabsPrimitive.Trigger>)}
     </TabsPrimitive.List></Tabs>
     {help}

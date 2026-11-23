@@ -11,6 +11,7 @@
 /* ================================================================== */
 // 30 files a message, any type (the owner, 13-Nov-2026): the limits, the stored type, what the AI is given of each file
 // and what it costs are server/_shared/attachrules.js, the same file fincom-assistant runs
+import "../../../src/js/99-screen-parts.js";
 import { ATTACH, ZIP, attachInr, fitAttachments, sniff, storeType, textTokens } from "../../../server/_shared/attachrules.js";
 const AUpload = window.AUpload = {
   KIND: {notice: "Notice", bill: "Bill or invoice", register: "Register", bank: "Bank statement", as26: "26AS / AIS / TRACES", certificate: "Certificate format", balance_sheet: "Balance sheet / financial statements", cma: "CMA data", other: "Other document"},

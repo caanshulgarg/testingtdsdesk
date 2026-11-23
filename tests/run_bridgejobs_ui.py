@@ -99,7 +99,7 @@ with sync_playwright() as p:
     ok(not M["bodies"] and "no company ID" in t["said"] and t["asked"] == 0, "a deletion with no GUID on the link: nothing sent, said before any confirm: %s" % t)
     # the reasons told apart: the link not read (the read failed; no records), two links with different companies
     pg.evaluate(LINK, LG)
-    for setup, want, what in (("() => { LinkRec.load = async () => { LinkRec.st.err = 'made-up failure'; return LinkRec.st.rows; }; }", "could not read this client's Tally link", "the link records could not be read"),
+    for setup, want, what in (("() => { LinkRec.load = async () => { LinkRec.st.err = 'made-up failure'; return LinkRec.st.rows; }; }", "Not sent: FinCom's cloud did not answer. Nothing went to Tally; try again in a minute.", "the link records could not be read"),
                               ("() => { LinkRec.load = async () => { LinkRec.st.err = ''; return LinkRec.st.rows; }; LinkRec.st.rows = []; }", "is not linked to ZZ in FinCom", "no link records"),
                               ("() => { LinkRec.on = () => false; LinkRec.st.missing = false; }", "sign in to FinCom's cloud", "not signed in to FinCom's cloud"),
                               ("() => { LinkRec.on = () => false; LinkRec.st.missing = true; }", "is not linked to ZZ in FinCom", "a cloud without the link records"),
@@ -110,6 +110,22 @@ with sync_playwright() as p:
         rs = o["r"]["results"]; t = pg.evaluate(UNPOST)
         ok(not M["bodies"] and rs and all(not x["ok"] and want in (x.get("message") or "") for x in rs) and want in t["said"] and t["asked"] == 0,
            "%s: nothing sent, the posting and the deletion say so: %s / %s" % (what, [x.get("message", "")[:70] for x in rs], t["said"][:70]))
+    # next-fix-post-resume (23-Nov-2026): FinCom's cloud not read at Post: an entry already in a posting still going keeps its
+    # words ("Being posted on the Tally computer"; one waiting: "Waiting for Tally"), never "Nothing was sent"; the others
+    # say plainly that nothing went
+    lv = pg.evaluate("""async () => { const was = [CloudJobs.list, LinkRec.load]; const cid = CO().id;
+      CloudJobs.list = [{id: 'job-live-1', client_id: cid, status: 'running', created_at: '2026-11-23T10:00:00Z', items: [{id: 'lv1', kind: 'voucher', state: 'sending'}], results: []},
+                        {id: 'job-live-2', client_id: cid, status: 'waiting', created_at: '2026-11-23T10:01:00Z', items: [{id: 'lv3', kind: 'voucher', state: 'waiting'}], results: []},
+                        {id: 'job-old-1', client_id: cid, status: 'failed', created_at: '2026-11-22T10:00:00Z', items: [{id: 'lv2', kind: 'voucher', state: 'failed'}], results: []}];
+      LinkRec.load = async () => { LinkRec.st.err = 'made-up failure'; return LinkRec.st.rows; };
+      try { const r = await Bridge.post({company: "ZZ", client: cid, masters: [], vouchers: ["lv1", "lv2", "lv3"].map(id => ({id, xml: "<VOUCHER><DATE>20260701</DATE></VOUCHER>"}))});
+            return r.results.map(x => [x.id, !!x.ok, !!x.held, x.message || ""]); }
+      finally { [CloudJobs.list, LinkRec.load] = was; LinkRec.st.err = ''; } }""")
+    by = {x[0]: x for x in lv}
+    ok(not M["bodies"] and by.get("lv1", [0, 1, 0, ""])[3].startswith("Being posted on the Tally computer") and by["lv1"][2] and not by["lv1"][1],
+       "the cloud not read: an entry being posted keeps 'Being posted on the Tally computer' (%s)" % by.get("lv1"))
+    ok(by.get("lv3", [0, 0, 0, ""])[3].startswith("Waiting for Tally") and "Nothing" not in by["lv3"][3], "an entry of a posting waiting for Tally: says so (%s)" % by.get("lv3"))
+    ok(by.get("lv2", [0, 0, 0, ""])[3] == "Not sent: FinCom's cloud did not answer. Nothing went to Tally; try again in a minute.", "an entry in no live posting: plain words (%s)" % by.get("lv2"))
     pg.evaluate(LINK, LG); pg.evaluate("() => { LinkRec.st.err = ''; }")
     # a closed period with no GUID on the link: not asked about (nor recorded), nothing sent
     pg.evaluate(LINK, ""); M["bodies"].clear()

@@ -35,6 +35,9 @@ function FirmSetupSlot() {
 import SCREENS from "./screens/index.js";
 import Main from "./Main.jsx";
 import { clearBoot, bootDone } from "./boot.js";
+import { newLook } from "./newlook/flag.js";
+// New look (off unless the person turns it on): its menu, + New, search and entry form, in a file of its own
+const NewLook = lazy(() => import("./newlook/Shell.jsx"));
 
 let host = null;
 function mainHost() {
@@ -49,7 +52,8 @@ function mainHost() {
 
 export default function App() {
   const v = useSyncExternalStore(subscribe, snapshot);
-  useLayoutEffect(() => { if (S.firm) bootDone(); });
+  const nl = !!S.firm && newLook();
+  useLayoutEffect(() => { if (S.firm) bootDone(); document.documentElement.classList.toggle("nl", nl); });
   // before the firm's settings are loaded: the frame index.html drew, as it is (one loading state, not a second "Loading…")
   if (!S.firm) return null;
   clearBoot();
@@ -62,6 +66,7 @@ export default function App() {
       {createPortal(<Guard name="the sidebar" v={v} quiet><Side /></Guard>, document.getElementById("side"))}
       <Guard name="the top bar" v={v} quiet><TopBar /></Guard>
       <Guard name="the client switcher" v={v} quiet><Switcher /></Guard>
+      {nl && <Guard name="the new look" v={v} quiet><Suspense fallback={null}><NewLook /></Suspense></Guard>}
       <Guard name="the firm's details" v={v} quiet><FirmSetupSlot /></Guard>
       <WhyNotes />
       <Guard name="the assistant" v={v} quiet><AssistantSlot /></Guard>

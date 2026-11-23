@@ -304,7 +304,21 @@ const POST_LINKED_ELSEWHERE = "The client was linked to another Tally company af
 // the link's GUID gone since the posting was stamped (unlinked, or linked again without one): words that fit it
 const POST_LINK_GONE = "The client's Tally link changed or was removed after this posting was made: check the entries and post again. Nothing more of it was sent to Tally.";
 const POST_OK_UNSURE = "FinCom could not confirm in time that this posting may be sent now, so nothing more is sent now. If none of it was sent on this try, FinCom puts it back for this FinCom Bridge, which tries again shortly; otherwise FinCom judges what reached Tally from this bridge's report.";
+// next-fix-post-resume (the owner's "yes to both", 23-Nov-2026): a posting stopped part-way because post_ok could not confirm
+// in time is kept taken in these words (their start marks it), then put back for the same bridge by its beat once
+// POST_RESUME_MS have passed since (resumePaused), in POST_RESUMED's words (not 203's "Put back for the same FinCom Bridge":
+// that start waits 30 s more at the hand-out)
+const POST_PAUSED_MARK = "Paused: FinCom's cloud was slow to answer";
+const POST_PAUSED = POST_PAUSED_MARK + ", so FinCom Bridge stopped part-way. It carries on with the rest by itself in a few minutes; what it already sent to Tally is never sent again.";
+const POST_RESUMED = "Carrying on: FinCom Bridge sends the rest of this posting now; what it already sent to Tally is never sent again.";
+const POST_RESUME_MS = 3 * 60 * 1000;
 const postOkUnsure = () => new Response(JSON.stringify({ ok: true, post: false, stop: "checking", error: POST_OK_UNSURE }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+// a read of post_ok cut at what is left of its budget (left: ms); an abort or a throw is an error, as any other (never allowed)
+async function postOkInTime(left: () => number, qb: any): Promise<any> {
+  const ms = left() - 150;
+  if (ms < 50) return { error: { message: "post_ok: out of time" } };
+  try { return await qb.abortSignal(AbortSignal.timeout(ms)); } catch (e) { return { error: { message: String((e as Error)?.message || e) } }; }
+}
 const busyReply = () => new Response(JSON.stringify({ ok: false, busy: true, retry: true, error: BUSY_WORDS }), { status: 503, headers: { ...cors, "Content-Type": "application/json", "Retry-After": "30" } });
 
 async function sha256(s: string) {
@@ -1147,6 +1161,31 @@ async function postsFor(dev: any, id: string, main: boolean) {
   }
   return (data || []).filter((j: any) => j.target_bridge === id || (!j.target_bridge && main)).length;
 }
+// next-fix-post-resume (the owner's "yes to both", 23-Nov-2026): this bridge's postings paused part-way (posts_update:
+// POST_PAUSED_MARK, FinCom could not confirm in time) for POST_RESUME_MS and more are put back for this SAME bridge
+// (taken_by and target kept; 203's hand-out gives a posting once taken only to the bridge that took it, on its own key),
+// so the bridge carries on within minutes, not after the requeue's 2 hours. Only while it is still taken by this bridge,
+// not stopped, not cancelled, no re-send list, no entry of it released, 36b's resend guard taking it (asked first, and its
+// trigger at the write), and the posting is the version read (row_version). The bridge then sends only the rest: what
+// it sent is kept in its results and refused on its own record (posted-ids.json). Anything not had: left as it is
+async function resumePaused(dev: any, bridge: string) {
+  if (!/^go-[0-9a-f]{6,32}$/.test(bridge)) return;
+  const before = new Date(Date.now() - POST_RESUME_MS).toISOString();
+  const { data, error } = await db.from("tally_post_jobs").select("id, row_version, results, items, resend_only").eq("device_id", dev.id).eq("status", "taken").eq("taken_by", bridge)
+    .is("stop_reason", null).like("message", POST_PAUSED_MARK + "%").lt("updated_at", before).limit(3);
+  if (error) { if (!missingRel(error)) console.error("tally-ingest: paused postings not read", dev.id, String(error.message || "").slice(0, 200)); return; }
+  for (const j of (data || []) as any[]) {
+    if (typeof j.row_version !== "number" || (Array.isArray(j.resend_only) && j.resend_only.length)) continue;
+    const { data: rel, error: relErr } = await db.from("tally_post_ids").select("job_id").eq("job_id", j.id).not("released_at", "is", null).limit(1);
+    if (relErr || (rel || []).length) continue;
+    const { data: who, error: wErr } = await db.rpc("tally_post_job_accepted", { p_job: j.id, p_results: j.results ?? null, p_items: j.items ?? null });
+    if (wErr || (who !== null && who !== undefined && who !== "")) { console.log("tally-ingest: paused posting not put back (Tally accepted " + String(who || wErr?.message || "?").slice(0, 120) + ")", j.id); continue; }
+    const { data: wrote, error: uErr } = await db.from("tally_post_jobs").update({ status: "waiting", message: POST_RESUMED, updated_at: new Date().toISOString() })
+      .eq("id", j.id).eq("device_id", dev.id).eq("status", "taken").eq("taken_by", bridge).is("stop_reason", null).eq("row_version", j.row_version).like("message", POST_PAUSED_MARK + "%").select("id");
+    if (uErr) console.log("tally-ingest: paused posting not put back", j.id, String(uErr.message || "").slice(0, 160));
+    else if (Array.isArray(wrote) && wrote.length) console.log("tally-ingest: paused posting put back for the same bridge", j.id, bridge);
+  }
+}
 // tally_post_count_for (migration 142); null on a cloud without it (asked again after 10 minutes) or on an error
 let countMissing = 0;
 async function countFor(dev: any, id: string, main: boolean): Promise<number | null> {
@@ -1229,11 +1268,13 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
   const out: Record<string, unknown> = {}, info: Record<string, unknown> = {};
   try {
     const now = Date.now(), at = new Date(now).toISOString();
-    const [st, rs, rl] = await Promise.all([
+    // (next-speed: the owner's rollbacks asked with the other three, side by side; read only when the releases were)
+    const [st, rs, rl, rbq] = await Promise.all([
       db.from("tally_read_stops").select("id, device_id, reason, stopped_at").eq("firm_id", firm).eq("action", "stop").is("cleared_at", null),
       // a resume is passed on for a week (a computer off for longer reads again when it comes back only if it was not stopped)
       db.from("tally_read_stops").select("id, device_id, stopped_at").eq("firm_id", firm).eq("action", "resume").gt("stopped_at", new Date(now - 7 * 86400000).toISOString()),
-      db.from("tally_bridge_releases").select("*").eq("firm_id", firm)]);
+      db.from("tally_bridge_releases").select("*").eq("firm_id", firm),
+      db.from("tally_bridge_rollbacks").select("version, set_at").eq("firm_id", firm).is("cleared_at", null)]);
     const mine = (r: any) => !r?.device_id || r.device_id === dev.id;
     if (!st.error && !rs.error) {
       // the newest stop for this computer or for all of the firm's
@@ -1259,7 +1300,6 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
       const blocked = (r: any) => !!(r.held_at || r.withdrawn_at);
       const held = [...new Set(rows.filter(blocked).map((r: any) => String(r.version)))].sort(newer);
       const free = rows.filter((r: any) => !blocked(r)).sort((a: any, b: any) => newer(b.version, a.version))[0];
-      const rbq = await db.from("tally_bridge_rollbacks").select("version, set_at").eq("firm_id", firm).is("cleared_at", null);
       const rb = rbq.error ? null : (rbq.data || []).filter((x: any) => VERSION.test(String(x?.version || ""))).sort((a: any, b: any) => String(b.set_at || "").localeCompare(String(a.set_at || "")))[0];
       out.release = rb ? { version: rb.version, allowed: true, rollback: true } : { newest: true, allowed: true, held, ...(free ? { version: free.version } : {}) };
     }
@@ -2152,7 +2192,7 @@ let gapIdleMissing = 0;                              // migration 182 (tally_gap
 // Fail safe: a beat without pickups, periodPull or the last request's time is never idle. Today's bridge keeps its own
 // typing gate on top (DayPullIdleSec, 60 s by default)
 const TYPING_STALE_MS = 120000;
-function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null } {
+function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null; quietMs: number } {
   const t = (v: unknown) => typeof v === "string" && !isNaN(Date.parse(v)) ? Date.parse(v) : NaN;
   const key = (v: unknown) => typeof v === "string" ? v.trim().toLowerCase().split(/\s+/).join(" ") : "";     // (the bridge's companyKey)
   const pick = Array.isArray(b?.pickups) ? b.pickups : null;
@@ -2174,7 +2214,9 @@ function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; ty
   const typingAt = at > 0 ? new Date(at).toISOString() : null;
   const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
   const quiet = at > 0 ? now - at : Infinity;
-  return { idle: !!known && !b?.paused && b?.tallyState !== "busy" && quiet >= (ms <= 300 ? 5000 : 60000), typingAt };
+  const idle = !!known && !b?.paused && b?.tallyState !== "busy" && quiet >= (ms <= 300 ? 5000 : 60000);
+  // next-speed: how long Tally has been left alone, only when idle (0 otherwise): the older entries' pace (periodPace)
+  return { idle, typingAt, quietMs: idle ? quiet : 0 };
 }
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }, idle = false): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
@@ -4782,6 +4824,18 @@ Deno.serve(sentry.wrap(async (req) => {
   // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
   // and nothing it says is kept. A cloud without the function: as before
   let boundOwn = "";     // 2.3.1: the bridge id the bind just found this computer's own (its idRefused, if any, was cleared there)
+  // next-fix-postok (staging 23-Nov-2026: a posting stopped "could not confirm in time" while each round trip took ~0.35 s):
+  // post_ok's two reads of the posting (its bridge's Changes only, the posting's row) are asked here, beside the binding
+  // below, each cut at what is left of the budget. All three are read only for the answer and each must be had before
+  // post: true (post_ok below awaits them in the same order as before), so nothing is allowed that was not allowed before;
+  // the answer takes three round trips one after another (the key, these together, the link's GUID), not five
+  const postOkPre = isPostOk && body?.shadow !== true ? (() => {
+    const meP = bridgeOf(dev, body, false).id, idP = String(body.id || "").slice(0, 64);
+    return {
+      co: postOkInTime(postOkLeft, db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", meP).maybeSingle()),
+      q: postOkInTime(postOkLeft, db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", idP).eq("device_id", dev.id).maybeSingle()),
+    };
+  })() : null;
   {
     const bid = body?.bridge && typeof body.bridge === "object" ? String(body.bridge.id || "") : "";
     if (/^go-[0-9a-f]{6,32}$/.test(bid)) {
@@ -4813,18 +4867,25 @@ Deno.serve(sentry.wrap(async (req) => {
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
   // post_ok is read only and answered within its budget: none of the writes below (the beats keep last_seen)
+  // next-speed (the speed plan, #3): a beat writes them while its first look-ups (only reads, which never read them) are
+  // asked, side by side (seenWrite, awaited there before anything else is written); every other call waits for them here
+  let seenWrite: Promise<void> = Promise.resolve();
   if (!isPostOk) {
-    // FinCom Bridge 2.5.12 (migration 154): a computer whose bridge was updated tries every held entry of the firm again
-    if (body.version && dev.version && String(body.version).slice(0, 40) !== String(dev.version)) {
-      const { error } = await db.rpc("tally_period_held_release", { p_firm: firm, p_version: String(body.version).slice(0, 40) });
-      if (error && !missingFn(String(error.message || ""))) fail("period_held_release", error);
-    }
-    if (body.kind === "hello" && body.info && typeof body.info === "object") {
-      // kept beside the heartbeat and history (it used to replace them)
-      const i = body.info, prev = (dev.info && typeof dev.info === "object") ? dev.info : {};
-      seen.info = { ...prev, computer: String(i.computer || "").slice(0, 60), user: String(i.user || "").slice(0, 60) };
-    }
-    await db.from("tally_devices").update(seen).eq("id", dev.id);
+    seenWrite = (async () => {
+      // FinCom Bridge 2.5.12 (migration 154): a computer whose bridge was updated tries every held entry of the firm again
+      if (body.version && dev.version && String(body.version).slice(0, 40) !== String(dev.version)) {
+        const { error } = await db.rpc("tally_period_held_release", { p_firm: firm, p_version: String(body.version).slice(0, 40) });
+        if (error && !missingFn(String(error.message || ""))) fail("period_held_release", error);
+      }
+      if (body.kind === "hello" && body.info && typeof body.info === "object") {
+        // kept beside the heartbeat and history (it used to replace them)
+        const i = body.info, prev = (dev.info && typeof dev.info === "object") ? dev.info : {};
+        seen.info = { ...prev, computer: String(i.computer || "").slice(0, 60), user: String(i.user || "").slice(0, 60) };
+      }
+      await db.from("tally_devices").update(seen).eq("id", dev.id);
+    })();
+    seenWrite.catch(() => {});     // (its error is met where it is awaited, never an unhandled one)
+    if (body.kind !== "beat") await seenWrite;
   }
 
   try {
@@ -4843,12 +4904,17 @@ Deno.serve(sentry.wrap(async (req) => {
         const beatAt = new Date().toISOString();
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
-        const [speedBooks, pickups, co] = await Promise.all([
+        // next-speed (the speed plan, #3): the computer's last_seen written (seenWrite, above) and Stop reading / the version
+        // it may install (bridgeControl, below: its own reads, and the pilot's evidence) beside these reads, which need neither
+        const [speedBooks, pickups, co, ctl] = await Promise.all([
           speedBooksFor(firm, b),
           // bridge 2.5.10: the days as the bridge took them (pickupsOf); none from an older bridge
           pickupsOf(b, prevInfo, me.id, (c: string) => bookForBeat(firm, c)),
           // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
-          changesOnly(dev, me.id)]);
+          changesOnly(dev, me.id),
+          // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
+          bridgeControl(dev, firm, me, prevInfo),
+          seenWrite]);
         // migration 203 (the final review): the beat names the bridge that sent it, so a posting's words are read only from
         // its own bridge's beat (tally_post_elsewhere_why)
         const beat = { at: beatAt, bridge: me.id, tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
@@ -4926,8 +4992,6 @@ Deno.serve(sentry.wrap(async (req) => {
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         if (pickups.length) (beat as any).pickups = pickups;
         if (co) (me.entry as any).changesOnly = true;
-        // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
-        const ctl = await bridgeControl(dev, firm, me, prevInfo);
         // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
         const ug = gateTrack(prevInfo, beat, Date.now());
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
@@ -4994,6 +5058,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (co || !may) await rescuePosts(dev);
         // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
         // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
+        if (!co && may) await resumePaused(dev, me.id);   // next-fix-post-resume: counted (and taken) at once below
         const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
         // migration 139: the newest version only while idle with Tally, at its time, in its computer's slot
         if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prevInfo, beat, ug, posts, (ctl.out as any).release);
@@ -5073,8 +5138,11 @@ Deno.serve(sentry.wrap(async (req) => {
         const periodStopped = !!beat.paused || !!beat.readStopped || !!(info as any).readStop;
         // review 245 R15 (L5): at most one list of days every 5 s a computer (an empty list while stopped is never held)
         // next-fast-entries (periodpace.js): a bridge whose beat says its fast read is on (FastEntries) is handed up to 30 days
-        // by day too; every other bridge as before (3 by day, 30 at night)
-        const pace = periodPace(periodNight, b);
+        // by day too; every other bridge as before (3 by day, 30 at night). next-speed (the speed plan, #1): by day a bridge whose
+        // Tally has been left alone a minute or more (lightIdle quiet) is handed more only when its beat says it takes a wide
+        // list by day (periodpace.js wideByDay: today only FastEntries; a default bridge reads at most 3 by day, so more
+        // would be stamped handed out and never read)
+        const pace = periodPace(periodNight, b, quiet.quietMs);
         const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bRead, periodStopped, pace.max, pace.night, fastOn(b), { dev, bridge: me.id, shared: gate.shared }, quiet.idle) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)
@@ -5139,17 +5207,14 @@ Deno.serve(sentry.wrap(async (req) => {
         const meOB = bridgeOf(dev, body, false), meO = meOB.id;
         const no = (stop: string, error: string) => reply(200, { ok: true, post: false, stop, error });
         // a read of the database cut at what is left of the budget (an abort or a throw: an error, as any other)
-        const inTime = async (qb: any): Promise<any> => {
-          const left = postOkLeft() - 150;
-          if (left < 50) return { error: { message: "post_ok: out of time" } };
-          try { return await qb.abortSignal(AbortSignal.timeout(left)); } catch (e) { return { error: { message: String((e as Error)?.message || e) } }; }
-        };
+        const inTime = (qb: any): Promise<any> => postOkInTime(postOkLeft, qb);
         if (!mayPost(dev, meO, (meOB.entry as any).user)) return no("notMain", "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one does not post.");
-        const co: any = await inTime(db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", meO).maybeSingle());
+        // (next-fix-postok) the two reads asked beside the binding, above (the same reads, the same bridge and posting)
+        const co: any = await (postOkPre ? postOkPre.co : inTime(db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", meO).maybeSingle()));
         if (co.error && !missingRel(co.error)) { console.error("tally-ingest: post_ok changes only not read", dev.id, String(co.error.message || "").slice(0, 200)); return postOkUnsure(); }
         if (!co.error && co.data?.changes_only === true) return no("notMain", CHANGES_ONLY);
         const id = String(body.id || "").slice(0, 64);
-        let q: any = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", id).eq("device_id", dev.id).maybeSingle());
+        let q: any = await (postOkPre ? postOkPre.q : inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", id).eq("device_id", dev.id).maybeSingle()));
         // a cloud without 203 (company_guid): read without it; without 174 (stop_reason) or 54 (target_bridge, resend_only): without them
         if (q.error && /company_guid/.test(String(q.error.message || ""))) q = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle());
         if (q.error && /stop_reason|taken_by|target_bridge|resend_only/.test(String(q.error.message || ""))) q = await inTime(db.from("tally_post_jobs").select("status, checking").eq("id", id).eq("device_id", dev.id).maybeSingle());
@@ -5510,29 +5575,36 @@ Deno.serve(sentry.wrap(async (req) => {
           // the posting's ids show nothing of it sent on this try (a re-send list: those entries alone; else every entry, and
           // nothing ever stamped accepted), the posting is put back for the same bridge at once (taken_by and the list kept,
           // nothing else changed), so it is sent once FinCom answers, not after the requeue's 30 minutes. Anything else: as
-          // before (stored; the requeue and the checks judge it)
+          // before (stored; the requeue and the checks judge it).
+          // next-fix-post-resume (the owner's "yes to both", 23-Nov-2026): stopped so PART-WAY (a part sent on this try or
+          // an earlier one), its own bridge holding it, no re-send list, and 36b's resend guard taking it: kept taken, said
+          // as paused (POST_PAUSED); this bridge's beat puts it back for this same bridge a few minutes later
+          // (resumePaused), and the bridge sends only the rest: what it sent is kept in its results and refused on its own
+          // record (posted-ids.json, sentBeforeRefusal; bridge-go/postresume_test.go)
           const msg0 = String(body.message || "");
-          if (!c.stop_reason && ["taken", "running"].includes(c.status) && st === "taken" && /^Stopped by FinCom before part 1 of \d+ was sent: /.test(msg0) && msg0.includes("could not confirm in time")) {
+          const stopAt = !c.stop_reason && ["taken", "running"].includes(c.status) && st === "taken" && msg0.includes("could not confirm in time") ? /^Stopped by FinCom before part (\d+) of \d+ was sent: /.exec(msg0) : null;
+          if (stopAt) {
             const only = Array.isArray(c.resend_only) && c.resend_only.length ? new Set((c.resend_only as unknown[]).map(String)) : null;
             const ours = (x: any) => !only || (x && only.has(String(x.id || "")));
             const sentAny = (r: any) => r && (r.ok === true || r.sent === true || r.outcomeUnknown === true || r.accepted === true || r.held === true || SENT_STATES.includes(String(r.state || "")));
             const prior = only ? [] : ([] as any[]).concat(Array.isArray(c.results) ? c.results : [], Array.isArray(c.items) ? c.items : []);   // (a re-send list: its earlier tries judged already)
             // (the posting's ids in pages of 1000: PostgREST answers 1000 rows at most)
             let ids0: any[] = [], idsErr: any = null;
-            for (let from = 0; from < 100000; from += 1000) {
+            for (let from = 0; stopAt[1] === "1" && from < 100000; from += 1000) {
               const { data: pg, error: pe } = await db.from("tally_post_ids").select("fincom_id, entry_id, accepted_at").eq("job_id", id).order("fincom_id").range(from, from + 999);
               if (pe) { idsErr = pe; break; }
               ids0 = ids0.concat(pg || []);
               if ((pg || []).length < 1000 || (from > 0 && ids0.length > from + 1000)) break;
             }
             const stamped = !!idsErr || ids0.some((r: any) => r && r.accepted_at && (!only || only.has(String(r.entry_id || "")) || only.has(String(r.fincom_id || ""))));
-            const anySent = accepted.size > 0 || stamped || (results as any[]).filter(ours).some(sentAny) || prior.some(sentAny)
+            const anySent = stopAt[1] !== "1" || accepted.size > 0 || stamped || (results as any[]).filter(ours).some(sentAny) || prior.some(sentAny)
               || ((items || []) as any[]).filter(ours).some((x) => !x || String(x.state || "waiting") !== "waiting");
             // (the sixth review) and only when 36b's resend guard will take it: the row as merged, asked first
             // (tally_post_job_accepted: an entry Tally accepted that is not confirmed, on the posting as it would be written);
             // an error, or anything named: not put back (stored as before). The write below falls back the same way
             let guardOk = false;
-            if (!anySent) {
+            const mine = /^go-[0-9a-f]{6,32}$/.test(meU) && c.taken_by === meU;
+            if (!anySent || (mine && !only)) {
               const { data: who, error: wErr } = await db.rpc("tally_post_job_accepted", { p_job: id, p_results: b.row.results ?? null, p_items: b.row.items ?? null });
               guardOk = !wErr && (who === null || who === undefined || who === "");
               if (!guardOk) console.log("tally-ingest posts_update: not put back (Tally accepted " + String(who || wErr?.message || "?").slice(0, 120) + ")", id);
@@ -5542,6 +5614,11 @@ Deno.serve(sentry.wrap(async (req) => {
               b.row.status = "waiting";
               b.row.message = s("Put back for the same FinCom Bridge: FinCom could not confirm in time that it may be sent, so the bridge sent nothing of it; it is sent once FinCom answers.", 500);
               b.status = "waiting";
+              return b;
+            }
+            if (anySent && guardOk && mine && !only) {
+              b.row.message = s(POST_PAUSED, 500);
+              console.log("tally-ingest posts_update: paused part-way (FinCom could not confirm in time); carried on for the same bridge in a few minutes", id);
               return b;
             }
           }

@@ -59,3 +59,59 @@ export function parseSheetMap(text: string, head: string[], fields: string[] = S
   Object.entries(j.why || {}).forEach(([f, w]) => { if (map[f]) why[f] = String(w ?? "").slice(0, 80); });
   return { map, transforms: { date: ["dmy", "mdy", "ymd"].includes(t.date) ? t.date : "dmy", groupByNo: t.groupByNo !== false }, skip: (Array.isArray(j.skip) ? j.skip : []).map((x: unknown) => String(x).slice(0, 60)).slice(0, 5), why };
 }
+
+// next-payroll (docs/PAYROLL.md): a salary sheet's new layout. The header and AT MOST 3 rows, names, PANs, codes, e-mails,
+// phones and account numbers already masked in the browser (app/src/lib/payrollSheet.js samples); the answer is which
+// column is which, never a figure. The person confirms it, it is saved as the client's rule, and that layout is read by
+// the rule alone from then on.
+export const PAYROLL_FIELDS = ["name", "code", "pan", "days", "month", "date", "gross", "tds", "pt", "pfEmp", "pfEr", "esiEmp", "esiEr", "net"];
+export const PAYROLL_ROWS = 3;
+export const PAYROLL_SYSTEM = [
+  "You map the columns of an Indian company's monthly salary sheet (pay register) to an accounting app's fields.",
+  "You are given the header row and up to 3 data rows. Names, PANs, employee codes, phone and account numbers are masked (TEXT_1, PAN_1, CODE_1, NUMBER_1); keep to the shape of the values.",
+  "Fields: name (employee name), code (employee code or id), pan, days (days paid or attendance), month (the salary month, e.g. Oct-2026), date (the date salary was paid; never a date of birth, joining or leaving),",
+  "gross (gross pay or total earnings, one column), tds (income tax deducted), pt (professional tax), pfEmp (the employee's PF), pfEr (the employer's PF contribution), esiEmp (the employee's ESI), esiEr (the employer's ESI contribution), net (net pay, take home).",
+  "Also list earn: every earning head column (basic, DA, HRA, allowances, bonus, overtime, arrears), and ded: every other deduction column out of the employee's pay (advance or loan recovery, canteen, LWF).",
+  "Never put a total, gross or net column in earn or ded; never a column in two places; never a date of birth, joining or leaving as month or date.",
+  "Map a field only when a column clearly holds it; leave it out otherwise. Use the column's header text exactly as given.",
+  "Answer only JSON: {\"map\": {field: header}, \"earn\": [header], \"ded\": [header], \"why\": {field: \"a few words\"}}.",
+].join("\n");
+// (review 8) the server's own second mask, whatever the page sent: a full date (birth, joining, pay) as DATE, an account,
+// phone or UAN of 9 digits or more as NUMBER, a PAN or an e-mail as such, and every figure rounded to two significant
+// digits (a day count up to 31 kept), any other text (a name) as TEXT; a pay month ("Oct-2026", "10/2026") and the page's
+// own tokens (TEXT_1) as they are
+export function payrollMask(v: unknown): string {
+  const s = String(v ?? "").trim();
+  if (!s || /^(TEXT|PAN|CODE|NUMBER|EMAIL|DATE)_\d+$/.test(s)) return s;
+  if (/^[A-Z]{5}\d{4}[A-Z]$/i.test(s)) return "PAN";
+  if (/@/.test(s)) return "EMAIL";
+  if (/^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}([T ].*)?$/.test(s) || /^\d{1,2}[-\s]?[a-z]{3,9}[-\s']*\d{2,4}$/i.test(s)) return "DATE";
+  if (/^\d{1,2}[-\/]\d{4}$|^\d{4}[-\/]\d{1,2}$/.test(s) || /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\s'\/]*\d{2,4}$/i.test(s)) return s;
+  if (/^\+?\d{9,}$/.test(s.replace(/[\s\-./]/g, "")) && !/^\d{1,3}(,\d{2,3})+(\.\d+)?$/.test(s) && !/\.\d{1,2}$/.test(s)) return "NUMBER";
+  const t = s.replace(/^(rs\.?|inr|₹)\s*/i, "").replace(/[,\s₹]/g, "");
+  if (/^-?\d*\.?\d+$/.test(t)) {
+    const n = Number(t), a = Math.abs(n);
+    if (a <= 31) return String(Math.round(n * 2) / 2);
+    const k = Math.pow(10, Math.max(0, Math.floor(Math.log10(a)) - 1));
+    return String((n < 0 ? -1 : 1) * Math.round(a / k) * k);
+  }
+  // (re-review 8) any other text (a name, a department, a bank) as TEXT, whatever the page did
+  return /[\p{L}]/u.test(s) ? "TEXT" : "OTHER";
+}
+export function payrollPrompt(head: string[], rows: string[][]): string {
+  const h = (head || []).slice(0, 80).map((x) => String(x ?? "").slice(0, 60));
+  const r = (rows || []).slice(0, PAYROLL_ROWS).map((row) => (row || []).slice(0, 80).map((x) => payrollMask(x).slice(0, 40)));
+  return "A salary sheet.\nHeader: " + JSON.stringify(h) + "\nRows:\n" + r.map((x) => JSON.stringify(x)).join("\n");
+}
+// the answer checked: only the fields, only the sheet's own headers, a column in one place at most
+export function parsePayrollMap(text: string, head: string[]): { map: Record<string, string>, earn: string[], ded: string[], why: Record<string, string> } {
+  const m = String(text || "").match(/\{[\s\S]*\}/);
+  let j: any = {};
+  try { j = m ? JSON.parse(m[0]) : {}; } catch { j = {}; }
+  const heads = new Set((head || []).map((x) => String(x ?? ""))), used = new Set<string>(), map: Record<string, string> = {};
+  Object.entries(j.map || {}).forEach(([f, col]) => { const c = String(col ?? ""); if (!PAYROLL_FIELDS.includes(f) || !heads.has(c) || used.has(c)) return; map[f] = c; used.add(c); });
+  const list = (a: unknown) => (Array.isArray(a) ? a : []).map((c) => String(c ?? "")).filter((c) => heads.has(c) && !used.has(c) && (used.add(c), true));
+  const earn = list(j.earn), ded = list(j.ded), why: Record<string, string> = {};
+  Object.entries(j.why || {}).forEach(([f, w]) => { if (map[f] || f === "earn" || f === "ded") why[f] = String(w ?? "").slice(0, 80); });
+  return { map, earn, ded, why };
+}

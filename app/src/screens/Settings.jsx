@@ -12,6 +12,7 @@
 // (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 // next-room-2: AI help's own working and buttons (not in the program every page loads)
+import "../../../src/js/99-screen-parts.js";
 import "../../../src/js/50-ai-help-page.js";
 import { SheetFormats } from "../parts/SheetPanel.jsx";
 // GSTLock's checks of a change (the ISD switch, GST API all clients): with this screen, as with the GST screens (build.py lazy_files)
@@ -43,13 +44,18 @@ import LogoPick from "../parts/LogoPick.jsx";
 // next-assistant (phase 1 design): the client's own contacts, for Daily Check's weekly questions
 import ClientContacts from "./daily/ClientContacts.jsx";
 import TrustLevels from "./daily/TrustLevels.jsx";
-import { clientTallyState, tallyDevs, pcLive, seenWords, openOn } from "../lib/tallyState.js";
+import { clientTallyState } from "../lib/tallyState.js";
+import { tallyOffline, gstSignals } from "../lib/firmNeeds.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 // the two-pane look of both pages (the owner's redesign of 17-Nov-2026): with this screen's file, not in the main styles
 import "./settings-layout.css";
 // the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
 import "../../../src/js/99-pending-suppliers.js";
+// the new look (newlook/flag.js): Settings in six plain groups, Tally out of it
+import { newLook, setNewLook } from "../newlook/flag.js";
+const NLMail = lazy(() => import("../newlook/Mail.jsx"));
+import { density, setDensity } from "../parts/density.js";
 
 // the list on the left: groups of sections; each section one line, its label and, at the right, where it stands now
 // (a section that needs something done: warn, in the warning colour; its whole status in the tip)
@@ -86,7 +92,7 @@ const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstA
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
 const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
-  plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here." };
+  plan: "Nothing to save here.", mail: "Nothing to save here: the form has its own Save.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here." };
 
 // the Save bar's own words, for a section that asks for them (GST settings, the owner's redesign of 17-Nov-2026)
 const SEC_BAR = { gstset: { count: true, discardText: "Undo my changes" } };
@@ -174,24 +180,9 @@ function FirmDetails() {
 //   the tab was hidden)
 //   the GST API links that lapsed: a client's GSTIN that once had a session (connected, ended or failed) and is not live
 //   now; a GSTIN only looked up (GSTAPI.seen, set by every 2B page's card before the server answers) is not counted
-const WEEK = 7 * 864e5;
 function firmSignals() {
-  const beatOf = (d) => (((d && d.info) || {}).beat || {}), beatAt = (d) => Date.parse(beatOf(d).at || (d && d.last_seen) || "") || 0;
-  const TL = typeof TLight === "object" ? TLight.st || {} : {};
-  // read within 3 minutes (a beat every 30 s), each beat's age told as of that read (devState at TL.at), not as of now
-  const fresh = !!TL.at && Date.now() - TL.at < 180000 && !(typeof TStale === "object" && TStale.now(["light"]));
-  let own = null, answers = false;
-  try { own = window.FCOwn && window.FCOwn.bridge ? window.FCOwn.bridge() : null; answers = !!(window.FCOwn && window.FCOwn.state && (window.FCOwn.state() || {}).state === "ok"); } catch (e) { own = null; }
-  const liveAtRead = (d) => { try { const b = typeof devState === "function" ? devState(d, TL.at).bridge : ""; return b === "online" || b === "reconnecting"; } catch (e) { return pcLive(d); } };
-  const dev = own && own.dev && tallyDevs().find((d) => d.id === own.dev.id);
-  const hadTally = (d) => { const b = beatOf(d); return !!b.tally || b.tallyState === "open" || b.tallyState === "busy" || openOn(d).length > 0; };
-  // (their bridge answering this browser now: the top bar says Connected, so nothing here says otherwise)
-  const off = fresh && !answers && dev && beatAt(dev) && TL.at - beatAt(dev) < WEEK && hadTally(dev) && !liveAtRead(dev) ? [dev] : [];
-  const G = typeof GSTAPI === "object" ? GSTAPI : null;
-  const gstins = Array.from(new Set(Object.values(S.companies || {}).filter((c) => c && !c.deleted).map((c) => String(c.gstin || "").toUpperCase()).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g))));
-  const lapsed = G ? gstins.filter((g) => { const x = (G.sess || {})[g]; return !!x && !!(x.connectedAt || x.endedAt || x.error) && !G.live(g); }).length : 0;
-  const soon = G ? gstins.filter((g) => { const x = G.live(g) && G.accessLeft ? G.accessLeft(g) : null; return x && x.soon && !x.over; }).length : 0;
-  return { off, offSince: off.length ? seenWords(new Date(beatAt(off[0])).toISOString()) : "", notLinked: lapsed, soon };
+  // (lib/firmNeeds.js: the same reading for the new look's firm Home)
+  return Object.assign({}, tallyOffline(), gstSignals());
 }
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
 
@@ -233,6 +224,36 @@ function firmGroups(sig = firmSignals()) {
   return groups.filter((g) => g.items.length);
 }
 
+// the new look (the owner, 22-Nov-2026: "Settings: remove anything unused, Tally out of Settings, easy to understand"):
+// the same sections in plain groups; what is Tally's is on the Tally page (Connect Tally and Sent to Tally were only links
+// there; Books in the cloud and Post automatically are the Tally page's Settings tab); the empty group headings go
+export const NL_MOVED = { bridge: "computers", tcloud: "settings", postlog: "sent", autopost: "settings" };
+function nlGroups(groups) {
+  const by = {}; groups.forEach((g) => g.items.forEach((i) => { by[i.id] = i; }));
+  const pick = (...ids) => ids.map((id) => by[id]).filter(Boolean);
+  const people = by.account && Object.assign({}, by.account, { label: "People and sign-in" });
+  const look = { id: "look", label: "Look", about: "The new look of FinCom, and how close the rows of a table sit. For you only.", status: newLook() ? "new look" : "classic" };
+  // (the owner, 23-Nov-2026) GST portal links are on the firm's GST page (Due dates › GST portal links); Daily Check's
+  // sending to clients is here, under Email and messages; Academy batches stay
+  const mail = Cloud.on() ? { id: "mail", label: "Email to clients", about: "Daily Check’s questions to clients: test mode or for real, and the firm’s test email and WhatsApp.", status: "" } : null;
+  return [
+    { title: "Firm", items: [by.firm, people, by.batches].filter(Boolean) },
+    { title: "My account", items: [look] },
+    { title: "Client defaults", items: pick("rates") },
+    { title: "Email and messages", items: [mail].filter(Boolean) },
+    { title: "Billing", items: pick("plan") },
+    { title: "Advanced", items: pick("reading", "ai", "moves") },
+  ].filter((g) => g.items.length);
+}
+function LookSection() {
+  return <Card title="Look" note="For you only, on this browser. Everyone else keeps their own choice.">
+    <label className="chk" style={{ display: "flex", gap: 10, padding: "6px 0" }}><input type="checkbox" data-set-newlook="" checked={newLook()} onChange={(ev) => setNewLook(ev.target.checked)} />
+      <span><b>New look</b><br /><span className="note">A shorter menu, + New, search (Ctrl+K), Bank with a Statements tab, one Tally page.</span></span></label>
+    <label className="chk" style={{ display: "flex", gap: 10, padding: "6px 0" }}><input type="checkbox" data-set-compact="" checked={density() === "compact"} onChange={(ev) => setDensity(ev.target.checked ? "compact" : "comfortable")} />
+      <span><b>Compact rows</b><br /><span className="note">More lines of a table on the screen.</span></span></label>
+  </Card>;
+}
+
 // Needs you: each thing to do, as a link to its section (only sections the list has)
 function firmNeeds(sig, ids) {
   const out = [];
@@ -269,7 +290,12 @@ function AdminConsoleLink() {
 }
 
 export function FirmSettings() {
-  const sig = firmSignals(), groups = firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));
+  const nl = newLook();
+  // an old address of a section now on the Tally page (#/settings/bridge, …) opens it there
+  if (nl && NL_MOVED[S.settingsTab]) { const t = NL_MOVED[S.settingsTab]; S.settingsTab = null; setTimeout(() => { goTallyPage(t); if (t === "sent") { S.logAll = true; render(); } }, 0); }
+  // GST portal links: on the firm's GST page (Due dates › GST portal links)
+  if (nl && S.settingsTab === "gstapi") { S.settingsTab = null; setTimeout(() => { S.nlDueTab = "gstapi"; navHome("compliance"); }, 0); }
+  const sig = firmSignals(), groups = nl ? nlGroups(firmGroups(sig)) : firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));
   // no section asked for (Settings in the sidebar, #/settings): Firm details on a computer, the list on a phone
   const list = !ids.includes(S.settingsTab);
   const cur = list ? "firm" : S.settingsTab;
@@ -290,10 +316,13 @@ export function FirmSettings() {
     ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
     autopost: () => <AutoPostSettings />,
     moves: () => <MoveSwitches />,
+    look: () => <LookSection />,
+    mail: () => <Suspense fallback={null}><NLMail /></Suspense>,
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
   return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}
       list={list} back={back} top={<NeedsStrip title="Needs you" items={firmNeeds(sig, ids)} pick={pick} />}>{body()}</Layout>
+    {nl && <p className="note" data-set-tally-note="">Tally is set up on the Tally page only. <button type="button" className="linkbtn" onClick={() => goTallyPage("computers")}>Open the Tally page</button></p>}
     <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
 }
 

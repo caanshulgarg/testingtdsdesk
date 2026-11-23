@@ -7,6 +7,7 @@
 // e-invoicing, and "Rarely changed" folded, each with Change), Client-wide, Contacts.
 // State: S.gsetReg (the GSTIN whose settings are shown), S.gsetFrom / S.gsetType (a filing type being chosen),
 // S.gcontQ (the contacts search).
+import "../../../../src/js/99-screen-parts.js";
 import GstPortalLogin from "./GstPortalLogin.jsx";
 import { useEffect, useRef, useState } from "react";
 import Tag from "../../parts/Tag.jsx";

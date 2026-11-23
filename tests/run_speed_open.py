@@ -16,6 +16,7 @@ ScriptDuration: parse, compile, run), and the bytes of the program files (as sen
 levels). Then SPEED_IDLE_S seconds (default 120) on each screen at no wait: the cloud requests a minute, by endpoint.
 
   SPEED_JSON=file   also writes the numbers as JSON
+  SPEED_NET=kbps,ms the line throttled as well (download kbit/s, latency ms; with CF_GZIP=1 the files are sent gzip'd)
   limits checked: the idle requests a minute on Today <= SPEED_MAX_IDLE (default: none)"""
 import os, re, sys, json, time, asyncio, gzip, glob, threading, functools, http.server, subprocess, collections, tempfile, shutil, urllib.parse
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -28,6 +29,7 @@ CPU = float(os.environ.get("SPEED_CPU", "4"))
 RTTS = [int(x) for x in os.environ.get("SPEED_RTT", "0,250").split(",") if x.strip()]
 IDLE = int(os.environ.get("SPEED_IDLE_S", "120"))
 PORT = int(os.environ.get("SPEED_PORT", "9571"))
+NET = [int(x) for x in os.environ.get("SPEED_NET", "").split(",")] if os.environ.get("SPEED_NET") else None
 fails = []
 
 READY = "() => typeof S === 'object' && S && S.firm && typeof render === 'function' && !document.querySelector('[data-boot-part]')"
@@ -119,6 +121,8 @@ async def main():
             cdp = await ctx.new_cdp_session(pg)
             await cdp.send("Performance.enable")
             if CPU > 1: await cdp.send("Emulation.setCPUThrottlingRate", {"rate": CPU})
+            # SPEED_NET="down kbps,latency ms" (next-speed-2): the line throttled too (with CF_GZIP=1 the files go gzip'd)
+            if NET: await cdp.send("Network.enable"); await cdp.send("Network.emulateNetworkConditions", {"offline": False, "latency": NET[1], "downloadThroughput": NET[0] * 128, "uploadThroughput": NET[0] * 64})
             await pg.goto("about:blank")
             del log[:]
             t0 = time.time()

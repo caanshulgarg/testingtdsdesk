@@ -106,17 +106,6 @@ function choiceConfirm(co, key, value, opts){
   Drafts.direct(() => { choiceWrite(co, key, rec); if (!opts.nosave) Store.saveCompany(co); }, {bypass: true});
   return rec;
 }
-// a person takes a confirmation back (the owner, 14-Oct-2026: "if we want to unconfirm that, we can do that"): the value
-// stays as a guess to confirm again, with who unconfirmed it and when; posting waits for a new Confirm (choiceUsable)
-function choiceUnconfirm(co, key, opts){
-  if (!co) return null;
-  const was = choiceGet(co, key);
-  if (!was || was.state !== "confirmed") return null;
-  const now = new Date().toISOString(), who = (opts && opts.by) || choiceWho();
-  const rec = {value: was.value || "", state: "guessed", by: who, at: now, why: "unconfirmed by " + who, unok: {by: who, at: now}, prev: {value: was.value || "", state: was.state, by: was.by || "", at: was.at || ""}};
-  Drafts.direct(() => { choiceWrite(co, key, rec); if (!(opts && opts.nosave)) Store.saveCompany(co); }, {bypass: true});
-  return rec;
-}
 // forget a choice (a GST override emptied in Client setup: each bill picks its own again)
 function choiceForget(co, key, opts){ if (!co) return; Drafts.direct(() => { choiceWrite(co, key, null); if (!(opts && opts.nosave)) Store.saveCompany(co); }, {bypass: true}); }
 // one of two records of the same choice: a confirmed one is never replaced by a guess; else the later one
@@ -221,19 +210,6 @@ function bankAccountOf(co, st){
   return a;
 }
 function bankHealAccounts(co, stmts){ (stmts || []).forEach(st => bankAccountOf(co, st)); }
-// a person picked and confirmed the ledger of a bank account (the bank page, Bank accounts in Client setup)
-function bankConfirmAccLedger(accId, v){
-  const b = B(), co = CO(b ? b.cid : S.coId), a = choiceAcc(co, accId);
-  if (!a) return false;
-  const ex = exactLedger(v) || (hasLedgerList() ? "" : String(v || "").trim());
-  if (!ex){ toast("“" + v + "” is not a Tally ledger. Choose one from the list."); return false; }
-  choiceConfirm(co, "bank:" + accId, ex);
-  if (b && b.cid === co.id){ suggestAll(b.rows, true); saveBank({rows: true}); }
-  toast("Tally ledger confirmed: " + ex + ".");
-  render();
-  return true;
-}
-
 /* ---------- posting uses confirmed choices only ---------- */
 // a bill's lines taken from Client setup whose choice is not confirmed: the one-line reason, or ""
 function billGuessedWhy(e, co){
