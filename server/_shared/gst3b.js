@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s446614ef7dc90b7b";
+const GST3B_SRC = "s45e5fafa82e922ca";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1836,7 +1836,24 @@ const GSTR = {
     return null;
   },
   // invoices that came from a marketplace, kept in Sales
-  fromSales(ym){
+  // (release review 23-Nov-2026: a posted one was counted twice, here and as its Tally entry in the books: AMZ-21, 10,000
+  // and IGST 1,800, came to 20,000 and 3,600 in GSTR-1 and 3.1(a). An invoice in the books (inBooks) is counted only as
+  // its Tally entry; table 14 takes it from here (ecoBooked, below), since the entry does not name the operator)
+  fromSales(ym){ return this.marketRows(ym).filter(r => !r.booked); },
+  // the FinCom ids on the books' entries (" | TDSDesk:<id>" in the narration, as a posted sale carries it), lower case
+  // (read once for the books' list of entries as it is: by the list and its length)
+  bookTags(){
+    const vs = (S.books || {}).vouchers || [], c = this._tags;
+    if (c && c.vs === vs && c.n === vs.length) return c.t;
+    const t = new Set(); vs.forEach(v => { if (v.opt) return; (String(v.narr || "").match(/TDSDesk:([A-Za-z0-9]+)/ig) || []).forEach(m => t.add(m.slice(8).toLowerCase())); });
+    this._tags = {vs, n: vs.length, t};
+    return t;
+  },
+  // an invoice of Sales that is in the books: posted (Tally accepted it), found already in Tally (intally), or its
+  // FinCom id on an entry of the books (an entry that came back before the invoice was marked posted)
+  inBooks(v){ return ["posted", "intally"].includes(v.status) || this.bookTags().has(String(v.id || "").toLowerCase()); },
+  // every marketplace invoice of the month, booked: true when it is in the books (its entry counts it in tables 4-10 and 3B)
+  marketRows(ym){
     const s = S.sales;
     if (!s || s.cid !== S.coId) return [];
     return (s.list || []).filter(v => v.source === "market" && v.status !== "ignored").map(v => {
@@ -1844,13 +1861,18 @@ const GSTR = {
       if (ym && !GSTR.inP(d, ym)) return null;
       const tax = r2(num(x.cgst) + num(x.sgst) + num(x.igst));
       const P = this.posOfSale({id: v.id, pos: x.placeOfSupply, own: String((this.gstins(S.books)[0]) || "").slice(0, 2), gstin: x.customerGstin, igst: x.igst, cgst: x.cgst, sgst: x.sgst});
-      return {posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: x.placeOfSupply || "", id: v.id, date: d, no: x.number || "", party: x.customerName || "", gstin: (x.customerGstin || "").toUpperCase(),
+      const r = {posCode: P.code, posFrom: P.from, posBad: P.bad, posTally: x.placeOfSupply || "", id: v.id, date: d, no: x.number || "", party: x.customerName || "", gstin: (x.customerGstin || "").toUpperCase(),
         pos: P.code ? (P.from === "tally" ? x.placeOfSupply : this.posName(P.code)) : "", cls: "taxable", rcm: false, hsn: x.hsn || "", supply: "", eco: x.ecommerce || "market", etin: this.ecoGstinOf(x.ecoGstin) || this.ecoGstinOf(x.ecommerce),
         tcs: num(x.tcs), kind: x.noteKind === "credit" ? "CDNR" : (x.customerGstin ? "B2B" : "B2C"), note: x.noteKind || "",
         taxable: num(x.taxable), cgst: num(x.cgst), sgst: num(x.sgst), igst: num(x.igst), cess: num(x.cess),
         rate: num(x.rate) || (num(x.taxable) ? Math.round(tax / num(x.taxable) * 10000) / 100 : 0), total: num(x.total)};
+      if (this.inBooks(v)) r.booked = true;
+      return r;
     }).filter(Boolean);
   },
+  // table 14's rows of the marketplace invoices in the books: their Tally entries are counted in tables 4-10 (outward), so
+  // only here, never in outward
+  ecoBooked(ym){ return this.marketRows(ym).filter(r => r.booked); },
   // an e-commerce operator's GSTIN as written on a sale ("" when it is not one: Amazon's report names the operator only)
   ecoGstinOf(g){ const x = String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, ""); return /^\d{2}[A-Z0-9]{13}$/.test(x) ? x : ""; },
   // GSTR-1 table 14 (17-Oct-2026): supplies made through an e-commerce operator, by the operator's GSTIN (they are also in
@@ -1862,10 +1884,16 @@ const GSTR = {
   //   14(b), the operator pays the tax u/s 9(5): FinCom has no record of such supplies, so it is always empty.
   // {a: [{etin, eco, n, suppval, igst, cgst, sgst, cess}], missing: [{eco, tcs, n, suppval, ...}], b: []}
   ECO_TCS: ["amazon", "flipkart"],
+  // (the owner, 23-Nov-2026) a client's own Shopify store is no e-commerce operator (s.2(45) CGST Act): its sales are the
+  // client's own, in tables 4 to 10, never in table 14
+  ECO_NOT: ["shopify"],
   eco14(ym, reg, g){
     g = g || this.one(ym, reg);
     const typed = typeof GSTSet === "object" ? (GSTSet.peek(reg).ecoGstin || {}) : {}, by = {};
-    g.eco.forEach(r => { (by[r.eco] = by[r.eco] || []).push(r); });
+    // (release review 23-Nov-2026) the operator's invoices posted to Tally too (ecoBooked): their entries are in tables
+    // 4 to 10 but do not name the operator, so table 14 takes each once from the invoice in Sales
+    const booked = g.ecoBooked || this.ecoBooked(ym);
+    g.eco.concat(booked).forEach(r => { if (!this.ECO_NOT.includes(r.eco)) (by[r.eco] = by[r.eco] || []).push(r); });
     const z = (o) => Object.assign({n: 0, suppval: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}, o);
     const add = (o, r) => { const sg = r.kind === "CDNR" ? -1 : 1; o.n++; o.suppval = r2(o.suppval + sg * num(r.taxable)); ["igst", "cgst", "sgst", "cess"].forEach(h => { o[h] = r2(o[h] + sg * num(r[h])); }); };
     const a = {}, missing = {};
@@ -2055,7 +2083,7 @@ const GSTR = {
       .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
     // the operator sales (table 14: eco14 below, the R1 portal screen); the old card's per-operator summary is gone (17-Oct-2026)
     const eco = rows.filter(r => r.eco);
-    return {rows, eco, b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
+    return {rows, eco, ecoBooked: this.ecoBooked(ym), b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
       exp: part("EXP"), nil: part("NIL"), rcm: rows.filter(r => r.rcm),
       b2cRates: byRate(part("B2C")), hsn: Object.values(hsnRows).sort((a, c) => c.taxable - a.taxable),
       series: Object.values(series), total: this.sum(rows)};

@@ -31,6 +31,13 @@
 //   6b. D2: not answered, but a 3B already filed reversed D2: it stays on until the CA says
 //   7b. nil 3B: 3.1(b) IGST payable (an export with payment) is tax payable: not nil
 //   9. PMT-06 (self-assessment): the quarter's second month starts from what the first month left of the credit
+//  10. (release review 23-Nov-2026) a marketplace invoice kept in Sales (Amazon, Flipkart, Shopify; source "market") is
+//      counted exactly once, before and after it is posted to Tally: GSTR-1 tables 4/7 and 14, 3B 3.1(a), rule 42's
+//      turnover. October 2025: a B2C sale S/1 50,000 (CGST/SGST 4,500) in the books; AMZ-21 (Amazon, 10,000, IGST
+//      1,800), FK-31 (Flipkart, 5,000, IGST 900) and SH-41 (the client's own Shopify store, 2,000, IGST 360) in Sales:
+//      3.1(a) 67,000 (IGST 3,060), table 14 Amazon 10,000 and Flipkart 5,000 (u/s 52), never Shopify (no e-commerce
+//      operator: the owner, 23-Nov-2026). Then AMZ-21 posted (its voucher in the books, "| TDSDesk:<id>"), FK-31's voucher
+//      in the books with the invoice not yet marked posted, SH-41 found already in Tally (intally, no tag): the same.
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm");
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
@@ -280,5 +287,36 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     const p1 = x.GSTQ.pmt06("202504", reg), p2 = x.GSTQ.pmt06("202505", reg);
     ok(near(p1.amt.cgst, 0), "April: 800 of tax, 1,000 of credit: nothing to deposit (" + p1.amt.cgst + ")");
     ok(near(p2.amt.cgst, 600) && near(p2.amt.sgst, 600), "May: 800 of tax, 200 of credit left: 600 each (" + f(p2.amt) + ")"); }
+  // ---------------------------------------------------------------- 10. marketplace invoices: once, before and after posting
+  console.log("== 10. a marketplace invoice in Sales is counted once, before and after it is posted");
+  { const KA = "Karnataka";
+    const inv = (id, no, eco, taxable, igst, status, o) => ({id, source: "market", status, customerLedger: "Marketplace Customers", x: Object.assign({number: no, date: "2025-10-0" + no.slice(-1), customerName: "Retail customer", customerGstin: "",
+      placeOfSupply: KA, taxable, igst, cgst: 0, sgst: 0, cess: 0, total: taxable + igst, rate: 18, ecommerce: eco, tcs: eco === "shopify" ? 0 : taxable / 100}, o || {})});
+    const s1 = out("Sales", "20251003", "S/1", "Walk-in Customers", "", 50000, {cgst: 4500, sgst: 4500});
+    const AMZ = "mk7a21", FK = "mk7f31", SH = "mk7s41";
+    const check = (when, b) => {
+      G._carry = null; if (typeof x.perRender === "function") {}
+      const t = T("202510"), g = G.one("202510", reg), e = G.eco14("202510", reg, g), all = e.a.concat(e.missing);
+      const am = all.find((q) => q.eco === "amazon"), fl = all.find((q) => q.eco === "flipkart"), sh = all.find((q) => q.eco === "shopify");
+      const b2c = G.sum(g.b2c), n21 = g.rows.filter((r) => /AMZ-21/.test(r.no)).length, n31 = g.rows.filter((r) => /FK-31/.test(r.no)).length, n41 = g.rows.filter((r) => /SH-41/.test(r.no)).length;
+      const to = x.GSTRev.turnoverNow("202510", reg), j = G.toJson("202510", reg, {plain: true}), cl = ((j.supeco || {}).clttx || []);
+      ok(near(t.net.taxable, 67000) && near(t.net.igst, 3060) && near(t.net.cgst, 4500), when + ": 3.1(a) 67,000, IGST 3,060, CGST 4,500 (" + t.net.taxable + ", " + f(t.net) + ")");
+      ok(near(b2c.taxable, 67000) && near(b2c.igst, 3060) && n21 === 1 && n31 === 1 && n41 === 1, when + ": GSTR-1 B2C (tables 4-7) 67,000, IGST 3,060; AMZ-21, FK-31, SH-41 once each (" + b2c.taxable + ", " + b2c.igst + "; " + [n21, n31, n41] + ")");
+      ok(am && am.n === 1 && near(am.suppval, 10000) && near(am.igst, 1800) && fl && fl.n === 1 && near(fl.suppval, 5000) && near(fl.igst, 900), when + ": table 14 Amazon 1 invoice 10,000 (IGST 1,800), Flipkart 1 invoice 5,000 (" + JSON.stringify(all.map((q) => [q.eco, q.n, q.suppval])) + ")");
+      ok(!sh, when + ": the client's own Shopify store is no e-commerce operator: not in table 14");
+      ok(cl.length === 2 && near(cl.reduce((a, q) => a + q.suppval, 0), 15000), when + ": the JSON's supeco 14(a): two operators, 15,000 (" + JSON.stringify(cl) + ")");
+      ok(near(to.taxable, 67000) && near(to.total, 67000), when + ": rule 42's turnover 67,000 (" + JSON.stringify(to) + ")");
+    };
+    books([s1]);
+    ctx.S.sales = {cid: "t", list: [inv(AMZ, "AMZ-21", "amazon", 10000, 1800, "review", {ecoGstin: "07AAAAZ1111Z1CZ"}), inv(FK, "FK-31", "flipkart", 5000, 900, "review", {ecoGstin: "07AAAAZ2222Z1CZ"}), inv(SH, "SH-41", "shopify", 2000, 360, "review")]};
+    check("before posting", ctx.S.books);
+    // posted: AMZ-21 posted and in the books; FK-31's voucher came back before its status was set; SH-41 was already in
+    // Tally (intally: matched by number, no FinCom tag on its voucher)
+    const pv = (no, amt, igst, id, date) => out("Sales", date, no, "Marketplace Customers", "", amt, {igst}, {pos: KA, narr: "Being sales invoice " + no + " dated 01-Oct-2025 to Retail customer" + (id ? " | TDSDesk:" + id : "")});
+    books([s1, pv("AMZ-21", 10000, 1800, AMZ, "20251001"), pv("FK-31", 5000, 900, FK, "20251001"), pv("SH-41", 2000, 360, "", "20251001")]);
+    ctx.S.sales.list[0].status = "posted"; ctx.S.sales.list[2].status = "intally";
+    check("after posting", ctx.S.books);
+    ctx.S.sales = null;
+  }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

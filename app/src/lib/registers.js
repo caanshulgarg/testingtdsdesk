@@ -832,7 +832,9 @@ const SheetPost = {
       // a marketplace's report (Amazon, Flipkart, Shopify): its invoices are kept as a marketplace's (source "market",
       // as the retired importMarketFile made them), so GSTR.fromSales (server/_shared/gst3b.js) counts them in the month's
       // GSTR-1 / 3B outward supplies and in table 14 by the operator, with the TCS it collected u/s 52 CGST Act (review
-      // of e7bf15906: they were made "sheet", in neither until posted). A GST register (generic) stays the client's own.
+      // of e7bf15906: they were made "sheet", in neither until posted). Once posted (or found in Tally) its Tally entry is
+      // what counts, and table 14 takes it from here (GSTR.ecoBooked); a Shopify store is the client's own, never in table
+      // 14 (GSTR.ECO_NOT). A GST register (generic) stays the client's own.
       // One held for a person (a cancellation with no sale in the report, a refunded or voided order) is "sheet" until it
       // is put right (heldV, above), so it is never counted with the report's own signs
       const mk = ["amazon", "flipkart", "shopify"].includes(d.market) ? d.market : "";

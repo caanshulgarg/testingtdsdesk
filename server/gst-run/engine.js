@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.11";
+export const REV = "171.12";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -255,7 +255,7 @@ function itcRow(guid, x) {
 }
 // today's engine on a month, in the shape of gst_month's rows (reg, sec, k1, k2, k3 -> n and the figures): 3.1 and 3.2
 // from GSTR.sec31 (threeBm's own), GSTR-1 from GSTR.one; the marketplace sales kept in Sales are left out (they are not
-// entries of the book: notes.market says how many there are). b: books() of the whole book, S set by the caller
+// entries of the book: notes.market says how many there are; one posted to Tally is in the book as its entry). b: books() of the whole book, S set by the caller
 const FIG = ["taxable", "igst", "cgst", "sgst", "cess", "qty"];
 export function engineSums(ym, reg) {
   const out = new Map(), put = (sec, k1, k2, k3, o, keepN) => {
@@ -328,7 +328,7 @@ export function engineMonth(rows, ym, reg, o) {
     const S = { books: null, coId: rows.client, companies: { [rows.client]: co }, sales: { cid: rows.client, list: [] }, gstYm: ym };
     G.S = S; G.CO = (cid) => S.companies[cid || S.coId];
     const b = o.books || books(rows); S.books = b;
-    return { sums: engineSums(ym, reg), books: b, market: (rows.sales || []).filter((v) => v && v.source === "market" && v.status !== "ignored" && String((v.x || {}).date || "").replace(/-/g, "").slice(0, 6) === ym).length };
+    return { sums: engineSums(ym, reg), books: b, market: (rows.sales || []).filter((v) => v && v.source === "market" && v.status !== "ignored" && !E.GSTR.inBooks(v) && String((v.x || {}).date || "").replace(/-/g, "").slice(0, 6) === ym).length };
   } finally {
     Object.assign(G, was);
     Object.keys(was).forEach((k) => { if (was[k] === undefined) delete G[k]; });
