@@ -224,7 +224,9 @@ func postQuietBankMax() int { return maxI(1, minI(keepNum("PostQuietBankMax", 10
 //     without such a fixed cost: none (kept in the file); a slope of 0 or less (noise, or all of it fixed): unproven.
 //     Either way never past what the best measured time a voucher fits in the budget.
 //   - One size seen: a probe of 2 after a part of one voucher, every part over 2 s, when one voucher x 1.3 (the 2
-//     vouchers predicted) fits under PostSlowMaxMs; a probe over it marks the company per-voucher for good (PerVch).
+//     vouchers predicted) fits under PostSlowMaxMs. A probe over it is a spike when over 2.5x the median one-voucher
+//     part (not learned, counted toward the 3 probes, no probe for 8 parts); per-voucher for good (PerVch) after 2
+//     probes over it that were no spikes, or 3 over it in all: 3 over-long requests a company at most, ever.
 //   - The last part over its budget: half of it at most; since a part Tally did not answer: Cap at most.
 //
 // 0: no fixed-cost size (the per-voucher pace decides). Nothing about what is sent changes: the same Import, more lines.
@@ -281,7 +283,29 @@ func paceFixedSize(rec postPaceRec, prev int) (int, bool) {
 
 // a probe of 2 may go: the last part one voucher, every recent part over 2 s, and one voucher x 1.3 under the most
 func canProbe(rec postPaceRec, last [2]float64, maxMs float64) bool {
-	return int(last[0]) == 1 && rec.allSlow() && last[1]*paceProbeFactor <= maxMs
+	return rec.ProbeWait <= 0 && int(last[0]) == 1 && rec.allSlow() && last[1]*paceProbeFactor <= maxMs
+}
+
+// a probe over PostSlowMaxMs that took more than paceSpikeFactor x the median one-voucher part is one of Tally's own
+// spikes, not proof that the time is the vouchers' own
+const paceSpikeFactor = 2.5
+
+// the median time of the recent parts of one voucher (ms; 0: none, then the one-voucher estimate)
+func (p postPaceRec) medSingle() float64 {
+	var ts []float64
+	for _, h := range p.hist() {
+		if h[0] == 1 {
+			ts = append(ts, h[1])
+		}
+	}
+	if len(ts) == 0 {
+		return p.oneMs()
+	}
+	sort.Float64s(ts)
+	if len(ts)%2 == 0 {
+		return (ts[len(ts)/2-1] + ts[len(ts)/2]) / 2
+	}
+	return ts[len(ts)/2]
 }
 
 // the times a company's "per voucher" verdict from a fit may be checked again by a probe (re-review: a Tally's own
@@ -399,18 +423,35 @@ func (q *postQueue) done(r importReq, secs float64, err error) {
 		if n >= planned && left > 0 {
 			part = n // a whole part (not the last one, cut short by the queue's end): the size the next job may start at
 		}
+		maxMs := postSlowMaxSec() * 1000
+		probe := r.bank && q.probe && n == 2
+		over := probe && secs*1000 > maxMs
+		spike := over && secs*1000 > paceSpikeFactor*postPaceGet(q.key, true).medSingle()
 		postPaceNote(q.key, r.bank, secs*1000/float64(n), secs*1000/kb, part)
-		postPacePart(q.key, r.bank, n, secs*1000)
+		if !spike {
+			postPacePart(q.key, r.bank, n, secs*1000) // a spike teaches nothing of the fit
+		}
 		if r.bank {
-			maxMs := postSlowMaxSec() * 1000
-			probe := q.probe && n == 2
 			reprobe := probe && q.reprobe
 			postPaceBank(q.key, func(p *postPaceRec) {
-				if reprobe {
-					p.Reprobes++
+				if reprobe || spike {
+					p.Reprobes++ // a spike counts toward the same lifetime limit
 				}
-				if probe && secs*1000 > maxMs {
-					p.PerVch = true // re-review: the probe ran over the most: per-voucher, never probed again
+				if p.ProbeWait > 0 && !probe {
+					p.ProbeWait--
+				}
+				if over {
+					// the last change before review: a probe over the most is proof of a per-voucher Tally only when it
+					// is no spike; per-voucher after 2 such, or once the probes are used up: 3 over-long requests at most
+					p.Over++
+					if spike {
+						p.ProbeWait = paceHistMax
+					} else {
+						p.NonSpike++
+					}
+					if p.NonSpike >= 2 || p.Over >= paceReprobes || p.Reprobes >= paceReprobes {
+						p.PerVch = true
+					}
 				}
 				if p.Cap > 0 && n >= p.Cap && secs*1000 <= maxMs {
 					if p.CapOK++; p.CapOK >= paceCapLift {
@@ -448,7 +489,12 @@ type postPaceRec struct {
 	PerVch   bool
 	Cap      int
 	CapOK    int
-	Reprobes int // the probes that checked a "per voucher" fit again (paceReprobes at most)
+	Reprobes int // the probes that checked a "per voucher" fit again, and probes that hit a spike (paceReprobes at most)
+	// the last change before review: probes over PostSlowMaxMs (Over: all; NonSpike: those within 2.5x one voucher's
+	// median, proof the time is the vouchers' own); ProbeWait: parts to go before a probe after a spike
+	Over      int
+	NonSpike  int
+	ProbeWait int
 }
 
 const paceHistMax = 8
@@ -595,6 +641,7 @@ func postPaceFreshLocked() {
 			}
 		}
 		r.PerVch, r.Cap, r.CapOK, r.Reprobes = truthy(e["pervch"]), toInt(e["cap"]), toInt(e["capok"]), toInt(e["reprobes"])
+		r.Over, r.NonSpike, r.ProbeWait = toInt(e["over"]), toInt(e["nonspike"]), toInt(e["probewait"])
 		if truthy(e["fit"]) {
 			r.FixMs, r.VchMs, r.FitOK = num(e["fix"]), num(e["vch"]), true // review B2: a no-fixed-cost fit kept too
 		}
@@ -604,7 +651,7 @@ func postPaceFreshLocked() {
 		if r.KN <= 0 || r.KAvg <= 0 {
 			r.KN, r.KLast, r.KAvg = 0, 0, 0
 		}
-		if r.N > 0 || r.Part > 0 || r.HN > 0 || r.PerVch || r.Cap > 0 || r.Reprobes > 0 {
+		if r.N > 0 || r.Part > 0 || r.HN > 0 || r.PerVch || r.Cap > 0 || r.Reprobes > 0 || r.Over > 0 {
 			postPace.m[k] = r
 		}
 	}
@@ -762,6 +809,9 @@ func postPaceTextLocked() string {
 		}
 		if p.Reprobes > 0 {
 			e["reprobes"] = p.Reprobes
+		}
+		if p.Over > 0 || p.ProbeWait > 0 {
+			e["over"], e["nonspike"], e["probewait"] = p.Over, p.NonSpike, p.ProbeWait
 		}
 		if p.FitOK {
 			e["fit"], e["fix"], e["vch"] = true, round3(p.FixMs), round3(p.VchMs)

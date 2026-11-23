@@ -401,9 +401,9 @@ func TestFastBankOutlierSingleNoLongBudget(t *testing.T) {
 	}
 }
 
-// the probe of 2 under the 8 s most: allowed when one voucher x 1.3 fits (a 4.6 s book: 6 s); a probe over 8 s marks the
-// company per-voucher in the file, never probed again, even after a restart: one over-long request a company, ever
-func TestFastBankProbeOverMaxOnceEver(t *testing.T) {
+// the probe of 2 under the 8 s most: allowed when one voucher x 1.3 fits (a 4.6 s book: 6 s); probes over 8 s that are
+// no spikes mark the company per-voucher after the second, never probed again, even after a restart
+func TestFastBankProbeOverMaxLimited(t *testing.T) {
 	reviewPaceStart(t, "")
 	fastBankQuiet(t, true)
 	// the 4.6 s book: the probe goes (one voucher 4.6 s, x 1.3 = 6 s)
@@ -414,12 +414,13 @@ func TestFastBankProbeOverMaxOnceEver(t *testing.T) {
 	if len(sizes) < 3 || sizes[1] != 2 {
 		t.Fatalf("a 4.6 s book with the 8 s most: no probe of 2 (sizes %v)", fastBankHead(sizes))
 	}
-	// a Tally of 5 s a voucher, all its own: the probe (10 s) runs over 8 s once, then never again
+	// a Tally of 5 s a voucher, all its own: the probe (10 s, 2x one voucher: no spike) runs over 8 s; after the second
+	// such probe the company is per-voucher in the file, never probed again (over-8 s requests: 2, ever)
 	key = companyKey("ZZ PERVCH CO") + "|g-pv"
 	postPaceNote(key, true, 5000, 5000, 1)
 	over := 0
 	run := func(prefix string) []int {
-		q := newPostQueueFor("ZZ PERVCH CO", "g-pv", nil, fastBankVch(prefix, 20))
+		q := newPostQueueFor("ZZ PERVCH CO", "g-pv", nil, fastBankVch(prefix, 30))
 		s, _ := fastBankRun(t, q, func(n int) float64 {
 			if 5*float64(n) > 8 {
 				over++
@@ -432,11 +433,66 @@ func TestFastBankProbeOverMaxOnceEver(t *testing.T) {
 	postPaceFlush()
 	postPaceReset()
 	if !postPaceGet(key, true).PerVch {
-		t.Fatal("the probe over 8 s was not kept as per-voucher in the file")
+		t.Fatal("two probes over 8 s (no spikes) were not kept as per-voucher in the file")
 	}
 	run("pb")
-	if over != 1 {
-		t.Fatalf("%d requests over 8 s for one company (want exactly 1, ever)", over)
+	if over != 2 {
+		t.Fatalf("%d requests over 8 s for a per-voucher company (want 2, ever)", over)
+	}
+}
+
+// the 4.6 s book whose probe hits one of Tally's own spikes (16 s: over 2.5x one voucher): a spike, not proof; the
+// book is not marked per-voucher and grows to 10 a part later
+func TestFastBankProbeSpikeNotProof(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	key := companyKey("ZZ SPIKE CO") + "|g-spk"
+	postPaceNote(key, true, 4600, 4600, 1)
+	q := newPostQueueFor("ZZ SPIKE CO", "g-spk", nil, fastBankVch("sk", 400))
+	first := true
+	sizes, _ := fastBankRun(t, q, func(n int) float64 {
+		if n == 2 && first {
+			first = false
+			return 16
+		}
+		return 4.5 + 0.1*float64(n)
+	})
+	if postPaceGet(key, true).PerVch {
+		t.Fatalf("a spike on the probe marked the book per-voucher (sizes %v)", fastBankHead(sizes))
+	}
+	most := 0
+	for _, n := range sizes {
+		most = maxI(most, n)
+	}
+	if most < 8 {
+		t.Fatalf("after a spike on the probe the parts did not grow: %v", fastBankHead(sizes))
+	}
+}
+
+// a Tally whose every probe of 2 is a spike (20 s): 3 such probes a company at most, ever (then per-voucher)
+func TestFastBankThreeSpikesEver(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	key := companyKey("ZZ SPIKY CO") + "|g-spy"
+	postPaceNote(key, true, 4600, 4600, 1)
+	over := 0
+	for j := 0; j < 4; j++ {
+		q := newPostQueueFor("ZZ SPIKY CO", "g-spy", nil, fastBankVch(fmt.Sprintf("sy%d", j), 60))
+		fastBankRun(t, q, func(n int) float64 {
+			if n >= 2 {
+				over++
+				return 20
+			}
+			return 4.6
+		})
+		postPaceFlush()
+		postPaceReset()
+	}
+	if over > 3 {
+		t.Fatalf("%d requests over 8 s for one company (want 3 at most, ever)", over)
+	}
+	if !postPaceGet(key, true).PerVch {
+		t.Fatal("3 spiked probes used up and not marked per-voucher")
 	}
 }
 
