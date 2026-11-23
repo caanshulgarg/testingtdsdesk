@@ -17,6 +17,7 @@
 // type) is never changed, since Tally finds the master by its name: one the bridge cannot take is refused, said plainly.
 // Posting: app/src/lib/payrollPost.js (the second check, the claim, one voucher a Bridge.post, the proof).
 
+import { partOfWords } from "../../../server/_shared/tpparts.js";
 export const MAX_EMPLOYEES = 100;        // bridge-go payrollMaxEmployees
 export const MAX_PAY_HEADS = 50;         // payrollMaxPayHeads, per employee
 export const MAX_NAME = 200;             // payrollMaxName, characters
@@ -182,7 +183,7 @@ export function payrollVouchers(o) {
     const net = -es.reduce((s, e) => s + e.p, 0);
     if (net > MAX_PAISE) say("The month’s net is too large for one Tally Payroll voucher (more than 10 digits of rupees)");
     const id = idOf(i, n), tag = " | TDSDesk:" + id;
-    const text = cleanText("Salary for " + (o.label || "") + " as per the salary sheet (" + es.length + " employee" + (es.length === 1 ? "" : "s") + (n > 1 ? ", part " + no(i) + " of " + n : "") + ")", MAX_NARRATION - chars(tag));
+    const text = cleanText("Salary for " + (o.label || "") + " as per the salary sheet (" + es.length + " employee" + (es.length === 1 ? "" : "s") + (n > 1 ? partOfWords(no(i), n) : "") + ")", MAX_NARRATION - chars(tag));
     return { id, type, date: o.date, payable, category: es[0].cat, narration: text,
       employees: es.map((e) => ({ name: e.name, amount: e.p / 100, heads: e.al.map((x) => ({ head: x.head, earn: x.earn, amount: x.p / 100 })) })),
       gross: -es.reduce((s, e) => s + e.al.filter((x) => x.earn).reduce((t, x) => t + x.p, 0), 0) / 100, net: net / 100, part: no(i), parts: n };

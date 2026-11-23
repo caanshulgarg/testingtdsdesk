@@ -97,7 +97,8 @@ export function draftsOf(recs, jobs, prior, now) {
   return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => {
     const vid = String(r.data.id || ""), own = (r.data.results || {})[vid] || {};
     const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, ver: String(own.at || "-"), at: String(own.at || r.updated_at || ""),
-      parts: Number(r.data.parts) || 0 };   // next-payroll: a Tally Payroll month's part says how many parts the month has
+      parts: Number(r.data.parts) || 0,   // next-payroll: a Tally Payroll month's part says how many parts the month has
+      date: String((((r.data.vouchers || [])[0]) || {}).date || ""), sentAt: String((r.data.sent || {}).at || "") };   // (sixth review) its day, and when it was sent
     d.state = draftState(d, jobs, now, retried); return d;
   }).filter((d) => d.dedupe);
 }
@@ -134,8 +135,9 @@ export function nightInput(rows, b, x) {
     bookId: String((rows.book && rows.book.book_id) || ""),
     // next-payroll: how the client books salary (a Tally Payroll company's months are prepared as Tally payroll vouchers)
     payroll: payrollSettings(co, x.payHeads),
-    // when Tally's copy was last read in (tally_books.days_at): a Tally Payroll part not in a copy read after it may be in Tally
-    booksReadAt: String((rows.book && rows.book.days_at) || ""),
+    // (sixth review) when each Tally Payroll part's day was last read from Tally (tally_days.at): a part not in the books
+    // may be in Tally until its day was read after it was sent
+    daysAt: Object.fromEntries((rows.days || []).filter((r) => r && r.day).map((r) => [String(r.day).slice(0, 10), String(r.at || "")])),
   };
   // (phase 2) a salary line is paid against the salary payable ledger only when that ledger is certain
   out.ledgersFor.salaryPayable = pickLedger("salaryPayable", out).ledger || "";

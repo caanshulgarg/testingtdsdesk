@@ -26,6 +26,7 @@
 //   picks      a person's ledger choices ({role: ledger}), from prior ledger_pick findings
 import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries, earningHead, notSalaryHeadName } from "./nightchecks.js";
 import { voucherId } from "./dailytrust.js";
+import { partsIn } from "./tpparts.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
 export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "sent_check"];
@@ -111,12 +112,12 @@ const posted = (inp, vid) => live(inp.books).some((v) => String(v.narr || "").in
 const pending = (inp, dedupe) => (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed");
 // (last fix) sent to Tally and not confirmed there for 24 hours: never offered again silently. Needs you: a sent_check
 // finding for that draft ("Not in Tally: offer it again", the owner's, through entry_unconfirm); the entry waits on it
-function sentCheck(inp, dedupe, label, you) {
+function sentCheck(inp, dedupe, label, you, why) {
   const d = (inp.drafts || []).find((x) => x && x.dedupe === dedupe && x.state === "unconfirmed");
   if (!d) return null;
   return { finding: you(label + ": waiting on Tally to confirm it", [], { waits: true }).finding,
     picks: [finding("sent_check", "sent:" + dedupe + ":" + d.ver, "you", { party: label, dedupe, at: d.at, ver: d.ver, short: "Not confirmed in Tally",
-      title: label + ": sent to Tally but not confirmed there after 24 hours. Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, ver: d.ver }])] };
+      title: label + ": " + (why || "sent to Tally but not confirmed there after 24 hours") + ". Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, ver: d.ver }])] };
 }
 function finding(kind, key, state, facts, evidence, candidates) {
   return { kind, key, state, facts: Object.assign({ ask_text: "" }, facts), evidence: evidence || [], candidates: candidates || [] };
@@ -339,9 +340,13 @@ export function payrollSettings(co, heads) {
     vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort(), typed: Array.from(typed).sort() };
 }
 export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
-// (fifth review) a Tally Payroll part holds a journal back while it may be in Tally: its FinCom id in the books, or Tally's
-// copy (tally_books.days_at: inp.booksReadAt) not read at least 5 minutes after the part was sent / answered
-const tpHolds = (inp, d) => { const r = Date.parse(String(inp.booksReadAt || "")), t = Date.parse(String(d.at || "")); return live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !(isFinite(r) && isFinite(t) && r >= t + 5 * 60000); };
+// (fifth, sixth reviews) a Tally Payroll part holds a journal back while it may be in Tally: its FinCom id in the books, or
+// its own day (the part's voucher date, else the month-end) not read from Tally at least 5 minutes after the part was sent
+// or answered (tally_days.at: inp.daysAt; tally_books.days_at moves with any day read, so it proves nothing here)
+const isoDay = (x) => { const s = String(x || "").replace(/-/g, "").slice(0, 8); return /^\d{8}$/.test(s) ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; };
+export const tpDayRead = (inp, d) => { const ym = (String(d.vid || "").match(/^dc-tp-(\d{6})-/) || [])[1] || "", day = isoDay(d.date || (ym ? lastDay(ym) : ""));
+  const r = Date.parse(String((inp.daysAt || {})[day] || "")), t = Math.max(Date.parse(String(d.sentAt || "")) || 0, Date.parse(String(d.at || "")) || 0); return isFinite(r) && t > 0 && r >= t + 5 * 60000; };
+const tpHolds = (inp, d) => live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !tpDayRead(inp, d);
 const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
 // the salary booked for a month (review H2, N5; next-payroll review B1): any entry with a salary expense on the debit side
 // (salaryClass), a pay head of Tally's payroll (an earning: an expense ledger for payroll, "Basic", "HRA"), or any ledger
@@ -439,12 +444,16 @@ function tallyOne(ym, rows, inp, c) {
   const { key, dedupe, vid, label, date, base, you } = c, tp = inp.payroll || {}, T = "Tally Payroll " + label;
   if (posted(inp, vid) || (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && !/^dc-tp-/.test(String(d.vid || "")))) return null;   // booked as a journal through Daily Check
   // (third review) a part whose FinCom id is in the books is in Tally, whatever its draft says: never "Not confirmed"
-  // (fifth review) and how many parts the month has, from those vouchers' own narration ("part 1 of 2") when the drafts
-  // are lost
+  // (fifth review) and how many parts the month has, from those vouchers' own narration ("part 1 of 2", the builder's
+  // own words: tpparts.js) when the drafts are lost
   const inBooks = new Set(); let tagParts = 0;
-  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)(?!\\d)")); if (m) { inBooks.add(m[1]); tagParts = Math.max(tagParts, Number((String(v.narr || "").match(/part \d+ of (\d+)/) || [])[1]) || 1); } });
-  const drafts = (inp.drafts || []).map((d) => (d && inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" }) : d));
-  { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you); if (sc) return sc; }
+  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)(?!\\d)")); if (m) { inBooks.add(m[1]); tagParts = Math.max(tagParts, partsIn(v.narr)); } });
+  // (sixth review) a part "sent before" with no Tally id (the posting computer's own record) waits while its day was not
+  // read from Tally after the send, and is "Not confirmed in Tally" (Needs you) at once when it was and the id is not
+  // there: no 24 hours either way
+  const drafts = (inp.drafts || []).map((d) => (!d ? d : inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" })
+    : /^dc-tp-/.test(String(d.vid || "")) && (d.state === "pending" || d.state === "unconfirmed") ? Object.assign({}, d, { state: tpDayRead(inp, Object.assign({ date }, d)) ? "unconfirmed" : "pending" }) : d));
+  { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you, "sent to Tally (the posting computer says so) but not in Tally’s copy of its day read since"); if (sc) return sc; }
   const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")));
   if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
   const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));

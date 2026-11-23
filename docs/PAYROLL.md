@@ -313,6 +313,18 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   Tally with or without a draft (a draft is made for it); the night counts the month done from those ids and their
   narration's "part i of n". A resend of an unanswered part goes only through the computer that sent it (the bridge's id, or the computer and
   Windows user here); a computer FinCom cannot name waits.
+- **Sixth review (23-Nov-2026)**: `tally_books.days_at` moves when any day is read, so it proves nothing about a part.
+  A part not in Tally's copy counts as not posted only when its own day (the voucher date, else the month-end) was read
+  from Tally at least 5 minutes after the send (`tally_days.at`, one more read); the journal (night and Approve) and the
+  night's check of a part use the same per-day signal, with no 24-hour rule. A part settled "not in Tally" keeps its
+  computer unless that per-day check settled it (`dayGone`); then it goes once more released (`released: [{id, by, at,
+  why}]` in the `Bridge.post` payload, which bridge-go's `releaseFor` honours once per release by FinCom's tag; through the
+  cloud's queue the earlier posting's id is released with `tally_post_owner_release` first). A part "sent before" with
+  no Tally id (the posting computer's own record) stays open: its day not read since, it waits; read since and the id not
+  there, Approve refuses "Not confirmed in Tally" and the night raises `sent_check` at once; once the owner says "Not in
+  Tally: offer it again", Approve sends the identical XML released; if the copy later shows the id, it is in Tally. The
+  computer is keyed by the bridge's own id (`go-<install id>`) on both paths. The narration's "part i of n" is one wording
+  (`server/_shared/tpparts.js`) for the builder and the night.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
-- **Redeploy when published**: the `assistant-night` function (dailyjournals.js, nightinput.js, handler.ts) and
+- **Redeploy when published**: the `assistant-night` function (dailyjournals.js, tpparts.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.

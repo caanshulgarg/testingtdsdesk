@@ -153,7 +153,7 @@ export async function approveJournal(e) {
   if (e.source === "payroll") {
     const A0 = await import("../../lib/asstEntries.js"), ds = ((await A0.Drafts.load(cid, true)) || []).filter((d) => d && /^dc-tp-/.test(String(d.id || "")) && d.dedupe === e.dedupe && !d.removed && ((d.results || {})[d.id] || {}).state !== "failed");
     const T = await import("../../lib/payrollPost.js"), bk = typeof S === "object" && S.coId === cid ? S.books : null;
-    const st = await T.settleParts(CO(cid), e, ds, {}, A0, undefined, { forJournal: true, books: bk, pay: bk && bk.payroll });
+    const st = await T.settleParts(CO(cid), e, ds, {}, A0, undefined, { forJournal: true, books: bk, pay: bk && bk.payroll, prior: lastPrior.filter((p) => p.cid === cid) });
     if (st.waits.length) { toast(st.waits[0]); return false; }
   }
   const why = await recheck(e, { prior: lastPrior.filter((p) => p.cid === cid) });

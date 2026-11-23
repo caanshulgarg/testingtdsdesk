@@ -34,10 +34,11 @@ export function inputOf(cid, o) {
     ledgers: o.ledgers || [], booksFrom: d8(o.booksFrom || ""), salary: b.salary || [],
     closed: closedTo ? [{ from: "19000101", to: closedTo }] : [],
     gst: typeof GSTR === "object" && typeof GSTF === "object" ? gstMonths({ GSTR, GSTF, GSTSet: typeof GSTSet === "object" ? GSTSet : null }, months) : [],
-    drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed, vid: String(d.id), parts: Number(d.parts) || 0, at: String((((d.results || {})[d.id]) || {}).at || d.savedAt || d.at || "") })),
+    drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed, vid: String(d.id), parts: Number(d.parts) || 0, at: String((((d.results || {})[d.id]) || {}).at || d.savedAt || d.at || ""),
+      date: String((((d.vouchers || [])[0]) || {}).date || ""), sentAt: String((d.sent || {}).at || "") })),
     picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "",
     // next-payroll: how the client books salary, and Tally's pay heads (the cloud copy's payroll, S.books.payroll)
-    booksReadAt: (() => { try { const bk = typeof TCloud === "object" && TCloud.book ? TCloud.book(cid) : null; return String((bk && bk.daysAt) || ""); } catch (x) { return ""; } })(),
+    daysAt: o.daysAt || {},   // (sixth review) when each Tally Payroll part's day was last read from Tally (tally_days.at)
     payroll: payrollSettings(co, Object.entries(((b.payroll || {}).heads) || {}).map(([name, h]) => ({ name, type: (h && h.type) || "" }))),
   };
 }
@@ -63,7 +64,11 @@ export async function recheck(e, o = {}) {
   drafts = drafts.filter((d) => !(d.dedupe === e.dedupe && d.state === "failed"));
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed && d.state === "unconfirmed")) return "Sent to Tally but not confirmed there. Check Tally (Needs you).";
   if (drafts.some((d) => d.dedupe === e.dedupe && !d.removed)) return "Already approved: it is on its way to Tally.";
-  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId }));
+  // (sixth review) the days of the Tally Payroll parts on record (their voucher date, else the month-end), as last read
+  const tpDays = Array.from(new Set(drafts.filter((d) => /^dc-tp-\d{6}-/.test(String(d.id || ""))).map((d) => { const x = String((((d.vouchers || [])[0]) || {}).date || "").slice(0, 10), ym = String(d.id).slice(6, 12);
+    return /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-" + String(new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(4, 6), 0)).getUTCDate()).padStart(2, "0"); })));
+  const daysAt = o.daysAt || (tpDays.length && bookId ? await (async () => { try { return Object.fromEntries(((await Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(bookId) + "&day=in.(" + tpDays.join(",") + ")")) || []).map((r) => [String(r.day).slice(0, 10), String(r.at || "")])); } catch (x) { return {}; } })() : {});
+  const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId, daysAt }));
   const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);
   if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;
   return "";

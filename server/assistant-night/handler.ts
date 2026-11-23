@@ -80,7 +80,7 @@ export function handler(deps: Deps) {
     if (!cl || cl.deleted) { await fail("skipped", "no such client"); return { ok: true, skipped: "client" }; }
     const co = Object.assign({}, cl.data || {}, { id: cl.id, deleted: !!cl.deleted });
     const bookId = await rpc("gst_calc_book", { p_firm: firm, p_client: cid, p_ym: ym }).catch(() => null);
-    const book = bookId ? ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at,days_at&book_id=eq." + enc(String(bookId)))) || [])[0] : null;
+    const book = bookId ? ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at&book_id=eq." + enc(String(bookId)))) || [])[0] : null;
     if (!book) { await fail("skipped", "no books in the cloud"); return { ok: true, skipped: "books" }; }
     const gstins: string[] = await rpc("gst_calc_gstins", { p_book: book.book_id, p_client: cid }).catch(() => []) || [];
     const fys = Array.from(new Set([fyOf(night), fyOf(new Date(now().getTime() - 400 * 86400_000).toISOString().slice(0, 10))]));
@@ -121,6 +121,12 @@ export function handler(deps: Deps) {
     // cloud without migration 74's columns: none, as before)
     const phRows = await rest("/rest/v1/tally_ledgers?select=name,pay_type&for_payroll=eq.true&merged_into=is.null&deleted_at=is.null&book_id=eq." + enc(String(book.book_id)) + "&limit=2000").catch(() => []);
     const payHeads = (Array.isArray(phRows) ? phRows : []).filter((l: any) => l && l.name).map((l: any) => ({ name: String(l.name), type: String(l.pay_type || "") }));
+    // (sixth review) when the month-end days of the lookback were last read from Tally (tally_days.at): a Tally Payroll
+    // part not in the books may be in Tally until its day was read after it was sent
+    const ends = Array.from({ length: 15 }, (_, i) => { const d = new Date(Date.UTC(now().getUTCFullYear(), now().getUTCMonth() - i + 1, 0)); return d.toISOString().slice(0, 10); })
+      .concat(draftRecs.map((r: any) => String((((r.data || {}).vouchers || [])[0] || {}).date || "").slice(0, 10)).filter((x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x)));
+    const dayRows = await rest("/rest/v1/tally_days?select=day,at&book_id=eq." + enc(String(book.book_id)) + "&day=in.(" + Array.from(new Set(ends)).slice(0, 60).join(",") + ")").catch(() => []);
+    rows.days = Array.isArray(dayRows) ? dayRows : [];
     const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, payHeads, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };

@@ -16,6 +16,7 @@
 import * as TP from "./tallyPayroll.js";
 import { monLabel } from "./payrollSheet.js";
 import { sheetMonth, earningHead, notSalaryHeadName } from "../../../server/_shared/nightchecks.js";
+import { partsIn } from "../../../server/_shared/tpparts.js";
 
 export const NEED = "2.5.18";
 export const OLD_BRIDGE = "Install FinCom Bridge " + NEED + " to post Tally Payroll";
@@ -48,10 +49,11 @@ export function postingBridge(co, g = G) {
     const T = g.TCloud, viaCloud = !!(co && T && typeof T.has === "function" && (typeof T.on !== "function" || T.on()) && T.has(co.id));
     if (viaCloud && typeof T.postThrough === "function") {
       const t = T.postThrough(co);
-      return t ? { version: String(t.version || ""), where: [t.computer, t.user].filter(Boolean).join(" · "), id: t.id || t.computer ? "bridge:" + String(t.id || t.computer) : "" } : { version: "", where: "", id: "" };
+      return t ? { version: String(t.version || ""), where: [t.computer, t.user].filter(Boolean).join(" · "), id: t.id ? "bridge:" + String(t.id) : "", cloud: true } : { version: "", where: "", id: "", cloud: true };
     }
-    const st = (g.Bridge && g.Bridge.st) || {};
-    return { version: String(st.version || ""), where: "this computer", id: st.computer ? "here:" + String(st.computer) + "|" + String(st.user || "") : "" };
+    // (sixth review) one key for the computer on both paths: the bridge's own id (go-<install id>, as the cloud hears it)
+    const st = (g.Bridge && g.Bridge.st) || {}, c = g.Bridge && typeof g.Bridge.cfg === "function" ? g.Bridge.cfg() || {} : {}, bid = String(st.bridgeId || c.bridgeId || "");
+    return { version: String(st.version || ""), where: "this computer", id: bid ? "bridge:" + bid : "" };
   } catch (e) { return { version: "", where: "" }; }
 }
 // the FinCom Bridge setup this site hands out (assets/bridge-go/latest.json, as the Tally page reads it)
@@ -191,11 +193,20 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   // the earlier send FinCom has on record: unanswered, or settled as not in Tally's copy (a copy behind Tally: the bridge's
   // own check by FinCom's id then says it is there, and it is this very XML only when the record says so)
   const was = A.Drafts.get(co.id, v.id), prevSent = unanswered(was) || (was && was.sent && was.sent.answered === "gone" && was.sent.xml) ? Object.assign({}, was.sent) : null;
-  // (fifth review) a part whose earlier send is unanswered goes again only through the computer that sent it (its own
-  // record of what it sent is the bridge's only guard): never handed to another computer meanwhile
-  if (prevSent && !prevSent.answered && prevSent.via && prevSent.via !== via.id) {
+  // (fifth, sixth reviews) a part sent before goes again only through the computer that sent it (its own record of what
+  // it sent is the bridge's only guard), unanswered or settled "not in Tally" alike; another computer only once its day
+  // was read from Tally after the send and the id was not there (dayGone)
+  if (prevSent && prevSent.via && prevSent.via !== via.id && !(prevSent.answered === "gone" && prevSent.dayGone)) {
     const res = { id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net, ok: false, state: "failed", msg: "Part " + v.part + " was sent through " + (prevSent.where || "another computer") + " and its answer never came; it goes again only through that computer. Open FinCom Bridge there, or wait for Tally’s copy of the books to show it." };
     res.words = partWords(res); return res;
+  }
+  // (sixth review) a part found not in Tally (its day read after the send) goes once more released: the sending
+  // computer's record (posted-ids.json) lets it go once per release (bridge-go releaseFor); through the cloud's queue the
+  // cloud is the judge, so the earlier posting's id is released there first (tally_post_owner_release)
+  const rel = prevSent && prevSent.answered === "gone" && prevSent.release && prevSent.release.at ? [prevSent.release] : [];
+  if (rel.length && via.cloud && was.job && g.TCloud && typeof g.TCloud.rpc === "function") {
+    const k = await g.TCloud.rpc("tally_post_owner_release", { p_job: was.job, p_id: v.id, p_why: rel[0].why }).catch((err) => ({ ok: false, error: errWords(err) }));
+    if (!k || k.ok === false) { const res = { id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net, ok: false, state: "failed", msg: "FinCom could not release part " + v.part + " in the cloud’s queue (" + String((k && k.error) || "no answer") + "). Nothing was sent." }; res.words = partWords(res); return res; }
   }
   const d = draftOf(co, e, v, A, at);
   d.state = "posting"; d.sent = { xml, at: at(), via: via.id, where: via.where };
@@ -204,7 +215,7 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   if (before) await before();
   let out = null, x = null;
   try {
-    out = await g.Bridge.post({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, (pj) => { try { progress && progress(v, pj); } catch (err) { /* only words */ } });
+    out = await g.Bridge.post(Object.assign({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, rel.length ? { released: rel } : {}), (pj) => { try { progress && progress(v, pj); } catch (err) { /* only words */ } });
     x = [].concat((out && out.results) || []).find((r) => r && r.id === v.id) || null;
   } catch (err) { x = { id: v.id, ok: false, message: errWords(err) || "The posting did not go through." }; }
   if (out && out.job && out.job.id) d.job = out.job.id;
@@ -283,27 +294,34 @@ export function partChanges(was, now, id) {
 }
 
 // ---------------------------------------------------------------- the month's parts, settled from Tally itself
-// (fourth and fifth reviews) bridge 2.5.18 does not look for FinCom's id in Tally before posting: its only guard is the
+// (fourth to sixth reviews) bridge 2.5.18 does not look for FinCom's id in Tally before posting: its only guard is the
 // posting computer's own record of what it sent (alreadySent). So a part is never sent again on a guess:
 //   - every TDSDesk:dc-tp-<yyyymm>-<n> in Tally's copy (one read for the month, the client's book; else the books and the
 //     payroll read here) is in Tally, with or without a draft: its employees and amounts against what was sent (or the
 //     part built now) -> the same: in Tally; other figures: in Tally as Tally has it (the change named, accepting offered)
-//   - a part sent and never answered, not in the copy: "not posted" (may go again) only when the copy was read from Tally
-//     after the send (tally_books.days_at at least FRESH_MS after it); else it waits ("Tally's copy is older than this
-//     send"). The same for a journal instead, and for a part once answered in Tally and deleted since
+//   - a part sent and never answered, or "sent before" with no Tally id (unconfirmed), not in the copy: settled only when
+//     the part's own day was read from Tally after the send (tally_days.at at least FRESH_MS after it: tally_books.days_at
+//     moves with any day); else it waits ("Tally's copy is older than this send"). Never answered: "not posted" (may go
+//     again through any computer, the day read marked: dayGone, released so the sending computer's record lets it go once
+//     more). Unconfirmed: "Not confirmed in Tally" until the owner says "Not in Tally:
+//     offer it again" (sent_check), then not posted and released (the same computer sends it once more). The same for a
+//     journal instead, and for a part once answered in Tally and deleted since
 //   - a posting of the part still running in the cloud's queue: waited for
 export const FRESH_MS = 5 * 60000;
 export const freshAfter = (readAt, sentAt) => { const r = Date.parse(String(readAt || "")), s = Date.parse(String(sentAt || "")); return isFinite(r) && isFinite(s) && r >= s + FRESH_MS; };
 const tagRe = (ym) => new RegExp("TDSDesk:(dc-tp-" + ym + "-\\d+)(?!\\d)");
 const heads3 = (rows) => { const by = new Map(); rows.forEach((a) => { const k = String(a.centre || ""); if (!k) return; if (!by.has(k)) by.set(k, { name: k, amount: 0, heads: [] }); const e = by.get(k), x = Math.round(Number(a.amount) * 100) / 100; e.heads.push({ head: String(a.ledger || ""), amount: x }); e.amount = Math.round((e.amount + x) * 100) / 100; }); return Array.from(by.values()); };
-// readMonth(cid, ym) -> null (cannot read) | {readAt, parts: {id: {found: true, no, narr, employees} | {found: false, deleted}}}
-export async function readMonth(cid, ym, g = G) {
+// readMonth(cid, ym, days) -> null (cannot read) | {dayAt: {yyyy-mm-dd: when that day was last read from Tally}, parts:
+// {id: {found: true, no, narr, employees} | {found: false, deleted}}}
+export async function readMonth(cid, ym, days, g = G) {
   try {
     const bk = g.TCloud && typeof g.TCloud.book === "function" ? g.TCloud.book(cid) : null, book = bk && bk.book;
     if (!book || !g.Cloud || typeof g.Cloud.api !== "function") return null;
-    const B = "&book_id=eq." + encodeURIComponent(book), re = tagRe(ym);
-    const [vs, bks] = await Promise.all([g.Cloud.api("tally_vouchers?select=guid,alter_id,vno,narration,cancelled,optional,deleted_at" + B + "&narration=like." + encodeURIComponent("*TDSDesk:dc-tp-" + ym + "-*")), g.Cloud.api("tally_books?select=days_at" + B)]);
-    const parts = {}, live = [];
+    const B = "&book_id=eq." + encodeURIComponent(book), re = tagRe(ym), ds = Array.from(new Set(days)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const [vs, dr] = await Promise.all([g.Cloud.api("tally_vouchers?select=guid,alter_id,vno,narration,cancelled,optional,deleted_at" + B + "&narration=like." + encodeURIComponent("*TDSDesk:dc-tp-" + ym + "-*")),
+      ds.length ? g.Cloud.api("tally_days?select=day,at" + B + "&day=in.(" + ds.join(",") + ")") : []]);
+    const parts = {}, live = [], dayAt = {};
+    (dr || []).forEach((r) => { if (r && r.day) dayAt[String(r.day).slice(0, 10)] = String(r.at || ""); });
     (vs || []).forEach((v) => { const m = String((v && v.narration) || "").match(re); if (!m) return;
       if (!v.deleted_at && !v.cancelled && !v.optional) { parts[m[1]] = { found: true, no: String(v.vno || ""), narr: String(v.narration || ""), guid: v.guid, alter: v.alter_id, employees: [] }; live.push(m[1]); }
       else if (!parts[m[1]]) parts[m[1]] = { found: false, deleted: true }; });
@@ -312,7 +330,7 @@ export async function readMonth(cid, ym, g = G) {
       const al = (await g.Cloud.api("tally_cost_allocs?select=guid,alter_id,ledger,centre,amount&gone_at=is.null" + B + "&guid=in.(" + ids.map((id) => encodeURIComponent('"' + parts[id].guid + '"')).join(",") + ")")) || [];
       byGuid.forEach((p, guid) => { p.employees = heads3(al.filter((a) => a && a.guid === guid && (a.alter_id == null || p.alter == null || Number(a.alter_id) === Number(p.alter)))); });
     }
-    return { readAt: String(((bks || [])[0] || {}).days_at || ""), parts };
+    return { dayAt, parts };
   } catch (x) { return null; }
 }
 // the same from the books and the payroll read here (no read time: never trusted to say a part is not in Tally)
@@ -320,48 +338,56 @@ export function localMonth(ym, pay, b) {
   const re = tagRe(ym), parts = {}, allocs = (pay && pay.allocs) || [];
   ((b && b.vouchers) || []).forEach((v) => { const m = v && !v.cancel && !v.opt && String(v.narr || "").match(re); if (!m) return;
     parts[m[1]] = { found: true, no: String(v.no || ""), narr: String(v.narr || ""), employees: heads3(allocs.filter((a) => a && String(a.guid) === String(v.id)).map((a) => ({ centre: a.employee, ledger: a.head, amount: a.amt }))) }; });
-  return { readAt: "", parts };
+  return { dayAt: {}, parts };
 }
 const figs = (emps) => (emps || []).map((e) => fold(e.name) + ":" + (e.heads || []).map((h) => fold(h.head) + "=" + P(h.amount)).sort().join(",")).sort().join("|");
 const live3 = async (g, job) => { if (!job) return false; try { const j = ((await g.Cloud.api("tally_post_jobs?select=id,status&id=eq." + encodeURIComponent(job))) || [])[0]; return !!j && ["waiting", "taken", "running"].includes(j.status); } catch (x) { return true; } };
 const partNoOf = (id) => Number(String(id).split("-").pop()) || 0;
+// "sent before" from the posting computer's own record, with no Tally id: not known to be in Tally
+export const unconfirmedR = (r) => !!(r && r.ok && r.unconfirmed && !String(r.tallyId || "").trim());
+// the drafts the owner said are not in Tally (a sent_check answered "Not in Tally: offer it again"), as the night reads them
+export const retriedOf = (prior) => new Set((prior || []).filter((p) => p && p.kind === "sent_check" && p.state === "resolved" && !p.undone && ((p.evidence || [])[0] || {}).t === "retry").map((p) => String(p.key)));
+const dayOf = (d, built, ym) => String((((d && d.vouchers) || [])[0] || {}).date || (built && built.date) || lastDay(ym)).slice(0, 10);
 // drafts: the month's drafts (changed in place, saved; a part in Tally with no draft gets one); built: {id: the part
-// built now}; o: {forJournal, now, readMonth, pay, books}
+// built now}; o: {forJournal, now, readMonth, pay, books, prior}
 export async function settleParts(co, e, drafts, built, A, g = G, o = {}) {
   const ym = String((e.voucher || {}).period || String(e.dedupe || "").replace(/^payroll:/, "")), now = o.now == null ? Date.now() : o.now, at = () => new Date(now).toISOString(), waits = [];
-  const mine = drafts.filter((x) => x && /^dc-tp-/.test(String(x.id || "")) && x.dedupe === e.dedupe && !x.removed);
-  const copy = (await (o.readMonth ? o.readMonth(co.id, ym) : readMonth(co.id, ym, g))) || null;
+  const mine = drafts.filter((x) => x && /^dc-tp-/.test(String(x.id || "")) && x.dedupe === e.dedupe && !x.removed), retried = retriedOf(o.prior);
+  const days = [lastDay(ym)].concat(mine.map((d) => dayOf(d, built[d.id], ym)), Object.values(built).map((v) => String(v.date || "").slice(0, 10)));
+  const copy = (await (o.readMonth ? o.readMonth(co.id, ym, days) : readMonth(co.id, ym, days, g))) || null;
   const local = localMonth(ym, o.pay, o.books), parts = Object.assign({}, local.parts, (copy || {}).parts || {});
-  const readAt = copy ? copy.readAt : "";
-  const nParts = Math.max(Object.keys(built).length, ...Object.values(parts).filter((p) => p.found).map((p) => Number((String(p.narr || "").match(/part \d+ of (\d+)/) || [])[1]) || 0));
+  const nParts = Math.max(Object.keys(built).length, ...Object.values(parts).filter((p) => p.found).map((p) => partsIn(p.narr)));
   const found = async (d, t, id) => {
     const r = (d && d.results || {})[id] || {};
     if (o.forJournal) waits.push("Part " + partNoOf(id) + " of the Tally Payroll voucher is in Tally (voucher no. " + (t.no || "?") + "). Delete it in Tally first, or post this month as Tally Payroll: a journal would book that salary twice.");
-    if (r.ok) return;
+    if (r.ok && !unconfirmedR(r)) return;
     if (!d) { d = { id, from: "daily", kind: "tallyPayroll", created: at(), by: A.me ? A.me() : "", dedupe: e.dedupe, night_entry: e.id, part: partNoOf(id), parts: nParts || partNoOf(id), vouchers: [{ id, kind: "tallyPayroll", date: lastDay(ym) }], removed: false }; drafts.push(d); }
     const ref = (d.sent && d.sent.xml) || (built[id] ? TP.payrollVoucherXml(built[id]) : ""), rv = ref ? readVoucherXml(ref) : null;
     const same = !!rv && figs(rv.employees) === figs(t.employees);
     const asTally = same ? ref : TP.payrollVoucherXml({ id, type: (rv && rv.type) || "Payroll", date: (((d.vouchers || [])[0]) || {}).date || lastDay(ym), payable: (rv && rv.payable) || "", category: (rv && rv.category) || "", narration: "as in Tally",
       employees: t.employees, net: -t.employees.reduce((s, x) => s + P(x.amount), 0) / 100 });
     d.sent = Object.assign({}, d.sent || {}, { xml: asTally, at: (d.sent && d.sent.at) || "", answered: "ok", fromTally: !same });
-    d.results = Object.assign({}, d.results, { [id]: { ok: true, state: "posted", tallyId: t.no, existed: true, msg: same ? "In Tally (read from Tally)" : "In Tally with other figures than FinCom sent (read from Tally)", at: at() } });
+    d.results = Object.assign({}, d.results, { [id]: { ok: true, state: "posted", tallyId: t.no || "in Tally", existed: true, msg: same ? "In Tally (read from Tally)" : "In Tally with other figures than FinCom sent (read from Tally)", at: at() } });
     d.state = "posted";
     await A.Drafts.save(co.id, d, "Tally Payroll: part " + partNoOf(id) + " found in Tally" + (same ? "" : " with other figures"));
   };
   // every part in Tally (by its FinCom id), with or without a draft
   for (const [id, t] of Object.entries(parts)) if (t.found) await found(mine.find((d) => d.id === id), t, id);
   for (const d of mine) {
-    const r = (d.results || {})[d.id] || {}, open = unanswered(d), wasOk = !!r.ok, t = parts[d.id];
+    const r = (d.results || {})[d.id] || {}, unc = unconfirmedR(r), open = unanswered(d) || unc, wasOk = !!r.ok && !unc, t = parts[d.id];
     if (t && t.found) continue;
     if (!open && !(wasOk && o.forJournal) && !(wasOk && t && t.deleted)) continue;
     if (open && await live3(g, r.job || d.job)) { waits.push("On its way to Tally (part " + (d.part || 1) + "): wait for it to finish."); continue; }
     if (!copy) { if (open || o.forJournal) waits.push("FinCom could not read Tally’s copy of the books to settle part " + (d.part || "") + ". Read the books again, then try again."); continue; }
-    const sentAt = [(d.sent && d.sent.at) || "", r.at || ""].sort().pop();
-    if (!freshAfter(readAt, sentAt)) { if (open || o.forJournal) waits.push("Part " + (d.part || "") + " was sent to Tally at " + String(sentAt).slice(0, 16).replace("T", " ") + " and Tally’s copy is older than this send. Read the books again (FinCom Bridge on the Tally computer brings them in), then try again."); continue; }
-    d.sent = Object.assign({}, d.sent || {}, { answered: "gone" });
+    const sentAt = [(d.sent && d.sent.at) || "", r.at || ""].sort().pop(), day = dayOf(d, built[d.id], ym);
+    if (!freshAfter(copy.dayAt[day], sentAt)) { if (open || o.forJournal) waits.push("Part " + (d.part || "") + " was sent to Tally at " + String(sentAt).slice(0, 16).replace("T", " ") + " and Tally’s copy of " + day + " is older than this send. Read the books again (FinCom Bridge on the Tally computer brings them in), then try again."); continue; }
+    // (sixth review) sent before, the day read since, the id still not in Tally: the owner checks Tally first (Needs you)
+    const ver = String(r.at || "-");
+    if (unc && !retried.has("sent:" + e.dedupe + ":" + ver)) { waits.push("Not confirmed in Tally: part " + (d.part || "") + " was sent before (the posting computer says so) but is not in Tally’s copy read since. Check Tally (Day Book), then answer it on Needs you."); continue; }
+    d.sent = Object.assign({}, d.sent || {}, { answered: "gone", dayGone: day, goneAt: at(), release: { id: d.id, at: at(), by: (A.me ? A.me() : "") || "FinCom", why: (unc ? "Not in Tally: offer it again; " : "") + "not in Tally's copy of " + day + " read after the send" } });
     d.results = Object.assign({}, d.results, { [d.id]: { ok: false, state: "failed", msg: "Not in Tally (read from Tally)", said: "not in Tally", at: at() } });
     d.state = "failed";
-    await A.Drafts.save(co.id, d, "Tally Payroll: part " + (d.part || "") + " is not in Tally (read from Tally after it was sent)");
+    await A.Drafts.save(co.id, d, "Tally Payroll: part " + (d.part || "") + " is not in Tally (its day read from Tally after it was sent)");
   }
   return { waits, drafts };
 }
@@ -421,7 +447,7 @@ export async function approveTallyPayroll(e, env = {}) {
   // (fourth, fifth reviews) the month's parts settled from Tally itself first (above): every part in Tally by its FinCom
   // id, with or without a draft; a send never answered only from a copy read after it
   {
-    const st = await settleParts(co, e, mine, Object.fromEntries(p.vouchers.map((v) => [v.id, v])), A, g, { readMonth: env.readMonth, now: env.now, pay, books: b });
+    const st = await settleParts(co, e, mine, Object.fromEntries(p.vouchers.map((v) => [v.id, v])), A, g, { readMonth: env.readMonth, now: env.now, pay, books: b, prior });
     if (st.waits.length) return no(st.waits[0]);
     st.drafts.forEach((d) => { if (!mine.includes(d)) mine.push(d); });
   }
