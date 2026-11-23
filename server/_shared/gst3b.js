@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "sbc38be8423245a55";
+const GST3B_SRC = "s92824f7c7486d664";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1855,26 +1855,29 @@ const GSTR = {
   booksSeen(){
     const b = S.books || {}, vs = b.vouchers || [], ss = b.salesSeen || null, c = this._seen;
     if (c && c.vs === vs && c.n === vs.length && c.ss === ss) return c.t;
-    const ids = new Set(), nos = new Set();
+    const ids = new Set(), nos = new Map(), put = (k, x) => { const l = nos.get(k); if (l) l.push(x); else nos.set(k, [x]); };
     vs.forEach(v => { if (v.opt) return;
       (String(v.narr || "").match(/TDSDesk:([A-Za-z0-9]+)/ig) || []).forEach(m => ids.add(m.slice(8).toLowerCase()));
       if (v.fid) ids.add(String(v.fid).toLowerCase());
-      if (v.no && Books.isSale(v)) nos.add(this.saleNoKey(v.no, v.date)); });
-    if (ss){ (ss.fids || []).forEach(f => ids.add(String(f).toLowerCase())); (ss.nos || []).forEach(k => nos.add(String(k))); }
+      if (v.no && Books.isSale(v)) put(this.saleNoKey(v.no, v.date), {v}); });
+    if (ss){ (ss.fids || []).forEach(f => ids.add(String(f).toLowerCase())); (ss.nos || []).forEach(n => { if (n && n.k) put(String(n.k), {total: num(n.total)}); }); }
     const t = {ids, nos};
     this._seen = {vs, n: vs.length, ss, t};
     return t;
   },
   // an invoice of Sales that is in the books (re-review of ffd1402d0: never by its status alone, so an invoice posted is
   // counted from Sales until the books show its entry, and again if the entry is deleted in Tally): its FinCom id on an
-  // entry of the books; one found already in Tally (intally, matched by number and amount, no FinCom id on it) by a sale
-  // of its number on the date Tally had, or its own
+  // entry of the books. One found already in Tally (intally: matched by number and amount, no FinCom id on it): a sale of
+  // the number and date Tally had (tallyMatch; else the invoice's own) whose amount is the invoice's, its total or its
+  // taxable value within Rs 1 (final review of 157da641f: "AMZ21" of another amount the same day is not "AMZ-21")
   inBooks(v){
     const t = this.booksSeen();
     if (t.ids.has(String(v.id || "").toLowerCase())) return true;
     if (v.status !== "intally") return false;
-    const x = v.x || {}, m = v.tallyMatch || {};
-    return t.nos.has(this.saleNoKey(m.number || x.number, m.date || x.date)) || t.nos.has(this.saleNoKey(x.number, x.date));
+    const x = v.x || {}, m = v.tallyMatch || {}, own = m.number && m.date;
+    const l = t.nos.get(own ? this.saleNoKey(m.number, m.date) : this.saleNoKey(x.number, x.date)) || [];
+    const tot = Math.abs(num(x.total)), txb = Math.abs(num(x.taxable)), near = (a, c) => c > 0 && Math.abs(Math.abs(a) - c) <= 1;
+    return l.some(e => { if (!e.v) return near(e.total, tot) || near(e.total, txb); const L = Books.lines(e.v); return near(L.total, tot) || near(L.taxable, txb); });
   },
   // when the books were last read (a Day Book, the bridge's copy, the cloud's): the latest time they say
   booksAt(){ const m = (S.books || {}).meta || {}; return [m.at, (m.copy || {}).at, m.copyAt].filter(Boolean).map(String).sort().pop() || ""; },

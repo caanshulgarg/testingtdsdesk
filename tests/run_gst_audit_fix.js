@@ -341,9 +341,23 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     check("posted, its entry deleted in Tally since", ctx.S.books);
     ok(JSON.stringify(gone()) === '["AMZ-21"]', "What to fix: AMZ-21 posted to Tally but not in the books read since (" + JSON.stringify(gone()) + ")");
     // gst-run's month step has no entries: what the cloud copy shows (data.ts salesSeen, as engine.js seenOf gives it)
-    books([s1]); ctx.S.books.salesSeen = {fids: [AMZ, FK], nos: [G.saleNoKey("SH-41", "20251001")]};
+    books([s1]); ctx.S.books.salesSeen = {fids: [AMZ, FK], nos: [{k: G.saleNoKey("SH-41", "20251001"), total: 2360}]};
     const ms = G.marketRows("202510"), bk = ms.filter((r) => r.booked).map((r) => r.no).sort();
     ok(JSON.stringify(bk) === '["AMZ-21","FK-31","SH-41"]' && !G.fromSales("202510").length, "the cloud's month step: AMZ-21 and FK-31 by the copy's fincom_id, SH-41 (intally) by its number: in the books, none from Sales (" + JSON.stringify(bk) + ")");
+    // (final review of 157da641f) an invoice in Tally: by the number and date Tally had (tallyMatch) when known, and only
+    // with the entry's amount (its total or taxable value, within Rs 1): "SH41" of another amount the same day is not SH-41
+    const seenNo = () => G.marketRows("202510").filter((r) => r.booked).map((r) => r.no);
+    ctx.S.books.salesSeen = {fids: [], nos: [{k: G.saleNoKey("SH-41", "20251001"), total: 999}]}; G._seen = null;
+    ok(!seenNo().includes("SH-41"), "the cloud's month step: a sale SH-41 of 999 the same day is not SH-41 of 2,360 (" + seenNo() + ")");
+    books([s1, pv("SH41", 500, 90, "", "20251001")]);
+    ok(!seenNo().includes("SH-41"), "a sale \"SH41\" of 590 the same day is not \"SH-41\" of 2,360: counted from Sales (" + seenNo() + ")");
+    books([s1, pv("SH41", 2000, 360, "", "20251001")]);
+    ok(seenNo().includes("SH-41"), "a sale \"SH41\" of 2,360 the same day is SH-41 (" + seenNo() + ")");
+    L[2].tallyMatch = {number: "SH/41", date: "20251002"};
+    ok(!seenNo().includes("SH-41"), "Tally's match was SH/41 of 2 October: the sale of 1 October is not taken for it (" + seenNo() + ")");
+    books([s1, pv("SH/41", 2000, 360, "", "20251002")]);
+    ok(seenNo().includes("SH-41"), "… and SH/41 of 2 October, 2,360, is (" + seenNo() + ")");
+    delete L[2].tallyMatch;
     ctx.S.sales = null;
   }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

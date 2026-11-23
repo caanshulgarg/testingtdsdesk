@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.13";
+export const REV = "171.14";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -415,10 +415,12 @@ export function shareSrc(inp) {
   };
 }
 // (re-review of ffd1402d0) the marketplace invoices the cloud copy's entries show (data.ts salesSeen) as GSTR.booksSeen
-// reads them: the FinCom ids, and each sale's number and date (GSTR.saleNoKey); none read: null
-function seenOf(x) {
+// reads them: the FinCom ids, and each sale's number and date (GSTR.saleNoKey) with its total; none read: null
+export function seenOf(x) {
   if (!x || (!(x.fids || []).length && !(x.heads || []).length)) return null;
-  return { fids: (x.fids || []).map(String), nos: (x.heads || []).filter((h) => h && h.vno && E.Books.isSale({ type: h.vtype || "", ent: [] })).map((h) => E.GSTR.saleNoKey(h.vno, h.day)) };
+  // (final review of 157da641f: any voucher type, "Tax Invoice" too; the read asked for those numbers only, and GSTR.inBooks
+  // takes one only with the invoice's amount)
+  return { fids: (x.fids || []).map(String), nos: (x.heads || []).filter((h) => h && h.vno).map((h) => ({ k: E.GSTR.saleNoKey(h.vno, h.day), total: Number(h.total) || 0 })) };
 }
 // the books the month step reads: the client's work as books() puts it, the context (ledger list, groups, GSTINs, places
 // of supply typed) over it, no entries, and shareSrc
