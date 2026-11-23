@@ -210,7 +210,7 @@ with sync_playwright() as p:
     each_size(pg, "New version bar over the review table", fresh, bottom=False)
     E("() => { const d = document.querySelector('[data-new-version]'); if (d) d.remove(); }")
     # ---- a long review banner (two lines on a narrow window)
-    pg.add_style_tag(content='body.is-test::after{content:"REVIEW BUILD – Ask FinCom never covers a button · staging database · not for real client work · a long review banner that wraps onto a second line on a narrower window";background:#6B3FA0;white-space:normal}')
+    pg.add_style_tag(content='body.is-test::after{position:fixed;left:0;right:0;bottom:0;z-index:70;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none;content:"REVIEW BUILD – Ask FinCom never covers a button · staging database · not for real client work · a long review banner that wraps onto a second line on a narrower window";background:#6B3FA0;white-space:normal}')
     each_size(pg, "Long review banner, review table", review)
     each_size(pg, "Long review banner, bill open", drawer, bottom=False)
 

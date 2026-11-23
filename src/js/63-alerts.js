@@ -30,7 +30,7 @@ const AlertHub = {
   },
   heldOf(){
     const h = this.held;
-    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > (Live.recorderLive || Live.copyLive ? SLOW_MS : 60000) && pollOk()){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
     return [].concat(h.rows || []);
   },
   async heldLoad(){
@@ -48,7 +48,9 @@ const AlertHub = {
   // the lines still waiting, as known now: the bell's own read, each brought up to date by Sync activity's lines (read
   // later, or come in live), so a line applied there is not counted as waiting here
   waitingRows(){
-    const rows = this.heldOf(), act = typeof Rec === "object" && Rec.act && Array.isArray(Rec.act.rows) ? Rec.act.rows : [];
+    // (review of 370f28773) Sync activity's lines only while they come live, or read after the bell's own
+    const ra = typeof Rec === "object" && Rec.act, fresh = ra && Array.isArray(ra.rows) && ((typeof Live === "object" && Live.recorderLive) || (ra.at || 0) >= (this.held.at || 0));
+    const rows = this.heldOf(), act = fresh ? ra.rows : [];
     const by = new Map(act.map(r => [String(r.id), r]));
     const out = rows.map(r => by.get(String(r.id)) || r);
     const seen = new Set(out.map(r => String(r.id)));

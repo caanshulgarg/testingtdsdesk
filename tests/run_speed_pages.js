@@ -133,7 +133,8 @@ async function sectionB(){
   const sent = () => calls.filter(c => c && c.sent).reduce((a, c) => a.concat(c.sent), []);
   const agrees = (w) => {
     const s = BI.st[b.cid], m = SPLIT.call(BI, WORK.call(BS, b)); let bad = 0;
-    m.forEach((it, key) => { if (s.base[key] !== BI.h(it.d, it.o)) bad++; });
+    // (next-db-load-2: a ledger map item is recorded by what it is synced by, without its count: BookItems.same)
+    m.forEach((it, key) => { if (!(BI.same ? BI.same(s.base[key], it.k, it.i, it.d, it.o) : s.base[key] === BI.h(it.d, it.o))) bad++; });
     ok(bad === 0, "B. " + w + ": the record of what the server has agrees with the books, item by item (" + m.size + " items)");
   };
   const pass = async (w, want) => {

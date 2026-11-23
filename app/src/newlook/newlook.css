@@ -231,3 +231,50 @@ html.nl .nl-needs > .linkbtn { font-size: 14px; text-align: left; min-height: 32
   html.nl header.top .tbar-title h2 { font-size: 17px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
   html.nl header.top .nl-top { gap: 4px; margin-right: 2px; }
 }
+
+/* ---- Bank: the header row's client and statement (the owner's screenshot of 23-Nov-2026, Safari at about 1000 px: the
+   statement's list was cut at the top and the foot). The statement's name is drawn here, one line cut with …, at a
+   control's height; the list (Bank.jsx StmtPick) lies over it unseen and takes the clicks and the keys */
+html.nl #app .bs-head .nl-stmtpick { position: relative; display: inline-flex; align-items: center; box-sizing: border-box; height: 28px; min-width: 0; max-width: 100%;
+  padding: 0 28px 0 10px; border: 1px solid var(--border-strong, var(--rule)); border-radius: var(--radius-control, 8px); background-color: var(--surface, var(--sheet));
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  color: var(--foreground); vertical-align: middle; cursor: pointer; }
+html.nl #app .bs-head .nl-stmtpick:hover { border-color: var(--accent); }
+html.nl #app .bs-head .nl-stmtpick:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 16%, transparent); }
+html.nl #app .bs-head .nl-stmtlbl { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 18px; }
+/* 16 px: a phone does not zoom in when the list opens */
+html.nl #app .bs-head .nl-stmtpick > select.bk-stmtsel { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; max-width: none; margin: 0; padding: 0; border: 0;
+  opacity: 0; font-size: 16px; cursor: pointer; }
+html.nl #app .bs-head .bsp-client { line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 601px) {
+  html.nl #app .bk-smart .bs-head .bk-id, html.nl.bk-spacious #app .bk-space .bs-head .bk-id { align-items: center; flex: 3 1 0; min-width: 220px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-check { min-width: 0; }
+  /* too narrow for all of it on one line (about 1000 px with the menu's words): the buttons go to a second line, at the right */
+  html.nl.bk-spacious #app .bk-space .bs-head { flex-wrap: wrap; row-gap: 4px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-actions { margin-left: auto; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id > .bsp-client { flex: 0 1 auto; min-width: 48px; max-width: 220px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id > .nl-stmtpick { flex: 0 1 auto; min-width: 150px; max-width: 380px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id > .bk-ledline { flex: 0 1000 auto; min-width: 0; overflow: hidden; flex-wrap: nowrap; white-space: nowrap; }
+  /* the period is in the statement's name */
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id:has(> .nl-stmtpick) > .bsp-period { display: none; }
+}
+@media (max-width: 600px) {
+  html.nl #app .bs-head .bk-id > .nl-stmtpick { display: flex; width: 100%; margin: 4px 0; }
+}
+
+
+/* ---- the top bar at about 1000 px with the menu's words: the page's own button (Upload statement) was squeezed to no
+   width and drawn over the page's name and the client's line. The right side keeps its width; the name's part takes
+   what is left (cut with …); the search box is its icon under 1280 px (its words on hover); and where even that does
+   not fit, the right side goes to a line of its own */
+@media (min-width: 761px) {
+  html.nl header.top .headrow { flex-wrap: wrap; row-gap: 4px; }
+  html.nl header.top .headrow > .tbar { flex: 1 1 0; min-width: 150px; }
+  html.nl header.top .headrow > .topright { flex: 0 0 auto; margin-left: auto; }
+  html.nl header.top .topright > .tb-page { min-width: min-content; }
+}
+@media (min-width: 761px) and (max-width: 1279px) {
+  html.nl .nl-search-btn { min-width: 0; width: 32px; padding: 0; justify-content: center; }
+  html.nl .nl-search-btn > .nl-search-w, html.nl .nl-search-btn kbd { display: none; }
+}

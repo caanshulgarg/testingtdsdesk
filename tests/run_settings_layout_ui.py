@@ -52,7 +52,7 @@ with sync_playwright() as p:
     E("() => { S.firm.firmName = ''; navHome('rules'); }"); pg.wait_for_timeout(700)
     grp = E("() => [...document.querySelectorAll('#app .setnav .setgroup-t')].map(x => x.textContent)")
     # offline (no firm account): the GST group's one section, GST API, needs the account, so three groups
-    ok(head() == "Firm details" and cur() == "firm" and grp == ["Your firm", "Tally", "How the work is done"], "Settings opens on Firm details, the groups in the list (%s)" % grp)
+    ok(head() == "Firm details" and cur() == "firm" and grp == ["Your firm", "My account", "Tally", "How the work is done"], "Settings opens on Firm details, the groups in the list (%s)" % grp)
     ok(not one_line(), "every section is one line: label and status side by side (%s)" % one_line())
     f = item("firm")
     ok(f and f["status"] == "no name yet" and f["warn"], "the firm with no name: its status says so, in the warning style (%s)" % f)
