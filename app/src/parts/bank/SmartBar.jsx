@@ -65,7 +65,7 @@ export default function SmartBar({ rows, base, grouped }) {
       <ActiveChips />
     </div>
       <span className="bs-keys" data-kb-help="" title={KEYS_HELP} tabIndex={0} aria-label={KEYS_HELP}>⌨</span>
-      <span className="bs-count" data-f-count="" title={"Out " + money(out) + " · in " + money(inn)}><b>{rows.length}</b> of {b.rows.length}<span className="bsp-sum"> · out {money(out)} · in {money(inn)}</span></span>
+      <span className="bs-count" data-f-count="" title={"Out " + money(out) + " · in " + money(inn)}><b>{rows.length}</b> of {b.rows.filter((r) => !bankOld(r)).length}<span className="bsp-sum"> · out {money(out)} · in {money(inn)}</span></span>
       {filtered && <button className="linkbtn" data-f-clear="" onClick={clearAll}>Clear filters</button>}
       {filtered && !b.ruleForm && <button className="linkbtn" data-f-rule="" title="Make a rule from this filter: lines containing these words go to one ledger, now and in future statements" onClick={ruleStart}>Rule from filter</button>}
       <Density />

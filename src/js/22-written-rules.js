@@ -823,7 +823,7 @@ function bankVisibleRows(){
   if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
   const tab = bankTab(), states = tabStates(tab);
-  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && (!states || bankTabOf(r) === tab || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
+  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && ((states ? bankTabOf(r) === tab : bankTabOf(r) !== "old") || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
 }
 let bankLastClicked = null;
 // the ticks and the bottom bar only (React alone redraws, not the old screens around it)
@@ -1026,13 +1026,13 @@ function bankTabOf(r){
   if (bankAside(r)) return "aside";
   if (r.state === "attention" || r.state === "suggested") return "review";
   if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
-  return r.state === "ignored" ? "ignored" : "done";
+  return r.state === "ignored" ? "ignored" : bankOld(r) ? "old" : "done";
 }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "ignored", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
-  const t = {review: 0, ready: 0, done: 0, ignored: 0, aside: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
-  return {review: t.review, ready: t.ready, done: t.done, ignored: t.ignored, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
+  const t = {review: 0, ready: 0, done: 0, ignored: 0, aside: 0, old: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
+  return {review: t.review, ready: t.ready, done: t.done, ignored: t.ignored, old: t.old, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }

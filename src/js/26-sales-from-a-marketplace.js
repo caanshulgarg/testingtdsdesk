@@ -207,7 +207,7 @@ function printInvoiceHtml(html, number){
 }
 /* ---------- the Sales screen ---------- */
 function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally"] : t === "ignored" ? ["ignored"] : ["review"]; }
-function salesCounts(){ const c = {review: 0, ready: 0, done: 0, ignored: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else if (v.status === "ignored") c.ignored++; else c.done++; }); return c; }
+function salesCounts(){ const c = {review: 0, ready: 0, done: 0, ignored: 0, old: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else if (v.status === "ignored") c.ignored++; else if (salesOld(v)) c.old++; else c.done++; }); return c; }
 function salesColPass(v){
   const f = (SL() || {}).f || {}, x = v.x || {};
   if (f.from && (x.date || "") < f.from) return false;
@@ -223,7 +223,7 @@ function salesColPass(v){
 function salesColOn(){ const f = (SL() || {}).f || {}; return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function salesVisible(){
   const s = SL(), states = salesTabStates(s.filter), q = s.q.trim().toLowerCase();
-  return s.list.filter(v => salesColPass(v) && (states.includes(v.status) || s.sticky.has(v.id)) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
+  return s.list.filter(v => salesColPass(v) && (states.includes(v.status) && !salesOld(v) || s.sticky.has(v.id)) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
     .sort((a, b) => String(b.x.date).localeCompare(String(a.x.date)) || String(b.x.number).localeCompare(String(a.x.number)));
 }
 // the Sales screen and its bar: React (app/src/screens/Sales.jsx)

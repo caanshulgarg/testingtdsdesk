@@ -19,6 +19,14 @@ function vchTypeOf(e, co){
 // A bill in a Tally file that no one has confirmed is not counted. Round 17a (owner, 04-Oct-2026): a bill FinCom Bridge
 // 2.1.8 posted by Tally's reply (it never reads back: postByReply) is in Tally too.
 function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postByReply === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
+// the owner (23-Nov-2026): an entry Tally confirmed more than 24 hours ago leaves Purchase, Bank and Sales (their lists,
+// tabs and counts) and is listed in Transactions only; with no time kept (older data) it counts as older. A view only:
+// nothing kept changes, and every check, return and report still reads them all. Not Tally's confirmation (a Tally
+// file, a mark made by a person, gone from Tally, held, to review): always listed
+function postedOld(at){ return !(Date.parse(at || "") > Date.now() - 864e5); }
+function billOld(e){ return billInTally(e) && !(e.tally && e.tally.byOwner) && postedOld((e.tally && e.tally.at) || e.exportedAt); }
+function bankOld(r){ return bankMatched(r) && postedOld((r.tally && r.tally.at) || r.sentAt); }
+function salesOld(v){ return (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && postedOld(v.postedAt); }
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
   if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];

@@ -7,6 +7,7 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
+import OldPosted from "../parts/OldPosted.jsx";
 import "../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 import { useDismiss } from "../parts/dismiss.js";
@@ -38,7 +39,7 @@ const salesOptShown = (v) => !!v.postedOptional && ["posted", "intally"].include
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
   ready: "Nothing ready to post. Confirm each invoice's customer ledger under To review; it then waits here.",
-  done: "Nothing in Tally yet. Post the invoices under Ready to post.", ignored: "No invoice ignored." };
+  done: "Nothing in Tally yet. Post the invoices under Ready to post.", old: "Nothing posted to Tally in the last 24 hours.", ignored: "No invoice ignored." };
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
@@ -453,17 +454,19 @@ export default function Sales() {
     </div>
     {s.showSettings && <SettingsPanel />}
   </>;
-  const list = salesVisible(), nSel = list.filter((v) => s.sel.has(v.id)).length, open = s.openId && inv(s.openId);
+  // the invoices this page lists: all but those Tally confirmed more than 24 hours ago (in Transactions only, salesOld)
+  const list = salesVisible(), listed = s.list.filter((v) => !salesOld(v)).length, nSel = list.filter((v) => s.sel.has(v.id)).length, open = s.openId && inv(s.openId);
   return <>
     <div className="bk sl">{head}
       <div className="bk-bar">
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search invoice, customer, GSTIN" aria-label="Search the invoices" value={s.q} onChange={(ev) => salesSearch(ev.target.value)} />
       </div>
-      <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />
+      <ChipBar t="sales" shown={list.length} total={listed + " invoices"} />
       {/* the one list table (spec K6) */}
-      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length} selected={s.sel}
+      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={listed} selected={s.sel}
         rowProps={(v) => ({ className: s.sel.has(v.id) ? "picked" : undefined })}
-        empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter]} />
+        empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter === "done" && salesCounts().old ? "old" : s.filter]} />
+      <OldPosted kind="sales" />
     </div>
     {open && <Detail v={open} />}
     {s.showSettings && <SettingsPanel />}
