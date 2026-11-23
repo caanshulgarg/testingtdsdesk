@@ -320,8 +320,8 @@ function postStatus(entry, job, ids, marks, ctx){
         live && !acc ? null : {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live});
     }
     if (live){
-      // next-posting-never-stuck: what its bridge said last (Tally closed, the company not open, the bridge off: "Open Tally
-      // and <company> on <computer> (<Windows user>)", app/src/lib/postNeeds.js), before the posting's own words
+      // next-posting-never-stuck: what its bridge said last (Tally closed, the company not open, the Tally computer off:
+      // "Tally is closed. Open Tally and <company>", no computer or Windows user named; app/src/lib/postWait.js), first
       const wait = typeof postWaitWhy === "function" ? postWaitWhy(job) : "";
       if (job.status === "waiting" || (it && it.state === "waiting" && job.status !== "running")) return mk(4, (ctx.queue ? "Number " + ctx.queue + " in the queue" : "In the queue") + ": " + (wait || postReasonText(job.message) || "waiting for the Tally computer to take it") + (wait ? "" : "."), job.status === "waiting" ? {kind: "cancel", label: "Cancel"} : null);
       if (wait) return mk(5, "Stopped part-way: " + wait, null);

@@ -17,7 +17,6 @@ import { UploadLine } from "./parts/StateBar.jsx";
 const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
 // console phase 1b: the firm paused, or the open company switched off, by FinCom's console (src/js/99 FirmGate)
 const GateBanner = lazy(() => import("./parts/GateBanner.jsx"));
-const PostNeeds = lazy(() => import("./parts/PostNeeds.jsx"));
 // next-assistant (phase 1 design): Daily Check, what last night's checks left, in a file of its own
 const DailyCheck = lazy(() => import("./screens/daily/DailyCheck.jsx"));
 // the new look's pages (newlook/flag.js): Bank with its Statements tab, the one Tally page, the row of a menu item's pages
@@ -88,7 +87,6 @@ export default function Main({ v }) {
     {FirmGate.why() && <Suspense fallback={null}><GateBanner /></Suspense>}
     {company && newLook() && <Guard name="the pages of this item" v={v} quiet><Suspense fallback={null}><NLTabs /></Suspense></Guard>}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
-    {company && <Guard name="the entries not in Tally" v={v} quiet><Suspense fallback={null}><PostNeeds cid={company.id} /></Suspense></Guard>}
     {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}

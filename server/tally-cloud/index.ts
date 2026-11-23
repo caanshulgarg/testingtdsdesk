@@ -1238,6 +1238,39 @@ async function resumePaused(dev: any, bridge: string) {
   }
 }
 const s500 = (t: string) => t.slice(0, 500);
+// next-posting-never-stuck (C1; the owner, 23-Nov-2026: "warnings say just 'Tally is closed'", no computer or Windows user
+// named): a posting waiting for this bridge while its beat says Tally is closed, or the company is not open in its Tally,
+// says so, instead of the requeue's 2-hour "restart FinCom Bridge on that computer" (migration 174) or resumePaused's
+// "Carrying on". Words only (a compare-and-set on the words read): status, bridge and the rest unchanged. They start "Not
+// posted yet: ", so migration 142/203's gate words replace them as before; once the company is open the bridge takes the
+// posting and its own words follow. Read at most once a minute for a bridge (TALLY_WAIT_WORDS_MS shortens it on a test stand)
+const WAIT_WORDS_MS = Math.max(1000, Number(Deno.env.get("TALLY_WAIT_WORDS_MS") || "") || 60000);
+const waitWordsAt = new Map<string, number>();
+const WAIT_TWO_H = "No word from the FinCom Bridge on this posting for 2 hours";
+const waitWords = (state: "closed" | "notOpen", company: string) => (state === "closed" ? "Not posted yet: Tally is closed. Open Tally and " + company
+  : "Not posted yet: " + company + " is not open in Tally. Open Tally and " + company) + ".";
+const waitOwn = (m: string) => /^Not posted yet: (Tally is closed\. Open Tally and |.+ is not open in Tally\. Open Tally and ).+\.$/.test(m);
+async function waitingWords(dev: any, bridge: string, entry: any) {
+  if (!/^go-[0-9a-f]{6,32}$/.test(bridge)) return;
+  const key = pauseKey(dev.id, bridge), now = Date.now();
+  if (now < (waitWordsAt.get(key) ?? 0)) return;
+  waitWordsAt.set(key, now + WAIT_WORDS_MS);
+  const closed = String(entry?.tallyState || (entry?.tally ? "open" : "closed")) === "closed";
+  const open = new Set(((Array.isArray(entry?.open) ? entry.open : []) as unknown[]).map((x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase()));
+  const { data, error } = await db.from("tally_post_jobs").select("id,company,message,taken_by,target_bridge,row_version").eq("device_id", dev.id).eq("status", "waiting").is("stop_reason", null).limit(50);
+  if (error) { if (!missingRel(error)) console.error("tally-ingest: waiting postings' words not read", dev.id, String(error.message || "").slice(0, 200)); return; }
+  for (const j of (data || []) as any[]) {
+    if ((j.taken_by || j.target_bridge) !== bridge) continue;
+    const m = String(j.message || ""), co = String(j.company || "").trim();
+    if (!co || !(m.startsWith(WAIT_TWO_H) || m === POST_RESUMED || waitOwn(m))) continue;
+    const st = closed ? "closed" : open.has(co.replace(/\s+/g, " ").toLowerCase()) ? "" : "notOpen";
+    if (!st) continue;   // open there: the bridge takes it; its own words follow
+    const words = s500(waitWords(st, co));
+    if (words === m) continue;
+    const { error: uErr } = await db.from("tally_post_jobs").update({ message: words }).eq("id", j.id).eq("device_id", dev.id).eq("status", "waiting").is("stop_reason", null).eq("message", m).select("id");
+    if (uErr) console.log("tally-ingest: waiting posting's words not changed", j.id, String(uErr.message || "").slice(0, 160));
+  }
+}
 // tally_post_count_for (migration 142); null on a cloud without it (asked again after 10 minutes) or on an error
 let countMissing = 0;
 async function countFor(dev: any, id: string, main: boolean): Promise<number | null> {
@@ -5121,6 +5154,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
         // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
         if (!co && may) await resumePaused(dev, me.id);   // next-fix-post-resume: counted (and taken) at once below
+        if (!co && may) await waitingWords(dev, me.id, me.entry);   // next-posting-never-stuck (C1): what a waiting posting waits for
         const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
         // migration 139: the newest version only while idle with Tally, at its time, in its computer's slot
         if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prevInfo, beat, ug, posts, (ctl.out as any).release);

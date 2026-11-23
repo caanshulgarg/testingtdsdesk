@@ -31,8 +31,8 @@ import "../../../src/js/97-postto-link.js";
 import "../../../src/js/98-post-register.js";
 // who holds a posting (PostOwner: src/js/59-post-owner.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/59-post-owner.js";
-// why a posting waits (Tally closed, the company not open on <computer> (<Windows user>)): postWaitWhy for 62's words
-import "../lib/postNeeds.js";
+// why a posting waits (Tally closed, the company not open, the Tally computer off): postWaitWhy for 62's words
+import "../lib/postWait.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";

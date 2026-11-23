@@ -163,13 +163,13 @@ const CloudJobs = {
       const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
       // each entry's state (items) from migration-24 on; the entries' ids and dismissing from migration-26 on; the
       // bridge's timing of the posting (round 15, B4: {reqs: [{n, seconds, …}], secondsTotal}) from migration 43 on
-      // (next-posting-never-stuck: the bridge it waits for and the cloud's hold, migrations 54 and 174, for the words of a
-      // posting that waits: Tally closed there, the company not open; app/src/lib/postNeeds.js)
-      const dis = ",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", more = [dis + ",timing,target_bridge,taken_by,stop_reason", dis + ",timing", dis, ",items", ""];
+      // (next-posting-never-stuck: the bridge it waits for, migration 54, for the words of a posting that waits: Tally
+      // closed there, the company not open; app/src/lib/postWait.js)
+      const dis = ",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", more = [dis + ",timing,target_bridge,taken_by", dis + ",timing", dis, ",items", ""];
       for (let i = 0; ; i++){
         // (a posting made between two pages shifts the next page by one: each posting once, the first read)
         try { const seen = new Set(); this.list = (await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc,id.desc")).filter(j => !seen.has(j.id) && seen.add(j.id)); this.dismissOk = i <= 2; break; }
-        catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|timing|target_bridge|taken_by|stop_reason|column/i.test(String(e && e.message))) continue; throw e; }
+        catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|timing|target_bridge|taken_by|column/i.test(String(e && e.message))) continue; throw e; }
       }
       this.err = ""; this.at = Date.now();
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
