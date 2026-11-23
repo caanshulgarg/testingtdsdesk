@@ -49,7 +49,10 @@ const unzip = (buf) => { const out = {}; let i = 0; const b = Buffer.from(buf); 
   ok(C("31(ba)").rows.length >= 1 && C("31(ba)").rows.length === cnt("cash269ST"), "1. 31(ba) 269ST: " + C("31(ba)").rows.length + " = the audit's count");
   // round 69: TDS not deducted is a finding per party, section and year (TDSWatch.missed); 21(b) lists the entries behind them
   const tm = r.run.findings.filter(f => f.check === "tdsMissed"), tmRows = tm.flatMap(f => f.rows);
-  ok(C("21(b)").rows.length === tmRows.length && x.r2(C("21(b)").rows.reduce((a, z) => a + z[1], 0)) === x.r2(tmRows.reduce((a, z) => a + z.amount, 0)), "1. 21(b) 40(a)(ia): " + C("21(b)").rows.length + " entries of " + tm.length + " parties, the same amount as the audit's TDS-not-deducted findings");
+  // (the owner, 23-Nov-2026) the amount is each finding's base, the part its TDS does not cover (its bills when none is
+  // covered), with 30% of it inadmissible under 40(a)(ia); with AuditWP too (it listed every bill of a party partly covered)
+  const baseOf = (f) => f.base != null ? f.base : f.rows.reduce((a, z) => a + z.amount, 0), s21 = x.r2(C("21(b)").rows.reduce((a, z) => a + z[1], 0));
+  ok(C("21(b)").rows.length >= tm.length && s21 === x.r2(tm.reduce((a, f) => a + baseOf(f), 0)) && x.r2(C("21(b)").rows.reduce((a, z) => a + z[2], 0)) === x.r2(s21 * 0.3), "1. 21(b) 40(a)(ia): " + C("21(b)").rows.length + " lines of " + tm.length + " parties, " + s21 + " = the audit's TDS-not-deducted findings' bases, 30% inadmissible");
   ok(C("22").rows.length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] === "43B(h) MSME").length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] !== "43B(h) MSME").length === cnt("balances:43B"), "1. 22 and 26: 43B(h) " + cnt("msme43Bh") + " bills, 43B " + cnt("balances:43B") + " dues = the audit's counts");
   const c34 = C("34(a)");
   ok(c34.rows.length > 0 && c34.rows.every(z => Math.abs(z[1] - z[2]) < 0.01), "1. 34(a): " + c34.rows.length + " sections from FinCom's TDS");
@@ -79,6 +82,6 @@ const unzip = (buf) => { const out = {}; let i = 0; const b = Buffer.from(buf); 
   }
   const r2 = x.FSX.taxAuditFromBooks(fy), C2 = no => r2.d3.clauses.find(c => c.no === no);
   ok(/77-audit/.test(r2.src) && C2("21(d)").rows.length === r2.counts.wp_cash40A3 && C2("31(ba)").rows.length === r2.counts.wp_cash269ST && C2("22").rows.length === r2.counts.wp_msme43Bh, "6. with AuditWP: its results fill 21(d), 31, 22, 26 and 21(b); counts equal its checks (" + r2.src + ")");
-  ok(C2("21(d)").rows.length === C("21(d)").rows.length && C2("31(ba)").rows.length === C("31(ba)").rows.length && C2("22").rows.length === C("22").rows.length && C2("21(b)").rows.length === C("21(b)").rows.length, "6. and the same answers as without it: one computation of each check");
+  ok(C2("21(d)").rows.length === C("21(d)").rows.length && C2("31(ba)").rows.length === C("31(ba)").rows.length && C2("22").rows.length === C("22").rows.length && C2("21(b)").rows.length === C("21(b)").rows.length && JSON.stringify(C2("21(b)").rows) === JSON.stringify(C("21(b)").rows), "6. and the same answers as without it: one computation of each check");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

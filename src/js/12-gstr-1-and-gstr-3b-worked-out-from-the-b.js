@@ -276,14 +276,17 @@ Object.assign(GSTR, {
   threeBJson(ym, reg, t0){
     const t = t0 || this.threeB(ym, reg);
     const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    // (review of ad4be74c3) the portal takes no negative figure in 3.1: a head's negative is set off and carried as negative
+    // liability (GSTR.setOff), a negative 3.1(b), (c), (e) value carried to the next return (GSTR.carry31)
+    const p0 = v => Math.max(0, r2(v)), sup0 = (txval, iamt, camt, samt, csamt) => ({txval: p0(txval), iamt: p0(iamt), camt: p0(camt), samt: p0(samt), csamt: p0(csamt)});
     const sup = (txval, iamt, camt, samt, csamt) => ({txval: r2(txval), iamt: r2(iamt), camt: r2(camt), samt: r2(samt), csamt: r2(csamt)});
     const out = {gstin, ret_period: ym.slice(4, 6) + ym.slice(0, 4),
       sup_details: {
-        osup_det: sup(t.net.taxable, t.net.igst, t.net.cgst, t.net.sgst, t.net.cess),
-        osup_zero: sup(t.zero.taxable, t.zero.igst, 0, 0, t.zero.cess),
-        osup_nil_exmp: {txval: r2(t.nil.taxable)},
-        isup_rev: sup(t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess),
-        osup_nongst: {txval: r2(t.nongst.taxable)}
+        osup_det: sup0(t.net.taxable, t.net.igst, t.net.cgst, t.net.sgst, t.net.cess),
+        osup_zero: sup0(t.zero.taxable, t.zero.igst, 0, 0, t.zero.cess),
+        osup_nil_exmp: {txval: p0(t.nil.taxable)},
+        isup_rev: sup0(t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess),
+        osup_nongst: {txval: p0(t.nongst.taxable)}
       },
       itc_elg: {itc_avl: [
         {ty: "IMPG", iamt: r2(t.impGoods.igst), camt: 0, samt: 0, csamt: r2(t.impGoods.cess)},

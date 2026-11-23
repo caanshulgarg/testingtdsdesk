@@ -224,7 +224,7 @@ export function r3bTables(t, j) {
       groups: [["", 2], ["Tax paid through ITC", 4], ["", 3]],
       cols: ["payable", "ui", "uc", "us", "ucs", "cash", "int", "fee"],
       rows: [{ id: "6.1A", label: "(A) Other than reverse charge", group: true }].concat(H4.map((k) => ({ id: "6.1A|" + k, label: { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" }[k], head: k,
-        payable: V(t.net, k), ui: V(P.use.igst, k), uc: V(P.use.cgst, k), us: V(P.use.sgst, k), ucs: V(P.use.cess, k), cash: R(V(P.cash, k) - V(P.rcmCash, k)), int: 0, fee: 0 })),
+        payable: V(P.due || t.net, k), ui: V(P.use.igst, k), uc: V(P.use.cgst, k), us: V(P.use.sgst, k), ucs: V(P.use.cess, k), cash: R(V(P.cash, k) - V(P.rcmCash, k)), int: 0, fee: 0 })),
       [{ id: "6.1B", label: "(B) Reverse charge", group: true }], H4.map((k) => ({ id: "6.1B|" + k, label: { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" }[k], head: k,
         payable: V(t.rcmOut, k), ui: 0, uc: 0, us: 0, ucs: 0, cash: V(P.rcmCash, k), int: 0, fee: 0 }))) },
   ];
@@ -245,17 +245,24 @@ export function r3bBills(id, ym, reg, t) {
   // kept before it has the whole in 3.1(a), as then)
   const rej = (t, c) => { const R = t.custRej; if (!R) return; const p = (o) => (o.by ? o.by[c] : c === "net" ? o : null);
     if (p(R.add)) A("Our credit notes rejected by customers in IMS", p(R.add)); if (p(R.back)) A("Of those, accepted later", neg(p(R.back))); };
+  // (the owner, 23-Nov-2026; review of ad4be74c3) a box shown nil, a carry brought in, 3.1(b)'s tax below nil (GSTR.carry31)
+  const c31 = (k) => { const c = t.c31; if (!c) return;
+    if (c.cin && c.cin[k]) A("Credit notes brought from the return before, taken off here", { taxable: -V(c.cin[k], "taxable") });
+    if (c.out && c.out[k]) A("Credit notes more than supplies: shown as nil, carried to the next return", { taxable: V(c.out[k], "taxable") });
+    if (c.raw && c.raw[k]) A(k === "zero" ? "Tax below nil: taken off 3.1(a)'s same head" : "Tax below nil: shown as nil", { igst: -Math.min(0, V(c.raw[k], "igst")), cgst: -Math.min(0, V(c.raw[k], "cgst")), sgst: -Math.min(0, V(c.raw[k], "sgst")), cess: -Math.min(0, V(c.raw[k], "cess")) }); };
   switch (id) {
     case "3.1a": {
       bills = B(out.filter((r) => r.cls === "taxable" && r.kind !== "CDNR")).concat(B(out.filter((r) => r.kind === "CDNR" && r.cls === "taxable"), -1));
       A("Tax on advances, 11A less 11B", t.adv);
       rej(t, "net");
       if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.out);
+      // (re-review of bac94a801, N1) 3.1(b)'s tax below nil taken off here; a head below nil shown as nil (negative liability)
+      if (t.f31) { if (t.f31.cin) A("Credit notes brought from the return before, taken off here", { taxable: -t.f31.cin }); A("3.1(b)'s tax below nil, taken off here", t.f31.take); A("Below nil: shown as nil, carried to the next return", t.f31.up); }
       figure = S5(t.net); break; }
-    case "3.1b": bills = CN(out.filter((r) => r.cls === "export" || r.cls === "sez")); if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.zero); rej(t, "zero"); figure = S5(t.zero); break;
-    case "3.1c": bills = CN(out.filter((r) => r.cls === "exempt" || r.cls === "nil")); rej(t, "nil"); figure = S5(t.nil); break;
+    case "3.1b": bills = CN(out.filter((r) => r.cls === "export" || r.cls === "sez")); if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.zero); rej(t, "zero"); c31("zero"); figure = S5(t.zero); break;
+    case "3.1c": bills = CN(out.filter((r) => r.cls === "exempt" || r.cls === "nil")); rej(t, "nil"); c31("nil"); figure = S5(t.nil); break;
     case "3.1d": bills = B(inn.filter((r) => r.rcm || (r.import && r.supply !== "Goods"))); figure = S5(t.rcmOut); break;
-    case "3.1e": bills = CN(out.filter((r) => r.cls === "nongst")); rej(t, "nongst"); figure = S5(t.nongst); break;
+    case "3.1e": bills = CN(out.filter((r) => r.cls === "nongst")); rej(t, "nongst"); c31("nongst"); figure = S5(t.nongst); break;
     case "4A1": bills = B(inn.filter((r) => r.import && r.supply === "Goods")); figure = S5(t.impGoods); break;
     case "4A2": bills = B(inn.filter((r) => r.import && r.supply !== "Goods")); figure = S5(t.impServ); break;
     case "4A3": bills = B(inn.filter((r) => r.rcm && !r.import)); figure = S5(t.rcmIn); break;

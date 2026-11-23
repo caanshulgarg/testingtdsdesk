@@ -117,6 +117,7 @@ if (x.Audit.form3cd){
   const d = x.Audit.form3cd(fake), cl = no => d.clauses.find(c => c.no === no);
   const sum = (c, i) => c.rows.reduce((s, z) => s + z[i], 0);
   ok(sum(cl("21(b)(ii)(A)"), 1) === 200000, "21(b)(ii)(A): 2,00,000 disallowable, not the 5 bills' 5,00,000 (got " + sum(cl("21(b)(ii)(A)"), 1) + ")");
+  ok(sum(cl("21(b)(ii)(A)"), 2) === 60000 && /Inadmissible/.test(cl("21(b)(ii)(A)").head[2]), "21(b)(ii)(A): 60,000 (30%) inadmissible under 40(a)(ia) (got " + sum(cl("21(b)(ii)(A)"), 2) + ")");
   const s34 = cl("34(a)").rows.find(z => z[0] === "194C") || [];
   ok(s34[1] === 500000 && s34[5] === 200000, "34(a) 194C: paid or credited 5,00,000 and without deduction 2,00,000 (got " + s34[1] + ", " + s34[5] + ")");
   x.TDS.allRows = allRows; x.Certs.issues = iss;
@@ -160,7 +161,7 @@ const t10 = tk.find(z => z.date === "20251010");
 ok(t10 && /interest/i.test(t10.note) && /19,000/.test(t10.note), "4,000 in cash with 16,500 owed, 1,500 of it interest: flagged, and the note says the loan alone comes to 19,000 (got " + JSON.stringify(t10 && t10.note) + ")");
 
 if (x.Audit.form3cd){
-  console.log("11. Form 3CD 34(a) and 21(b)(ii)(A): a short deduction is at a lower rate, not without deduction");
+  console.log("11. Form 3CD 34(a) and 21(b)(ii)(A): a short deduction is at a lower rate, not without deduction; 30% of its uncovered part inadmissible");
   books([]);
   const allRows = x.TDS.allRows, iss = x.Certs.issues;
   x.TDS.allRows = () => [{date: "20250610", fy: "2025-26", section: "194C", party: "K", paid: 100000, tds: 1000, sepShort: true, covers: 50000}]; x.Certs.issues = () => [];
@@ -168,15 +169,37 @@ if (x.Audit.form3cd){
     rows: [{date: "20250610", no: "1", type: "194C", party: "K", amount: 100000, note: "booked to Contract"}]}]}), cl = no => d.clauses.find(c => c.no === no);
   const s34 = cl("34(a)").rows.find(z => z[0] === "194C") || [];
   ok(s34[1] === 100000 && s34[5] === 0 && s34[4] === 100000, "34(a) 194C: paid 1,00,000 (not 1,50,000), at a lower rate 1,00,000, without deduction nil (got " + JSON.stringify(s34) + ")");
-  ok(!cl("21(b)(ii)(A)").rows.some(z => z[0] === "K"), "21(b)(ii)(A): nothing for K, TDS was deducted (short): " + JSON.stringify(cl("21(b)(ii)(A)").rows));
+  // (the owner, 23-Nov-2026) and 30% of the part its TDS does not cover is inadmissible under section 40(a)(ia), in 21(b),
+  // as the ITR adds it back (app/src/lib/itr/books.js): the 50,000 once, not also as "without deduction" in 34(a)
+  const kb = cl("21(b)(ii)(A)").rows.filter(z => z[0] === "K");
+  ok(kb.length === 1 && kb[0][1] === 50000 && kb[0][2] === 15000 && /short/i.test(kb[0][3]), "21(b)(ii)(A): K's 50,000 not covered by the short TDS, 15,000 (30%) inadmissible under 40(a)(ia) (got " + JSON.stringify(cl("21(b)(ii)(A)").rows) + ")");
+  ok(/40\(a\)\(ia\)/.test(cl("21(b)(ii)(A)").note) && /15,000/.test(cl("21(b)(ii)(A)").note) && /34\(a\)/.test(cl("21(b)(ii)(A)").note) && /Tekriwal/.test(cl("21(b)(ii)(A)").note) && /auditor decides/.test(cl("21(b)(ii)(A)").note), "21(b)'s note: the 30% inadmissible, the short part also in 34(a) at a lower rate, and the courts that hold otherwise: the auditor decides (" + cl("21(b)(ii)(A)").note + ")");
+  // a party with a bill wholly without TDS and another deducted short: the two parts add up to the finding's base, once
+  x.TDS.allRows = () => [{date: "20250710", fy: "2025-26", section: "194J", party: "M", paid: 200000, tds: 2000, sepShort: true, covers: 20000}];
+  const d2 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: [{id: "tdsMissed:M|194J|2025-26", check: "tdsMissed", base: 280000, section: "194J", party: "M", fy: "2025-26", count: 2, amount: 28000,
+    rows: [{date: "20250710", no: "7", type: "194J", party: "M", amount: 200000, note: "booked to Fees"}, {date: "20250810", no: "8", type: "194J", party: "M", amount: 100000, note: "booked to Fees"}]}]});
+  const mb = d2.clauses.find(c => c.no === "21(b)(ii)(A)").rows.filter(z => z[0] === "M"), m34 = d2.clauses.find(c => c.no === "34(a)").rows.find(z => z[0] === "194J") || [];
+  ok(mb.length === 2 && mb.reduce((a2, z) => a2 + z[1], 0) === 280000 && mb.reduce((a2, z) => a2 + z[2], 0) === 84000 && mb.some(z => z[1] === 180000) && mb.some(z => z[1] === 100000),
+    "21(b): M's 2,80,000 not covered, once: 1,80,000 short of the rate and 1,00,000 without deduction; 84,000 (30%) inadmissible (got " + JSON.stringify(mb) + ")");
+  ok(m34[4] === 200000 && m34[5] === 100000 && m34[1] === 300000, "34(a) 194J: at a lower rate 2,00,000, without deduction 1,00,000 (not 2,80,000), paid 3,00,000 (got " + JSON.stringify(m34) + ")");
   x.TDS.allRows = allRows; x.Certs.issues = iss;
 
-  console.log("12. clause 44: auditor's remuneration and staff welfare are bought from suppliers; partners' and directors' pay is not");
+  console.log("12. clause 44: auditor's remuneration and staff welfare are bought from suppliers; partners' and directors' pay is not; a non-employee director's fee is, with reverse charge GST");
   books([V("20250601", "Purchase", [["Purchase", -10000], ["Supp A", 10000]], {party: "Supp A"}), V("20260331", "Journal", [["Auditor's Remuneration", -50000], ["Audit Firm", 50000]], {party: "Audit Firm"}),
     V("20250815", "Payment", [["Staff Welfare", -20000], ["Cash", 20000]]), V("20260331", "Payment", [["Partners Remuneration", -300000], ["Made-up Bank", 300000]]),
     V("20260331", "Payment", [["Directors Remuneration", -200000], ["Made-up Bank", 200000]])]);
   const g12 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: []}).clauses.find(c => c.no === "44").rows[0];
   ok(g12[0] === 80000, "clause 44: 10,000 + auditor 50,000 + staff welfare 20,000 = 80,000; not the partners' or directors' 5,00,000 (got " + g12[0] + ")");
+  // (the owner, 23-Nov-2026) by default: a whole-time or managing director's pay is an employee's (out, Schedule III); a
+  // fee to a director who is not an employee is a supply under reverse charge (Notification 13/2017-CT(Rate), entry 6;
+  // circular 140/10/2020-GST): in clause 44 (with unregistered suppliers), its GST under reverse charge said
+  Object.assign(UNDER, {"Remuneration to Whole-time Director": "Indirect Expenses", "Managing Director Salary": "Indirect Expenses", "WTD Remuneration": "Indirect Expenses", "Directors Sitting Fees": "Indirect Expenses"});
+  books([V("20250601", "Purchase", [["Purchase", -10000], ["Supp A", 10000]], {party: "Supp A"}), V("20260331", "Payment", [["Remuneration to Whole-time Director", -400000], ["Made-up Bank", 400000]]),
+    V("20260331", "Payment", [["Managing Director Salary", -300000], ["Made-up Bank", 300000]]), V("20260331", "Payment", [["WTD Remuneration", -100000], ["Made-up Bank", 100000]]),
+    V("20250930", "Payment", [["Directors Sitting Fees", -50000], ["Made-up Bank", 50000]])]);
+  const c44 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: []}).clauses.find(c => c.no === "44"), g44 = c44.rows[0];
+  ok(g44[0] === 60000 && g44[5] === 60000, "clause 44: the purchase 10,000 and the sitting fees 50,000 (unregistered); not the whole-time, managing or WTD director's 8,00,000 (got total " + g44[0] + ", unregistered " + g44[5] + ")");
+  ok(/sitting fees|director/i.test(c44.note) && /50,000/.test(c44.note) && /reverse charge/i.test(c44.note) && /9,000/.test(c44.note) && /unless already booked under reverse charge/.test(c44.note), "clause 44's note: 50,000 of fees to directors who are not employees, GST 9,000 under reverse charge unless already booked (" + c44.note + ")");
 
   console.log("13. clause 31(bc): cash paid of 2 lakh or more that 40A(3) leaves out is listed to check");
   books([V("20250720", "Payment", [["Mohan Loan", -250000], ["Cash", 250000]]), V("20250721", "Payment", [["Capital", -300000], ["Cash", 300000]]), V("20250722", "Payment", [["Ravi Stores", -150000], ["Cash", 150000]])]);

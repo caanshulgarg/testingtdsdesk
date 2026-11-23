@@ -10,6 +10,7 @@ import "../../../../src/js/08-gstr-9-and-gstr-9c.js";
 import ExcelTools from "../../parts/ExcelTools.jsx";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
+import { r3bCarryYear } from "../../lib/gst3bNil.js";
 
 const m = (v) => INR.format(r2(v || 0));
 const regOf = (b) => S.gstReg || (GSTR.gstins(b).length === 1 ? GSTR.gstins(b)[0].slice(0, 2) : "");
@@ -38,6 +39,7 @@ export function Gst9({ b }) {
       {d.heldEnd && Math.abs(gap6J + d.heldEnd) < 2 ? <p className="note">{"6J: ₹" + m(d.heldEnd) + " of this year’s bills was held back from 3B because it was not in 2B by March; it is taken in next year’s returns and belongs in 8C and 13 when it is."}</p> : null}
       <p className="note">{"Table 8C and 13 count bills of this year booked in Tally from April to November of the next year, and credit of this year’s bills kept in a “not shown in 2B” ledger that the books move to the input ledger then; table 12, this year’s credit reversed then (₹" + m(all4(b12)) + " in the books). Figures that are not in the books are typed below."}</p>
     </section>
+    <Carried31 fy={fy} reg={reg} />
     <Card title="Figures not in the books">
       <p className="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.{b12 && (b12.igst + b12.cgst + b12.sgst) ? " Table 12 is taken from the books unless typed." : ""}{d.T["6Gbooks"] && all4(d.T["6Gbooks"]) ? " Table 6G is the ISD's credit in the books (₹" + m(all4(d.T["6Gbooks"])) + ", 3B 4(A)(4)) unless typed." : ""}</p>
       <div className="bk-tablewrap"><table className="bk-table gf-off" data-statement="">
@@ -55,6 +57,23 @@ export function Gst9({ b }) {
         <tbody>{d.hsnIn.slice(0, 100).map((x, i) => <tr key={i}><td>{x.hsn || "no HSN in Tally"}</td><td className="n">{m(x.taxable)}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>)}</tbody></table></div>
     </Card>
   </>;
+}
+
+// (the owner, 23-Nov-2026) 3B boxes 3.1(b), (c), (e) shown as nil because credit notes were more than supplies, and the
+// amount carried to the next return (GSTR.carry31): kept in sight for the year, with what is still carried at its end
+function Carried31({ fy, reg }) {
+  const rows = r3bCarryYear(GST9.months(fy), reg);
+  if (!rows.length) return null;
+  const last = {}; rows.forEach((r) => { last[r.box] = r.out; });
+  const left = Object.entries(last).filter(([, v]) => v >= 0.005);
+  return <Card title="3B boxes shown as nil: credit notes carried">
+    <p className="note">Credit notes more than supplies in 3.1(b), (c) or (e) are shown as nil in that 3B and taken off the next one.</p>
+    <div className="bk-tablewrap"><table className="bk-table gf-off" data-statement="" data-carry31="">
+      <thead><tr><th>3B</th><th>Box</th><th className="n">Brought in</th><th className="n">Carried on</th></tr></thead>
+      <tbody>{rows.map((r, i) => <tr key={i}><td>{r.quarter ? "Quarter to " + GSTR.label(r.ym) : GSTR.label(r.ym)}</td><td>{r.box}</td><td className="n">{r.cin ? m(r.cin) : "—"}</td><td className="n">{r.out ? m(r.out) : "—"}</td></tr>)}</tbody>
+    </table></div>
+    {left.length > 0 && <p className="note" data-carry31-left="">{"Still carried at the end of the year: " + left.map(([k, v]) => k + " ₹" + m(v)).join("; ") + "."}</p>}
+  </Card>;
 }
 
 /* ---------- GSTR-9C ---------- */
