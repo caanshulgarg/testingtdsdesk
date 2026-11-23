@@ -50,6 +50,9 @@ import "../../../src/js/83-tds-forms-2025.js";
 import "./settings-layout.css";
 // the bill desk's suppliers: waiting bills' new suppliers, the year read from Tally (src/js/99, kept out of legacy.js)
 import "../../../src/js/99-pending-suppliers.js";
+// the new look (newlook/flag.js): Settings in six plain groups, Tally out of it
+import { newLook, setNewLook } from "../newlook/flag.js";
+import { density, setDensity } from "../parts/density.js";
 
 // the list on the left: groups of sections; each section one line, its label and, at the right, where it stands now
 // (a section that needs something done: warn, in the warning colour; its whole status in the tip)
@@ -233,6 +236,32 @@ function firmGroups(sig = firmSignals()) {
   return groups.filter((g) => g.items.length);
 }
 
+// the new look (the owner, 22-Nov-2026: "Settings: remove anything unused, Tally out of Settings, easy to understand"):
+// the same sections in plain groups; what is Tally's is on the Tally page (Connect Tally and Sent to Tally were only links
+// there; Books in the cloud and Post automatically are the Tally page's Settings tab); the empty group headings go
+export const NL_MOVED = { bridge: "computers", tcloud: "settings", postlog: "sent", autopost: "settings" };
+function nlGroups(groups) {
+  const by = {}; groups.forEach((g) => g.items.forEach((i) => { by[i.id] = i; }));
+  const pick = (...ids) => ids.map((id) => by[id]).filter(Boolean);
+  const people = by.account && Object.assign({}, by.account, { label: "People and sign-in" });
+  const look = { id: "look", label: "Look", about: "The new look of FinCom, and how close the rows of a table sit. For you only.", status: newLook() ? "new look" : "classic" };
+  return [
+    { title: "Firm", items: [by.firm, people, by.batches].filter(Boolean) },
+    { title: "My account", items: [look] },
+    { title: "Client defaults", items: pick("rates", "gstapi").map((i) => (i.id === "gstapi" ? Object.assign({}, i, { label: "GST portal links" }) : i)) },
+    { title: "Billing", items: pick("plan") },
+    { title: "Advanced", items: pick("reading", "ai", "moves") },
+  ].filter((g) => g.items.length);
+}
+function LookSection() {
+  return <Card title="Look" note="For you only, on this browser. Everyone else keeps their own choice.">
+    <label className="chk" style={{ display: "flex", gap: 10, padding: "6px 0" }}><input type="checkbox" data-set-newlook="" checked={newLook()} onChange={(ev) => setNewLook(ev.target.checked)} />
+      <span><b>New look</b><br /><span className="note">A shorter menu, + New, search (Ctrl+K), Bank with a Statements tab, one Tally page.</span></span></label>
+    <label className="chk" style={{ display: "flex", gap: 10, padding: "6px 0" }}><input type="checkbox" data-set-compact="" checked={density() === "compact"} onChange={(ev) => setDensity(ev.target.checked ? "compact" : "comfortable")} />
+      <span><b>Compact rows</b><br /><span className="note">More lines of a table on the screen.</span></span></label>
+  </Card>;
+}
+
 // Needs you: each thing to do, as a link to its section (only sections the list has)
 function firmNeeds(sig, ids) {
   const out = [];
@@ -269,7 +298,10 @@ function AdminConsoleLink() {
 }
 
 export function FirmSettings() {
-  const sig = firmSignals(), groups = firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));
+  const nl = newLook();
+  // an old address of a section now on the Tally page (#/settings/bridge, …) opens it there
+  if (nl && NL_MOVED[S.settingsTab]) { const t = NL_MOVED[S.settingsTab]; S.settingsTab = null; setTimeout(() => goTallyPage(t), 0); }
+  const sig = firmSignals(), groups = nl ? nlGroups(firmGroups(sig)) : firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));
   // no section asked for (Settings in the sidebar, #/settings): Firm details on a computer, the list on a phone
   const list = !ids.includes(S.settingsTab);
   const cur = list ? "firm" : S.settingsTab;
@@ -290,10 +322,12 @@ export function FirmSettings() {
     ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
     autopost: () => <AutoPostSettings />,
     moves: () => <MoveSwitches />,
+    look: () => <LookSection />,
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
   return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}
       list={list} back={back} top={<NeedsStrip title="Needs you" items={firmNeeds(sig, ids)} pick={pick} />}>{body()}</Layout>
+    {nl && <p className="note" data-set-tally-note="">Tally is set up on the Tally page only. <button type="button" className="linkbtn" onClick={() => goTallyPage("computers")}>Open the Tally page</button></p>}
     <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
 }
 

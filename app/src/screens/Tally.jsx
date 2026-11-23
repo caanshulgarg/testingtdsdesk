@@ -1195,7 +1195,8 @@ function DownloadHead({ set, m }) {
 const TALLY_TABS = [["computers", "Tally"], ["activity", "Sync activity"], ["sent", "Everything sent"]];
 const goTab = (id) => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); window.scrollTo(0, 0); };
 // sourcesSlot: the mount point for 2.4.1's two-data-locations card (SourceCards on next-241), drawn inside Needs you
-export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
+// afterSimple: the new look's "This computer" (its ports) and computers, drawn under the steps and the companies
+export default function TallyHome({ connectStep = null, sourcesSlot = null, afterSimple = null }) {
   const m = useSetup();
   // the page is named in the top bar (one heading, spec I)
   if (S.tallyOld) return <OldBridge />;
@@ -1208,7 +1209,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     {tab === "activity" ? <SyncActivity /> : <PostLog />}</>;
   // signed out: Connect Tally needs the firm account (the link is kept in FinCom’s cloud), so it is not shown and nothing
   // asks to sign in (stay signed in, the owner, 13-Nov-2026); this browser's own bridge connect is under Advanced
-  if (!TCloud.on()) return <><DownloadHead set={setupOf(m)} m={m} />
+  if (!TCloud.on()) return <><DownloadHead set={setupOf(m)} m={m} />{afterSimple}
     <ForSupport><InstallAgain m={m} rows={rows} /><PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></ForSupport></>;
   // next-tally-own-status: a member of staff finds only their own bridge's card under Advanced (heard in the last 7
   // days), never another's. The owner still has each bridge's card there: its settings are the owner's alone (resume
@@ -1229,6 +1230,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     <GuideRefresh />
     {!Bridge.blocked() && <ThisWatch rows={rows} />}
     <SimpleTally latest={latest} installed={gx.done.install} ready={TCloud.pane.devices != null || !!TCloud.pane.err} download={dl} sha={set ? set.sha : ""} checkAgain={checkAgain} connectPanel={panel} />
+    {afterSimple}
     {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     <NeedsYou sources={sourcesSlot} />
