@@ -20,7 +20,7 @@ One page per client, under Books in the sidebar: **Income tax return**. Five ste
 | 5 JSON | Not yet / Ready for Winman, with three ticks: the official schema passes, the two computations agree, every check settled | The schema's own questions (Yes/No and choices FinCom cannot know), what the schema says if it fails, the versions made |
 
 The calm style of the client pages: few words, one chip in the heading ("7 to look at" / "JSON ready"), details on expand.
-The page is one lazy chunk (`ITR-*.js`, about 50 KB gzip, with `ITR-*.css` 2 KB); nothing of it is in `legacy.js` or the
+The page is one lazy chunk (`ITR-*.js`, about 100 KB gzip with the schedules, with `ITR-*.css` 2 KB); nothing of it is in `legacy.js` or the
 app's first file. Code: `app/src/screens/itr/ITR.jsx`, `itr.css`; the working, all pure and tested in Node, in
 `app/src/lib/itr/`:
 
@@ -363,6 +363,6 @@ All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
 | `python3 tests/run_itr_ui.py` | The page, desktop and phone: Data, a file brought in, a wrong PAN refused, re-import, the sheet with its ledgers, PDF, Excel, the checks, a difference opened, accepting only with a note, the JSON offered only when settled, the download passing ajv; fits the width. `ITR_SHOTS=<dir>` saves the design screenshots |
 | `node tests/run_itr_schedules.mjs` | The schedules by hand: salary in both regimes (HRA by rule 2A, one standard deduction, gratuity cap), house property (annual value, 30%, the self-occupied cap, co-owners, arrears, three self-occupied), capital gains (CII, holding periods, 55(2)(ac), 50C at 110%, indexation and the proviso's 2,93,630, no proviso for a non-resident or a company, set-off within the head and carry forward, buy-back, 54EC cap, the 234C accrual); whole ITR-3 / ITR-4 / ITR-5 / ITR-6 returns through both computations and ajv (Schedules S, HP, CG, 112A, SI, CFL, AL, FA, SH, AL-1, Ind AS); the checks (Form 16, AIS salary / rent / sales, AL, SH, Ind AS); 300 random returns with salary, houses and sales: both computations agree |
 | `python3 tests/run_itr_schedules_ui.py` | The Schedules step, desktop and phone: the Form 16 on Data, each head's figure, a sale opened, an AIS sale taken, an employer taken from Form 16, a house added, FA's lists from the schema, the Computation and the Checks group; ITR-6's SH, AL-1 and OCI. `ITR_SHOTS=<dir>` saves the screenshots |
-| `run_every_screen.py`, `run_legacy_room.py` | The four steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |
+| `run_every_screen.py`, `run_legacy_room.py` | The five steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |
 
 Run `sh tools/itr-schemas.sh` before building and before the schema test.
