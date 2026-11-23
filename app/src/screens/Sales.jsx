@@ -32,6 +32,8 @@ import "../../../src/js/97-postto-link.js";
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 // next-fix-sales-readback: an invoice in Tally as an Optional voucher (sent so, or found so), said on its row and panel
+// (next-sales-followups) the panel's "untick ... in Client setup" advice: only on one FinCom posted with the client's Optional
+// tick on, never on one found in Tally (entered there by hand as Optional)
 const salesOptShown = (v) => !!v.postedOptional && ["posted", "intally"].includes(v.status);
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
@@ -169,7 +171,7 @@ function Detail({ v }) {
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
       {v.postError && v.status !== "intally" && <div className="bk-alert bad">Tally: {v.postError}</div>}
-      {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers). To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup.</div>}
+      {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
       <SalesAsk v={v} wide />
       <section><h3>Invoice details</h3>
         <div className="bk-form">

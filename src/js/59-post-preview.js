@@ -77,7 +77,7 @@ function incomeLedger(name, cid){
   return "";
 }
 
-// Tally's answer for one entry, said one way everywhere (B12): "In Tally (verified)", "In Tally, not yet read back",
+// Tally's answer for one entry, said one way everywhere (B12): "In Tally (verified)", "Not confirmed by Tally yet",
 // "Altered in Tally", "Failed: reason"
 function postAltered(x){
   if (!x || !x.ok) return false;
@@ -94,7 +94,7 @@ function postAltered(x){
 // alreadyThere: in Tally too. "Waiting for Tally: Tally is busy …" before the check could run: nothing was posted either
 // round 17a (owner, 04-Oct-2026): one rule for "Tally has it" in every path. FinCom Bridge 2.1.8 posts by Tally's reply
 // and never reads back: {ok: true, byReply: true, verified: false, vchId | batchEnd + batchN}. Such a result is posted
-// (not "In Tally, not yet read back"), as a result read back (verified) or one Tally altered
+// (not "Not confirmed by Tally yet"), as a result read back (verified) or one Tally altered
 function postTaken(x){ return !!x && x.ok === true && (x.verified === true || x.byReply === true || postAltered(x)); }
 function postAlready(x){ return !!x && (x.already === true || (x.ok === true && x.alreadyThere === true) || (!x.ok && /^Already in Tally \(voucher no\./i.test(String(x.message || "")))); }
 function postCheckFail(x){ return !!x && !x.ok && !postAlready(x) && (x.checkFailed === true || /^(Could not check Tally|Waiting for Tally)\b/i.test(String(x.message || ""))); }
@@ -110,7 +110,7 @@ function postWord(x){
   if (postAltered(x)) return "Altered in Tally";
   if (x.verified === true) return "In Tally (verified)";
   if (x.byReply === true) return "Posted to Tally (Tally's reply)";
-  return "In Tally, not yet read back";
+  return "Not confirmed by Tally yet";
 }
 
 const PostGate = {
@@ -205,7 +205,7 @@ const PostRecord = {
     const vres = res.filter(r => vids.includes(r.id)), okN = vres.filter(r => r.ok || postAlready(r)).length, unread = vres.filter(r => r.ok && !postTaken(r)).length;
     const status = vres.length && okN === vids.length ? "done" : (!vids.length && res.every(r => r.ok) ? "done" : "failed");
     const how = "sent straight to FinCom Bridge" + (Bridge.st.version ? " " + Bridge.st.version : "") + (Bridge.st.computer ? " on " + Bridge.st.computer : " on this computer");
-    const message = (vids.length ? okN + " of " + vids.length + " in Tally" + (unread ? " (" + unread + " not yet read back)" : "") : res.length + " ledger" + (res.length === 1 ? "" : "s")) + ", " + how;
+    const message = (vids.length ? okN + " of " + vids.length + " in Tally" + (unread ? " (" + unread + " not confirmed by Tally yet)" : "") : res.length + " ledger" + (res.length === 1 ? "" : "s")) + ", " + how;
     try {
       const r = await TCloud.rpc("tally_post_record", {p_id: id, p_client: co.id, p_company: out.company || payload.company || "", p_status: status, p_results: res, p_entry_ids: vids, p_message: message});
       if (r && r.ok === false){ this.why = "FinCom's cloud did not keep a record of this posting: " + plainMsg(r.error || "refused") + "."; return false; }
@@ -763,7 +763,7 @@ function postRows(co){
   const stOf = (id, fallback) => {
     for (const j of live){
       const it = [].concat(j.items || []).find(x => x.id === id);
-      if (it) return it.state === "waiting" ? ["Waiting for Tally", "warn"] : it.state === "sending" ? ["Sending", "warn"] : it.state === "sent" ? ["In Tally, not yet read back", "warn"] : it.state === "in_tally" ? ["In Tally (verified)", "ok"] : it.state === "posted" ? ["Posted to Tally (Tally's reply)", "ok"] : ["Failed: " + (it.reason || "Tally refused it"), "bad"];
+      if (it) return it.state === "waiting" ? ["Waiting for Tally", "warn"] : it.state === "sending" ? ["Sending", "warn"] : it.state === "sent" ? ["Not confirmed by Tally yet", "warn"] : it.state === "in_tally" ? ["In Tally (verified)", "ok"] : it.state === "posted" ? ["Posted to Tally (Tally's reply)", "ok"] : ["Failed: " + (it.reason || "Tally refused it"), "bad"];
       if ((CloudJobs.idsOf(j) || []).includes(id)) return [j.status === "waiting" ? "Waiting for Tally" : "Sending", "warn"];
     }
     return fallback;
@@ -775,7 +775,7 @@ function postRows(co){
     // sent (a Tally file, or posted and not confirmed): listed with where it stands, not posted again from here
     const sent = !!e.exportedAt, ts = sent ? tallyStateOf(e) : null;
     out.push({kind: "bill", id: e.id, date: e.x.invoiceDate, party: e.x.vendorName, no: e.x.invoiceNo || "", amount: num(e.x.total), led, e, sent,
-      state: sent ? [ts[1], ts[0] === "bad" ? "bad" : "warn"] : stOf(e.id, e.postUnconfirmed ? ["In Tally, not yet read back", "warn"] : busyBills ? ["Sending", "warn"] : ["Waiting for Tally", ""])});
+      state: sent ? [ts[1], ts[0] === "bad" ? "bad" : "warn"] : stOf(e.id, e.postUnconfirmed ? ["Not confirmed by Tally yet", "warn"] : busyBills ? ["Sending", "warn"] : ["Waiting for Tally", ""])});
   });
   const b = S.bank && S.bank.cid === co.id && !S.bank.loading ? S.bank : null, st = b ? curStmt() : null;
   if (b && st){
