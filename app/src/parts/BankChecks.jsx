@@ -192,7 +192,7 @@ export function ReviewCheck({ rc }) {
 // what the last posting to Tally did
 export function PostReport({ rep }) {
   if (!rep) return null;
-  // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
+  // one clear word for each (review of 02-Oct-2026): In Tally (verified) / Not confirmed by Tally yet / Failed
   // 26-Oct-2026: the client linked and no company confirmed: the linked company asked about here, one click each
   const co = rep.notAllowed && typeof CO === "function" ? CO() : null, offer = co && typeof postToOffer === "function" && !(choiceState(co, "postTo") === "confirmed" && co.postTo) ? postToOffer(co) : null;
   if (offer && offer.companies.length) return <div className="bk-alert bad" data-not-allowed=""><b>{"Not sent to Tally. " + offer.ask}</b>{" "}

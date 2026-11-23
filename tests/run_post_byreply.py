@@ -269,6 +269,19 @@ with sync_playwright() as p:
     e2 = E("D().entries.u2.postError || ''")
     ok(e2 == UNC, "(i) the read-back after it did not find the bill: \"Not confirmed by Tally yet\" (%s)" % e2)
     E("() => { Bridge.post = window.__bpI; window.tallyCall = window.__tcI; delete D().entries.u1; delete D().entries.u2; S.billPost = null; }")
+    # (i) the same words on Tally's one word for an entry (the bill progress list), the reasons table, and the bank lines
+    ok(E("postWord({ok: true, verified: null})") == "Not confirmed by Tally yet", "(i) Tally's word for an answer not confirmed: \"Not confirmed by Tally yet\" (%s)" % E("postWord({ok: true, verified: null})"))
+    ok(E("(postReasonFor(billUnconf()) || {}).id") == "incomplete", "(i) the reasons table knows the new words (%s)" % E("(postReasonFor(billUnconf()) || {}).id"))
+    E("""() => { window.__cpU = CloudPost.run; window.__tcU = window.tallyCall; window.tallyCall = async () => ({vouchers: []}); B().postReport = null;
+      B().rows.push({id: "s1-u", fp: "qu", date: "2026-07-06", narr: "NEFT DR UNCONF", debit: 650, credit: 0, ledger: "Office Rent", state: "ready", userSet: true, balOk: true, dec: {name: "Office Rent"}});
+      CloudPost.run = async (cid, p) => ({ok: true, company: "GARG SHEKHAR & COMPANY", results: p.vouchers.map(v => ({id: v.id, ok: true, verified: false, verifyNote: "not found when read back"}))}); }""")
+    E("() => postBankToTally(['s1-u'])"); pg.wait_for_timeout(1500)
+    bu = E("(() => { const r = B().rows.find(x => x.id === 's1-u'), rep = B().postReport || {}; return {err: r.postError || '', msgs: (rep.failed || []).filter(f => f.id === 's1-u').map(f => f.msg)}; })()")
+    ok(bu["err"] == UNC + " [not found when read back]", "(i) a bank line Tally took but did not confirm: \"Not confirmed by Tally yet\" (%s)" % bu["err"])
+    ok(bu["msgs"] and all(m.startswith("Not confirmed by Tally yet") for m in bu["msgs"]), "(i) the bank run's list says not confirmed (%s)" % bu["msgs"])
+    E("() => { CloudPost.run = window.__cpU; window.tallyCall = window.__tcU; B().rows = B().rows.filter(r => r.id !== 's1-u'); B().postReport = null; }")
+    src = E("(async () => { const urls = [...document.scripts].map(s => s.src).filter(Boolean).concat(performance.getEntriesByType('resource').map(e => e.name).filter(n => /\\.js(\\?|$)/.test(n))); let t = ''; for (const u of [...new Set(urls)]) { try { t += await (await fetch(u)).text(); } catch (e) {} } return {n: urls.length, has: t.includes('In Tally, not yet read back'), unread: t.includes('not yet read back)')}; })()")
+    ok(src["n"] > 0 and not src["has"] and not src["unread"], "(i) no screen script says \"In Tally, not yet read back\" any more, nor \"(N not yet read back)\" (%s)" % src)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

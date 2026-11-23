@@ -1232,8 +1232,8 @@ async function postBankToTally(ids){
       // round 17a: Tally's reply (bridge 2.1.8, byReply) is posted, not "not yet read back" (postTaken, src/js/59)
       if (x && x.ok && !postTaken(x) && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
-        r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "In Tally, not yet read back \u2014 look in Tally before posting again"});
+        r.postError = billUnconf() + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "Not confirmed by Tally yet \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
         ok++; bankPosted(b.cid, r, x, tname, now); posted.push(r);
         if (x.optional) optionalN++;
@@ -1464,7 +1464,7 @@ function billAlready(cid, e, x, tname, now){
   billPosted(cid, e, Object.assign({}, x, {ok: true, verified: true, vchNumber: x.vchNumber || x.vchNo || "", vchDate: x.vchDate || x.date || ""}), tname, now);
   e.postNote = "Already in Tally"; e.postAlreadyMsg = plainMsg(x.message) || "";
 }
-// a bill Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
+// a bill or bank line Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
 function billUnconf(){ return "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again."; }
 // the bridge has read back the bills it put in Tally: the ones found count as posted now
 function billsAfterCheck(cid, chk, tname){

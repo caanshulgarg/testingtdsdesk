@@ -11,7 +11,10 @@ Made-up data only.
   6. (next-sales-followups) a queued posting's result that comes later: the same rule as a direct post (Tally's reply or
      a read back counts, an answer nobody confirmed does not), and an Optional voucher said so;
   7. the panel's "untick ... in Client setup" advice only on an invoice FinCom posted with the client's Optional tick on,
-     never on one found in Tally (entered by hand as Optional).
+     never on one found in Tally (entered by hand as Optional);
+  8. (review of a7fbb3c05) a queued result: a posting still checking (or a result still checking) is left for the next
+     look, its link kept; one Tally already had is In Tally; the bridge's "already" refusal is said, as a direct post
+     says it; an invoice whose IRN was cancelled keeps its "cancel it in Tally" mark when it may be in Tally.
 An answer not confirmed says "Not confirmed by Tally yet" (never "In Tally": an old bridge's not-found answer is one).
 Run on the React build: TDSDESK_SITE=../app/dist-test SYNC_PORT=8957 python3 run_sales_post_reply.py"""
 import os, threading, functools, http.server
@@ -126,10 +129,10 @@ with sync_playwright() as p:
         jq2: {id: 'jq2', status: 'done', company: 'ZZ Test Reply Traders', results: [{id: c, ok: true, byReply: true, verified: false}]}}; }""", [q1, q2, q3])
     A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(300)
     st = A.evaluate(STATE)
-    ok(st[0]["st"] == "ready" and st[0]["err"].startswith(UNCONF), "a queued result nobody confirmed (still checking): not Posted, not confirmed (%s)" % st[0])
+    ok(st[0]["st"] == "ready" and st[0]["err"].startswith("Waiting for Tally"), "a queued result still checking: left as it was, for the next look (%s)" % st[0])
     ok(st[1]["st"] == "ready" and st[1]["err"] == UNCONF + " [not found when read back]", "a queued result an old bridge did not find: not Posted (%s)" % st[1])
     ok(st[2]["st"] == "posted" and st[2]["err"] == "" and st[2]["opt"], "a queued result with Tally's reply: Posted, as an Optional voucher (client set so) (%s)" % st[2])
-    ok(A.evaluate("() => SL().list.map(v => !!v.postJob)") == [False, False, False], "each queued result taken off its posting (not asked again)")
+    ok(A.evaluate("() => SL().list.map(v => !!v.postJob)") == [True, False, False], "a result still checking keeps its posting link; the others are taken off it")
 
     print("7. the untick advice: only on an invoice FinCom posted with the Optional tick on")
     A.evaluate("(id) => { SL().filter = 'done'; SL().openId = id; render(); }", q3); A.wait_for_timeout(400)
@@ -142,6 +145,27 @@ with sync_playwright() as p:
     st = A.evaluate(STATE); n = A.evaluate(NOTE)
     ok(st[0]["st"] == "posted" and st[0]["opt"] and n and "Optional voucher" in n and "untick" not in n, "posted with the tick off, Tally said Optional: said so, no untick advice (%s, %s)" % (st, n))
     A.evaluate("() => { SL().openId = null; render(); }")
+
+    print("8. a queued result: still checking, already in Tally, an IRN cancelled")
+    A.evaluate("() => { SL().list = []; window.__rows = {}; }")
+    ids = [A.evaluate(ADD, ["ZT/8%d" % i, "2026-11-05", G["k"]]) for i in range(1, 7)]
+    A.evaluate("""(ids) => { SL().list.forEach((v, i) => { v.postJob = 'jr' + i; v.postError = 'Waiting for Tally: it stays queued and posts by itself.'; });
+      for (const i of [4, 5]){ const v = SL().list[i]; v.x.irnStatus = 'cancelled'; v.x.irnCancelInTally = true; }
+      const row = (i, r, more) => Object.assign({id: 'jr' + i, status: 'done', company: 'ZZ Test Reply Traders', results: [Object.assign({id: ids[i]}, r)]}, more || {});
+      window.__rows = {jr0: row(0, {ok: true, verified: false}, {checking: true}),
+        jr1: row(1, {ok: true, alreadyThere: true, vchNumber: 'ZT/82', vchDate: '20261105', message: 'Already in Tally'}),
+        jr2: row(2, {ok: false, already: true, message: 'Already in Tally (voucher no. ZT/83 of 05-Nov-2026): not posted again.'}),
+        jr3: row(3, {ok: true, pendingCheck: true}),
+        jr4: row(4, {ok: true, verified: false, verifyNote: 'not found when read back'}),
+        jr5: row(5, {ok: true, alreadyThere: true, vchNumber: 'ZT/86'})}; }""", ids)
+    A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(300)
+    q = A.evaluate("() => SL().list.map(v => ({st: v.status, err: v.postError || '', job: v.postJob || '', note: v.postNote || '', m: v.tallyMatch ? v.tallyMatch.number : '', cancel: !!v.x.irnCancelInTally}))")
+    ok(q[0]["st"] == "ready" and q[0]["job"] == "jr0" and q[0]["err"].startswith("Waiting for Tally"), "a posting still checking: left for the next look, its link kept (%s)" % q[0])
+    ok(q[1]["st"] == "intally" and q[1]["note"] == "Already in Tally" and q[1]["err"] == "" and not q[1]["job"] and q[1]["m"] == "ZT/82", "an answer Tally already had it: In Tally, with Tally's voucher (%s)" % q[1])
+    ok(q[2]["st"] == "ready" and not q[2]["job"] and q[2]["err"].startswith("Already in Tally (voucher no. ZT/83"), "the bridge's \"already\" refusal: said on the invoice, as a direct post says it (%s)" % q[2])
+    ok(q[3]["st"] == "ready" and q[3]["job"] == "jr3" and q[3]["err"].startswith("Waiting for Tally"), "a result still checking: left for the next look, its link kept (%s)" % q[3])
+    ok(q[4]["st"] == "ready" and q[4]["cancel"] and q[4]["err"].startswith(UNCONF), "IRN cancelled, not confirmed: kept, with its \"cancel it in Tally\" mark (%s)" % q[4])
+    ok(q[5]["st"] == "intally" and q[5]["cancel"], "IRN cancelled, already in Tally: In Tally, with its \"cancel it in Tally\" mark (%s)" % q[5])
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

@@ -338,12 +338,19 @@ async function salesQueuedSync(){
   for (const v of s.list.filter(x => x.postJob && (x.status === "ready" || x.x.irnCancelInTally))){
     let j = null; try { j = await CloudPost.row(v.postJob); } catch (e){ continue; }
     const r = j && [].concat(j.results || []).find(x => x && x.id === v.id);
-    // (next-sales-followups) the same rule as a direct post: Tally's reply or a read back is posted, an answer not confirmed is not
-    if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); } else v.postError = salesUnconfirmed(r); }
+    // (a posting or a result still checking: looked at again next time, its link kept, as bills wait in postReconcile)
+    if (j && (j.checking || (r && r.pendingCheck))) continue;
+    // (next-sales-followups) the same rule as a direct post: Tally's reply or a read back is posted, an answer not
+    // confirmed is not; one Tally already had is In Tally; an IRN cancelled keeps its mark while it may be in Tally
+    let maybeIn = false;
+    if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
+    else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
+    // (the bridge's "already" refusal: said on the invoice, as a direct post says it)
+    else if (r && r.already){ n++; delete v.postJob; v.postError = plainMsg(r.message) || "Tally did not confirm this invoice."; maybeIn = true; }
     else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
     // (not posted, its IRN cancelled: no sale any more, CGST Rules r.48(4), so set aside, nothing to cancel in Tally)
-    if (!v.postJob && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
+    if (!v.postJob && !maybeIn && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
   }
   if (n){ saveSales(); render(); }
 }
