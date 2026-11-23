@@ -1320,6 +1320,15 @@ func postStopNow() string {
 // would hold a long posting back); the parts meanwhile go as the owner decided
 var postOKOfflineGap = 15 * time.Second
 
+// 2.5.20 P1: the wait between the asks again after FinCom could not confirm in time (tests shorten it)
+var postOKUnsureWait = 10 * time.Second
+
+// 2.5.20 P1: how many times FinCom is asked again after "could not confirm in time"
+const postOKUnsureTries = 3
+
+// FinCom's words when it could not confirm in time (tally-ingest's POST_OK_UNSURE): a pause, not a decision
+func postOKUnsure(stop string) bool { return strings.Contains(stop, "could not confirm in time") }
+
 var postOKOffline sync.Map // job id -> time.Time of the last check with no answer
 
 // "" to send part i of n now; else why FinCom said stop. unheard: no answer from FinCom (the part, once it reaches
@@ -1329,6 +1338,16 @@ func checkCloudBeforeSend(jobID string, i, n int) (stop string, unheard bool) {
 		return "", true
 	}
 	stop, reached := postOKFn(jobID)
+	// 2.5.20 P1 (the owner's decision of 23-Nov-2026): FinCom could not confirm in time (its database slow): asked again
+	// up to 3 times, postOKUnsureWait apart (about 30 s in all), nothing sent meanwhile; a yes goes on, any other stop or
+	// still unsure stops as before; no answer at all goes ahead as before (the owner's "Then go ahead")
+	for try := 1; try <= postOKUnsureTries && stop != "" && postOKUnsure(stop); try++ {
+		if try == 1 {
+			writeLog(fmt.Sprintf("Posting job %s: FinCom could not confirm in time before part %d of %d; asked again (up to %d times, %s apart), nothing sent meanwhile", jobID, i, n, postOKUnsureTries, postOKUnsureWait))
+		}
+		time.Sleep(postOKUnsureWait)
+		stop, reached = postOKFn(jobID)
+	}
 	if stop != "" {
 		postOKOffline.Delete(jobID)
 		writeLog(fmt.Sprintf("Posting job %s: FinCom said to stop before part %d of %d: %s; nothing more is sent to Tally", jobID, i, n, stop))

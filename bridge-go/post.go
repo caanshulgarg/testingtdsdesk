@@ -388,6 +388,11 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 		}
 		out = append(out, b)
 	}
+	// 2.5.20 P2 (the owner's decision of 23-Nov-2026): Tally made the request only partly: that part alone is read back
+	var forget []string
+	if r.kind == "voucher" && !trusted && !refused {
+		forget = readBackPart(port, company, job, r, out, created+altered, (errs > 0 || len(lineErr) > 0) && exc == 0 && ign == 0)
+	}
 	if r.kind == "voucher" {
 		if !refused {
 			vchID := ""
@@ -395,11 +400,107 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 				vchID = lv
 			}
 			_ = noteSentMany(keys, company, job, lv, s, lv, vchID) // one write for the request
+			if len(forget) > 0 {
+				acceptedForgetMany(forget) // read back: not in Tally, with Tally's error: may go again
+			}
 		} else {
 			acceptedForgetMany(keys) // Tally made nothing of the request: not on the record, may go again
 		}
 	}
 	return importOutcome{results: out, note: note, seconds: secs}
+}
+
+// 2.5.20 P2: the part's entries found by their FinCom tag: resentLook (resent2519.go, 2.5.19's look before a re-sent
+// entry), FinComTag as built for one date at a time, under the 2 s stop with the posting's priority, whatever ReadDays
+// says, its answer taken only when whole and of that date. Any look that fails: nil (no answer), so nothing is called
+// "not in Tally" on a guess
+func readBackTags(port int, company string, items []M) map[string]M {
+	var heads []M
+	var dates []string
+	for _, it := range items {
+		if d := tagDate(str(it["xml"]), "DATE"); d != "" {
+			dates = append(dates, d)
+		}
+	}
+	for _, d := range uniqSorted(dates) {
+		ks, err := resentLook(port, company, d)
+		if err != nil {
+			return nil
+		}
+		for _, k := range ks {
+			heads = append(heads, headOfKey(k))
+		}
+	}
+	found := map[string]M{}
+	for _, it := range items {
+		if tag := reTag.FindString(str(it["xml"])); tag != "" {
+			for _, h := range heads {
+				if hasTag(str(h["narration"]), tag) {
+					found[str(it["id"])] = h
+					break
+				}
+			}
+		}
+	}
+	return found
+}
+
+// 2.5.20 P2: the most dates of one part read back (one FinComTag request a date; a part over it stays for review)
+var readBackMaxDays = 10
+
+// 2.5.20 P2 (the owner's decision of 23-Nov-2026): after a reply Tally made only partly (some created, altered or excepted,
+// with errors, exceptions or line errors), the part's own entries are looked for by their FinCom tag: FinComTag, the
+// request the posting check already uses, as built (no new request XML), once for each date the part carries, under the
+// same rules (the 2 s stop, one request in flight, inside the posting's own turn at Tally: readBackTags). Found: posted, in Tally (its
+// GUID and number). Not found, when Tally's reply gave errors or line errors and no exception or ignored entry (errs), and
+// every entry Tally says it made (made: CREATED + ALTERED) was found: refused by Tally, taken off this computer's record
+// so it may go again (the keys returned). Anything else (an exception or an ignored entry, fewer found than Tally made,
+// an entry without a mark or a date, a part over readBackMaxDays dates, the read not answered): as before for those not
+// found (needs review, on the record, never sent again by itself)
+func readBackPart(port int, company, job string, r importReq, out []M, made int, errs bool) []string {
+	var dates []string
+	for _, it := range r.items {
+		if d := tagDate(str(it["xml"]), "DATE"); d != "" {
+			dates = append(dates, d)
+		}
+	}
+	if n := len(uniqSorted(dates)); n == 0 || n > readBackMaxDays {
+		writeLog(fmt.Sprintf("Posting job %s: a reply Tally made only partly; not read back (%d dates in the part, at most %d): every entry of it needs review", job, n, readBackMaxDays))
+		return nil
+	}
+	found := readBackTags(port, company, r.items)
+	if found == nil {
+		writeLog(fmt.Sprintf("Posting job %s: a reply Tally made only partly; Tally did not answer the read back: every entry of it needs review", job))
+		return nil
+	}
+	var forget []string
+	nf, nn := 0, 0
+	for _, it := range r.items {
+		if _, ok := found[str(it["id"])]; ok {
+			nf++
+		}
+	}
+	errs = errs && nf == made // every entry Tally made is accounted for: the others were not made
+	nf = 0
+	for i, it := range r.items {
+		b, x := out[i], str(it["xml"])
+		if h, ok := found[str(it["id"])]; ok {
+			delete(b, "needsReview")
+			b["ok"], b["verified"], b["accepted"], b["readBack"], b["message"] = true, true, true, true, ""
+			b["guid"], b["masterId"], b["vchNumber"] = str(h["guid"]), str(h["masterId"]), str(h["number"])
+			nf++
+			continue
+		}
+		if !errs || reTag.FindString(x) == "" || tagDate(x, "DATE") == "" {
+			continue
+		}
+		delete(b, "needsReview")
+		b["ok"], b["accepted"], b["refusedByTally"], b["readBack"] = false, false, true, true
+		forget = append(forget, acceptedKey(str(it["id"]), x))
+		nn++
+	}
+	writeLog(fmt.Sprintf("Posting job %s: read back by FinComTag after a reply Tally made only partly: %d found, %d not found (refused by Tally, may go again), %d still need review", job, nf, nn, len(r.items)-nf-nn))
+	return forget
 }
 
 // Tally took the request and did not answer: the outcome of every entry is unknown. Each is recorded as sent (never

@@ -188,9 +188,20 @@ type kentry struct {
 	date  string
 }
 
-// round 18: whether the Day Book rounds read old days at all (the owner's rule of 04-Oct-2026: off). Only the settings
-// file on this computer sets it (applyCloudSettings never does)
-func readDaysOn() bool { return cfgB("ReadDays") }
+// round 18: whether the Day Book rounds read old days at all. Only the settings file on this computer sets it
+// (applyCloudSettings never does). 2.5.20 (the owner, 23-Nov-2026: reading from Tally ON by default on every computer
+// where Tally is connected): on when the file has no ReadDays (or null); any value a person wrote is read as before (false,
+// 0 or "" off: kept off). The standard settings never write it, so "not set" (on) and "off" stay apart. The typing gate,
+// postings first, the 2 s stop and one request in flight are as before
+func readDaysOn() bool {
+	cfgMu.Lock()
+	has, v := Cfg.Has("ReadDays"), Cfg.Get("ReadDays")
+	cfgMu.Unlock()
+	if !has || v == nil {
+		return true
+	}
+	return truthy(v)
+}
 
 // round 18 (the owner's decision of 04-Oct-2026): FinCom's direct reads of entries (/daybook, /vouchers, /keepcheck)
 // are refused with these words while ReadDays is off; nothing is sent to Tally
@@ -972,7 +983,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		return nil
 	}
 	// round 18 (the owner's rule of 04-Oct-2026): reading is prospective only. The bridge never reads earlier entries
-	// from Tally in normal running (reading old months is what risks hanging Tally): with ReadDays off (the default; it
+	// from Tally in normal running (reading old months is what risks hanging Tally): with ReadDays off (a person's; on by default from 2.5.20; it
 	// is never set from the cloud) the round is the company check (FinComCompany) and the ledger list above, and no day
 	// is read or sent. FY 2026-27's history comes from the owner's Day Book upload
 	if !readDaysOn() {
