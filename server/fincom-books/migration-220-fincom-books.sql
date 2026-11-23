@@ -900,7 +900,9 @@ begin
       -- the commit-time checks of what was just written, here, so that a failure is caught by this block
       set constraints public.fb_check immediate;
       set constraints public.fb_check deferred;
-    exception when others then
+    -- (query_canceled named too: with SET CONSTRAINTS ALL IMMEDIATE the flush runs inside the copy's statement, where a
+    -- statement_timeout could fire; at COMMIT Postgres has already stopped that timer)
+    exception when others or query_canceled then
       -- keep what this transaction changed for the catch-up, and say so
       insert into fb_mirror_dirty (txid, book_id, kind, key) select 0, d.book_id, d.kind, d.key from fb_mirror_dirty d where d.txid = tx and d.book_id = bk.book_id on conflict do nothing;
       get diagnostics nk = row_count;
@@ -921,7 +923,7 @@ create or replace function public.fb_flush_trg() returns trigger language plpgsq
 begin
   begin
     perform fb_flush();
-  exception when others then
+  exception when others or query_canceled then
     -- the flush itself failed (not one book): every key of this transaction is kept for the catch-up; none left behind
     begin
       insert into fb_mirror_dirty (txid, book_id, kind, key) select 0, d.book_id, d.kind, d.key from fb_mirror_dirty d where d.txid = txid_current() on conflict do nothing;

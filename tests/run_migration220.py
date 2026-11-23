@@ -425,6 +425,12 @@ try:
        "12. the book's mirror lock held elsewhere: the copy's write commits in %.1f s (not 6), the entry kept for the catch-up" % dt)
     catch()
     ok(fbh("RR-3") and db.one("select count(*) from fb_mirror_dirty") == "0", "12. ... and the catch-up mirrors it")
+    # ... and with the copy's own statement_timeout shorter than that wait: the timeout inside the flush never fails the COMMIT
+    a = bg("begin; select pg_advisory_xact_lock(hashtextextended('fb_mirror:%s', 0)); select pg_sleep(5); commit;" % BK); time.sleep(0.7)
+    b = bg("set statement_timeout = '1s'; begin; " + vsql("RR-5") + " commit;"); out_b = b.stdout.read(); b.wait(); a.stdout.read(); a.wait()
+    ok(b.returncode == 0 and has("RR-5") and db.one("select count(*) from fb_mirror_dirty where txid = 0 and key = 'RR-5'") == "1",
+       "12. the copy's statement_timeout (1 s): Postgres stops it before COMMIT, so it never cancels the flush; the flush's own 2 s lock wait ends; the write commits, the entry kept (%s; %s)" % (out_b.strip()[-120:], db.one("select error from fb_mirror_errors order by id desc limit 1")))
+    catch()
     # (2) a big statement (over the cap) is left to the catch-up instead of the copy's COMMIT
     big = [x["guid"] for x in db.rows("select guid from tally_vouchers where book_id = '%s' and day >= '2026-01-01' and not cancelled order by guid limit 20" % TB1)]
     vers = db.one("select sum(version) from fb_vouchers where book_id = '%s' and source_ref in (%s)" % (BK, ",".join("'%s'" % g for g in big)))

@@ -1,7 +1,8 @@
 """python3 tests/run_fbooks_ui.py - the FinCom Books page (app/src/screens/fbooks) in the built app, end to end on a
 throwaway PostgreSQL: migration 220 and the made-up books of tests/fbooks_fixture.mjs, enrolled and mirrored there; the
 page's readers (fb_status, fb_tb, fb_ledgers, fb_ledger, fb_daybook, fb_tieout_ask, fb_enroll) are answered by that
-database through window.__fbDemo.rpc (this test's server runs each call as the firm's owner).
+database through TCloud.rpc, replaced in the page by this test (its server runs each call as the firm's owner, or as
+staff / a look-only member for check 6). The page itself has nothing test-only.
   1. "Not in step": a change the mirror missed shows the warning banner with the group and the amount, since when, and
      that returns can still be filed; its differences open; the page never blocks anything
   2. the trial balance: Debit = Credit; primary groups with their Schedule III line; a group opens into its ledgers
@@ -9,8 +10,10 @@ database through window.__fbDemo.rpc (this test's server runs each call as the f
      party ledger's pending bills and ageing (the ported bill-wise rules)
   4. the day book: entries with their status (held, memo, cancelled), the totals of posted entries only
   5. Check now: after the next read brings the change, the banner says "In step with Tally"
-  6. a client without FinCom Books: the owner is offered "Set up FinCom Books"; it sets it up
-  7. a phone's width: nothing scrolls sideways; no page error anywhere; the page is its own lazy chunk
+  6. a client without FinCom Books: a look-only member is told who can set it up; staff are offered "Set up FinCom
+     Books" (owner decision 23-Nov-2026) and it sets it up
+  7. a phone's width: nothing scrolls sideways; no page error anywhere; the page is its own lazy chunk, which keeps the
+     MIT notice of the ported rules; no test hook in the built app
 FB_SHOTS=<dir>: also saves the design screenshots there (deviceScaleFactor 2, 1440 and 390 wide).
 Run on app/dist-test (or TDSDESK_SITE). PG_PORT (55622), FB_PORT (8396)."""
 import os, sys, json, threading, functools, http.server, glob
@@ -19,6 +22,8 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from playwright.sync_api import sync_playwright
 import pg_stand
 from fbooks_stand import F1, F2, OWN, STAFF, OTHER, TB1, COPY, MIG, load_sql, books
+VIEW = "aaaaaaaa-0000-0000-0000-000000000004"
+WHO = [OWN]   # who the test server answers as
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = int(os.environ.get("FB_PORT") or 8396)
 SHOTS = os.environ.get("FB_SHOTS", "")
@@ -30,10 +35,10 @@ def ok(c, w):
 db = pg_stand.start(int(os.environ.get("PG_PORT") or 55622))
 db.sql(COPY)
 db.sql("""insert into firms values ('%s', 'Sample & Co'), ('%s', 'Other Firm');
-  insert into members (user_id, firm_id, name, role) values ('%s', '%s', 'Owner', 'owner'), ('%s', '%s', 'Staff', 'staff'), ('%s', '%s', 'Other', 'owner');
+  insert into members (user_id, firm_id, name, role) values ('%s', '%s', 'Owner', 'owner'), ('%s', '%s', 'Staff', 'staff'), ('%s', '%s', 'Other', 'owner'), ('%s', '%s', 'Viewer', 'viewer');
   insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values ('%s', '%s', 'c1', 'Demo Books Pvt Ltd (made up)', '2024-04-01', '2024-04-01'),
     ('bbbbbbbb-0000-0000-0000-000000000009', '%s', 'c9', 'Second Demo LLP (made up)', '2025-04-01', '2025-04-01');
-  grant select on firms, members to authenticated;""" % (F1, F2, OWN, F1, STAFF, F1, OTHER, F2, TB1, F1, F1))
+  grant select on firms, members to authenticated;""" % (F1, F2, OWN, F1, STAFF, F1, OTHER, F2, VIEW, F1, TB1, F1, F1))
 db.sql(open(MIG).read())
 B = books(400, 7)
 db.sql(load_sql(TB1, F1, B))
@@ -61,23 +66,23 @@ class Q(http.server.SimpleHTTPRequestHandler):
         if not fn.startswith("fb_") or not fn.replace("_", "").isalnum(): self.send_response(400); self.end_headers(); return
         CALLS.append(fn)
         q = "set role authenticated; select %s(%s)" % (fn, ", ".join("%s => %s" % (k, lit(v)) for k, v in args.items() if k.replace("_", "").isalnum()))
-        try: out, code = db.one(q, OWN), 200
+        try: out, code = db.one(q, WHO[0]), 200
         except RuntimeError as e: out, code = json.dumps({"message": str(e).split("\n")[0]}), 400
         body = (out or "null").encode()
         self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = "http://localhost:%d/" % PORT
-DEMO = """window.__fbDemo = { client: "c1", rpc: (fn, args) => fetch("/__fb/" + fn, { method: "POST", body: JSON.stringify(args || {}) })
-  .then((r) => r.json().then((j) => { if (!r.ok) throw new Error(j.message || "error"); return j; })) };"""
-SEED = """() => { S.firm.firmName = "Sample & Co";
-  const c = newCompany({name: "Demo Books Pvt Ltd (made up)", pan: "ZZZPX9999Z"}); S.companies[c.id] = c; c.stats = {};
+RPC = """() => { TCloud.rpc = (fn, args) => fetch("/__fb/" + fn, { method: "POST", body: JSON.stringify(args || {}) })
+  .then((r) => r.json().then((j) => { if (!r.ok) throw new Error(j.message || "error"); return j; })); }"""
+SEED = """(cid) => { S.firm.firmName = "Sample & Co";
+  const c = newCompany({name: "Demo Books Pvt Ltd (made up)", pan: "ZZZPX9999Z"}); c.id = cid; S.companies[c.id] = c; c.stats = {};
   S.data[c.id] = {parties: {}, entries: {}, loaded: true}; S.coId = c.id; S.view = "company"; S.tab = "dash"; S.loadingCo = false;
   S.books = {cid: c.id, loading: false, vouchers: [], ledgers: [], challans: [], alloc: {}, map: {}};
   Store.saveFirm(); Store.saveCompany(c); render(); return c.id; }"""
-def start(pg):
+def start(pg, cid="c1"):
     pg.goto(URL); pg.wait_for_timeout(1200)
     pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })")
-    pg.wait_for_timeout(400); pg.evaluate(SEED); pg.wait_for_timeout(300)
+    pg.wait_for_timeout(400); pg.evaluate(RPC); pg.evaluate(SEED, cid); pg.wait_for_timeout(300)
     pg.evaluate("() => goClient('books:fb')")
     settle(pg)
 def settle(pg, ms=400):
@@ -97,7 +102,6 @@ try:
         errs = []
         def page(w, h=1000):
             ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, timezone_id="Asia/Kolkata")
-            ctx.add_init_script(DEMO)
             pg = ctx.new_page(); pg.on("pageerror", lambda e: errs.append(str(e)[:200])); return ctx, pg
         ctx, pg = page(1440)
         start(pg)
@@ -150,14 +154,20 @@ try:
         shot(pg, "p1-05-tb-in-step", full=False)
         ctx.close()
         # 6. not set up
+        WHO[0] = VIEW
         ctx, pg = page(1440)
-        ctx.add_init_script("window.__fbDemo.client = 'c9';")
-        start(pg)
-        ok(pg.locator("[data-fb-setup]").count() == 1, "6. a client without FinCom Books: the owner is offered Set up")
+        start(pg, "c9")
+        ok(pg.locator("[data-fb-setup]").count() == 0 and "owner or staff can set it up" in text(pg, "[data-fb-none]"), "6. a look-only member: no Set up button; told the owner or staff can")
+        ctx.close()
+        WHO[0] = STAFF
+        ctx, pg = page(1440)
+        start(pg, "c9")
+        ok(pg.locator("[data-fb-setup]").count() == 1, "6. a client without FinCom Books: staff are offered Set up")
         shot(pg, "p1-06-not-set-up", full=False)
         pg.click("[data-fb-setup]"); settle(pg, 1500)
         ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-source]").count() == 1, "6. set up: the trial balance is there")
         ctx.close()
+        WHO[0] = OWN
         # 7. a phone
         db.sql("begin; set local session_replication_role = replica; update tally_lines set amount = amount - 4200 where book_id = '%s' and guid = '%s' and ledger = 'Beta Sample Mart'; update tally_lines set amount = amount + 4200 where book_id = '%s' and guid = '%s' and ledger = 'Sales @ 18%%'; commit;" % (TB1, gd, TB1, gd))
         db.sql("set role service_role; select fb_tieout('%s')" % BK)
@@ -178,6 +188,9 @@ try:
     chunk = glob.glob(os.path.join(SITE, "assets", "FinComBooks-*.js"))
     main = glob.glob(os.path.join(SITE, "assets", "index-*.js"))
     ok(len(chunk) == 1 and not any("fb_daybook" in open(f).read() for f in main), "7. the page is its own lazy chunk (not in the app's first file)")
+    ctext = open(chunk[0]).read() if chunk else ""
+    ok("@license MIT" in ctext and "Independent Books" in ctext, "7. the shipped chunk keeps the MIT notice of the rules ported from Independent Books")
+    ok(not any("__fbDemo" in open(f, errors="ignore").read() for f in glob.glob(os.path.join(SITE, "**", "*.js"), recursive=True)), "7. no test hook (__fbDemo) anywhere in the built app")
 finally:
     srv.shutdown(); db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)

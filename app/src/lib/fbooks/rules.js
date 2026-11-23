@@ -1,4 +1,5 @@
-// Portions ported from Independent Books (MIT, (c) 2026 Independent Books Contributors), see THIRD_PARTY_NOTICES.md
+/*! Portions ported from Independent Books (https://github.com/PrimeSteelIndia/independent-books), @license MIT,
+ *  (c) 2026 Independent Books Contributors. See THIRD_PARTY_NOTICES.md. */
 //
 // FinCom Books' rules for amounts, GST splits and bill-wise references, as plain functions (no DOM, no globals): the
 // FinCom Books page uses them on the rows the database gives (fb_ledger's bill references), and own-books entry (P4)

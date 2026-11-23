@@ -3,8 +3,8 @@
 // page only reads: the trial balance, any ledger, the day book, and whether the books are in step with the source.
 // "Not in step" is a banner that warns (owner decision D18); nothing is blocked. No existing report reads fb_* yet
 // (docs/FINCOM-BOOKS-REPORT-SWITCH.md). One lazy chunk (screens/fbooks), opened from the books tab books:fb.
-// Data: the readers fb_status / fb_tb / fb_ledgers / fb_ledger / fb_daybook through TCloud.rpc; tests and the design
-// screenshots give window.__fbDemo.rpc instead (made-up books in a throwaway database: tests/run_fbooks_ui.py).
+// Data: the readers fb_status / fb_tb / fb_ledgers / fb_ledger / fb_daybook through TCloud.rpc (tests/run_fbooks_ui.py
+// puts made-up books in a throwaway database behind TCloud.rpc; nothing test-only is in this file).
 import { useEffect, useMemo, useState } from "react";
 import "./fbooks.css";
 import { billRows, entriesFromRefs, ageing, parsePaise } from "../../lib/fbooks/rules.js";
@@ -26,8 +26,6 @@ const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDa
 const srcName = (s) => (s === "zoho" ? "Zoho Books" : s === "own" ? "FinCom" : "Tally");
 
 function rpc(fn, args) {
-  const D = window.__fbDemo;
-  if (D && D.rpc) return D.rpc(fn, args);
   if (typeof TCloud !== "object" || !TCloud.rpc) return Promise.reject(new Error("FinCom’s cloud is not connected on this computer."));
   return TCloud.rpc(fn, args);
 }
@@ -49,8 +47,7 @@ function useAsk(fn, args, deps) {
 }
 
 export default function FinComBooks() {
-  const D = window.__fbDemo || null;
-  const cid = D ? D.client : S.coId;
+  const cid = S.coId;
   const [tick, setTick] = useState(0);
   const status = useAsk("fb_status", { p_client: cid }, [cid, tick]);
   const [bookPick, setBookPick] = useState("");
@@ -72,7 +69,7 @@ export default function FinComBooks() {
     </header>
     {status.loading && !status.data ? <p className="fbk-note" data-fb-loading="">Opening FinCom Books…</p>
       : status.error ? <p className="fbk-banner" data-tone="bad" role="alert" data-fb-error="">{status.error}</p>
-      : !book ? <NotSetUp owner={!!(status.data && status.data.owner)} cid={cid} onDone={() => setTick((x) => x + 1)} />
+      : !book ? <NotSetUp canSetUp={!!(status.data && status.data.can_set_up)} cid={cid} onDone={() => setTick((x) => x + 1)} />
       : <>
         <StepBanner book={book} onChecked={() => setTick((x) => x + 1)} />
         <nav className="fbk-tabs" role="tablist" aria-label="FinCom Books">
@@ -86,14 +83,14 @@ export default function FinComBooks() {
   </div>;
 }
 
-function NotSetUp({ owner, cid, onDone }) {
+function NotSetUp({ canSetUp, cid, onDone }) {
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
   const setUp = () => { setBusy(true); setMsg(""); rpc("fb_enroll", { p_client: cid }).then(() => { setBusy(false); onDone(); }, (e) => { setBusy(false); setMsg(plain(e)); }); };
   return <section className="fbk-card" data-fb-none="">
     <h2>FinCom Books is not set up for this client yet</h2>
     <p className="fbk-note">Once set up, FinCom keeps a complete copy of this client’s books from Tally, checks it against Tally every night, and shows the trial balance, ledgers and day book here.</p>
-    {owner ? <div className="fbk-actions"><button className="btn primary small" disabled={busy} onClick={setUp} data-fb-setup="">{busy ? "Setting up…" : "Set up FinCom Books"}</button></div>
-      : <p className="fbk-note">Your firm’s owner can set it up.</p>}
+    {canSetUp ? <div className="fbk-actions"><button className="btn primary small" disabled={busy} onClick={setUp} data-fb-setup="">{busy ? "Setting up…" : "Set up FinCom Books"}</button></div>
+      : <p className="fbk-note">Your firm’s owner or staff can set it up.</p>}
     {msg && <p className="fbk-banner" data-tone="bad" role="alert">{msg}</p>}
   </section>;
 }
