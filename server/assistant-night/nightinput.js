@@ -103,6 +103,20 @@ export function draftsOf(recs, jobs, prior, now) {
   }).filter((d) => d.dedupe);
 }
 
+// (seventh review) the month-ends of the last n months in India's time (the night runs at night IST: the UTC month can be
+// the one before), as yyyy-mm-dd
+export function monthEndsIST(now, n) {
+  const t = new Date(now.getTime() + 5.5 * 3600e3);
+  return Array.from({ length: n }, (_, i) => new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - i + 1, 0)).toISOString().slice(0, 10));
+}
+// each day's read time from the book that holds it (of the client's books, the one beginning latest on or before it: a
+// split year's March in last year's book): books [{book_id, from_date}], rows [{book_id, day, at}] -> [{day, at}]
+export function daysOfBooks(books, rows) {
+  const f = (b) => String(b.from_date || "").slice(0, 10), out = new Map();
+  (rows || []).forEach((r) => { const day = String(r.day || "").slice(0, 10), holds = (books || []).filter((b) => f(b) && f(b) <= day).sort((a, c) => f(c).localeCompare(f(a)))[0];
+    if (holds && String(holds.book_id) === String(r.book_id)) out.set(day, String(r.at || "")); });
+  return Array.from(out, ([day, at]) => ({ day, at }));
+}
 // x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules, draftRecs, payHeads}; rows.co is the client's settings
 // (clients.data); payHeads: the ledgers of Tally's payroll (tally_ledgers.for_payroll: the pay heads)
 export function nightInput(rows, b, x) {

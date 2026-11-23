@@ -12,7 +12,7 @@
 //   / already in Tally; 7 a month kept for 24Q replaced without losing its tax figures; 8 the AI's samples masked, the
 //   tab's month left out of the layout's key; lows: the page closed between parts, a net of zero, two Tally employees
 //   whose names fold to one
-import { booksOf, gstOf, nightInput, draftsOf } from "../server/assistant-night/nightinput.js";
+import { booksOf, gstOf, nightInput, draftsOf, monthEndsIST, daysOfBooks } from "../server/assistant-night/nightinput.js";
 import { journals, payrollOne, draftState } from "../server/_shared/dailyjournals.js";
 import { earningHead } from "../server/_shared/nightchecks.js";
 import * as E from "../server/_shared/gst3b.js";
@@ -616,7 +616,9 @@ console.log("sixth review: the part's own day read from Tally (tally_days.at), r
     f.paid = () => f.tally.flatMap((t) => TPost.readVoucherXml(t.xml).employees.map((e) => e.name));
     return f;
   };
-  const wire = (w, f) => { w.env.g.TCloud = { on: () => true, has: () => true, book: () => ({ book: "b1" }), postThrough: () => ({ version: "2.5.18", computer: "PC-" + f.via, id: f.via }), rpc: async () => ({ ok: true }) };
+  // (straight to the bridge on the posting computer: the release travels in the payload)
+  const wire = (w, f) => { w.env.g.TCloud = { on: () => true, has: () => false, book: () => ({ book: "b1" }) };
+    Object.defineProperty(w.env.g.Bridge, "st", { get: () => ({ version: "2.5.18", computer: "PC-" + f.via, bridgeId: f.via }), configurable: true });
     w.env.g.Bridge.post = async (pl) => { w.posts.push(pl); const x = f.post(pl.vouchers[0], pl.released); return { ok: true, results: x ? [x] : [] }; }; w.env.readMonth = f.readMonth; return w; };
   const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
   const once = (f, n) => { const p = f.paid(); return p.length === n && new Set(p).size === n; };
@@ -691,6 +693,109 @@ console.log("sixth review: the part's own day read from Tally (tally_days.at), r
     const pp = TPost.prepare({ co: rows.co, ym: YM, rows: many(250), pay: payOf(many(250)), ledgers: rows.ledgers.map((l) => l.name), books: {} }).vouchers;
     ok(pp.length === 3 && pp.every((v) => partsIn(v.narration) === 3 && PART_OF_RE.test(v.narration)), "the builder's narration (“…, part i of 3)”) is what the night reads back (tpparts.js)");
   }
+}
+
+console.log("seventh review: through FinCom's cloud queue (the bridge's releases come only from the posting it takes)");
+{
+  // the cloud's queue as migrations 32-203 and tally-ingest make it (the SQL route itself: tests/run_payroll_cloud_resend.py):
+  // a posting per Bridge.post (CloudPost.run tells its id first); the bridge on the posting computer keeps its own record
+  // (with the posting's id: sentJob) and honours only the releases of the posting it takes (tally_post_ids released by a
+  // member); tally_post_owner_release; a Retry (tally_post_enqueue with the posting's id) of a failed posting only
+  const cloud = () => {
+    const q = { tally: [], rec: new Map(), honoured: new Set(), jobs: new Map(), ids: [], lose: false, held: false, calls: [], copy: { dayAt: {}, snap: new Map() }, n: 0 };
+    const take = (j) => {
+      const v = j.payload.vouchers[0], rel = q.ids.filter((r) => r.job_id === j.id && r.released_by === "owner").map((r) => ({ id: r.fincom_id, at: r.released_at, by: "owner", why: r.why }));
+      const x = rel.find((y) => y.id === v.id && !q.honoured.has(y.at + "|" + y.id)), had = q.rec.get(v.id);
+      let res;
+      if (had && !x) res = { id: v.id, ok: false, alreadySent: true, refused: true, sent: true, state: "failed", sentJob: had.job, message: "already sent from this computer" };
+      else { if (x) q.honoured.add(x.at + "|" + x.id); q.rec.set(v.id, { xml: v.xml, job: j.id });
+        if (q.lose) res = { id: v.id, ok: false, sent: true, state: "failed", message: "Tally did not answer" };
+        else { q.tally.push({ id: v.id, xml: v.xml }); res = { id: v.id, ok: true, created: 1, vchId: String(q.tally.length) }; } }
+      j.results = (j.results || []).concat([res]); j.status = res.ok ? "done" : "failed";
+      return res;
+    };
+    q.post = async (pl, progress) => {
+      const id = "00000000-0000-4000-8000-00000000000" + (++q.n), v = pl.vouchers[0];
+      const j = { id, status: "waiting", payload: { vouchers: [v] }, results: [], company: pl.company, created_at: "2026-11-23T0" + q.n + ":00:00Z" };
+      q.jobs.set(id, j); q.ids.push({ job_id: id, fincom_id: v.id, client_id: pl.client, created_at: j.created_at });
+      progress && progress({ done: 0, total: 1, job: id });
+      if (q.held) return { ok: true, results: [{ id: v.id, ok: false, held: true, job: id, message: "Waiting for Tally" }], job: { id, status: "waiting" } };
+      const res = take(j);
+      return { ok: true, results: [res], job: { id, status: j.status }, viaCloud: true };
+    };
+    q.rpc = async (fn, a) => { q.calls.push(fn + " " + (a.p_id || "") + (a.p_job ? " " + a.p_job : ""));
+      if (fn === "tally_post_owner_release") { const j = q.jobs.get(a.p_job); if (!j) return { ok: false, error: "not found" };
+        if (["waiting", "taken", "running"].includes(j.status)) return { ok: false, error: "This posting is still being sent to Tally; wait for it to finish, then settle the entry." };
+        q.ids.filter((r) => r.job_id === a.p_job && r.fincom_id === a.p_id).forEach((r) => { r.released_by = "owner"; r.released_at = new Date().toISOString(); r.why = a.p_why; });
+        return { ok: true, released: true }; }
+      if (fn === "tally_post_enqueue") { const j = q.jobs.get(a.p_id); if (!j) return { ok: false, error: "new postings go through Bridge.post here" };
+        if (!["failed", "cancelled"].includes(j.status)) return { ok: true, id: j.id, again: true };
+        j.status = "waiting"; take(j); return { ok: true, id: j.id, retry: true }; }
+      return { ok: true }; };
+    q.api = async (path) => { const s = decodeURIComponent(String(path));
+      if (s.startsWith("tally_post_ids")) { const fid = (s.match(/fincom_id=eq\.([^&]+)/) || [])[1]; return q.ids.filter((r) => r.fincom_id === fid).sort((a, b) => b.created_at.localeCompare(a.created_at)); }
+      if (s.startsWith("tally_post_jobs")) { const ids = ((s.match(/id=(?:in\.\(([^)]*)\)|eq\.([^&]+))/) || []).slice(1).find(Boolean) || "").split(","); return ids.map((x) => q.jobs.get(x)).filter(Boolean).map((j) => JSON.parse(JSON.stringify(j))); }
+      return []; };
+    q.sync = () => { q.tally.forEach((t) => q.copy.snap.set(t.id, t.xml)); q.copy.dayAt["2026-10-31"] = FRESH; };
+    q.readMonth = async (cid, ym, days) => ({ readAt: Object.values(q.copy.dayAt).sort().pop() || STALE, dayAt: Object.fromEntries((days || []).filter((d) => q.copy.dayAt[d]).map((d) => [d, q.copy.dayAt[d]])),
+      parts: Object.fromEntries(Array.from(q.copy.snap).map(([id, xml]) => [id, { found: true, no: "1", narr: (xml.match(/<NARRATION>([^<]*)/) || [])[1], employees: TPost.readVoucherXml(xml).employees }])) });
+    q.paid = () => q.tally.flatMap((t) => TPost.readVoucherXml(t.xml).employees.map((e) => e.name));
+    return q;
+  };
+  const wire = (w, q) => { w.env.g.TCloud = { on: () => true, has: () => true, book: () => ({ book: "b1" }), postThrough: () => ({ version: "2.5.18", computer: "PC-X", id: "go-x" }), rpc: q.rpc };
+    w.env.g.Bridge.post = async (pl, progress) => { w.posts.push(pl); return q.post(pl, progress); };
+    w.env.g.Cloud = { api: q.api }; w.env.g.payrollSleep = async () => {}; w.env.readMonth = q.readMonth; return w; };
+  const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
+  const once = (q, n) => { const p = q.paid(); return p.length === n && new Set(p).size === n; };
+  for (const lostJob of [false, true]) {
+    // X records part 1 (with its posting), Tally never gets it, the page closes before the answer is saved
+    const q = cloud(); q.lose = true;
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-1" && d.state !== "posting" }), q);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    q.lose = false;
+    const d0 = JSON.parse(JSON.stringify(w.drafts));
+    const J1 = Array.from(q.jobs.keys())[0];
+    if (lostJob) delete d0["dc-tp-202610-1"].job;
+    ok(q.rec.has("dc-tp-202610-1") && !q.tally.length && (lostJob || d0["dc-tp-202610-1"].job === J1), (lostJob ? "cloud, no posting id on record (an older draft): " : "cloud: ") + "X recorded part 1 in posting " + J1.slice(-2) + ", Tally never got it, the answer lost" + (lostJob ? "" : "; the posting's id kept the moment it was queued"));
+    q.sync();
+    const w2 = wire(world(rows, { sheet, drafts: d0 }), q);
+    const r = await w2.run(t.entry);
+    const p1 = w2.posts.filter((pl) => pl.vouchers[0].id === "dc-tp-202610-1");
+    ok(r.ok && once(q, 150) && q.tally.length === 2 && !p1.length && q.calls.includes("tally_post_owner_release dc-tp-202610-1 " + J1) && q.calls.includes("tally_post_enqueue " + J1),
+      "  its day read since [" + String(r.why || r.words).slice(0, 200) + "]: posting " + J1.slice(-2) + " released and sent again as its own Retry (no new posting for part 1); X honours the release; everyone paid once (" + q.calls.join("; ") + ")");
+  }
+  {
+    // the posting still waiting for Tally: on its way, never settled meanwhile
+    const q = cloud(); q.held = true;
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-1" && d.state !== "posting" }), q);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    q.sync();
+    const d0 = JSON.parse(JSON.stringify(w.drafts)); delete d0["dc-tp-202610-1"].job;
+    const w2 = wire(world(rows, { sheet, drafts: d0 }), q);
+    const r = await w2.run(t.entry);
+    ok(!r.ok && /on its way/i.test(String(r.why)) && !q.tally.length && !q.calls.some((c) => /owner_release/.test(c)), "cloud: the earlier posting (found by FinCom's id) still waiting: on its way, nothing released or sent");
+  }
+}
+
+console.log("seventh review: the book that holds the day, India's month-ends, a computer FinCom cannot name");
+{
+  // a split year: March 2026's payroll approved in April, the client's books 2026-27 (b26) and 2025-26 (b25)
+  const asked = [], g = { TCloud: { st: { c1: { books: [{ book: "b26", from: "2026-04-01" }, { book: "b25", from: "2025-04-01" }] } }, book: () => ({ book: "b26" }) },
+    Cloud: { api: async (p) => { asked.push(decodeURIComponent(p)); return /^tally_days/.test(p) ? [{ day: "2026-03-31", at: FRESH }] : []; } } };
+  ok(TPost.bookFor(g, "c1", "2026-03-31") === "b25" && TPost.bookFor(g, "c1", "2026-04-30") === "b26", "the book that holds a day: March 2026 in 2025-26's book, April in 2026-27's");
+  const m = await TPost.readMonth("c1", "202603", ["2026-03-31"], g);
+  ok(m && m.dayAt["2026-03-31"] === FRESH && asked.some((x) => /^tally_days.*book_id=eq\.b25&day=in\.\(2026-03-31\)/.test(x)) && asked.some((x) => /^tally_vouchers.*book_id=in\.\(b25\)/.test(x)) && !asked.some((x) => /b26/.test(x)),
+    "  Tally's copy of March read from 2025-26's book (" + asked.map((x) => x.split("?")[0]).join(", ") + ")");
+  ok(JSON.stringify(monthEndsIST(new Date("2026-10-31T20:00:00Z"), 2)) === '["2026-11-30","2026-10-31"]' && JSON.stringify(monthEndsIST(new Date("2026-10-31T17:00:00Z"), 1)) === '["2026-10-31"]',
+    "the night's month-ends in India's time (31-Oct 20:00 UTC is 1-Nov in India)");
+  const picked = daysOfBooks([{ book_id: "b26", from_date: "2026-04-01" }, { book_id: "b25", from_date: "2025-04-01" }], [{ book_id: "b26", day: "2026-03-31", at: FRESH }, { book_id: "b25", day: "2026-03-31", at: STALE }, { book_id: "b26", day: "2026-04-30", at: FRESH }]);
+  ok(JSON.stringify(picked) === JSON.stringify([{ day: "2026-03-31", at: STALE }, { day: "2026-04-30", at: FRESH }]), "  each day's read time from the book that holds it (a later book's row for March ignored)");
+  // straight to the bridge, the bridge here naming no id: a part sent before waits (never sent on a guess)
+  const rows = rowsOf(), e = night(rows).entry;
+  const xs = TP.payrollVoucherXml(TPost.prepare({ co: rows.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows.ledgers.map((l) => l.name), books: {} }).vouchers[0]);
+  const w = world(rows, { drafts: { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", part: 1, parts: 1, state: "failed", sent: { xml: xs, at: "2026-11-22T10:00:00Z", answered: "gone" }, results: { "dc-tp-202610-1": { ok: false, state: "failed" } }, vouchers: [{ xml: xs }] } }, readMonth: notIn });
+  const r = await w.run(e);
+  ok(!r.ok && !w.posts.length && /goes again only through that computer/.test(String(r.why)), "a part settled “not in Tally” without its day read, no computer on record and none named here: waits, nothing sent");
 }
 
 console.log("the drafts the night reads carry the parts");

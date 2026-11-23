@@ -325,6 +325,18 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   Tally: offer it again", Approve sends the identical XML released; if the copy later shows the id, it is in Tally. The
   computer is keyed by the bridge's own id (`go-<install id>`) on both paths. The narration's "part i of n" is one wording
   (`server/_shared/tpparts.js`) for the builder and the night.
+- **Seventh review (23-Nov-2026)**: through FinCom's cloud queue (the normal way for a client linked there) a release in
+  the `Bridge.post` payload never reaches the bridge: `CloudPost.run` queues only the masters and vouchers, and
+  tally-ingest hands a bridge only the releases of the posting it takes (`tally_post_ids` released by a member). So the
+  posting's id is kept the moment it is queued (`CloudPost.run` tells it first), and found by the part's FinCom id
+  (`tally_post_ids`, the client's company) when an older draft has none; a part found not in Tally is sent again as that
+  posting's own Retry: released (`tally_post_owner_release`) and queued again by its id (`tally_post_enqueue`), the very
+  XML it holds, on the same computer; a posting still waiting, taken or running is on its way. Only the identical XML
+  goes this way (a part whose sheet changed since waits for the owner). The copy is read from the client's book that
+  holds the part's day (a split year's March in last year's book), the night's month-ends in India's time, and a
+  computer FinCom cannot name waits. `tests/run_payroll_cloud_resend.py` runs the route on the queue's SQL with the real
+  tally-ingest handing the posting out with its release.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
-- **Redeploy when published**: the `assistant-night` function (dailyjournals.js, tpparts.js, nightinput.js, handler.ts) and
+- **Redeploy when published**: the app (legacy.js: `CloudPost.run` tells the posting id), the `assistant-night` function
+  (dailyjournals.js, tpparts.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.

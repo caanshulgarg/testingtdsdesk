@@ -75,6 +75,7 @@ const CloudPost = {
     id = own || dup.values().next().value.job;
     try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
+    tell({done: 0, total: ids.length, job: id});   // next-payroll (seventh review): the posting's id the moment it is queued
     const t0 = Date.now(), fin = j => !!j && ["done", "failed", "cancelled"].includes(j.status), far = j => /^Queued: posts/.test((j && j.message) || "");
     // waiting for Tally: the cloud's own words when it is queued for no computer (migration 185), else the company and
     // the computer it waits for

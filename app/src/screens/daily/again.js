@@ -67,7 +67,11 @@ export async function recheck(e, o = {}) {
   // (sixth review) the days of the Tally Payroll parts on record (their voucher date, else the month-end), as last read
   const tpDays = Array.from(new Set(drafts.filter((d) => /^dc-tp-\d{6}-/.test(String(d.id || ""))).map((d) => { const x = String((((d.vouchers || [])[0]) || {}).date || "").slice(0, 10), ym = String(d.id).slice(6, 12);
     return /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-" + String(new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(4, 6), 0)).getUTCDate()).padStart(2, "0"); })));
-  const daysAt = o.daysAt || (tpDays.length && bookId ? await (async () => { try { return Object.fromEntries(((await Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(bookId) + "&day=in.(" + tpDays.join(",") + ")")) || []).map((r) => [String(r.day).slice(0, 10), String(r.at || "")])); } catch (x) { return {}; } })() : {});
+  // (seventh review) each from the book that holds the day (of the client's books, the one beginning latest on or before
+  // it: a split year's March in last year's book), else the books opened here
+  const holder = (day) => { try { const bs = ((TCloud.st[cid] || {}).books || []).filter((x) => x && x.book && String(x.from || "").replace(/-/g, "").slice(0, 8) <= day.replace(/-/g, "")).sort((a, c) => String(c.from).replace(/-/g, "").localeCompare(String(a.from).replace(/-/g, ""))); return String((bs[0] || {}).book || bookId || ""); } catch (x) { return bookId || ""; } };
+  const daysAt = o.daysAt || (tpDays.length ? await (async () => { const out = {}; for (const day of tpDays) { const bk = holder(day); if (!bk) continue;
+    try { ((await Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(bk) + "&day=eq." + day)) || []).forEach((r) => { out[String(r.day).slice(0, 10)] = String(r.at || ""); }); } catch (x) { /* not read: the part holds the journal back */ } } return out; })() : {});
   const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId, daysAt }));
   const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);
   if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;

@@ -193,31 +193,46 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   // the earlier send FinCom has on record: unanswered, or settled as not in Tally's copy (a copy behind Tally: the bridge's
   // own check by FinCom's id then says it is there, and it is this very XML only when the record says so)
   const was = A.Drafts.get(co.id, v.id), prevSent = unanswered(was) || (was && was.sent && was.sent.answered === "gone" && was.sent.xml) ? Object.assign({}, was.sent) : null;
-  // (fifth, sixth reviews) a part sent before goes again only through the computer that sent it (its own record of what
-  // it sent is the bridge's only guard), unanswered or settled "not in Tally" alike; another computer only once its day
-  // was read from Tally after the send and the id was not there (dayGone)
-  if (prevSent && prevSent.via && prevSent.via !== via.id && !(prevSent.answered === "gone" && prevSent.dayGone)) {
-    const res = { id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net, ok: false, state: "failed", msg: "Part " + v.part + " was sent through " + (prevSent.where || "another computer") + " and its answer never came; it goes again only through that computer. Open FinCom Bridge there, or wait for Tally’s copy of the books to show it." };
-    res.words = partWords(res); return res;
-  }
-  // (sixth review) a part found not in Tally (its day read after the send) goes once more released: the sending
-  // computer's record (posted-ids.json) lets it go once per release (bridge-go releaseFor); through the cloud's queue the
-  // cloud is the judge, so the earlier posting's id is released there first (tally_post_owner_release)
+  const stop = (msg, extra) => { const res = Object.assign({ id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net, ok: false, state: "failed", msg }, extra || {}); res.words = partWords(res); return res; };
+  // (fifth to seventh reviews) a part sent before goes again only through the computer that sent it (its own record of
+  // what it sent is the bridge's only guard), unanswered or settled "not in Tally" alike, and a computer FinCom cannot
+  // name (no id on record, or none now) waits; another computer only once its day was read from Tally after the send and
+  // the id was not there (dayGone)
+  if (prevSent && !(prevSent.answered === "gone" && prevSent.dayGone) && (!prevSent.via || !via.id || prevSent.via !== via.id))
+    return stop("Part " + v.part + " was sent through " + (prevSent.where || "another computer") + " and its answer never came; it goes again only through that computer. Open FinCom Bridge there, or wait for Tally’s copy of the books to show it.");
+  // (sixth, seventh reviews) a part found not in Tally (its day read after the send) goes once more released: the sending
+  // computer's record (posted-ids.json) lets it go once per release (bridge-go releaseFor). Straight to the bridge: the
+  // release in the payload. Through the cloud's queue the bridge's releases come only from the posting it takes (its own
+  // tally_post_ids released by a member), so the earlier posting itself is released (tally_post_owner_release) and sent
+  // again as its own Retry (tally_post_enqueue with its id), the very XML it holds; one still waiting, taken or running
+  // is on its way
   const rel = prevSent && prevSent.answered === "gone" && prevSent.release && prevSent.release.at ? [prevSent.release] : [];
-  if (rel.length && via.cloud && was.job && g.TCloud && typeof g.TCloud.rpc === "function") {
-    const k = await g.TCloud.rpc("tally_post_owner_release", { p_job: was.job, p_id: v.id, p_why: rel[0].why }).catch((err) => ({ ok: false, error: errWords(err) }));
-    if (!k || k.ok === false) { const res = { id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net, ok: false, state: "failed", msg: "FinCom could not release part " + v.part + " in the cloud’s queue (" + String((k && k.error) || "no answer") + "). Nothing was sent." }; res.words = partWords(res); return res; }
+  let again = null;
+  if (rel.length && via.cloud) {
+    if (prevSent.xml !== xml) return stop("Part " + v.part + " was sent before with other contents than the part built now, and is not in Tally. FinCom can send it again only as it was sent; put the sheet back as it was for part " + v.part + ", or ask FinCom support.");
+    const ex = (((was.results || {})[v.id]) || {}).job, J = await partJob(g, co.id, v.id, company, ex || was.job);
+    if (!J) return stop("FinCom cannot find the earlier posting of part " + v.part + " in its cloud, so it cannot send it again safely. Nothing was sent; ask FinCom support.");
+    if (["waiting", "taken", "running"].includes(J.status)) { const res = stop("", { state: "sent", onWay: true, job: J.id, msg: "It is still queued in FinCom’s cloud." }); return res; }
+    const k = await g.TCloud.rpc("tally_post_owner_release", { p_job: J.id, p_id: v.id, p_why: rel[0].why }).catch((err) => ({ ok: false, error: errWords(err) }));
+    if (!k || k.ok === false) return /still being sent/i.test(String((k && k.error) || "")) ? stop("", { state: "sent", onWay: true, job: J.id, msg: "It is still being sent to Tally." }) : stop("FinCom could not release part " + v.part + " in the cloud’s queue (" + String((k && k.error) || "no answer") + "). Nothing was sent.");
+    again = J.id;
   }
   const d = draftOf(co, e, v, A, at);
   d.state = "posting"; d.sent = { xml, at: at(), via: via.id, where: via.where };
   d.results = Object.assign({}, d.results, { [v.id]: { ok: false, state: "sent", msg: "", at: at() } });
   await A.Drafts.save(co.id, d, "pressed Approve (Tally Payroll): " + v.employees.length + " employees, net " + v.net.toFixed(2) + " to " + company + (v.parts > 1 ? ", part " + v.part + " of " + v.parts : ""));
   if (before) await before();
-  let out = null, x = null;
+  let out = null, x = null, kept = null;
+  if (again) { d.job = again; await A.Drafts.save(co.id, d, "Tally Payroll: part " + v.part + " released and sent again in its own posting (" + again.slice(0, 8) + ")"); }
   try {
-    out = await g.Bridge.post(Object.assign({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, rel.length ? { released: rel } : {}), (pj) => { try { progress && progress(v, pj); } catch (err) { /* only words */ } });
+    // (seventh review) the posting's id kept the moment the cloud's queue takes it (CloudPost.run tells it first), so a
+    // lost answer still leaves the posting to follow and to release
+    out = again ? await retryJob(g, co.id, again, v.id) : await g.Bridge.post(Object.assign({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, rel.length ? { released: rel } : {}), (pj) => {
+      if (pj && pj.job && d.job !== pj.job) { d.job = pj.job; kept = A.Drafts.save(co.id, d, "Tally Payroll: part " + v.part + " queued in FinCom’s cloud (posting " + String(pj.job).slice(0, 8) + ")").catch(() => false); }
+      try { progress && progress(v, pj); } catch (err) { /* only words */ } });
     x = [].concat((out && out.results) || []).find((r) => r && r.id === v.id) || null;
   } catch (err) { x = { id: v.id, ok: false, message: errWords(err) || "The posting did not go through." }; }
+  if (kept) await kept;
   if (out && out.job && out.job.id) d.job = out.job.id;
   let r = resultOf(x, out, A, (m) => plainPayrollWhy(m, (s) => A.plainWhy(s, co.id)));
   // (fifth review) the posting computer's own record (alreadySent) counts only for a byte-identical resend: else that
@@ -238,6 +253,34 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   res.words = partWords(res);
   await A.Drafts.save(co.id, d, "Tally Payroll: " + res.words);
   return res;
+}
+// (seventh review) the cloud's posting that sent a part: its job id on record (the bridge's sentJob, else the draft's),
+// else the newest posting of this client's company holding its FinCom id (tally_post_ids) whose result is not the
+// bridge's "already sent". -> {id, status} | null
+export async function partJob(g, cid, id, company, known) {
+  try {
+    let ids = known ? [String(known)] : [];
+    if (!ids.length) ids = Array.from(new Set(((await g.Cloud.api("tally_post_ids?select=job_id,created_at&client_id=eq." + encodeURIComponent(cid) + "&fincom_id=eq." + encodeURIComponent(id) + "&order=created_at.desc&limit=20")) || []).map((r) => String(r.job_id))));
+    if (!ids.length) return null;
+    const js = ((await g.Cloud.api("tally_post_jobs?select=id,status,company,results,created_at&id=in.(" + ids.map(encodeURIComponent).join(",") + ")")) || []).filter((j) => j && (known || !company || j.company === company));
+    const said = (j) => [].concat(j.results || []).find((x) => x && x.id === id) || {};
+    js.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    const j = js.find((x) => !said(x).alreadySent) || js[0];
+    return j ? { id: String(j.id), status: String(j.status || "") } : null;
+  } catch (x) { return null; }
+}
+// the earlier posting sent again as its own Retry, followed as CloudPost.run follows a posting (30 minutes at most; then
+// it stays queued and posts by itself) -> Bridge.post's answer
+async function retryJob(g, cid, job, id) {
+  const r = await g.TCloud.rpc("tally_post_enqueue", { p_id: job, p_client: cid, p_payload: {} });
+  if (!r || !r.ok || !r.retry) throw new Error("FinCom’s cloud did not queue the earlier posting again: " + String((r && r.error) || "it was not failed or cancelled") + ". Nothing was sent.");
+  const sleep = g.payrollSleep || ((ms) => new Promise((ok) => setTimeout(ok, ms))), t0 = Date.now();
+  for (;;) {
+    await sleep(2500);
+    let j = null; try { j = ((await g.Cloud.api("tally_post_jobs?select=id,status,results,checking,message&id=eq." + encodeURIComponent(job))) || [])[0]; } catch (x) { /* the internet: tried again */ }
+    if (j && ["done", "failed", "cancelled"].includes(j.status) && !j.checking) return { ok: true, results: [].concat(j.results || []).filter((x) => x && x.id === id).slice(-1), job: { id: job, status: j.status } };
+    if (Date.now() - t0 > 30 * 60000) return { ok: true, results: [{ id, ok: false, held: true, job, message: "It stays queued in FinCom’s cloud and posts by itself." }], job: { id: job } };
+  }
 }
 async function holdNext(co, e, v, A) {
   const was = A.Drafts.get(co.id, v.id);
@@ -313,15 +356,25 @@ const tagRe = (ym) => new RegExp("TDSDesk:(dc-tp-" + ym + "-\\d+)(?!\\d)");
 const heads3 = (rows) => { const by = new Map(); rows.forEach((a) => { const k = String(a.centre || ""); if (!k) return; if (!by.has(k)) by.set(k, { name: k, amount: 0, heads: [] }); const e = by.get(k), x = Math.round(Number(a.amount) * 100) / 100; e.heads.push({ head: String(a.ledger || ""), amount: x }); e.amount = Math.round((e.amount + x) * 100) / 100; }); return Array.from(by.values()); };
 // readMonth(cid, ym, days) -> null (cannot read) | {dayAt: {yyyy-mm-dd: when that day was last read from Tally}, parts:
 // {id: {found: true, no, narr, employees} | {found: false, deleted}}}
+// (seventh review) the book that holds a day: of the client's books in the cloud (tally_status, a split Tally's earlier
+// years among them), the one beginning latest on or before it (March's payroll approved in April: last year's book)
+export function bookFor(g, cid, day) {
+  const s = g.TCloud && g.TCloud.st && g.TCloud.st[cid], d8 = String(day || "").replace(/-/g, "").slice(0, 8), f8 = (b) => String(b.from || "").replace(/-/g, "").slice(0, 8);
+  const bs = (s && Array.isArray(s.books) ? s.books : []).filter((b) => b && b.book && /^\d{8}$/.test(f8(b)) && f8(b) <= d8).sort((a, b) => f8(b).localeCompare(f8(a)));
+  if (bs.length) return String(bs[0].book);
+  const bk = g.TCloud && typeof g.TCloud.book === "function" ? g.TCloud.book(cid) : null;
+  return bk && bk.book ? String(bk.book) : "";
+}
 export async function readMonth(cid, ym, days, g = G) {
   try {
-    const bk = g.TCloud && typeof g.TCloud.book === "function" ? g.TCloud.book(cid) : null, book = bk && bk.book;
-    if (!book || !g.Cloud || typeof g.Cloud.api !== "function") return null;
-    const B = "&book_id=eq." + encodeURIComponent(book), re = tagRe(ym), ds = Array.from(new Set(days)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-    const [vs, dr] = await Promise.all([g.Cloud.api("tally_vouchers?select=guid,alter_id,vno,narration,cancelled,optional,deleted_at" + B + "&narration=like." + encodeURIComponent("*TDSDesk:dc-tp-" + ym + "-*")),
-      ds.length ? g.Cloud.api("tally_days?select=day,at" + B + "&day=in.(" + ds.join(",") + ")") : []]);
+    const ds = Array.from(new Set(days)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)), byBook = new Map();
+    Array.from(new Set(ds.concat([lastDay(ym)]))).forEach((d) => { const b = bookFor(g, cid, d); if (b) byBook.set(b, (byBook.get(b) || []).concat(ds.includes(d) ? [d] : [])); });
+    if (!byBook.size || !g.Cloud || typeof g.Cloud.api !== "function") return null;
+    const books = Array.from(byBook.keys()), B = "&book_id=in.(" + books.map(encodeURIComponent).join(",") + ")", re = tagRe(ym);
+    const [vs, ...dr] = await Promise.all([g.Cloud.api("tally_vouchers?select=guid,alter_id,vno,narration,cancelled,optional,deleted_at,book_id" + B + "&narration=like." + encodeURIComponent("*TDSDesk:dc-tp-" + ym + "-*"))]
+      .concat(books.filter((b) => byBook.get(b).length).map((b) => g.Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(b) + "&day=in.(" + byBook.get(b).join(",") + ")"))));
     const parts = {}, live = [], dayAt = {};
-    (dr || []).forEach((r) => { if (r && r.day) dayAt[String(r.day).slice(0, 10)] = String(r.at || ""); });
+    dr.forEach((rows) => (rows || []).forEach((r) => { if (r && r.day) dayAt[String(r.day).slice(0, 10)] = String(r.at || ""); }));
     (vs || []).forEach((v) => { const m = String((v && v.narration) || "").match(re); if (!m) return;
       if (!v.deleted_at && !v.cancelled && !v.optional) { parts[m[1]] = { found: true, no: String(v.vno || ""), narr: String(v.narration || ""), guid: v.guid, alter: v.alter_id, employees: [] }; live.push(m[1]); }
       else if (!parts[m[1]]) parts[m[1]] = { found: false, deleted: true }; });
@@ -377,7 +430,9 @@ export async function settleParts(co, e, drafts, built, A, g = G, o = {}) {
     const r = (d.results || {})[d.id] || {}, unc = unconfirmedR(r), open = unanswered(d) || unc, wasOk = !!r.ok && !unc, t = parts[d.id];
     if (t && t.found) continue;
     if (!open && !(wasOk && o.forJournal) && !(wasOk && t && t.deleted)) continue;
-    if (open && await live3(g, r.job || d.job)) { waits.push("On its way to Tally (part " + (d.part || 1) + "): wait for it to finish."); continue; }
+    // (seventh review) a send whose answer was lost carries no posting id: the cloud's posting holding its FinCom id
+    const job = r.job || d.job || (open ? ((await partJob(g, co.id, d.id, o.company)) || {}).id : "");
+    if (open && await live3(g, job)) { waits.push("On its way to Tally (part " + (d.part || 1) + "): wait for it to finish."); continue; }
     if (!copy) { if (open || o.forJournal) waits.push("FinCom could not read Tally’s copy of the books to settle part " + (d.part || "") + ". Read the books again, then try again."); continue; }
     const sentAt = [(d.sent && d.sent.at) || "", r.at || ""].sort().pop(), day = dayOf(d, built[d.id], ym);
     if (!freshAfter(copy.dayAt[day], sentAt)) { if (open || o.forJournal) waits.push("Part " + (d.part || "") + " was sent to Tally at " + String(sentAt).slice(0, 16).replace("T", " ") + " and Tally’s copy of " + day + " is older than this send. Read the books again (FinCom Bridge on the Tally computer brings them in), then try again."); continue; }
@@ -447,7 +502,7 @@ export async function approveTallyPayroll(e, env = {}) {
   // (fourth, fifth reviews) the month's parts settled from Tally itself first (above): every part in Tally by its FinCom
   // id, with or without a draft; a send never answered only from a copy read after it
   {
-    const st = await settleParts(co, e, mine, Object.fromEntries(p.vouchers.map((v) => [v.id, v])), A, g, { readMonth: env.readMonth, now: env.now, pay, books: b, prior });
+    const st = await settleParts(co, e, mine, Object.fromEntries(p.vouchers.map((v) => [v.id, v])), A, g, { readMonth: env.readMonth, now: env.now, pay, books: b, prior, company });
     if (st.waits.length) return no(st.waits[0]);
     st.drafts.forEach((d) => { if (!mine.includes(d)) mine.push(d); });
   }
