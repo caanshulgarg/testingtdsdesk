@@ -1,10 +1,10 @@
 {
- "build": "mwt7imdb-6da985",
+ "build": "mwt945xk-d12c7c",
  "path": "../review-prev/",
- "stamp": "React \u00b7 23-Nov-2026 17:23 \u00b7 33a1cb9c9",
- "commit": "76c9a817100f410bc4b3d0bb3362cb1d5e5ef6db",
- "replacedBy": "mwt945xk-d12c7c",
+ "stamp": "React \u00b7 23-Nov-2026 18:08 \u00b7 ef959cba9",
+ "commit": "5a62af2bea27be2a5d1dc529057c9d1d067d31cf",
+ "replacedBy": "mwt9ubnk-d56db5",
  "how": "promote",
- "at": "2026-11-23T12:38:22Z",
+ "at": "2026-11-23T12:58:45Z",
  "note": "the build review/ held before; app/rollback-review.sh puts review/ back as it is at commit"
 }
