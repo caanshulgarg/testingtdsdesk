@@ -6,6 +6,7 @@
 // and the tests check every form's figures (tests/run_itr_schedules.mjs). Nothing here makes up a non-amount field:
 // an address, a name or a choice not given is left out, and fill.js asks for it.
 import { put } from "./fill.js";
+import { CII, fyOf } from "./heads.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -147,10 +148,14 @@ function landRow(X, path, x, lt) {
   const o = { DateofPurchase: iso(x.acq), DateofSale: iso(x.sale), FullConsideration: R(x.value), PropertyValuation: R(x.sdv), FullConsideration50C: R(x.fullValue), AquisitCost: R(x.costUsed), ImproveCost: R(x.imp), ExpOnTrans: R(x.exp),
     TotalDedn: R(x.costUsed + x.imp + x.exp), Balance: R(x.gain), ExemptionOrDednUs54: { ExemptionOrDednUs54Dtls: ex.length ? ex : undefined, ExemptionGrandTotal: R(x.exemptAmt) }, CapgainonAssets: R(x.net) };
   if (lt) {
-    const idxCost = proviso ? R(x.idxCost) : R(x.costUsed), idxImp = proviso ? R(x.idxImp) : R(x.imp), dB = idxCost + idxImp + R(x.exp), balB = Math.max(0, R(x.fullValue) - dB), gB = balB - Math.min(R(x.exemptAmt), balB);
-    const taxA = proviso ? R(Math.max(0, x.net) * 0.125) : 0, taxB = proviso ? R(Math.max(0, gB) * 0.2) : 0;
-    Object.assign(o, { AquisitCostIndex: idxCost, TotalDednForEiB: dB, BalanceForEiB: balB, CapgainonAssets_1ea: gB, TaxSec1121a: taxA, TaxSec1121aiiB: taxB, ExcessAmtSec1121a: R(x.excess),
-      CostOfImprovements: improve.length ? { CostOfImprovementsDtls: improve.map((m, j) => ({ slno: j + 1, ImproveCost: R(m.amt), ImproveDate: FY(m.fy), CostOfImpIndex: proviso ? R(N(m.amt) * 376 / ({ 2001: 100, 2002: 105, 2003: 109, 2004: 113, 2005: 117, 2006: 122, 2007: 129, 2008: 137, 2009: 148, 2010: 167, 2011: 184, 2012: 200, 2013: 220, 2014: 240, 2015: 254, 2016: 264, 2017: 272, 2018: 280, 2019: 289, 2020: 301, 2021: 317, 2022: 331, 2023: 348, 2024: 363, 2025: 376 }[m.fy] || 376)) : R(m.amt) })),
+    const idxCost = proviso ? R(x.idxCost) : R(x.costUsed), idxImp = proviso ? R(x.idxImp) : R(x.imp), dB = idxCost + idxImp + R(x.exp), balB = Math.max(0, R(x.fullValue) - dB), gB = proviso ? Math.max(0, R(x.idxNet)) : balB - Math.min(R(x.exemptAmt), balB);
+    // the two taxes and the excess on what of this property's gain is chargeable (tax.js tax112: after the set-offs and
+    // the basic exemption)
+    const pr = ((X.comp.tax && X.comp.tax.p112 && X.comp.tax.p112.rows) || []).find((y) => y.id === x.id);
+    const taxA = proviso && pr ? pr.taxA : 0, taxB = proviso && pr ? pr.taxB : 0, excess = proviso && pr ? pr.excess : 0;
+    const cs = CII[fyOf(x.sale)] || CII[2025];
+    Object.assign(o, { AquisitCostIndex: idxCost, TotalDednForEiB: dB, BalanceForEiB: balB, CapgainonAssets_1ea: gB, TaxSec1121a: taxA, TaxSec1121aiiB: taxB, ExcessAmtSec1121a: excess,
+      CostOfImprovements: improve.length ? { CostOfImprovementsDtls: improve.map((m, j) => ({ slno: j + 1, ImproveCost: R(m.amt), ImproveDate: FY(m.fy), CostOfImpIndex: proviso ? R(N(m.amt) * cs / CII[Math.min(2025, +m.fy)]) : R(m.amt) })),
         TotalImprovecost: R(x.imp), TotalindexImprovecost: idxImp } : undefined });
   }
   const b = (imps && imps.buyers) || [];
@@ -199,7 +204,8 @@ export function cgSchedule(X, o) {
   if (ltLand.length) {
     put(o, LT + "/SaleofLandBuild/SaleofLandBuildDtls", ltLand.map((x) => landRow(X, LT + "/SaleofLandBuild/SaleofLandBuildDtls/[]", x, true)));
     put(o, LT + "/SaleofLandBuild/TotalLTCGImmblPrprty", R(sumOf(ltLand, (x) => x.net)));
-    if (has(X, LT + "/SaleofLandBuild/TotalExcessTax")) put(o, LT + "/SaleofLandBuild/TotalExcessTax", R(sumOf(ltLand, (x) => x.excess)));
+    const p112 = ((X.comp.tax && X.comp.tax.p112 && X.comp.tax.p112.rows) || []);
+    if (has(X, LT + "/SaleofLandBuild/TotalExcessTax")) put(o, LT + "/SaleofLandBuild/TotalExcessTax", R(sumOf(p112.filter((y) => ltLand.some((x) => x.id === y.id && x.idxGain != null)), (y) => y.excess)));
   }
   if (lt112A.length) put(o, LT + "/SaleOfEquityShareUs112A", fit(X, LT + "/SaleOfEquityShareUs112A", { BalanceCG: R(sumOf(lt112A, (x) => x.gain)), DeductionUs54F: R(sumOf(lt112A, (x) => x.exemptAmt)), CapgainonAssets: R(sumOf(lt112A, (x) => x.net)) }));
   if (ltOth.length) put(o, LT + "/SaleofAssetNADtls/SaleofAssetNA", aggregate(X, LT + "/SaleofAssetNADtls/SaleofAssetNA", ltOth));

@@ -63,28 +63,7 @@ export function buildModel(c) {
   const interestBooks = bk ? bk.sched.pl.interestInc.cy : 0;
   M.os = { interest: R(interestBooks + N(st.osInterest)), dividend: R(st.osDividend), other: R(st.osOther) };
   M.interestSrc = "the books' interest income" + (N(st.osInterest) ? " + " + R(st.osInterest) + " entered" : "");
-  // the heads with schedules of their own (heads.js): Schedule S from the salaries (Form 16), HP from the houses, CG
-  // from the sales; check.js works each again from the same rows
-  const hctx = { regime: M.regime, entity, resident: M.resident };
-  if (Array.isArray(st.salaries) && st.salaries.length && (entity === "P")) {
-    const sh = salaryHead(st.salaries, hctx);
-    M.salaryRows = st.salaries; M.salaryHead = sh;
-    M.salary = { gross: sh.gross, std: sh.std, net: sh.income, basicDa: sh.basicDa, src: "Schedule S (" + sh.rows.length + " employer" + (sh.rows.length === 1 ? "" : "s") + ")" };
-  } else if (st.salary && N(st.salary.gross)) M.salary = { gross: N(st.salary.gross), std: Math.min(N(st.salary.gross), M.regime === "old" ? 50000 : 75000) };
-  if (Array.isArray(st.houses) && st.houses.length) {
-    const hh = houseHead(st.houses, hctx);
-    M.houseRows = st.houses; M.hpHead = hh; M.hp = hh.total; M.hpRent = hh.rentOwn;
-  } else if (st.hp != null && st.hp !== "") M.hp = N(st.hp);
-  if (Array.isArray(st.cgRows) && st.cgRows.length) {
-    const g = capitalGains(st.cgRows, hctx);
-    M.cgRows = st.cgRows; M.cgHead = g;
-    M.cg = { s111A: g.s111A, s112A: g.s112A, s112: g.s112, other: g.stApp, relief112: g.relief112, cfStcl: g.cfStcl, cfLtcl: g.cfLtcl, at: g.at, reliefAt: g.reliefAt };
-    const a = g.rows.filter((x) => x.bucket === "s112A");
-    if (a.length) M.cg112A = { sale: R(a.reduce((s, x) => s + x.fullValue, 0)), cost: R(a.reduce((s, x) => s + x.costUsed + x.imp + x.exp, 0)) };
-  } else {
-    if (st.cg) M.cg = st.cg;
-    if (st.cg112A && N(st.cg112A.sale)) M.cg112A = { sale: N(st.cg112A.sale), cost: N(st.cg112A.cost) };
-  }
+  headsInto(M, st);
   // the lists the official schedules take as they are (the page's editors follow the schema): AL, FA, SH, AL-1, OCI
   ["al", "fa", "sh", "al6"].forEach((k) => { if (st[k]) M[k] = st[k]; });
   if (st.indAsOci) M.oci = st.indAsOci;
@@ -121,6 +100,36 @@ export function buildModel(c) {
     const tot = (xs) => R(xs.reduce((s, t) => s + N(t.amt), 0));
     const tdsL = by(/\bTDS\b|TAX DEDUCTED/i, /TCS|PAYABLE/i), tcsL = by(/\bTCS\b|TAX COLLECTED/i, /PAYABLE/i), advL = by(/ADVANCE TAX|ADVANCE INCOME TAX/i), saL = by(/SELF.?ASSESSMENT/i);
     M.books = { tds: tdsL.length ? tot(tdsL) : null, tdsLedgers: tdsL, tcs: tcsL.length ? tot(tcsL) : null, tcsLedgers: tcsL, adv: advL.length ? tot(advL) : null, advLedgers: advL, sa: saL.length ? tot(saL) : null };
+  }
+  return M;
+}
+
+// the heads with schedules of their own (heads.js): Schedule S from the salaries (Form 16), HP from the houses, CG from
+// the sales; check.js works each again from the same rows (salaryRows, houseRows, cgRows). M: the model so far (regime,
+// entity, resident, os); st: the owner's answers
+export function headsInto(M, st) {
+  const entity = M.entity, hctx = { regime: M.regime, entity, resident: M.resident !== false };
+  M.os = M.os || {};
+  if (Array.isArray(st.salaries) && st.salaries.length && (entity === "P")) {
+    const sh = salaryHead(st.salaries, hctx);
+    M.salaryRows = st.salaries; M.salaryHead = sh;
+    M.salary = { gross: sh.gross, std: sh.std, net: sh.income, basicDa: sh.basicDaKnown ? sh.basicDa : null, src: "Schedule S (" + sh.rows.length + " employer" + (sh.rows.length === 1 ? "" : "s") + ")" };
+  } else if (st.salary && N(st.salary.gross)) M.salary = { gross: N(st.salary.gross), std: Math.min(N(st.salary.gross), M.regime === "old" ? 50000 : 75000), basicDa: st.salary.basicDa != null && st.salary.basicDa !== "" ? N(st.salary.basicDa) : null };
+  if (Array.isArray(st.houses) && st.houses.length) {
+    const hh = houseHead(st.houses, hctx);
+    M.houseRows = st.houses; M.hpHead = hh; M.hp = hh.total; M.hpRent = hh.rentOwn;
+  } else if (st.hp != null && st.hp !== "") M.hp = N(st.hp);
+  if (Array.isArray(st.cgRows) && st.cgRows.length) {
+    const g = capitalGains(st.cgRows, hctx);
+    M.cgRows = st.cgRows; M.cgHead = g;
+    M.cg = { s111A: g.s111A, s112A: g.s112A, s112: g.s112, other: g.stApp, cfStcl: g.cfStcl, cfLtcl: g.cfLtcl, at: g.at, pool112: g.pool112, poolAt: g.poolAt };
+    // a buy-back's money is dividend (2(22)(f)): other sources
+    if (g.buybackDividend) M.os.buyback = g.buybackDividend;
+    const a = g.rows.filter((x) => x.bucket === "s112A");
+    if (a.length) M.cg112A = { sale: R(a.reduce((s, x) => s + x.fullValue, 0)), cost: R(a.reduce((s, x) => s + x.costUsed + x.imp + x.exp, 0)) };
+  } else {
+    if (st.cg) M.cg = st.cg;
+    if (st.cg112A && N(st.cg112A.sale)) M.cg112A = { sale: N(st.cg112A.sale), cost: N(st.cg112A.cost) };
   }
   return M;
 }

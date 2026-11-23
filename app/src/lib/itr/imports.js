@@ -141,7 +141,7 @@ function form16Text(t) {
   const optOut = /opting out of taxation u\/s 115BAC/i.test(all) ? (/115BAC\(1A\)\?\s*(Yes|No)/i.exec(all) || [])[1] || "" : "";
   if (!emp) return { error: { code: "no_pan", text: "No employee's PAN was found in this Form 16." } };
   const ex = [["10(13A)", exHra], ["10(5)", exLta], ["10(10)", exGrat], ["10(10AA)", exLeave]].filter(([, v]) => v).map(([sec, a]) => ({ sec, amt: a }));
-  const data = { employer, tan, s171: s171 || 0, s172: s172 || 0, s173: s173 || 0, exempt: ex, std: std || 0, ent: ent || 0, ptax: ptax || 0, chargeable, tds: tds || 0, oldRegime: /^yes$/i.test(optOut) };
+  const data = { employer, tan, s171: s171 || 0, s172: s172 || 0, s173: s173 || 0, exempt: ex, std: std || 0, ent: ent || 0, ptax: ptax || 0, chargeable, tds: tds || 0, oldRegime: /^yes$/i.test(optOut), optOut };
   return { pan: emp, ay: y ? y.ay : "", fy: y ? y.fy : "", name: "", key: "form16|" + (tan || "x"), data,
     read: { sections: summarize([{ name: "Salary (17(1) + 17(2) + 17(3))", count: 1, total: N0(s171) + N0(s172) + N0(s173) }, { name: "Exempt under section 10", count: ex.length, total: ex.reduce((a, x) => a + x.amt, 0) }, { name: "TDS (Part A)", count: 1, total: tds || 0 }]) } };
 }

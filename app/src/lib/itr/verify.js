@@ -232,6 +232,11 @@ export function verify(c) {
 
 // ---------- the schedules (heads.js, sched.js): each against an independent source where there is one ----------
 const SEC_KINDS = ["eq", "eqNoStt", "bond", "zcb", "mfDebt", "mf50AA"];
+// the schedules' checks alone (the tests): c as for verify()
+export function schedulesChecks(c) {
+  const im = c.imports || {}, bk = c.books && c.books.ok ? c.books : null;
+  return schedules(c, c.model || {}, c.main || {}, im, im.ais && im.ais.data, im.as26 && im.as26.data, bk);
+}
 function schedules(c, M, S, im, ais, as26, bk) {
   const out = [], sh = M.salaryHead, hh = M.hpHead, g = M.cgHead;
   // Form 16, employer by employer (TAN): gross salary and TDS
@@ -243,6 +248,25 @@ function schedules(c, M, S, im, ais, as26, bk) {
     const claimed = ((M.paid || {}).tdsSal || []), byTan = (t) => R(sumBy(claimed.filter((x) => x.tan === t), (x) => x.amt));
     out.push(two("f16_tds", "sch", "TDS on salary: Form 16 against 26AS (claimed)", { label: "TDS on salary claimed (26AS, section 192)", amt: as26 ? R(sumBy(claimed, (x) => x.amt)) : null, src: "Form 26AS Part I, section 192", why: "26AS is not brought in", how: "Bring in 26AS." },
       { label: "Form 16 Part A", amt: R(sumBy(rows, (r) => r.tds)), src: "Form 16" }, rows.map((r) => ({ label: r.label, a: as26 ? byTan(r.tan) : null, b: r.tds })), "The employer's deposit does not match its Form 16: ask the employer to correct its 24Q; claim only what 26AS shows."));
+    // the regime the employee told the employer (Form 16 Part B: "Whether opting out of taxation u/s 115BAC(1A)?")
+    // against the return's; a salaried person without business income may choose again in the return (115BAC(6)),
+    // one with business income only through Form 10-IEA
+    const said = f16.map((f) => ({ f, opt: String((f.data || {}).optOut || "") })).filter((x) => /^(yes|no)$/i.test(x.opt));
+    if (said.length && (M.regime === "new" || M.regime === "old")) {
+      const differ = said.filter((x) => (/^yes$/i.test(x.opt) ? "old" : "new") !== M.regime);
+      const rowsR = said.map((x) => ({ label: ((x.f.data || {}).employer || "Employer") + ": " + (/^yes$/i.test(x.opt) ? "opted out (old regime)" : "new regime") }));
+      out.push(differ.length ? needs("f16_regime", "sch", "Regime: Form 16 against the return", "The return is in the " + M.regime + " regime; " + differ.length + " Form 16" + (differ.length === 1 ? " says" : "s say") + " the employee chose the other with the employer (115BAC(1A)).", "Confirm the regime with the client (with business income the old regime needs Form 10-IEA by the due date), then answer with a note.", rowsR)
+        : matched("f16_regime", "sch", "Regime: Form 16 against the return", "The employer's Form 16 and the return are in the same regime (" + M.regime + ").", rowsR));
+    }
+  }
+  // section 194IA: the buyer deducts 1% of the higher of the consideration and the stamp duty value (from 1-10-2024)
+  // when either is Rs 50 lakh or more; the TDS in 26AS against what the sale should carry
+  const props = M.cgHead ? M.cgHead.rows.filter((x) => x.kind === "land" && (x.value >= 5000000 || x.sdv >= 5000000)) : [];
+  if (props.length) {
+    const t194 = ((M.paid || {}).tds || []).filter((x) => /^194IA$/i.test(String(x.sec || "").replace(/[()\s-]/g, "")));
+    out.push(two("tds_194ia", "sch", "TDS on the sale of property (194IA): 26AS against the sale", { label: "Form 26AS, section 194IA", amt: as26 ? R(sumBy(t194, (x) => x.amt)) : null, src: "26AS Part I", why: "26AS is not brought in", how: "Bring in 26AS." },
+      { label: "1% of the higher of the consideration and the stamp duty value", amt: R(sumBy(props, (x) => Math.max(x.value, x.sdv) * 0.01)), src: props.length + " sale" + (props.length === 1 ? "" : "s") + " on Schedules" }, props.map((x) => ({ label: (x.desc || "Property") + ": " + R(Math.max(x.value, x.sdv)), b: R(Math.max(x.value, x.sdv) * 0.01) })),
+      "The buyer's TDS differs from 1%: claim only what 26AS shows, and check the consideration and the stamp duty value (a short deduction is the buyer's default, not a reason to change the gain)."));
   }
   if (ais) {
     const cat = (k) => ais.rows.filter((r) => r.cat === k);

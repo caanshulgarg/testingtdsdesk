@@ -16,14 +16,24 @@ const NEW_NO = ["10(5)", "10(13A)", "10(14)(i)", "10(14)(ii)"];
 const GOVT = ["CGOV", "SGOV", "PE", "PESG"];
 export const SAL_LAW = {
   std: { new: 75000, old: 50000 }, ent: 5000, ptaxMax: 5000, ptaxArt276: 2500,
-  limits: { "10(10)": [2000000, 2500000], "10(10AA)": [2500000, Infinity], "10(10C)": [500000, 500000], "10(10B)(i)": [500000, 500000], "10(10B)(ii)": [500000, 500000], "10(14)(ii)(115BAC)": [38400, 38400] },
-  src: "Sections 15-17; section 10 (10(5), 10(10) Rs 20 lakh / 25 lakh, 10(10AA) Rs 25 lakh, 10(10B), 10(10C) Rs 5 lakh, 10(13A) with rule 2A, 10(14)); section 16(ia) standard deduction Rs 75,000 in the new regime (115BAC(1A)), Rs 50,000 in the old; 16(ii) entertainment allowance (government employees, old regime); 16(iii) tax on employment (old regime); 115BAC(2)",
+  limits: { "10(10)": [2000000, Infinity], "10(10AA)": [2500000, Infinity], "10(10C)": [500000, 500000], "10(10B)(i)": [500000, 500000], "10(10B)(ii)": [500000, 500000], "10(14)(ii)(115BAC)": [38400, 38400] },
+  src: "Sections 15-17; section 10 (10(5), 10(10) Rs 20 lakh (10(10)(iii)), a government employee's wholly exempt (10(10)(i)), 10(10AA) Rs 25 lakh, 10(10B), 10(10C) Rs 5 lakh, 10(13A) with rule 2A, 10(14)); section 16(ia) standard deduction Rs 75,000 in the new regime (115BAC(1A)), Rs 50,000 in the old; 16(ii) entertainment allowance (government employees, old regime); 16(iii) tax on employment (old regime); 115BAC(2)",
 };
+export const NATURES = ["CGOV", "SGOV", "PSU", "PE", "PESG", "PEPS", "PEO", "OTH"];
 // rows: [{employer, tan, nature, addr, s171, s172, s173, basicDa, exempt: [{sec, amt}], hra: {metro, received, rent}, ent, ptax, tds}]
+// basicDa: "salary" for rule 2A (HRA), 16(ii) and 80CCD(2) is basic + dearness allowance (forming part of retirement
+// benefits) + commission at a fixed percentage of turnover (rule 2A Explanation (ii)); never the whole of 17(1): asked
+// when blank and one of those is used
 export function salaryHead(rows, ctx) {
-  const regime = (ctx || {}).regime === "old" ? "old" : "new", out = { rows: [], gross: 0, exempt: 0, net: 0, std: 0, ent: 0, ptax: 0, ded16: 0, income: 0, basicDa: 0, warn: [], src: SAL_LAW.src };
+  const regime = (ctx || {}).regime === "old" ? "old" : "new", out = { rows: [], gross: 0, exempt: 0, net: 0, std: 0, ent: 0, ptax: 0, ded16: 0, income: 0, basicDa: 0, basicDaKnown: true, warn: [], needs: [], src: SAL_LAW.src };
   (rows || []).forEach((r, i) => {
-    const s171 = R(r.s171), s172 = R(r.s172), s173 = R(r.s173), gross = s171 + s172 + s173, basicDa = R(r.basicDa != null && r.basicDa !== "" ? r.basicDa : s171), govt = GOVT.includes(r.nature);
+    const known = r.basicDa != null && r.basicDa !== "";
+    const s171 = R(r.s171), s172 = R(r.s172), s173 = R(r.s173), gross = s171 + s172 + s173, basicDa = known ? R(r.basicDa) : 0, govt = GOVT.includes(r.nature);
+    const who = (r.employer || "Employer " + (i + 1));
+    if (!known) out.basicDaKnown = false;
+    if (!NATURES.includes(r.nature)) out.needs.push({ key: "sal_nature_" + i, text: who + ": say the kind of employer (central or state government, public sector, pensioner, other): Schedule S needs it, and the limits of 10(10), 10(10AA) and 16(ii) depend on it." });
+    const hraUsed = regime === "old" && (r.exempt || []).some((e) => e.sec === "10(13A)") && r.hra, entUsed = regime === "old" && govt && N(r.ent) > 0;
+    if (!known && (hraUsed || entUsed)) out.needs.push({ key: "sal_basic_" + i, text: who + ": give the basic salary + dearness allowance (rule 2A): " + (hraUsed ? "the HRA exemption" : "the entertainment allowance") + " is worked on it, not on the whole salary under 17(1)." });
     const ex = [];
     let hra = null;
     (r.exempt || []).forEach((e) => {
@@ -36,6 +46,7 @@ export function salaryHead(rows, ctx) {
       if (regime === "new" && NEW_NO.includes(e.sec)) { if (amt) out.warn.push({ key: "sal_new_" + e.sec, text: "Section " + e.sec + " exemption of " + amt + " is not allowed in the new regime (115BAC(2)); left out." }); amt = 0; }
       const lim = SAL_LAW.limits[e.sec];
       if (lim) { const L = govt ? lim[1] : lim[0]; if (amt > L) { out.warn.push({ key: "sal_lim_" + e.sec, text: "Section " + e.sec + " exemption claimed " + amt + ", allowed up to " + L + "." }); amt = L; } }
+      if (e.sec === "10(10)" && govt && amt > 2500000) out.warn.push({ key: "sal_grat_govt_" + i, text: "Gratuity of a government employee, " + amt + ", is wholly exempt (10(10)(i)) and is taken so; the department's utility may cap it at Rs 25 lakh: compare the utility's figure before filing." });
       if (amt > s171 && e.sec !== "10(10)" && e.sec !== "10(10A)" && e.sec !== "10(10AA)" && e.sec !== "10(10C)") { out.warn.push({ key: "sal_17_" + e.sec, text: "Section " + e.sec + " exemption is more than the salary under 17(1); cut to it." }); amt = s171; }
       ex.push({ sec: e.sec, amt: R(amt), desc: e.desc || "" });
     });
@@ -44,7 +55,7 @@ export function salaryHead(rows, ctx) {
     const ent = regime === "old" && govt ? R(Math.min(N(r.ent), SAL_LAW.ent, 0.2 * basicDa)) : 0;
     const ptax = regime === "old" ? R(Math.min(pos(r.ptax), SAL_LAW.ptaxMax)) : 0;
     if (regime === "old" && N(r.ptax) > SAL_LAW.ptaxArt276) out.warn.push({ key: "sal_ptax", text: "Tax on employment of " + R(r.ptax) + " is above Rs 2,500 a year (Article 276(2) of the Constitution): confirm." });
-    const x = { i, employer: r.employer || "", tan: r.tan || "", nature: r.nature || "OTH", addr: r.addr || null, s171, s172, s173, gross, exemptRows: ex, exempt, net: gross - exempt, ent, ptax, basicDa, hra, tds: R(r.tds), src: r.src || "entered" };
+    const x = { i, employer: r.employer || "", tan: r.tan || "", nature: r.nature || "", basicDaKnown: known, addr: r.addr || null, s171, s172, s173, gross, exemptRows: ex, exempt, net: gross - exempt, ent, ptax, basicDa, hra, tds: R(r.tds), src: r.src || "entered" };
     out.rows.push(x);
     out.gross += gross; out.exempt += exempt; out.net += x.net; out.ent += ent; out.ptax += ptax; out.basicDa += basicDa;
   });
@@ -57,7 +68,8 @@ export function salaryHead(rows, ctx) {
 // a Form 16 read by imports.js -> a row of Schedule S
 export function salaryFromForm16(d) {
   d = d || {};
-  return { employer: d.employer || "", tan: d.tan || "", nature: "OTH", addr: d.addr || null, s171: R(d.s171), s172: R(d.s172), s173: R(d.s173), basicDa: d.basicDa != null ? R(d.basicDa) : undefined,
+  // the kind of employer is not in Form 16: asked on Schedules (never assumed)
+  return { employer: d.employer || "", tan: d.tan || "", nature: "", addr: d.addr || null, s171: R(d.s171), s172: R(d.s172), s173: R(d.s173), basicDa: d.basicDa != null ? R(d.basicDa) : undefined,
     exempt: (d.exempt || []).filter((e) => R(e.amt)).map((e) => ({ sec: e.sec, amt: R(e.amt) })), ptax: R(d.ptax), ent: R(d.ent), tds: R(d.tds), src: "Form 16" };
 }
 
@@ -70,16 +82,19 @@ export function houseHead(props, ctx) {
   let sopLeft = null, sops = 0;
   (props || []).forEach((p, i) => {
     const share = p.share == null || p.share === "" ? 100 : Math.max(0, Math.min(100, N(p.share))), kind = ["L", "S", "D"].includes(p.kind) ? p.kind : "L";
-    const interest = R(sum(p.loans, (l) => l.interest));
-    const x = { i, kind, share, rent: 0, unrealised: 0, muniTax: 0, ded: 0, av: 0, own: 0, std30: 0, interest, interestAllowed: 0, arrears: 0, income: 0, loans: p.loans || [], addr: p.addr || null, coOwners: p.coOwners || [], tenants: p.tenants || [] };
+    // 24(b) Explanation: interest of the years before the house was bought or built, a fifth each year for five years
+    const preConst = R(N(p.preConst) / 5), interest = R(sum(p.loans, (l) => l.interest)) + preConst;
+    const x = { i, kind, share, preConst, rent: 0, unrealised: 0, muniTax: 0, ded: 0, av: 0, own: 0, std30: 0, interest, interestAllowed: 0, arrears: 0, income: 0, loans: p.loans || [], addr: p.addr || null, coOwners: p.coOwners || [], tenants: p.tenants || [] };
     if (kind === "S" && ctx && ctx.entity && ctx.entity !== "P" && ctx.entity !== "H") out.needs.push({ key: "hp_sop_entity_" + i, text: "House " + (i + 1) + ": only an individual or HUF has a self-occupied house; a firm's or company's house is let out or deemed let out." });
     if (kind === "S") {
       sops++;
-      // 24(b) second proviso: the self-occupied houses' interest together at most Rs 2 lakh (Rs 30,000 for an old loan)
-      if (sopLeft == null) sopLeft = p.oldLoan ? HP_LAW.sopCapOld : HP_LAW.sopCap;
-      const a = regime === "new" || share === 0 ? 0 : Math.min(interest, sopLeft);
+      // 24(b) second proviso: the self-occupied houses' interest together at most Rs 2 lakh; a house whose loan was taken
+      // before 1-04-1999 (or is for repairs) at most Rs 30,000 of it (first proviso), by that house's own loan
+      if (sopLeft == null) sopLeft = HP_LAW.sopCap;
+      const own = p.oldLoan ? HP_LAW.sopCapOld : HP_LAW.sopCap;
+      const a = regime === "new" || share === 0 ? 0 : Math.min(interest, own, sopLeft);
       if (regime === "new" && interest) out.warn.push({ key: "hp_sop_new", text: "Interest of " + interest + " on a self-occupied house is not allowed in the new regime (115BAC(2))." });
-      else if (a < interest && share) out.warn.push({ key: "hp_sop_cap", text: "Interest on self-occupied houses is allowed up to " + (p.oldLoan ? "Rs 30,000" : "Rs 2 lakh") + " in all (24(b)); " + (interest - a) + " is not allowed." });
+      else if (a < interest && share) out.warn.push({ key: "hp_sop_cap_" + i, text: "House " + (i + 1) + ": interest on a self-occupied house is allowed up to " + (p.oldLoan ? "Rs 30,000 for a loan before 1-04-1999" : "Rs 2 lakh") + (own > sopLeft ? " (Rs 2 lakh for all self-occupied houses together)" : "") + " (24(b)); " + (interest - a) + " is not allowed." });
       if (regime !== "new") sopLeft -= a;
       x.interestAllowed = a;
     } else {
@@ -105,14 +120,14 @@ export function houseHead(props, ctx) {
 export const CII = { 2001: 100, 2002: 105, 2003: 109, 2004: 113, 2005: 117, 2006: 122, 2007: 129, 2008: 137, 2009: 148, 2010: 167, 2011: 184, 2012: 200, 2013: 220, 2014: 240,
   2015: 254, 2016: 264, 2017: 272, 2018: 280, 2019: 289, 2020: 301, 2021: 317, 2022: 331, 2023: 348, 2024: 363, 2025: 376 };
 export const CG_LAW = {
-  rates: { s111A: 0.2, s112A: 0.125, s112: 0.125, idx: 0.2 }, exempt112A: 125000, cut: "20240723", gf: "20180201", y2001: "20010401", sdvTol: 1.1, s54EC: 5000000, s54cap: 100000000,
+  rates: { s111A: 0.2, s112A: 0.125, s112: 0.125, idx: 0.2 }, exempt112A: 125000, fyStart: "20250401", fyEnd: "20260331", cut: "20240723", gf: "20180201", y2001: "20010401", sdvTol: 1.1, s54EC: 5000000, s54cap: 100000000,
   dates: ["20250615", "20250915", "20251215", "20260315", "20260331"],
   src: "Sections 2(42A) (long-term: more than 12 months for listed securities and equity fund units, 24 months for the rest, transfers from 23-07-2024), 45, 48 (no indexation from 23-07-2024), 49, 50AA (specified mutual funds, market-linked and unlisted debentures: short-term), 50C (stamp duty value above 110%), 50CA, 55(2)(ac) (cost of equity bought before 1-02-2018: FMV on 31-01-2018), 55(2)(b) (FMV on 1-04-2001), 46A and 2(22)(f) (buy-back from 1-10-2024: the money is dividend, the cost a capital loss), 54 / 54B / 54EC (Rs 50 lakh) / 54F (Rs 10 crore), 70(2)-(3), 74, 111A (20%), 112 (12.5%; proviso to 112(1)(a): for land or building bought before 23-07-2024 by a resident individual or HUF, the tax above 20% with indexation is ignored), 112A (12.5% above Rs 1.25 lakh)",
 };
 const LISTED12 = ["eq", "eqNoStt", "bond", "zcb"];
 export const CG_KINDS = [["eq", "Listed equity share / equity fund unit (STT paid)"], ["eqNoStt", "Listed share without STT"], ["bond", "Listed bond or debenture"], ["unlisted", "Unlisted share"],
   ["land", "Land or building"], ["mfDebt", "Other mutual fund unit (bought before 1-04-2023)"], ["mf50AA", "Specified mutual fund / market-linked or unlisted debenture (50AA)"], ["other", "Other asset (gold, art ...)"], ["buyback", "Shares bought back by the company"]];
-const fyOf = (d) => { const y = +String(d).slice(0, 4), m = +String(d).slice(4, 6); return m >= 4 ? y : y - 1; };
+export const fyOf = (d) => { const y = +String(d).slice(0, 4), m = +String(d).slice(4, 6); return m >= 4 ? y : y - 1; };
 function addMonths(d, k) {
   let y = +String(d).slice(0, 4), m = +String(d).slice(4, 6) + k; const day = +String(d).slice(6, 8);
   y += Math.floor((m - 1) / 12); m = ((m - 1) % 12) + 1;
@@ -126,42 +141,90 @@ export function longTerm(kind, acq, sale, r) {
   return String(sale) > addMonths(acq, months);
 }
 const ST = ["stApp", "s111A"], LT = ["s112", "s112A"];
-function rowGain(r, ctx, warn) {
-  const kind = r.kind || "other", acq = String(r.acq || ""), sale = String(r.sale || ""), lt = longTerm(kind, acq, sale, r);
+const IND = (ctx) => ctx.entity === "P" || ctx.entity === "H";
+// the 54-series on one basis of the gain (without indexation, and with it for the proviso to 112(1)(a)): each claim's
+// own rule, together at most the gain. c: the claims as allowed for this row (allowedClaims)
+function exemptOn(G, claims, netCons) {
+  let left = pos(G), tot = 0;
+  claims.forEach((c) => {
+    let a = 0;
+    if (c.sec === "54" || c.sec === "54B") a = Math.min(pos(G), c.cost);                                 // 54(1), 54B(1): the lower of the gain and the new asset's cost
+    else if (c.sec === "54F") a = netCons > 0 ? (c.cost >= netCons ? pos(G) : pos(G) * c.cost / netCons) : 0;  // 54F(1)(b): gain x cost / net consideration
+    else a = Math.min(pos(G), c.amt);                                                                    // 54EC (as allowed this year), 54D, 54G, 54GA ...
+    a = R(Math.min(a, left)); left -= a; tot += a;
+  });
+  return tot;
+}
+// which claims the law lets this row have: 54 a residential house sold; 54B agricultural land; 54EC land or building
+// (first proviso to 54EC(1): Rs 50 lakh in all in a year, ec.left); 54F any long-term asset other than a residential
+// house; 54 / 54B / 54F only for an individual or HUF; the new house's cost at most Rs 10 crore (54(1), 54F(1) provisos)
+function allowedClaims(r, kind, lt, ctx, ec, warn, needs, G) {
+  const who = r.desc || "a sale", out = [];
+  (r.exempt || []).forEach((e, j) => {
+    const sec = String(e.sec || ""), amt = R(e.amt), cost0 = e.cost != null && e.cost !== "" ? R(e.cost) : null;
+    const no = (why) => { warn.push({ key: "cg_ex_" + sec + "_" + r.id + "_" + j, text: "Section " + sec + " " + why + ": left out for " + who + "." }); };
+    if (["54", "54EC", "54F"].includes(sec) && !lt) return no("is for long-term gains only");
+    if (["54", "54B", "54F"].includes(sec) && !IND(ctx)) return no("is for an individual or HUF only");
+    if (sec === "54" && !(kind === "land" && r.residential)) return no("is for the sale of a residential house (mark the sale as a residential house if it is one)");
+    if (sec === "54F" && kind === "land" && r.residential) return no("is for an asset other than a residential house (section 54 is for a house)");
+    if (sec === "54B" && kind !== "land") return no("is for agricultural land");
+    if (sec === "54EC" && kind !== "land") return no("is for land or building only");
+    if (sec === "54EC") {
+      const want = Math.min(amt, pos(G));
+      const a = Math.min(want, ec.left); ec.left -= a;
+      if (a < want) warn.push({ key: "cg_54ec_" + r.id, text: "Section 54EC: at most Rs 50 lakh in all in a year (first proviso to 54EC(1)); " + (want - a) + " for " + who + " is not allowed." });
+      return out.push({ sec, amt: a });
+    }
+    if (sec === "54" || sec === "54F" || sec === "54B") {
+      let cost = cost0 != null ? cost0 : sec === "54F" ? null : amt;
+      if (cost == null) { needs.push({ key: "cg_54f_cost_" + r.id, text: who + ": give the cost of the new house for section 54F (the exemption is the gain x the cost / the net consideration)." }); cost = 0; }
+      if (sec !== "54B" && cost > CG_LAW.s54cap) { warn.push({ key: "cg_54cap_" + r.id, text: "Section " + sec + ": the new house's cost above Rs 10 crore is not counted." }); cost = CG_LAW.s54cap; }
+      return out.push({ sec, cost });
+    }
+    out.push({ sec, amt });
+  });
+  return out;
+}
+function rowGain(r, ctx, warn, needs, ec) {
+  const kind = r.kind || "other", acq = String(r.acq || ""), sale = String(r.sale || ""), lt = longTerm(kind, acq, sale, r), who = r.desc || "A sale";
+  if (!sale) needs.push({ key: "cg_nosale_" + r.id, text: who + ": give the date of sale (it decides the holding period, the rate and the instalment of 234C)." });
+  else if (sale < CG_LAW.fyStart || sale > CG_LAW.fyEnd) needs.push({ key: "cg_saledate_" + r.id, text: who + ": the date of sale must be within 1-04-2025 to 31-03-2026 (the previous year)." });
+  if (acq && sale && acq > sale) needs.push({ key: "cg_acqdate_" + r.id, text: who + ": the date of purchase must be before the sale." });
+  // a buy-back: the money received is dividend (2(22)(f)); nil consideration here, the cost a capital loss (46A)
   const value = kind === "buyback" ? 0 : R(r.value), sdv = R(r.sdv);
   // full value: 50C for land or building (the stamp duty value when above 110% of the consideration), 50CA for unlisted shares
   const fullValue = kind === "land" ? (sdv > CG_LAW.sdvTol * value ? sdv : value) : kind === "unlisted" ? Math.max(value, sdv) : value;
   let cost = R(r.cost);
-  if (acq && acq < CG_LAW.y2001 && r.fmv2001 != null && r.fmv2001 !== "" && kind !== "eq") cost = R(r.fmv2001);
+  // 55(2)(b): an asset held on 1-04-2001, its FMV of that date at the option; for land or building at most its stamp
+  // duty value on that date (proviso)
+  if (acq && acq < CG_LAW.y2001 && r.fmv2001 != null && r.fmv2001 !== "" && kind !== "eq") {
+    cost = R(r.fmv2001);
+    if (kind === "land") {
+      if (r.sdv2001 != null && r.sdv2001 !== "") cost = Math.min(cost, R(r.sdv2001));
+      else needs.push({ key: "cg_sdv2001_" + r.id, text: who + ": give the stamp duty value on 1-04-2001: the FMV of that date is taken at most at it (proviso to 55(2)(b))." });
+    }
+  }
   const stt = kind === "eq" && r.stt !== false;
   let costUsed = cost;
   if (stt && lt && acq && acq < CG_LAW.gf && r.fmv2018 != null && r.fmv2018 !== "" && N(r.fmv2018) > 0) costUsed = Math.max(cost, Math.min(R(r.fmv2018), fullValue));
   const imps = Array.isArray(r.improve) ? r.improve : r.improveCost ? [{ fy: String(fyOf(acq || "20200401")), amt: r.improveCost }] : [];
   // 55(1)(b): improvement before 1-04-2001 is not counted
   const imp = R(sum(imps.filter((x) => +x.fy >= 2001), (x) => x.amt)), exp = R(r.expenses);
-  const gain = fullValue - costUsed - imp - exp;
+  const gain = fullValue - costUsed - imp - exp, netCons = fullValue - exp;
   const bucket = kind === "mf50AA" ? "stApp" : !lt ? (stt ? "s111A" : "stApp") : stt ? "s112A" : "s112";
-  // the 54-series exemptions, at most the gain
-  let ex = 0;
-  (r.exempt || []).forEach((e) => {
-    let a = R(e.amt);
-    if (["54", "54EC", "54F"].includes(e.sec) && !lt) { warn.push({ key: "cg_ex_st_" + r.id, text: "Section " + e.sec + " is for long-term gains only: left out for " + (r.desc || "a sale") + "." }); a = 0; }
-    if (e.sec === "54EC" && a > CG_LAW.s54EC) { warn.push({ key: "cg_54ec_" + r.id, text: "Section 54EC: at most Rs 50 lakh invested in a year; " + a + " cut to it." }); a = CG_LAW.s54EC; }
-    if ((e.sec === "54" || e.sec === "54F") && a > CG_LAW.s54cap) { warn.push({ key: "cg_54cap_" + r.id, text: "Section " + e.sec + ": the new house's cost above Rs 10 crore is not counted; cut." }); a = CG_LAW.s54cap; }
-    ex += a;
-  });
-  const exemptAmt = Math.min(ex, pos(gain)), net = gain - exemptAmt;
-  // the proviso to 112(1)(a): land or building bought before 23-07-2024 by a resident individual or HUF
-  let idxGain = null, excess = 0, idxCost = 0, idxImp = 0;
-  if (kind === "land" && lt && acq && acq < CG_LAW.cut && (ctx.entity === "P" || ctx.entity === "H") && ctx.resident !== false) {
+  const claims = allowedClaims(r, kind, lt, ctx, ec, warn, needs, gain);
+  const exemptAmt = exemptOn(gain, claims, netCons), net = gain - exemptAmt;
+  // the proviso to 112(1)(a): land or building bought before 23-07-2024 by a resident individual or HUF: the gain with
+  // indexation (CII of the year of sale / of the year of purchase, 2001-02 at the earliest) and the exemptions on it
+  let idxGain = null, idxNet = null, idxCost = 0, idxImp = 0;
+  if (kind === "land" && lt && acq && acq < CG_LAW.cut && IND(ctx) && ctx.resident !== false) {
     const cs = CII[fyOf(sale)], ca = CII[Math.max(2001, fyOf(acq))];
     idxCost = R(cost * cs / ca);
     idxImp = R(sum(imps.filter((x) => +x.fy >= 2001), (x) => R(N(x.amt) * cs / CII[Math.min(2025, +x.fy)])));
     idxGain = fullValue - idxCost - idxImp - exp;
-    const idxNet = idxGain - Math.min(ex, pos(idxGain));
-    excess = Math.max(0, R(pos(net) * CG_LAW.rates.s112) - R(pos(idxNet) * CG_LAW.rates.idx));
+    idxNet = idxGain - exemptOn(idxGain, claims, netCons);
   }
-  return { id: r.id, kind, desc: r.desc || "", acq, sale, lt, value, sdv, fullValue, cost, costUsed, imp, exp, gain, exemptAmt, net, bucket, stt, idxGain, idxCost, idxImp, excess, exempt: r.exempt || [], src: r.src || "entered" };
+  return { id: r.id, kind, desc: r.desc || "", acq, sale, lt, value, sdv, fullValue, cost, costUsed, imp, exp, gain, exemptAmt, net, bucket, stt, idxGain, idxNet, idxCost, idxImp, exempt: r.exempt || [], claims, residential: !!r.residential, src: r.src || "entered" };
 }
 // the head from the rows: set-off within the head (70(2): a short-term loss against any gain; 70(3): a long-term loss
 // against long-term gains only); the long-term loss is set off first, so the short-term loss, which goes further, is
@@ -176,16 +239,21 @@ function bucketsOf(rs) {
   Object.keys(b).forEach((k) => { b[k] = R(pos(b[k])); });
   return { b, off, cfStcl, cfLtcl };
 }
-// rows: [{id, kind, desc, acq, sale, value, sdv, cost, improve: [{fy, amt}], expenses, fmv2018, fmv2001, stt, listed, exempt: [{sec, amt}], buyers, addr, isin, qty, inBooks}]
+// the gains taxed under 112 before any set-off, row by row, for the proviso to 112(1)(a) (tax.js tax112): the gain
+// without indexation and, for a property the proviso covers, with it
+const poolOf = (rs) => rs.filter((x) => x.bucket === "s112" && x.net > 0).map((x) => ({ id: x.id, gain: R(x.net), idx: x.idxNet == null ? null : R(x.idxNet), elig: x.idxNet != null }));
+// rows: [{id, kind, desc, acq, sale, value, sdv, cost, improve: [{fy, amt}], expenses, fmv2018, fmv2001, sdv2001, stt, listed, residential, exempt: [{sec, amt, cost, date}], buyers, addr, isin, qty, inBooks}]
 // ctx: {entity, resident}
 export function capitalGains(rows, ctx) {
   ctx = ctx || {};
-  const warn = [], rs = (rows || []).map((r, i) => rowGain(Object.assign({ id: r.id || "cg" + i }, r), ctx, warn));
-  const k = bucketsOf(rs), relief = R(sum(rs.filter((x) => x.bucket === "s112"), (x) => x.excess));
+  const warn = [], needs = [], ec = { left: CG_LAW.s54EC };
+  const rs = (rows || []).map((r, i) => rowGain(Object.assign({ id: r.id || "cg" + i }, r), ctx, warn, needs, ec));
+  const k = bucketsOf(rs);
   // what had accrued by each instalment date of 234C (the proviso to 234C: a capital gain is not an earlier shortfall)
-  const at = {}, run = { stApp: 0, s111A: 0, s112: 0, s112A: 0 };
-  CG_LAW.dates.forEach((d) => { const q = bucketsOf(rs.filter((x) => x.sale && x.sale <= d)).b; const o = {}; Object.keys(run).forEach((key) => { run[key] = Math.min(k.b[key], Math.max(run[key], q[key])); o[key] = run[key]; }); at[d] = o; });
-  const reliefAt = {}; CG_LAW.dates.forEach((d) => { reliefAt[d] = R(sum(rs.filter((x) => x.bucket === "s112" && x.sale && x.sale <= d), (x) => x.excess)); });
+  const at = {}, poolAt = {}, run = { stApp: 0, s111A: 0, s112: 0, s112A: 0 };
+  CG_LAW.dates.forEach((d) => { const upto = rs.filter((x) => x.sale && x.sale <= d), q = bucketsOf(upto).b; const o = {}; Object.keys(run).forEach((key) => { run[key] = Math.min(k.b[key], Math.max(run[key], q[key])); o[key] = run[key]; }); at[d] = o; poolAt[d] = poolOf(upto); });
   rs.forEach((x) => { if (x.kind === "eq" && x.lt && x.acq < CG_LAW.gf && !(N((rows.find((r) => (r.id || "") === x.id) || {}).fmv2018) > 0)) warn.push({ key: "cg_fmv_" + x.id, text: (x.desc || "An equity sale") + ": bought before 1-02-2018, the FMV on 31-01-2018 is not given (55(2)(ac)); the cost is taken as it is." }); });
-  return Object.assign({ rows: rs, setoff: k.off, cfStcl: k.cfStcl, cfLtcl: k.cfLtcl, relief112: relief, at, reliefAt, warn, src: CG_LAW.src }, k.b, { total: k.b.stApp + k.b.s111A + k.b.s112 + k.b.s112A });
+  // a buy-back from 1-10-2024: the whole amount received is dividend (2(22)(f)), income from other sources
+  const buybackDividend = R(sum((rows || []).filter((r) => r.kind === "buyback" && String(r.sale || "") >= "20241001"), (r) => r.value));
+  return Object.assign({ rows: rs, setoff: k.off, cfStcl: k.cfStcl, cfLtcl: k.cfLtcl, pool112: poolOf(rs), at, poolAt, buybackDividend, warn, needs, src: CG_LAW.src }, k.b, { total: k.b.stApp + k.b.s111A + k.b.s112 + k.b.s112A });
 }

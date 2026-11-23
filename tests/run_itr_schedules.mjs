@@ -93,18 +93,18 @@ eq(by("a").gain, 140000, "112A gain");
 eq(by("c").fullValue, 6000000, "50C: stamp duty value within 110% of the consideration, the consideration stands");
 eq(by("c").gain, 3400000, "land: gain without indexation (48 as amended)");
 eq(by("c").idxGain, 656849, "land: gain with indexation (CII 376 / 167 and 376 / 254)");
-eq(by("c").excess, 293630, "proviso to 112(1)(a): 12.5% (4,25,000) exceeds 20% with indexation (1,31,370) by 2,93,630, ignored");
+eq(by("c").idxNet, 656849, "land: the indexed gain after exemptions (none here), for the proviso");
 eq(g.s111A, 60000, "111A: 60,000");
 eq(g.stApp, 40000, "short-term at the normal rates (50AA)");
 eq(g.s112A, 140000, "112A: 1,40,000");
 eq(g.s112, 3350000, "112: 34,00,000 less the long-term loss 50,000 (70(3))");
-eq(g.relief112, 293630, "the proviso's excess");
+ok(g.pool112.length === 1 && g.pool112[0].gain === 3400000 && g.pool112[0].idx === 656849 && g.pool112[0].elig, "the 112 pool before set-off: the plot, 34,00,000 and indexed 6,56,849 (the proviso is worked on what is chargeable, tax.js)");
 const g50 = capitalGains([{ id: "x", kind: "land", acq: "20150101", sale: "20250701", value: 5000000, sdv: 5600000, cost: 4000000 }], { entity: "P", resident: true });
 eq(g50.rows[0].fullValue, 5600000, "50C: stamp duty value above 110% taken as the full value");
 const gNr = capitalGains([rows[2]], { entity: "P", resident: false });
-eq(gNr.relief112, 0, "no indexation option for a non-resident (rule 445)");
+eq(gNr.pool112[0].elig, false, "no indexation option for a non-resident (rule 445)");
 const gCo = capitalGains([rows[2]], { entity: "C", resident: true });
-eq(gCo.relief112, 0, "no indexation option for a company");
+eq(gCo.pool112[0].elig, false, "no indexation option for a company");
 const gl = capitalGains([{ id: "l1", kind: "eq", acq: "20250401", sale: "20250901", value: 100000, cost: 180000 }, { id: "l2", kind: "eq", acq: "20200101", sale: "20250901", value: 500000, cost: 300000 }, { id: "l3", kind: "other", acq: "20190101", sale: "20251001", value: 100000, cost: 400000 }], { entity: "P", resident: true });
 eq(gl.s111A, 0, "short-term loss 80,000 ...");
 eq(gl.s112A, 0, "... and long-term loss 3,00,000 against 112A gain 2,00,000 (70(3)): the long-term loss first");
@@ -114,7 +114,9 @@ const bb = capitalGains([{ id: "bb", kind: "buyback", listed: true, acq: "202301
 eq(bb.cfLtcl, 120000, "buy-back after 1-10-2024: the cost is a capital loss (46A, 2(22)(f)); the money is dividend");
 const ex = capitalGains([Object.assign({}, rows[2], { exempt: [{ sec: "54EC", amt: 6000000 }] })], { entity: "P", resident: true });
 eq(ex.rows[0].exemptAmt, 3400000, "an exemption at most the gain");
-ok(ex.warn.some((w) => /54EC/.test(w.text)), "54EC above Rs 50 lakh is said");
+const ex2 = capitalGains([Object.assign({}, rows[2], { value: 11000000, sdv: 0, exempt: [{ sec: "54EC", amt: 6000000 }] })], { entity: "P", resident: true });
+eq(ex2.rows[0].exemptAmt, 5000000, "54EC: gain 79,00,000, 60 lakh invested: at most 50 lakh (first proviso to 54EC(1))");
+ok(ex2.warn.some((w) => /54EC/.test(w.text)), "54EC above Rs 50 lakh is said");
 eq(g.at["20250615"].s112A, 0, "234C: 112A gain on 20-06-2025 accrues after 15-06");
 eq(g.at["20250915"].s111A, 60000, "234C: 111A gain by 15-09");
 eq(g.at["20251215"].s112, 3350000, "234C: the plot's gain by 15-12");
@@ -163,8 +165,13 @@ eq(cg3.ShortTermCapGainFor23.EquityMFonSTT[0].EquityMFonSTTDtls.CapgainonAssets,
 eq(cg3.LongTermCapGain23.SaleOfEquityShareUs112A.CapgainonAssets, 140000, "Schedule CG: 112A");
 eq(d.Schedule112A.Balance112A, 140000, "Schedule 112A: the balance");
 eq(d.Schedule112A.Schedule112ADtls[0].CostAcqWithoutIndx, 160000, "Schedule 112A: cost under 55(2)(ac)");
-eq(cg3.LongTermCapGain23.SaleofLandBuild.SaleofLandBuildDtls[0].ExcessAmtSec1121a, 293630, "Schedule CG: the proviso's excess for the plot");
-eq(cg3.LongTermCapGain23.SaleofLandBuild.TotalExcessTax, 293630, "Schedule CG: total excess");
+// the proviso on what is chargeable: the unlisted long-term loss of 50,000 is set off against the plot (within the
+// head, against the covered property first): 33,50,000 and indexed 6,06,849; 12.5% = 4,18,750, 20% = 1,21,370
+const land3 = cg3.LongTermCapGain23.SaleofLandBuild.SaleofLandBuildDtls[0];
+eq(land3.TaxSec1121a, 418750, "Schedule CG: 12.5% of the plot's chargeable gain");
+eq(land3.TaxSec1121aiiB, 121370, "Schedule CG: 20% of its chargeable indexed gain");
+eq(land3.ExcessAmtSec1121a, 297380, "Schedule CG: the proviso's excess for the plot");
+eq(cg3.LongTermCapGain23.SaleofLandBuild.TotalExcessTax, 297380, "Schedule CG: total excess");
 eq(cg3.SumOfCGIncm, c.heads.cg, "Schedule CG: sum of capital gains is the head (" + c.heads.cg + ")");
 eq(c.heads.cg, 60000 + 40000 + 140000 + 3350000, "the head: 111A + normal + 112A + 112");
 const si = d.ScheduleSI.SplCodeRateTax, si112 = si.find((x) => x.SecCode === "22"), si1A = si.find((x) => x.SecCode === "1A");
@@ -173,8 +180,7 @@ eq(d["PartB-TI"].CapGain.TotalCapGains, c.heads.cg, "Part B-TI: capital gains");
 eq(d.PartB_TTI.ComputationOfTaxLiability.TaxPayableOnTI.TaxAtSpecialRates, c.tax.specialTax, "Part B-TTI: tax at special rates is the computation's");
 ok(!R3.json.coverage.some((x) => ["hp", "salary", "cg"].includes(x.key)), "ITR-3: Schedules S, HP and CG no longer block the JSON");
 // the 112 proviso reaches the tax: 12.5% on the plot less the excess
-const t112 = Math.round(3350000 * 0.125);
-ok(c.tax.parts.t112 === t112 - 293630 || c.tax.parts.t112 < t112, "the proviso's excess comes off the 112 tax (" + c.tax.parts.t112 + ")");
+eq(c.tax.parts.t112, 121370, "the 112 tax is the lower: 1,21,370");
 
 // new regime: the house property loss is not set off (115BAC(2)) and is carried forward (71B)
 R3 = await run("ITR-3", { regime: "new", houses: [Object.assign({}, let1, { rent: 120000, muniTax: 0, loans: [Object.assign({}, let1.loans[0], { interest: 300000 })] })] }, "new regime, a house property loss");
@@ -261,7 +267,7 @@ eq(R4.doc.IncomeDeductions.PropertyDetails[0].Rentdetails.IncomeOfHP, 93600, "IT
 const R5 = await run("ITR-5", { houses: [Object.assign({}, let1, { kind: "L" })], cgRows: [rows[1], rows[2], rows[4]] }, "a firm: house property, capital gains");
 eq(R5.doc.ScheduleHP.TotalIncomeChargeableUnHP, 93600, "ITR-5: Schedule HP");
 eq(R5.comp.heads.c112, 3350000, "ITR-5: a firm's land at 12.5% without indexation, the unlisted loss set off");
-eq(R5.comp.cgRelief || 0, 0, "ITR-5: no proviso for a firm");
+ok(R5.comp.tax.relief112 === 0 && !(R5.comp.tax.p112 && R5.comp.tax.p112.rows.length) && R5.comp.tax.parts.t112 === Math.round(R5.comp.after.c112 * 0.125), "ITR-5: no proviso for a firm: 12.5% of the 112 income (" + R5.comp.tax.parts.t112 + ")");
 eq(R5.doc.ScheduleCG.SumOfCGIncm, R5.comp.heads.cg, "ITR-5: Schedule CG");
 
 // ITR-6: SH, AL, Ind AS
@@ -289,22 +295,27 @@ ok(R6.doc.ScheduleAL && R6.doc.ScheduleAL.AsstLiabilitiesUnlistedCompany.ALUnlis
 // random returns through both computations
 console.log("Random returns through both computations");
 let agree = 0;
-const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+let seed = 7202526; const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+const rnd = (a, b) => a + Math.floor(rand() * (b - a + 1));
+let firstBad = null;
 const kinds = ["eq", "eq", "land", "unlisted", "mf50AA", "other", "bond", "buyback"];
 const D3 = await demo("ITR-3"), files3 = Object.entries(D3.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v));
 for (let i = 0; i < 300; i++) {
   const cgr = Array.from({ length: rnd(0, 4) }, (_, j) => { const k = kinds[rnd(0, kinds.length - 1)], y = rnd(2000, 2025), m = rnd(1, 12); const acq = String(y) + String(m).padStart(2, "0") + "15";
     const sale = "2025" + String(rnd(4, 12)).padStart(2, "0") + String(rnd(1, 28)).padStart(2, "0");
-    return { id: "r" + j, kind: k, listed: true, acq: acq > sale ? "20200101" : acq, sale, value: k === "buyback" ? 0 : rnd(0, 9000000), cost: rnd(0, 6000000), sdv: k === "land" ? rnd(0, 9000000) : 0, fmv2018: rnd(0, 3) ? rnd(0, 5000000) : 0, expenses: rnd(0, 50000), improve: k === "land" && rnd(0, 1) ? [{ fy: String(rnd(2001, 2024)), amt: rnd(0, 900000) }] : [] }; });
-  const hs = Array.from({ length: rnd(0, 3) }, () => ({ kind: ["L", "S", "D"][rnd(0, 2)], share: [100, 50][rnd(0, 1)], rent: rnd(0, 900000), muniTax: rnd(0, 30000), unrealised: rnd(0, 1) ? rnd(0, 50000) : 0, arrears: rnd(0, 3) ? 0 : rnd(0, 100000), loans: rnd(0, 1) ? [{ bank: "B", account: "1", date: "20200101", total: 1, outstanding: 1, interest: rnd(0, 400000) }] : [] }));
+    return { id: "r" + j, kind: k, listed: true, acq: acq > sale ? "20200101" : acq, sale, value: rnd(0, 9000000), cost: rnd(0, 6000000), sdv: k === "land" ? rnd(0, 9000000) : 0, fmv2018: rnd(0, 3) ? rnd(0, 5000000) : 0, expenses: rnd(0, 50000), improve: k === "land" && rnd(0, 1) ? [{ fy: String(rnd(2001, 2024)), amt: rnd(0, 900000) }] : [],
+      residential: k === "land" && !!rnd(0, 1), fmv2001: rnd(0, 2) ? undefined : rnd(0, 3000000), sdv2001: rnd(0, 1) ? rnd(0, 3000000) : undefined,
+      exempt: rnd(0, 2) ? [] : [{ sec: ["54", "54EC", "54F", "54B"][rnd(0, 3)], amt: rnd(0, 6000000), cost: rnd(0, 1) ? rnd(0, 9000000) : undefined }] }; });
+  const hs = Array.from({ length: rnd(0, 3) }, () => ({ kind: ["L", "S", "D"][rnd(0, 2)], share: [100, 50][rnd(0, 1)], rent: rnd(0, 900000), muniTax: rnd(0, 30000), unrealised: rnd(0, 1) ? rnd(0, 50000) : 0, arrears: rnd(0, 3) ? 0 : rnd(0, 100000), loans: rnd(0, 1) ? [{ bank: "B", account: "1", date: "20200101", total: 1, outstanding: 1, interest: rnd(0, 400000) }] : [], oldLoan: !rnd(0, 3), preConst: rnd(0, 3) ? 0 : rnd(0, 300000) }));
   const sal = rnd(0, 1) ? [{ employer: "E", nature: ["OTH", "CGOV"][rnd(0, 1)], s171: rnd(0, 3000000), s172: rnd(0, 200000), s173: rnd(0, 100000), basicDa: rnd(0, 1500000), ptax: rnd(0, 2500), ent: rnd(0, 6000), exempt: [{ sec: ["10(5)", "10(10)", "10(10AA)", "10(13A)"][rnd(0, 3)], amt: rnd(0, 400000) }], hra: rnd(0, 1) ? { metro: !!rnd(0, 1), received: rnd(0, 300000), rent: rnd(0, 400000) } : null }] : [];
   const stR = Object.assign({}, D3.booksObj.itr["2026|state"], { regime: ["new", "old"][rnd(0, 1)], form10iea: "X", cgRows: cgr, houses: hs, salaries: sal, filingDate: ["20260720", "20261125", "20260301"][rnd(0, 2)], resident: rnd(0, 5) > 0 });
   const m = buildModel({ entity: "P", client: D3.client, imports: importsOf(files3), books: D3.books, state: stR });
   if (rnd(0, 2) === 0) m.business = Object.assign({}, m.business, { pbt: rnd(-3000000, 3000000) });
+  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000) }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000) }] };
   const dd2 = differences(compute(m).key, check(m));
-  if (!dd2.length) agree++; else if (agree + 1 === i) console.log("    differ: " + JSON.stringify(dd2.slice(0, 3)));
+  if (!dd2.length) agree++; else if (!firstBad) firstBad = { i, dd: dd2.slice(0, 4), cgr, hs, sal, regime: stR.regime, losses: m.losses };
 }
-eq(agree, 300, "300 random returns with salary, houses and capital gains: both computations agree on every figure");
+eq(agree, 300, "300 random returns with salary, houses and capital gains: both computations agree on every figure" + (firstBad ? ": the first that differs: " + JSON.stringify(firstBad) : ""));
 
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);
