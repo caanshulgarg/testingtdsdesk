@@ -1,0 +1,100 @@
+# FinCom Books, phase 1: what is built (branch next-books-p1)
+
+**Status:** built and tested on made-up books, **not applied or deployed anywhere**. The plan is
+`docs/FULL-BOOKS-PLAN.md`. The owner's answers of 23-Nov-2026 are applied as listed below. The branch starts from
+`staging-next` @ b64a6d398, with `next-full-books` merged in.
+
+**What the owner gets:** each client has one set of books in FinCom, called FinCom Books, so anything about the client
+can be fetched from FinCom alone. In phase 1 the books are a complete mirror of the client's Tally (or Zoho) company,
+copied from FinCom's cloud copy and checked every night. The new page **Books › FinCom Books** shows the books. It is
+read-only and has three tabs: trial balance, any ledger, and the day book. When the books do not match Tally, the page
+shows a "Not in step" banner. The banner only warns: nothing is blocked.
+
+## 1. The pieces
+
+| Piece | Where | What it does |
+|---|---|---|
+| The store | `server/fincom-books/migration-220-fincom-books.sql` (draft) | The 29 `fb_*` tables of plan section 2. Groups are seeded with Tally's 28 reserved groups and Schedule III codes (Division I). Lines are kept per version: a change makes a new version, and the old lines stay. Nothing is ever deleted. RLS works by firm, and by book once a book names its people (`fb_grants`). Nobody may write a table directly, `service_role` included: every write goes through the functions. |
+| The edit log | same file | `fb_audit_log` is written by AFTER triggers on every books table and chained by SHA-256 per book. UPDATE, DELETE and TRUNCATE are refused for every role, a superuser included, unless that superuser first switches the guard off. The nightly self-check (`fb_selfcheck`) checks that every trigger is on, verifies the whole chain, and checks that every voucher version has its log rows. If any check fails, the book turns read-only and the page says why. Each day's last hash is kept in `fb_audit_anchors`. |
+| D3 | same file, `fb_vouchers_guard` | A posted own-books voucher can change only as a new version, with a reason. The version before is kept whole in `fb_voucher_versions`, and the reason goes into the edit log. Cancelling also needs a reason. |
+| Commit rules | same file, constraint triggers deferred to COMMIT | These run even for a superuser's direct insert: Dr = Cr to the paisa; at least two lines unless the voucher is a memo; and, for own entries, cost-centre parts and bill references must add up to their line. |
+| The mirror builder | same file: `fb_land_*` triggers, `fb_flush`, `fb_mirror_*` | Six landing tables get new **statement** triggers: `tally_vouchers`, `tally_lines`, `tally_bills`, `tally_cost_allocs`, `tally_ledgers` and `tally_groups`. A constraint trigger deferred to COMMIT then rebuilds the touched vouchers and masters in the **same transaction**. **No existing function of the Tally path is replaced**, and only books the owner enrolled are mirrored. A failure inside the mirror never fails the copy's write: it is logged in `fb_mirror_errors`, the book turns "Not in step", and the 10-minute catch-up applies the change later. |
+| Building a book | `fb_enroll` (owner), `fb_mirror_catchup` (cron) | The book is mirrored from the start of the previous financial year (D20). Older entries are carried into the openings exactly: Tally's opening plus every older entry. Small books are built at once, and bigger ones by the catch-up in chunks of up to 5,000 entries. |
+| The tie-out | `fb_tieout`, `fb_tieout_all` (nightly), `fb_tieout_ask` (on request, D21) | Compares FinCom Books with the copy: ledger by day, entries by type and month, openings, any opening difference, held entries and mirror errors. It also compares with Tally's own group closings once they are read (see section 3). Every difference is named. The words name the group that differs ("Sundry Debtors differs by ₹4,200.00"), and "since" is kept from the first time a difference was seen. |
+| D18 | `fb_filing_warning` | Gives `{warn, block: false, words}` for a client and period. It never blocks a filing. |
+| D7 | `fb_opening_signoff` | A difference in opening balances keeps the book "Not in step" until the owner accepts that exact amount, with a reason, per book. The reason is kept on the book and in the edit log. |
+| D19 | status `sent` | An entry FinCom sent to Tally that has not come back yet is left out of every total and the tie-out, and is listed with its count. It is written from P3 onwards. |
+| The readers | `fb_status`, `fb_tb`, `fb_ledgers`, `fb_ledger`, `fb_daybook`, `fb_audit_verify` | Members of the firm, under RLS. Every figure is recomputed from the entries each time. |
+| Timers | `server/fincom-books/migration-220-cron.sql` (draft) | Catch-up every 10 minutes; tie-out at 02:17 IST; self-check at 02:43 IST. These are database jobs only: no edge function, and nothing is asked of Tally. |
+| The page | `app/src/screens/fbooks/FinComBooks.jsx` + `fbooks.css` (its own lazy chunk), with the sidebar entry and books tab `books:fb` | Status banner, trial balance (primary groups with their Schedule III line, which open into ledgers), ledger (running balance; for a party ledger, its pending bills and ageing from the ported rules) and day book (each entry with its status; the totals count posted entries only). On a client without FinCom Books, the owner gets a "Set up FinCom Books" button. |
+| Ported rules | `app/src/lib/fbooks/rules.js`, `THIRD_PARTY_NOTICES.md` | Independent Books' amount parsing, GST half-split, blank state = IGST, and bill-wise rules (New / Against / Advance / On Account, stable ids, over-allocation, wrong party, opposite side, ambiguous names, the residual, ageing boundaries). They are rewritten for whole paise, a debit positive and the invoice's place of supply. |
+
+**Sign.** In `fb_*` a debit is positive and a credit negative (plan section 2). The copy keeps Tally's own sign, where a
+credit is positive, as `tally_calc_bal` states. The mirror therefore negates every amount and opening. The tests prove
+every ledger equals the copy with the sign turned.
+
+## 2. Tests (made-up books only)
+
+| Test | What |
+|---|---|
+| `tests/run_migration220.py` | 70 checks on pg_stand. They cover the guard and a second run; grants (no direct writes for anyone); enroll; masters; D20 openings; the mirror equal to the copy; the same-transaction cases (commit, rollback, version 2, deletion, back in Tally, rename/merge, an older-year change moving the openings, a mirror failure that does not fail the copy's write); the commit rules; the edit log (every role refused, a tampered row named by its seq, a disabled trigger making the book read-only); D3; the tie-out with D18, D7, the TODO hook and D19; RLS; and the readers. `FB_BIG=20000`: 20,000 entries mirrored in 49 s, and the tie-out takes 0.4 s. |
+| `tests/run_fbooks_rules.mjs` | 55 checks: the ported Independent Books cases, each naming the original test. |
+| `tests/run_fbooks_ui.py` | The page in the built app, end to end against the real SQL. Each call the page makes runs in a throwaway Postgres as the owner. Covers the banner, trial balance, ledger and bills, day book, Check now, set-up, phone width and the lazy chunk. `FB_SHOTS=dir` saves the screenshots. |
+| `tests/fbooks_fixture.mjs` | The made-up books: GST sales and purchases, bill-wise, cost centres, an optional entry, a cancelled one, one off by a paisa, and one with no lines. |
+
+## 3. The new Tally reads: TODO hooks only (D16)
+
+The owner said yes to new Tally reads, but each exact request is shown to him first. Another worker drafts them for
+bridge 2.5.19. **This branch adds no bridge request and changes no bridge file.** P1 runs on what the copy holds
+today. Each future read has a marked place to land:
+
+| Read (plan section 3.4) | Hook here | Until then |
+|---|---|---|
+| Primary-group closing balances, for the tie-out against Tally | `fb_source_figures` + `fb_source_figures_put(book, 'group_closing', as_on, {group: closing})` (service role). `fb_tieout` compares as soon as figures are there; this is tested with made-up figures | The tie-out compares against the copy only. The page says "Tally's own trial balance is not read yet". |
+| Voucher-type masters | `fb_vtype_base` / `fb_vtypes.mirror_note` | A type the user made ("Sales – Delhi") has base `unknown`. Tally's own type names map exactly. |
+| Cost-centre and category masters | `fb_cc_id` (`mirror_note`) | Centres are named from the entries' allocations, under "Primary Cost Category" when none is given. |
+| Opening bill-wise | `fb_bill_refs` (new references at the window's start) | Parties' openings are not bill by bill. The page's pending bills say the difference is the opening. |
+| Post-dated flag | a `memo`-style status, out of the totals | Not distinguished. If one exists, the tie-out shows it as a difference. |
+| Registrations (multi-GSTIN) | `fb_registrations` | The voucher keeps its GSTIN and place of supply in `gst`. |
+| Missing ledger fields (bill-wise, credit days, MSME, address) | `fb_ledgers` columns are there | Left empty. |
+
+## 4. To apply on staging (the coordinator, after review)
+
+1. **D12, before the first own-books client** (not needed for mirrors): confirm that the Supabase project's region and
+   backups are in India (Companies (Accounts) Rules, rule 3(5) proviso).
+2. `sbq.sh server/fincom-books/migration-220-fincom-books.sql`. It is add-only and safe to run twice; it stops, naming
+   the clash, if a name is already used. It needs the copy's migrations (32, 57, 75).
+3. `sbq.sh server/fincom-books/migration-220-cron.sql`.
+4. Publish the app build with the page. Nothing changes for anyone until the owner presses "Set up FinCom Books" for a
+   client.
+5. Run a 30-day trial per plan A10 on a few staging clients: the tie-out at ₹0.00 every night, and each "Not in step"
+   explained.
+
+No edge function changes. No change to the bridge, legacy.js or any existing report.
+
+## 5. Risks and notes for the reviewer
+
+- **Commit-time cost on the Tally path.** The mirror adds about 2.5 ms per changed entry at COMMIT (20,000 entries in
+  49 s here). A day's ingest of 500 entries adds about 1.2 s to that transaction. This happens only for enrolled books;
+  for any other book the triggers return at once. If staging shows ingest timeouts, the switch is one change: replace
+  the deferred flush with a queue drained by the catch-up. The plan's same-transaction guarantee would then become
+  "within 10 minutes", and the owner decides.
+- **Transition tables.** The statement triggers keep the changed rows of a landing statement in memory while it runs
+  (Postgres's own mechanism).
+- **The whole chain is verified nightly.** This costs O(log rows). Anchors are kept, and copying them outside the
+  database is a later step (plan 2.6 point 4).
+- **A superuser can still switch a trigger off.** The self-check then finds it and the book turns read-only. Tampering
+  is evident; it is not impossible (plan 2.6 point 4).
+- **Mirror figures are the source's.** An entry whose Dr and Cr differ in the copy is kept as **held**: shown, never
+  added, and named by the tie-out. Nothing is "fixed".
+- **`fb_filing_warning` is ready but not yet shown on the GST and TDS filing pages.** Showing it there is part of the
+  report switch (`docs/FINCOM-BOOKS-REPORT-SWITCH.md`, step 0), because the filing pages are legacy code with almost no
+  size budget left.
+
+## 6. Open questions for the owner
+
+1. **Same-transaction vs queued mirror.** Is about 1 s more on a big day's ingest acceptable? Or should the mirror
+   follow within 10 minutes instead (section 5)?
+2. **Bridge 2.5.19's reads (D16).** Once you approve each request, the group-closing read plugs into
+   `fb_source_figures_put` with no further SQL.
+3. **Who may set up FinCom Books for a client.** Today it is the firm's owner only. Should staff be allowed too?
