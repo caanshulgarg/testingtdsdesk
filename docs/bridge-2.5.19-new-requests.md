@@ -1,6 +1,9 @@
 # FinCom Bridge 2.5.19 and after: new Tally requests for the owner to approve
 
-**Status: DRAFT for the owner. Nothing in this paper has been built, added to the allow-list or sent to any Tally.**
+**Status (23-Nov-2026): B1, C1 to C8 and E are BUILT on branch `next-bridge-2519` as the owner decided below, each on the
+allow-list as "NOT yet measured". Nothing has been sent to any real Tally yet, and nothing is released until each request
+is timed on ZZ BIG TEST (the list at the end of this paper).** (The paper as first drafted, for the record:
+DRAFT for the owner; nothing in it built, added to the allow-list or sent to any Tally.)
 Each request below goes into the bridge only after the owner says yes to that exact request, and only after it has been
 timed on the ZZ BIG TEST company under the 2-second rule. Written 23-Nov-2026 on branch `next-bridge-2519`.
 
@@ -505,3 +508,52 @@ Each will be shown to the owner as exact XML in its own paper before it is built
 
 The 2.5.2 measurement company (4,000 items with godowns and batches) is the test bed. Item counts are larger than
 ledger counts in some trades, so the chunk may be 1,000.
+
+---
+
+## Built (23-Nov-2026, branch `next-bridge-2519`): what the owner still has to check
+
+### Names still "to confirm" (switched off until a person's ZZ TEST export confirms them)
+
+Each switch is a setting, off by default. With it off the request is built without the name (or, for C6 and C8, not
+sent at all). It is turned on only after one made-up master of that kind, exported (Export, XML) from TallyPrime 3.0
+and 7.1 on ZZ TEST, shows exactly these names. A name that differs goes back to the owner as exact XML first.
+
+| Switch | Request | Names to confirm | While off |
+|---|---|---|---|
+| `Confirmed2519VchTypeGst` | C2 FinComVoucherTypes | `GSTREGISTRATION` on a voucher type | asked without it |
+| `Confirmed2519GstRegs` | C6 FinComGstRegistrations | the collection `TaxUnit`; `GSTREGNUMBER`, `STATENAME`, `GSTREGISTRATIONTYPE`, `APPLICABLEFROM`, `ISACTIVE`; an empty list on TallyPrime 2.1 | never sent (the first GSTIN from TDSDeskCompanyInfo, as today) |
+| `Confirmed2519LedgerLists` | C7 the ledger list's fields | `LEDMAILINGDETAILS.LIST` (and inside it ADDRESS, STATE, PINCODE, COUNTRY), `LEDMSMEREGDETAILS.LIST` (MSMEENTERPRISETYPE, UDYAMREGNUMBER) | the ledger requests asked without the two lists |
+| `Confirmed2519GroupClosing` | C8 FinComGroupClosing | `$Parent = ""` picks exactly the primary groups | never sent (no tie-out) |
+
+### The manual ZZ BIG TEST timing list (before release; every request under 2 s worst, aim 1.35 s, Tally's window never held 2 s)
+
+On TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (and NWS144), ZZ BIG TEST as in B.5 and C (20,000 ledgers, 5,000 bill-wise with
+10 opening bills each, 200 voucher types, 2,000 cost centres, 5 GST registrations, 100,021 entries):
+
+1. B1 FinComDayHeadsPart: days of 2,216, 7,601, 12,000, 15,000 and 18,000 entries; bands of 500, 1,000, 2,000 and 5,000
+   rows; t, rows, bytes and window hold for each band; the union of the bands equals F1's list (2,216 and 7,601 days);
+   the highest voucher MasterID is not above AltVchId; a 10-row band against a 5,000-row band (the per-row cost, 0.085 ms
+   an entry expected); typing in Tally while a band is at Tally (window hold under 1 s).
+2. C1 FinComBillOpenings: every chunk of 500 MasterIDs at 5,000 bill-wise parties (estimate 0.15 to 0.4 s); the bills
+   against Tally's own Bills Receivable / Payable at the books' start.
+3. C2 FinComVoucherTypes: the one request at 200 types (estimate under 0.1 s); with `GSTREGISTRATION` once confirmed.
+4. C3 FinComCostCentres: each chunk of 2,000 at 2,000 centres (estimate under 0.15 s).
+5. C4 FinComCostCategories: the one request (estimate under 0.05 s).
+6. C5 ISPOSTDATED: FinComVoucherBatch, a group of 100 entries of the 2,216 and 7,601 days (was 945 / 1,405 ms worst);
+   FinComVoucherObject a 500-employee payroll entry (was 2.2 s worst under its 3 s stop) and an ordinary entry; a made-up
+   post-dated entry reads Yes, an ordinary one No.
+7. C6 FinComGstRegistrations: the one request at 5 registrations (estimate under 0.05 s); on TallyPrime 2.1 an empty list.
+8. C7 FinComLedgers (chunk of 2,000 MasterIDs at 20,000 ledgers with addresses: was 278 ms, estimate about 0.4 s; over 1 s:
+   the chunk becomes 1,000), FinComLedgerChanges (a window of 200 AlterIDs), FinComLedgerByName (one ledger); then again
+   with `LEDMAILINGDETAILS.LIST` and `LEDMSMEREGDETAILS.LIST` once confirmed.
+9. C8 FinComGroupClosing: the one request at 100,021 entries, after the company's other reads (Tally warm) and also as
+   the first request after Tally starts (for the record; the bridge never sends it first); against Tally's Trial Balance
+   at the day, each primary group to the paisa. Over 1 s: one primary group a request instead (shown to the owner first).
+10. E FinComTag (already on the list, never measured): dates of 50, 500, 2,216 and 7,601 entries; every row of the date
+    asked (the plain yyyymmdd period applied on every release; if not, the request must change and comes back to the
+    owner); a made-up entry with its mark found.
+11. Background behaviour: with someone typing in Tally on NWS144 none of B1, C1 to C4, C6 or C8 goes; with Tally left
+    alone 60 s they go one at a time after any posting.
+
+The worst time and date of each go into its row in `docs/tally-allowlist.md` and `bridge-go/allowlist.go` before release.

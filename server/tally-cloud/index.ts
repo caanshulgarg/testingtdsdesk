@@ -181,7 +181,9 @@
 //   outside the computer's office hours with periodNight true (ROUND 103: 20:00-08:00 IST and Sunday by default); the
 //   year's days not counted first, then the part's days FinCom does not hold whole; none while the computer's reading is
 //   paused or stopped); the bridge answers with
-//   {kind:"period_heads", company, company_guid, day, via: day|split, n, heads:[[guid, masterId, alterId, type]]}
+//   {kind:"period_heads", company, company_guid, day, via: day|split|bands, n, heads:[[guid, masterId, alterId, type]]}
+//                                                    (bridge 2.5.19, B1: "bands" is the day's whole list read in MasterID bands
+//                                                    end to end: taken as a whole day, as "day")
 //                                                    -> {ok, n, held, done, want:[masterId]} (tally_period_heads), or
 //   {kind:"period_heads", company, company_guid, day, upload: true, why, type, words} -> {ok}: the day to be uploaded by hand
 //   {kind:"period_entries", company, company_guid, day, vouchers:[the voucher's XML as the entry request kept it], gone, full}
@@ -2448,6 +2450,12 @@ function periodAllowed(devId: string) {
   return true;
 }
 // a day's heads from Tally (its count, by FinComDayHeads), or the day to be uploaded by hand
+// the period_heads list's kind: "split" (partial: one voucher type at a time) or "day" (whole: one go, or bridge 2.5.19's
+// MasterID bands end to end); anything else is taken as a whole day, as before
+function periodHeadsVia(v: unknown): "split" | "day" {
+  return v === "split" ? "split" : "day";
+}
+
 async function periodHeads(book: string, body: any, device = "", bridge = "") {
   const day = String(body?.day || "");
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
@@ -2466,7 +2474,11 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
   // 30-Oct-2026 (migration 133): a day of an upload being checked against Tally: the check's want (entries Tally has that
   // the upload lacks or holds at another AlterID; FinCom's entries Tally no longer lists are removed on a second whole list),
   // with the period's own count kept as well when the day is one of the period chosen
-  const via = body?.via === "split" ? "split" : "day";
+  // bridge 2.5.19 (B1, the owner's approval of 23-Nov-2026): a heavy day read in MasterID bands (FinComDayHeadsPart) comes
+  // as via "bands": the bands cover the day end to end, so it is the day's whole list and closes the day as "day" does;
+  // only "split" (one voucher type at a time) is partial. The database keeps both as "day" (tally_period_heads and
+  // tally_check_heads take anything but "split" as whole: no SQL change)
+  const via = periodHeadsVia(body?.via);
   // next-fast-delete (migration 158): a whole-day list of a day being checked first applies the held deletes it proves (the
   // line's MasterID, number and type name one live entry, whose GUID Tally makes from that MasterID, and the list has
   // neither; the line this computer's bridge's own, in the last 10 minutes, the entry held before it): the entry leaves
