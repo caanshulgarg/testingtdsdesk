@@ -4,7 +4,7 @@
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
 /* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
-import { journals, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK } from "../../../../server/_shared/dailyjournals.js";
+import { journals, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK, payrollSettings } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const CHANGED = "Changed since last night. Run again.";
@@ -13,7 +13,10 @@ const P = (x) => Math.round((Number(x) || 0) * 100);
 const key = (ls) => (ls || []).map((l) => l.ledger + "|" + (P(l.dr) ? "D" + P(l.dr) : "C" + P(l.cr))).sort().join(";");
 // India's date, as the night has it
 export const todayIn = (d = new Date()) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10).replace(/-/g, "");
+// a Tally Payroll month (next-payroll): its totals, its employees' count, the payable ledger and the voucher type
+const tpKey = (v) => [v.kind, v.type, v.party, v.period, v.n, P(v.gross), P(v.net)].concat(["tds", "pt", "pf", "esi", "other"].map((k) => P((v.ded || {})[k]))).join("|");
 export function sameJournal(a, b) {
+  if (a && b && (a.kind === "tallyPayroll" || b.kind === "tallyPayroll")) return d8(a.date) === d8(b.date) && tpKey(a) === tpKey(b);
   return !!a && !!b && a.type === b.type && d8(a.date) === d8(b.date) && key(a.lines) === key(b.lines);
 }
 // the night's input, made from what the app holds for the client (S.books opened from the cloud; the ledgers of the cloud
@@ -31,8 +34,10 @@ export function inputOf(cid, o) {
     ledgers: o.ledgers || [], booksFrom: d8(o.booksFrom || ""), salary: b.salary || [],
     closed: closedTo ? [{ from: "19000101", to: closedTo }] : [],
     gst: typeof GSTR === "object" && typeof GSTF === "object" ? gstMonths({ GSTR, GSTF, GSTSet: typeof GSTSet === "object" ? GSTSet : null }, months) : [],
-    drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed })),
+    drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed, vid: String(d.id), parts: Number(d.parts) || 0 })),
     picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "",
+    // next-payroll: how the client books salary, and Tally's pay heads (the cloud copy's payroll, S.books.payroll)
+    payroll: payrollSettings(co, Object.keys(((b.payroll || {}).heads) || {})),
   };
 }
 // "" when the entry is still exactly what last night made; else why not

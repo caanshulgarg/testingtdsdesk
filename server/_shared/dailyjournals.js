@@ -315,21 +315,45 @@ export function setoffOne(m, inp, others) {
 // ---------------------------------------------------------------- 2. the payroll journal (the salary sheet)
 // The sheet's rows (TDS24Q.fromFile, src/js/17-24q.js): {name, date|month, gross, tds, profTax, surcharge, cess} and, when
 // the sheet has them, net, pf, esi. Each employee: gross = net + TDS + professional tax + PF + ESI, to the paisa.
+// (review: other deductions) an advance recovered, canteen, LWF (r.otherDed, the sheet's own heads) are out of the pay too
 export function payrollPlain(rows) {
-  let g = 0, t = 0, pt = 0, pf = 0, esi = 0, n = 0, bad = "";
+  let g = 0, t = 0, pt = 0, pf = 0, esi = 0, o = 0, n = 0, bad = "";
   for (const r of rows) {
-    const gr = P(r.gross), td = P(r.tds), p = P(r.profTax), f = P(r.pf), e = P(r.esi);
-    const nt = r.net != null && r.net !== "" ? P(r.net) : gr - td - p - f - e;
-    if (gr !== nt + td + p + f + e && !bad) bad = String(r.name || "?");
+    const gr = P(r.gross), td = P(r.tds), p = P(r.profTax), f = P(r.pf), e = P(r.esi), od = P(r.otherDed);
+    const nt = r.net != null && r.net !== "" ? P(r.net) : gr - td - p - f - e - od;
+    if (gr !== nt + td + p + f + e + od && !bad) bad = String(r.name || "?");
     if (nt < 0 && !bad) bad = String(r.name || "?");
-    g += gr; t += td; pt += p; pf += f; esi += e; n += nt;
+    g += gr; t += td; pt += p; pf += f; esi += e; o += od; n += nt;
   }
-  return { gross: R(g), tds: R(t), profTax: R(pt), pf: R(pf), esi: R(esi), net: R(n), bad, adds: g === n + t + pt + pf + esi };
+  return { gross: R(g), tds: R(t), profTax: R(pt), pf: R(pf), esi: R(esi), other: R(o), net: R(n), bad, adds: g === n + t + pt + pf + esi + o };
+}
+// next-payroll: how the client books salary, as kept on the client (Payroll page: co.payrollMethod, co.payrollJournal,
+// co.payrollPayable, co.payrollVchType) and the pay heads Tally's payroll has (tally_ledgers.for_payroll): the night reads
+// them from the client's record, the page's second check from CO() and S.books.payroll (the same object both ways)
+export function payrollSettings(co, heads) {
+  const c = co || {}, m = (c.payrollMethod || {}).value;
+  return { method: m === "tally" || m === "journal" ? m : "", journal: Object.assign({}, c.payrollJournal || {}), payable: String(c.payrollPayable || ""),
+    vchType: String(c.payrollVchType || ""), heads: Array.from(new Set((heads || []).map(String).filter(Boolean))).sort() };
+}
+export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
+const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
+// the salary booked for a month (review H2, N5; next-payroll review B1): any entry with a salary expense on the debit side
+// (salaryClass), a pay head of Tally's payroll (an earning: an expense ledger for payroll, "Basic", "HRA"), or any ledger
+// a payroll-type voucher debits; FinCom's own Tally Payroll vouchers of the month left out when skipOwn (a split month
+// half posted is finished, not taken for salary booked by hand)
+function bookedFor(ym, inp, skipOwn) {
+  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []);
+  const V = live(inp.books).filter((v) => !(skipOwn && ownTp(v, ym)));
+  const pt = new Set(); V.forEach((v) => { if (/payroll/i.test(String(v.type || ""))) (v.ent || []).forEach((e) => { if (e.a < 0 && A.isExpense(e.l)) pt.add(e.l); }); });
+  const cls = (l) => ((ph.has(l) || pt.has(l)) && A.isExpense(l) ? "yes" : salaryClass(A, l, sbase, inp.ledgers));
+  return { cls, booked: salaryEntries(V, ym, (l) => cls(l) !== "") };
 }
 export function payrollOne(ym, rows, inp) {
   const key = "payroll:" + ym, dedupe = key, vid = voucherId(dedupe), label = monYear(ym), date = lastDay(ym);
   const base = { party: "Payroll " + label.split(" ")[0], ym, date, n: rows.length };
   const you = (title, extra) => ({ finding: finding("payroll_due", key, "you", Object.assign({}, base, { short: "Payroll " + label + ": check", title }, extra || {})) });
+  const tp = inp.payroll || {};
+  if (tp.method === "tally" && !(tp.journal || {})[ym]) return tallyOne(ym, rows, inp, { key, dedupe, vid, label, date, base, you });
   if (posted(inp, vid)) return null;
   { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
   if (pending(inp, dedupe)) return null;
@@ -337,6 +361,10 @@ export function payrollOne(ym, rows, inp) {
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you("Payroll " + label + ": the sheet has surcharge or cess on TDS. Book it by hand.");
   const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });
   if (twice) return you("Payroll " + label + ": " + twice.name + " is on the sheet twice.");
+  // (review) other deductions (an advance recovered, canteen, LWF) have no ledger in the payroll journal: said so (a month
+  // posted through Tally Payroll takes them, each to its own pay head)
+  const other = rows.filter((r) => P(r.otherDed));
+  if (other.length) return you("Payroll " + label + ": other deductions (" + Array.from(new Set(other.flatMap((r) => Object.keys(r.ded || {})))).join(", ") + ") have no ledger in the payroll journal. Book this month by hand, or post it through Tally Payroll.");
   // the builder: each employee's net, then the totals by ledger (rupees with paise, as the sheet keeps them)
   // (review L2) each employee's net by the one net function (nightchecks sheetNet: TDS, PT, PF and ESI)
   const per = rows.map((r) => { const gross = r2(num(r.gross)), ded = r2(num(r.tds) + num(r.profTax) + num(r.pf) + num(r.esi)); return { name: r.name, gross, tds: r2(num(r.tds)), pt: r2(num(r.profTax)), pf: r2(num(r.pf)), esi: r2(num(r.esi)), net: sheetNet(r), ded }; });
@@ -349,8 +377,7 @@ export function payrollOne(ym, rows, inp) {
   // next, or naming the month. The same gross: nothing; anything else: Needs you
   // (review N5) salary "yes" (the payroll's own salary ledger, or its all-salary sub-group) is compared; a "maybe" (another
   // ledger named like salary) cannot be decided exactly: Needs you. Each entry counts for one month (salaryEntries)
-  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", cls = (l) => salaryClass(A, l, sbase, inp.ledgers);
-  const booked = salaryEntries(live(inp.books), ym, (l) => cls(l) !== "");
+  const A = groupsOf(inp.books || {}), { cls, booked } = bookedFor(ym, inp, false);
   const maybe = booked.find((v) => v.ent.some((e) => e.a < 0 && cls(e.l) === "maybe"));
   if (maybe) return you("Payroll " + label + ": an entry of " + dmon(maybe.date) + " to " + maybe.ent.find((e) => e.a < 0 && cls(e.l) === "maybe").l + " may be salary. Check it first.", { amt: tot.gross });
   const sal = (e) => e.a < 0 && cls(e.l) === "yes";
@@ -384,6 +411,72 @@ export function payrollOne(ym, rows, inp) {
   const f = finding("payroll_due", key, "resolved", Object.assign({}, base, { amt: tot.gross, short: "Payroll " + label }), ev);
   const e = entryOf(f, "payroll", dedupe, voucher, "Payroll", ev, checks);
   if (!e.ready) return you("Payroll " + label + ": " + checks.filter((c) => !c.ok).map((c) => c.why || CHECK_WORDS[c.k]).join("; "), { amt: tot.gross });
+  return { finding: f, entry: e };
+}
+
+// next-payroll (the owner, 23-Nov-2026: "Night prepares every month"): a Tally Payroll company's month is prepared as ONE
+// entry for Tally's own payroll voucher (posted on Approve by app/src/lib/payrollPost.js: the employees and pay heads
+// are Tally's, the net to the salary payable ledger), for every month kept with the books, other deductions (an advance,
+// canteen, LWF: each to its own pay head on Approve) included. No journal ledger is needed: the entry is the month's
+// totals (gross, each deduction, net, the employees), worked out two ways. Books first: salary booked for the month by
+// any other entry (a hand payroll voucher to "Basic" or "HRA" too) stops it (Needs you when the amount differs); the
+// month's own Tally Payroll vouchers (TDSDesk:dc-tp-<yyyymm>-<n>) are what is being finished: a month split in parts
+// with some in Tally stays ready until every part is there (each part's draft says how many there are)
+function tallyOne(ym, rows, inp, c) {
+  const { key, dedupe, vid, label, date, base, you } = c, tp = inp.payroll || {}, T = "Tally Payroll " + label;
+  if (posted(inp, vid) || (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && !/^dc-tp-/.test(String(d.vid || "")))) return null;   // booked as a journal through Daily Check
+  { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
+  const mine = (inp.drafts || []).filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")));
+  if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
+  const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));
+  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)")); if (m) done.add(m[1]); });
+  const parts = Math.max(0, ...mine.map((d) => Number(d.parts) || 0));
+  if (parts > 0 && Array.from({ length: parts }, (_, i) => TP_ID(ym) + "-" + (i + 1)).every((x) => done.has(x))) return null;
+  // 1. the sheet
+  if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you(T + ": the sheet has surcharge or cess on TDS. Book it by hand.");
+  const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });
+  if (twice) return you(T + ": " + twice.name + " is on the sheet twice.");
+  const per = rows.map((r) => { const gross = r2(num(r.gross)), other = r2(num(r.otherDed)), ded = r2(num(r.tds) + num(r.profTax) + num(r.pf) + num(r.esi) + other);
+    const net = r.net != null && r.net !== "" ? r2(num(r.net)) : r2(gross - ded);
+    return { name: r.name, gross, tds: r2(num(r.tds)), pt: r2(num(r.profTax)), pf: r2(num(r.pf)), esi: r2(num(r.esi)), other, net, ded }; });
+  const wrong = per.find((p) => Math.abs(r2(p.net + p.ded) - p.gross) >= 0.005 || p.net < 0 || p.gross <= 0);
+  if (wrong) return you(T + ": " + wrong.name + "'s gross " + inr(wrong.gross) + " is not net " + inr(wrong.net) + " plus deductions " + inr(wrong.ded) + ".");
+  // (review, low) Tally Payroll takes an employee only with something to pay: said before anything is posted
+  const zero = per.find((p) => P(p.net) === 0);
+  if (zero) return you(T + ": " + zero.name + "'s net pay is ₹0. Tally Payroll can't take an employee with nothing to pay: leave them off this month's sheet, or post this month as a journal.");
+  const sum = (k) => r2(per.reduce((s, p) => s + p[k], 0));
+  const tot = { gross: sum("gross"), tds: sum("tds"), pt: sum("pt"), pf: sum("pf"), esi: sum("esi"), other: sum("other"), net: sum("net") };
+  // 2. the books first: salary booked by any other entry (the month's own Tally Payroll vouchers left out)
+  const { cls, booked } = bookedFor(ym, inp, true);
+  const maybe = booked.find((v) => v.ent.some((e) => e.a < 0 && cls(e.l) === "maybe"));
+  if (maybe) return you(T + ": an entry of " + dmon(maybe.date) + " to " + maybe.ent.find((e) => e.a < 0 && cls(e.l) === "maybe").l + " may be salary. Check it first.", { amt: tot.gross });
+  if (booked.length) {
+    const amt = r2(booked.reduce((s, v) => s + v.ent.filter((e) => e.a < 0 && cls(e.l) === "yes").reduce((x, e) => x - e.a, 0), 0));
+    if (Math.abs(amt - tot.gross) <= 1) return null;
+    return you(T + ": salary booked " + inr(amt) + ", the sheet says " + inr(tot.gross) + ".", { amt: tot.gross });
+  }
+  // 3. the salary payable ledger: the one picked on Payroll, else the one certain by name and group; none yet is no stop
+  // (Approve asks for it on Payroll)
+  const L = new Set(inp.ledgers || []), payable = tp.payable && L.has(tp.payable) ? tp.payable : (pickLedger("salaryPayable", inp).ledger || "");
+  // 4. two ways
+  const plain = payrollPlain(rows);
+  const agree = !plain.bad && plain.adds && [["gross", "gross"], ["tds", "tds"], ["profTax", "pt"], ["pf", "pf"], ["esi", "esi"], ["other", "other"], ["net", "net"]].every(([a, b]) => P(plain[a]) === P(tot[b]))
+    && P(tot.gross) === P(tot.net) + P(tot.tds) + P(tot.pt) + P(tot.pf) + P(tot.esi) + P(tot.other);
+  const voucher = { type: tp.vchType || "Payroll", kind: "tallyPayroll", date, no: "", party: payable, period: ym, book: inp.bookId || "", lines: [], n: rows.length,
+    gross: tot.gross, net: tot.net, ded: { tds: tot.tds, pt: tot.pt, pf: tot.pf, esi: tot.esi, other: tot.other },
+    narration: "Salary for " + label + " as per the salary sheet (" + rows.length + " employee" + (rows.length === 1 ? "" : "s") + ")" };
+  const checks = checkEntry({ voucher: { date }, source: "journal" }, inp).filter((x) => x.k === "period");
+  checks.push({ k: "duplicate", ok: true, why: "" });
+  checks.push({ k: "adds", ok: plain.adds && !plain.bad, why: plain.bad ? plain.bad + " does not add up" : "" });
+  checks.push({ k: "twoways", ok: agree, why: agree ? "" : "The plain sums and the totals differ" });
+  const ev = [{ t: "salary", ref: "sheet:" + ym, label: "Salary sheet " + label + " · " + rows.length + " employee" + (rows.length === 1 ? "" : "s") },
+    { t: "salary", ref: "sheet:" + ym + ":tot", label: "Gross " + inr(tot.gross) + " = net " + inr(tot.net) + (tot.tds ? " + TDS " + inr(tot.tds) : "") + (tot.pt ? " + PT " + inr(tot.pt) : "") + (tot.pf ? " + PF " + inr(tot.pf) : "") + (tot.esi ? " + ESI " + inr(tot.esi) : "") + (tot.other ? " + other deductions " + inr(tot.other) : "") }]
+    .concat(per.slice(0, 4).map((p, i) => ({ t: "salary", ref: "sheet:" + ym + ":" + i, label: p.name + ": " + inr(p.gross) + (p.ded ? " − " + inr(p.ded) : "") + " = " + inr(p.net) })))
+    .concat(per.length > 4 ? [{ t: "salary", ref: "sheet:" + ym + ":more", label: "and " + (per.length - 4) + " more on the sheet" }] : [])
+    .concat(done.size ? [{ t: "entry", ref: "tp:" + ym + ":done", label: done.size + " part" + (done.size === 1 ? "" : "s") + " already in Tally: Approve posts the rest" }] : []);
+  const f = finding("payroll_due", key, "resolved", Object.assign({}, base, { amt: tot.gross, short: T }), ev);
+  const e = entryOf(f, "payroll", dedupe, voucher, "Tally Payroll", ev, checks);
+  if (!e.ready) return you(T + ": " + checks.filter((x) => !x.ok).map((x) => x.why || CHECK_WORDS[x.k]).join("; "), { amt: tot.gross });
   return { finding: f, entry: e };
 }
 

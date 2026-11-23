@@ -239,6 +239,40 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
 - **Tests**: `node tests/run_payroll_post.mjs` (the builder's output and tampered copies through the bridge's own Go
   checks, by a `go test -overlay` that adds nothing to the tree; the approve flow with fakes) and section 8 of
   `tests/run_payroll_flex_ui.py`.
-- **Open**: Approve needs the night's payroll entry for the claim. A month whose sheet has other deductions, or whose
-  journal ledgers are not picked, gets no night entry, so it cannot be approved yet (the night would need a Tally
-  Payroll entry of its own).
+- **The night prepares every month** (the owner, 23-Nov-2026): for a Tally Payroll company (`co.payrollMethod` tally,
+  not "as a journal this month") `server/_shared/dailyjournals.js` makes a Tally Payroll entry for every month kept with
+  the books (`voucher.kind = "tallyPayroll"`: the voucher type, the salary payable ledger, the employees' count, gross,
+  each deduction and other deductions, net; no journal lines and no journal ledger needed), worked out two ways. Other
+  deductions (an advance, canteen, LWF) go to their own pay heads on Approve. A journal company's month with other
+  deductions is said plainly ("no ledger in the payroll journal").
+
+### 4.4 The independent review's fixes (23-Nov-2026, not published)
+
+- **B1, never twice**: salary booked counts a payroll voucher entered in Tally by hand: any pay head of Tally's payroll
+  that is an expense (`tally_ledgers.for_payroll`; the night reads them, the page has `S.books.payroll.heads`) and any
+  ledger a Payroll-type voucher debits. Approve also refuses when Tally's payroll read (`Payroll.data().allocs`) or the
+  books hold a payroll entry of the month without `TDSDesk:dc-tp-<yyyymm>-` in its narration, naming it.
+- **B2, a fixed split**: employees go into parts in the order of Tally's employee list (by name, as FinCom reads it), so
+  a re-sorted sheet moves nobody; a part counts as done only when its saved XML is the part built now, else "Part N in
+  Tally differs from the sheet now".
+- **B3, a split month finishes**: the month's own vouchers (`TDSDesk:dc-tp-<yyyymm>-*`) are left out of salary booked,
+  so after part 1 reaches the books the night's entry and the second check stay the same and Approve posts the rest.
+  Each part's draft carries `parts`; the night counts the month done only when every part is in Tally.
+- **The bridge asked** is the cloud queue's (`TCloud.postThrough`) whenever the client's books are in the cloud, as
+  `Bridge.post` routes it. **Salary payable ledger and voucher type** are picked on Payroll (`co.payrollPayable`,
+  `co.payrollVchType`); the night's entry names them and Approve refuses a payable changed since. **Cost categories**:
+  each employee under their own (Tally's employee master); the pin takes one CATEGORYENTRY a voucher, so a category is a
+  part of its own. **Daily Check › Entries** shows the entry as a payroll voucher (employees, deductions, net to the
+  payable) and says "queued for the Tally computer" when only queued. **alreadySent / already in Tally** answers are on
+  their way / in Tally, as on the bank path.
+- **The sheet kept**: a month kept before (for 24Q too) is replaced only after a warning, and each employee's exempt,
+  standard, Chapter VI-A, taxable, regime and PAN are carried over. **AI learning**: the tab's month is left out of the
+  layout's key (old keys still found); full dates (not a pay month), numbers of 9 digits or more are masked and figures
+  rounded to two significant digits, in the page and again in `server/assistant/sheetmap.ts`. **The month** of a sheet
+  read by a saved rule without a month column is picked on the start card (last month at first).
+- **Lows**: a part posted saves the next part again ("waiting") so the cloud's settle, which reads the latest draft,
+  never approves a half-posted month; a net of zero is said tonight; the page says the employer's PF and ESI are booked
+  separately; two Tally employees whose names fold to one are refused unless one is exactly the sheet's name.
+- **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
+- **Redeploy when published**: the `assistant-night` function (dailyjournals.js, nightinput.js, handler.ts) and
+  `fincom-assistant` (sheetmap.ts). No SQL.

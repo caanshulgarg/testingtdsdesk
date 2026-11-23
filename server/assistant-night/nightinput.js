@@ -12,7 +12,7 @@
 import * as E from "../_shared/gst3b.js";
 import { books as engineBooks } from "../gst-run/engine.js";
 import { ymd, num, r2 } from "../_shared/nightchecks.js";
-import { gstMonths, pickLedger, picksOf, excludedOf, draftState, retriedOf, LOOKBACK } from "../_shared/dailyjournals.js";
+import { gstMonths, pickLedger, picksOf, excludedOf, draftState, retriedOf, LOOKBACK, payrollSettings } from "../_shared/dailyjournals.js";
 
 const G = globalThis;
 // the app's globals the engine reads (S, CO) for the length of one call, then put back
@@ -96,12 +96,14 @@ export function draftsOf(recs, jobs, prior, now) {
   const retried = retriedOf(prior);
   return (recs || []).filter((r) => r && r.data && /^#?dc-/.test(String(r.item || r.data.id || ""))).map((r) => {
     const vid = String(r.data.id || ""), own = (r.data.results || {})[vid] || {};
-    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, ver: String(own.at || "-"), at: String(own.at || r.updated_at || "") };
+    const d = { dedupe: String(r.data.dedupe || ""), state: String(r.data.state || ""), removed: !!(r.deleted || r.data.removed), job: jobOf(r.data), vid, results: r.data.results || {}, ver: String(own.at || "-"), at: String(own.at || r.updated_at || ""),
+      parts: Number(r.data.parts) || 0 };   // next-payroll: a Tally Payroll month's part says how many parts the month has
     d.state = draftState(d, jobs, now, retried); return d;
   }).filter((d) => d.dedupe);
 }
 
-// x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules, draftRecs}; rows.co is the client's settings (clients.data)
+// x: {today, bankRecs, inboxRecs, entryRecs, twob, prior, firmRules, draftRecs, payHeads}; rows.co is the client's settings
+// (clients.data); payHeads: the ledgers of Tally's payroll (tally_ledgers.for_payroll: the pay heads)
 export function nightInput(rows, b, x) {
   const co = rows.co || {}, bk = bankOf(x.bankRecs, co);
   const closedTo = ymd((co.closed || {}).to);
@@ -130,6 +132,8 @@ export function nightInput(rows, b, x) {
     gst: x.gst || [], drafts: draftsOf(x.draftRecs, x.jobs, x.prior, x.now), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true), excluded: excludedOf(x.prior),
     // the book the night read: Approve refuses on another (a client's books split by year)
     bookId: String((rows.book && rows.book.book_id) || ""),
+    // next-payroll: how the client books salary (a Tally Payroll company's months are prepared as Tally payroll vouchers)
+    payroll: payrollSettings(co, x.payHeads),
   };
   // (phase 2) a salary line is paid against the salary payable ledger only when that ledger is certain
   out.ledgersFor.salaryPayable = pickLedger("salaryPayable", out).ledger || "";

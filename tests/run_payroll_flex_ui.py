@@ -61,7 +61,7 @@ SEED = """([data, role]) => { S.firm.firmName = "Sample & Co";
   S.books = b;
   Cloud.on = () => false;
   window.saveBooks = async () => { window.__pr.saved++; };
-  const sc = Store.saveCompany; Store.saveCompany = (c) => { window.__pr.co = JSON.parse(JSON.stringify({payrollMethod: c.payrollMethod, payrollFormats: c.payrollFormats, payrollJournal: c.payrollJournal})); try { sc.call(Store, c); } catch (e) {} };
+  const sc = Store.saveCompany; Store.saveCompany = (c) => { window.__pr.co = JSON.parse(JSON.stringify({payrollMethod: c.payrollMethod, payrollFormats: c.payrollFormats, payrollJournal: c.payrollJournal, payrollPayable: c.payrollPayable || "", payrollVchType: c.payrollVchType || ""})); try { sc.call(Store, c); } catch (e) {} };
   window.loadRegisters = async () => {};
   const ans = data.ai;
   window.SheetAI = {map: async (req) => { window.__pr.ai.push(req); const k = Object.keys(ans).find((x) => (ans[x].map.name && req.head.includes(ans[x].map.name)) && Object.values(ans[x].map).every((c) => req.head.includes(c)) && (ans[x].earn || []).every((c) => req.head.includes(c)) && req.head.length === new Set(req.head).size);
@@ -134,15 +134,28 @@ def run(br, w, kind):
     pg.set_input_files("[data-sheet-in]", FILES["A"]); pg.wait_for_selector("[data-preview=tally]", timeout=10000); settle(pg, 300)
     tp = pg.inner_text("[data-preview=tally]")
     ok("Tally Payroll voucher" in tp and "Needs your OK" not in tp and len(P()["ai"]) == 1, kind + " 6. Tally Payroll: the voucher preview (read by the rule, no AI)")
-    ok(pg.locator("[data-preview=tally] select").count() == 1 and "Gross" not in tp, kind + " 6. Basic has no same-named pay head: the owner picks it")
-    pg.select_option("[data-preview=tally] select", "Basic Pay"); settle(pg, 300)
+    HP = "[data-preview=tally] select[aria-label^='Tally pay head']"
+    ok(pg.locator(HP).count() == 1 and "Gross" not in tp, kind + " 6. Basic has no same-named pay head: the owner picks it")
+    pg.select_option(HP, "Basic Pay"); settle(pg, 300)
     tp = pg.inner_text("[data-preview=tally]")
     ok("3 employees · net ₹78,255.71 to Salary Payable" in tp, kind + " 6. the voucher: 3 employees, net ₹78,255.71 to Salary Payable")
     pg.click("[data-preview=tally] [data-more^=emp-] .pr-more-btn"); pg.click("[data-preview=tally] [data-more^=xml-] .pr-more-btn"); settle(pg, 200)
     x = pg.inner_text("[data-xml]")
     ok('OBJVIEW="PaySlip Voucher View"' in x and "<EMPLOYEENAME>Mehta, Sunil</EMPLOYEENAME>" in x and "REMOTEID" not in x and "Create only" in pg.inner_text("[data-preview=tally]"), kind + " 6. the XML on opening, the bridge's shape, no REMOTEID")
     ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in pg.inner_text("[data-install]") and pg.locator("[data-install] [data-bridge-download]").count() == 1, kind + " 6. no 2.5.18 bridge here: the install line with its download, no Approve")
+    ok("employer’s PF and ESI are not in this voucher" in pg.inner_text("[data-employer-note]"), kind + " 6. the page says the employer's PF and ESI are booked separately")
     shot(pg, "6-tally-payroll-preview", kind)
+    # (review 3) the salary payable ledger and the voucher type picked on the page, kept on the client
+    opts = pg.eval_on_selector_all("[data-pick-payable] option", "(os) => os.map((o) => o.value)")
+    ok("Salary Payable" in opts and pg.locator("[data-pick-vchtype] option").count() >= 1, kind + " 6. pickers: the salary payable ledger (" + str(len(opts) - 1) + " offered) and the voucher type")
+    pg.select_option("[data-pick-payable]", "Salary Payable"); settle(pg, 250)
+    ok(P()["co"].get("payrollPayable") == "Salary Payable" and "net ₹78,255.71 to Salary Payable" in pg.inner_text("[data-preview=tally]"), kind + " 6. the payable picked: kept on the client (co.payrollPayable)")
+    # (review 9) the month of the sheet: on the start card, last month at first
+    mv = pg.input_value("[data-sheet-month] input")
+    ok(len(mv) == 7 and mv[4] == "-", kind + " 9. the month picker on the start card: " + mv)
+    if w > 600:
+        pg.evaluate("() => document.querySelector('[data-tp-settings]').scrollIntoView({block: 'center'})")
+        shot(pg, "10-tally-pickers-month", kind)
     pg.click("[data-journal-once]"); settle(pg, 300)
     ok(pg.locator("[data-preview=journal]").count() == 1 and "As a journal this month" in pg.inner_text("[data-preview=journal]") and P()["co"]["payrollJournal"].get("202610"), kind + " 6. Post as a journal this month: the journal instead, kept for Oct 2026")
     ok(P()["posts"] == 0, kind + " no Bridge.post: nothing posted from this page")
@@ -159,7 +172,7 @@ MOCK = """(v) => { window.__ap = {rpc: [], posts: [], order: [], entry: null};
       if (fn === "entry_approved") A.entry = Object.assign({}, A.entry, {state: "approved"});
       return fn === "save_book_items" ? {ok: true, items: []} : {ok: true}; }
     return []; };
-  TCloud.on = () => true; TCloud.has = () => true; CloudTally.call = async () => ({ok: true, via: "cloud", ledgers: LED.map((n) => ({name: n, group: ""}))});
+  TCloud.on = () => true; TCloud.has = () => true; TCloud.postThrough = () => ({version: Bridge.st.version, computer: "MADEUP-PC", user: ""}); CloudTally.call = async () => ({ok: true, via: "cloud", ledgers: LED.map((n) => ({name: n, group: ""}))});
   window.tallyVia = () => "bridge"; Bridge.st = Object.assign({}, Bridge.st, {version: v});
   Bridge.post = async (pl) => { window.__ap.posts.push(pl); window.__ap.order.push("post"); await new Promise((r) => setTimeout(r, 300));
     return {ok: true, company: pl.company, results: pl.vouchers.map((x) => ({id: x.id, ok: true, created: 1, vchId: "101", word: "In Tally (verified)"}))}; };
@@ -184,8 +197,12 @@ def approve_flow(br, w, kind):
     lines = pg.evaluate("""() => Array.from(document.querySelectorAll('[data-preview=journal] tbody tr')).map((tr) => { const t = tr.querySelectorAll('td'), n = (s) => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
       return n(t[1].innerText) ? {ledger: t[0].innerText, dr: n(t[1].innerText)} : {ledger: t[0].innerText, cr: n(t[2].innerText)}; })""")
     pg.click("[data-keep]"); settle(pg, 300)
-    pg.evaluate("(lines) => { window.__ap.entry = {id: '00000000-0000-4000-8000-000000000701', client_id: 'c1', source: 'payroll', dedupe: 'payroll:202610', work_ref: '', state: 'ready', updated_at: new Date().toISOString(), why: 'Payroll Oct 2026', reason: 'Payroll', evidence: [], checks: [],"
-      " voucher: {type: 'Journal', kind: 'payroll', date: '20261031', no: '', party: 'Salary Payable', period: '202610', book: '', lines, narration: 'Salary for Oct 2026 as per the salary sheet (3 employees)'}}; return true; }", lines)
+    # last night's entry for a Tally Payroll company (the owner's "Night prepares every month"): the month's totals as the
+    # night's builder makes them from the sheet kept with the books
+    pg.evaluate("""() => { const rs = S.books.salary.filter((r) => r.month === '202610'), R = (x) => Math.round(x * 100) / 100, sum = (k) => R(rs.reduce((s, r) => s + R(Number(r[k]) || 0), 0));
+      window.__ap.entry = {id: '00000000-0000-4000-8000-000000000701', client_id: 'c1', source: 'payroll', dedupe: 'payroll:202610', work_ref: '', state: 'ready', updated_at: new Date().toISOString(), why: 'Tally Payroll Oct 2026', reason: 'Tally Payroll', evidence: [], checks: [],
+        voucher: {type: 'Payroll', kind: 'tallyPayroll', date: '20261031', no: '', party: 'Salary Payable', period: '202610', book: '', lines: [], n: rs.length, gross: sum('gross'), net: sum('net'),
+          ded: {tds: sum('tds'), pt: sum('profTax'), pf: sum('pf'), esi: sum('esi'), other: sum('otherDed')}, narration: 'Salary for Oct 2026 as per the salary sheet (' + rs.length + ' employees)'}}; return true; }""")
     pg.click("[data-pick=tally]")
     try: pg.wait_for_selector("[data-approve]", timeout=10000)
     except Exception:

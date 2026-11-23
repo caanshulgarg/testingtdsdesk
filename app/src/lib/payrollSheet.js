@@ -92,30 +92,48 @@ export function headRow(grid) {
   }
   return 0;
 }
+// (review 8) the tab's name without its month ("Oct 2026", "Salary_October", "NOV-26", any case): a monthly tab is the
+// same layout every month, so its saved rule is used again
+const MONTH_WORDS = /(january|february|march|april|june|july|august|september|october|november|december|sept|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/g;
+export const tabKey = (sheet) => String(sheet || "").toLowerCase().replace(MONTH_WORDS, "").replace(/\d+/g, "#").replace(/[^a-z#]+/g, "").replace(/#+/g, "#");
 export function fingerprint(head, sheet) {
-  const names = (head || []).map(norm), sh = String(sheet || "").toLowerCase().replace(/\d+/g, "#").replace(/[^a-z#]+/g, "");
-  return "p" + hash(names.join("|") + "#" + names.length + "#" + sh);
+  const names = (head || []).map(norm);
+  return "p" + hash(names.join("|") + "#" + names.length + "#" + tabKey(sheet));
 }
+// the key rules were saved under before (the tab's name with its month)
+const fingerprintWas = (head, sheet) => { const names = (head || []).map(norm), sh = String(sheet || "").toLowerCase().replace(/\d+/g, "#").replace(/[^a-z#]+/g, ""); return "p" + hash(names.join("|") + "#" + names.length + "#" + sh); };
 // a known layout: the very same fingerprint, nothing less. A moved, added, renamed or removed column is a new layout,
 // and the AI studies it again (the owner's rule)
 export function findRule(head, sheet, rules) {
-  const fp = fingerprint(head, sheet);
-  return (rules || []).find((r) => r && !r.deleted && r.fp === fp) || null;
+  const fp = fingerprint(head, sheet), was = fingerprintWas(head, sheet);
+  return (rules || []).find((r) => r && !r.deleted && r.fp === fp) || (rules || []).find((r) => r && !r.deleted && r.fp === was) || null;
 }
 
 // ---------------------------------------------------------------- what the AI is shown, and its answer checked
+// (review 8) a full date (a birth, joining or pay date) masked to DATE_n, a pay month ("Oct-2026", "10/2026") kept; an
+// account, phone or UAN of 9 digits or more (spaces, dashes and dots aside) masked; the figures rounded to two
+// significant digits (a salary is never sent as it is; a day count up to 31 kept, to tell days from amounts)
+export function roundFigure(s) {
+  const n = amount(s);
+  if (!n) return String(s).trim();
+  const a = Math.abs(n);
+  if (a <= 31) return String(Math.round(n * 2) / 2);
+  const k = Math.pow(10, Math.max(0, Math.floor(Math.log10(a)) - 1));
+  return String((n < 0 ? -1 : 1) * Math.round(a / k) * k);
+}
 export function samples(head, rows) {
   const toks = new Map(), tok = (kind, v) => { const k = kind + "|" + v; if (!toks.has(k)) toks.set(k, kind + "_" + (Array.from(toks.keys()).filter((x) => x.startsWith(kind + "|")).length + 1)); return toks.get(k); };
   const cell = (v) => {
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (v instanceof Date) { const t = isNaN(v) ? "" : v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0"); return /-01$/.test(t) ? t.slice(0, 7) : tok("DATE", t); }   // the 1st: a pay month
     let s = String(v == null ? "" : v).trim();
     if (!s) return "";
     if (/^[A-Z]{5}\d{4}[A-Z]$/i.test(s)) return tok("PAN", s.toUpperCase());
     if (/@/.test(s)) return tok("EMAIL", s);
-    if (/^\+?\d{9,18}$/.test(s.replace(/[\s-]/g, "")) && !/[.,]/.test(s)) return tok("NUMBER", s);       // a phone, an account, a UAN
+    if (/^\+?\d{9,}$/.test(s.replace(/[\s\-./]/g, "")) && !/^\d{1,3}(,\d{2,3})+(\.\d+)?$/.test(s) && !/\.\d{1,2}$/.test(s)) return tok("NUMBER", s);   // a phone, an account, a UAN
+    if (/^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(s) || /^\d{1,2}[-\s]?[a-z]{3,9}[-\s']*\d{2,4}$/i.test(s)) return tok("DATE", s);   // a full date
+    if (/^\d{1,2}[-\/]\d{4}$|^\d{4}[-\/]\d{1,2}$/.test(s) || new RegExp("^(" + MON.join("|") + ")[a-z]*[-\\s'/]*\\d{2,4}$", "i").test(s)) return s;   // a pay month
     if (/^[A-Z]{1,5}[-\/]?\d{1,6}$/i.test(s)) return tok("CODE", s.toUpperCase());                     // an employee code
-    if (/^[\d,.\-()₹\s]+$/.test(s) || /^(rs\.?|inr|₹)/i.test(s)) return s;                              // a figure
-    if (/^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(s) || new RegExp("^(" + MON.join("|") + ")[a-z]*[-\\s'/]*\\d{2,4}$", "i").test(s)) return s;   // a date or a month
+    if (/^[\d,.\-()₹\s]+$/.test(s) || /^(rs\.?|inr|₹)/i.test(s)) return roundFigure(s);                 // a figure, rounded
     return tok("TEXT", s);                                                                               // a name, a department, a bank
   };
   return { head: head.map((h) => String(h == null ? "" : h)), rows: (rows || []).filter((r) => (r || []).some((c) => String(c == null ? "" : c).trim())).slice(0, MAX_SAMPLE_ROWS).map((r) => (r || []).map(cell)) };
@@ -269,11 +287,31 @@ export function builderRows(rows) {
   }
   return { rows: rows.map((r) => ({ name: r.name, code: r.code || "", pan: r.pan || "", date: r.date, gross: r.gross, tds: r.tds, profTax: r.profTax, pf: r.pf, esi: r.esi, net: r.net, surcharge: 0, cess: 0 })) };
 }
-// the salary sheet kept with the books (b.salary, as TDS24Q keeps it for 24Q): this month's rows replace the same month's
+// the salary sheet kept with the books (b.salary, as TDS24Q keeps it for 24Q): this month's rows replace the same month's.
+// (review 7) what 24Q read for an employee that a pay sheet does not carry (the exemptions, the standard deduction,
+// Chapter VI-A, the taxable salary, the regime, the PAN) is carried over from that employee's row (by code, PAN, then
+// name); replacing() says beforehand what would be replaced
+const rowMonth = (r) => r.month || String(r.date || "").slice(0, 7).replace("-", "");
+export const CARRY = ["exempt", "standard", "chapter6", "taxable", "regime", "pan"];
+const nameKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+function sameEmp(a, b) {
+  if (a.code && b.code) return String(a.code).trim().toUpperCase() === String(b.code).trim().toUpperCase();
+  if (a.pan && b.pan) return String(a.pan).toUpperCase() === String(b.pan).toUpperCase();
+  return !!nameKey(a.name) && nameKey(a.name) === nameKey(b.name);
+}
+const has = (v) => v != null && v !== "" && v !== 0;
+export function replacing(old, rows) {
+  const months = new Set(rows.map(rowMonth)), was = (old || []).filter((r) => months.has(rowMonth(r)));
+  return { n: was.length, months: Array.from(new Set(was.map(rowMonth))).sort(), tax: was.filter((r) => CARRY.some((k) => k !== "pan" && has(r[k]))).length };
+}
 export function mergeSalary(old, rows) {
-  const months = new Set(rows.map((r) => r.month || String(r.date || "").slice(0, 7).replace("-", "")));
-  const keep = (old || []).filter((r) => !months.has(r.month || String(r.date || "").slice(0, 7).replace("-", "")));
-  return keep.concat(rows.map((r) => Object.assign({ exempt: 0, standard: 0, chapter6: 0, taxable: 0, regime: "" }, r)));
+  const months = new Set(rows.map(rowMonth));
+  const keep = (old || []).filter((r) => !months.has(rowMonth(r))), was = (old || []).filter((r) => months.has(rowMonth(r)));
+  return keep.concat(rows.map((r) => {
+    const o = was.find((w) => rowMonth(w) === rowMonth(r) && sameEmp(w, r)) || {}, carry = {};
+    CARRY.forEach((k) => { if (!has(r[k]) && has(o[k])) carry[k] = o[k]; });
+    return Object.assign({ exempt: 0, standard: 0, chapter6: 0, taxable: 0, regime: "" }, r, carry);
+  }));
 }
 
 // ---------------------------------------------------------------- manual entry (the same rows, typed)

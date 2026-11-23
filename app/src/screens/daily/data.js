@@ -126,7 +126,9 @@ export async function approveEntry(e) {
 // next-payroll (docs/PAYROLL.md 4.3, bridge 2.5.18): a company that books salary in Tally Payroll posts the month as Tally
 // payroll vouchers, not this journal, unless the owner chose "Post as a journal this month" on Payroll
 export function tallyPayrollFor(e, co) {
-  if (!e || e.source !== "payroll" || !co || ((co.payrollMethod || {}).value !== "tally")) return false;
+  if (!e || e.source !== "payroll") return false;
+  if ((e.voucher || {}).kind === "tallyPayroll") return true;          // the night made it as a Tally payroll voucher
+  if (!co || ((co.payrollMethod || {}).value !== "tally")) return false;
   return !(co.payrollJournal || {})[String((e.voucher || {}).period || "")];
 }
 // (phase 2) a journal FinCom made: the second check first (the same builder on the books as they are now: anything
@@ -143,7 +145,7 @@ export async function approveJournal(e) {
     const T = await import("../../lib/payrollPost.js");
     const r = await T.approveTallyPayroll(e, { prior: lastPrior.filter((p) => p.cid === cid) });
     toast(r.ok ? r.words : r.why + (r.install ? " Download it on Payroll or the Tally page." : ""));
-    return !!r.ok;
+    return r.ok ? (r.queued ? "queued" : true) : false;
   }
   const why = await recheck(e, { prior: lastPrior.filter((p) => p.cid === cid) });
   if (why) { toast(why); return false; }
@@ -168,7 +170,7 @@ export async function approveJournal(e) {
     toast((res && res.msg) || (r && r.error) || "Not posted."); return false;
   }
   await rpc("entry_approved", { p_id: e.id, p_work_ref: d.id });
-  return true;
+  return res.state === "sent" ? "queued" : true;     // queued in the cloud for the Tally computer: said so, not "sent"
 }
 // Edit: the entry opened where it is made (the bill in Purchase, the line in Bank)
 export async function editEntry(e) {

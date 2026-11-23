@@ -108,19 +108,30 @@ export function payHeadPlan(rows, heads, saved) {
 
 // ---------------------------------------------------------------- the month's vouchers
 // o: {id, date (yyyy-mm-dd), label ("Oct 2026"), type ("Payroll"), payable (ledger), rows, plan, employees (Tally's names,
-//     or {name, gone}), category, idOf(i, n) (the voucher's id; default: id, or id-1, id-2 ... when split)}
+//     or {name, gone, category}), category, idOf(i, n) (the voucher's id; default: id, or id-1, id-2 ... when split)}
 // Each voucher is one request of its own: at most MAX_EMPLOYEES employees and MAX_VOUCHER_BYTES of XML (a month larger
 // than that is split, as docs/PAYROLL.md has it: each part its own voucher and its own posting)
+// (review B2) the split is fixed by Tally, never by the sheet: the employees in the order of Tally's employee list (as
+// FinCom read it: by name), so a sheet sorted another way, or an employee picked again, never moves one between parts
+// (review 4) each employee under their own cost category (Tally's employee master; none: o.category, else Primary Cost
+// Category); the bridge's pin takes one CATEGORYENTRY a voucher, so each category is a part (or parts) of its own
 export function payrollVouchers(o) {
   const problems = [], say = (w) => { if (!problems.includes(w)) problems.push(w); };
   const live = (o.employees || []).map((e) => (typeof e === "string" ? { name: e } : e)).filter((e) => e && e.name && !e.gone && !e.group);
-  const emp = new Map(live.map((e) => [nk(e.name), e.name]));
+  const emp = new Map(), ord = new Map();
+  live.forEach((e, i) => { const k = nk(e.name); emp.set(k, (emp.get(k) || []).concat([e])); if (!ord.has(e.name)) ord.set(e.name, i); });
   const type = o.type || "Payroll", category = cleanText(o.category || CATEGORY, MAX_NAME) || CATEGORY, payable = String(o.payable || "");
   [[type, "voucher type"], [category, "cost category"]].forEach(([n, w]) => { const why = nameProblem(n, w); if (why) say(why); });
-  const parts = [], seen = new Map(), headWhy = new Set();
+  const parts = [], seen = new Map(), headWhy = new Set(), catWhy = new Set();
   (o.rows || []).forEach((r) => {
-    const tallyName = emp.get(nk(r.name));
+    const cands = emp.get(nk(r.name)) || [], exact = cands.filter((e) => e.name === r.name);
+    // (review, low) two employees in Tally whose names differ only in case, spaces or marks ("Ravi Kumar", "RAVI-KUMAR"):
+    // never guessed between
+    if (cands.length > 1 && exact.length !== 1) { say("Two employees in Tally, " + cands.slice(0, 3).map((e) => "“" + cleanText(e.name, 80) + "”").join(" and ") + ", match “" + cleanText(r.name, 80) + "” on the sheet. Rename one in Tally, or write the name on the sheet exactly as Tally has it"); return; }
+    const te = cands.length > 1 ? exact[0] : cands[0], tallyName = te ? te.name : "";
     if (!tallyName) { say("Create the employee “" + cleanText(r.name, 80) + "” in Tally (Payroll), or correct the name on the sheet"); return; }
+    const cat = String(te.category || "").trim() ? String(te.category) : category;
+    if (cat !== category && !catWhy.has(cat)) { catWhy.add(cat); const why = nameProblem(cat, "cost category"); if (why) say(why); }
     { const why = nameProblem(tallyName, "employee"); if (why) { say(why); return; } }
     if (seen.has(fold(tallyName))) { say(cleanText(r.name, 80) + " is on the sheet twice (as “" + cleanText(seen.get(fold(tallyName)), 80) + "” too)"); return; }
     seen.set(fold(tallyName), r.name);
@@ -144,20 +155,22 @@ export function payrollVouchers(o) {
     if (merged.some((x) => Math.abs(x.p) > MAX_PAISE)) say(tallyName + ": an amount is too large for Tally Payroll (more than 10 digits of rupees)");
     const sum = merged.reduce((s, x) => s + x.p, 0);
     if (-sum !== P(r.net)) say(tallyName + ": the pay heads come to " + amt(-sum) + ", the net is " + amt(P(r.net)));
-    else if (sum >= 0) say(tallyName + ": the net pay is " + amt(-sum) + "; Tally Payroll needs it above zero");
-    parts.push({ name: tallyName, p: sum, al: merged });
+    else if (sum >= 0) say(tallyName + ": the net pay is " + amt(-sum) + "; Tally Payroll needs it above zero. Leave them off this month’s sheet, or post this month as a journal");
+    parts.push({ name: tallyName, p: sum, al: merged, cat, ord: ord.get(tallyName) });
   });
+  parts.sort((a, b) => (a.cat === b.cat ? 0 : a.cat === category ? -1 : b.cat === category ? 1 : a.cat < b.cat ? -1 : 1) || a.ord - b.ord);
   if (!problems.length && !parts.length) say("No employee to pay");
   if (!payable.trim()) say("Pick the salary payable ledger");
   else { const why = nameProblem(payable, "salary payable ledger"); if (why) say(why); }
   if (problems.length) return { vouchers: [], problems };
   // the split: a new voucher at MAX_EMPLOYEES, or before its XML would pass the byte cap (the fixed part counted at its
   // largest: a narration of MAX_NARRATION characters of 4 bytes, the names at 6 bytes a character when escaped)
-  const fixed = 600 + MAX_NARRATION * 4 + 6 * (chars(type) * 2 + chars(category) + chars(payable)), groups = [];
-  let cur = [], size = fixed;
+  const fixed = (c) => 600 + MAX_NARRATION * 4 + 6 * (chars(type) * 2 + chars(c) + chars(payable)), groups = [];
+  let cur = [], size = 0;
   parts.forEach((e) => {
     const b = byteLen(empXml({ name: e.name, amount: e.p / 100, heads: e.al.map((x) => ({ head: x.head, earn: x.earn, amount: x.p / 100 })) }));
-    if (cur.length && (cur.length >= MAX_EMPLOYEES || size + b > MAX_VOUCHER_BYTES)) { groups.push(cur); cur = []; size = fixed; }
+    if (cur.length && (cur[0].cat !== e.cat || cur.length >= MAX_EMPLOYEES || size + b > MAX_VOUCHER_BYTES)) { groups.push(cur); cur = []; }
+    if (!cur.length) size = fixed(e.cat);
     cur.push(e); size += b;
   });
   if (cur.length) groups.push(cur);
@@ -167,7 +180,7 @@ export function payrollVouchers(o) {
     if (net > MAX_PAISE) say("The month’s net is too large for one Tally Payroll voucher (more than 10 digits of rupees)");
     const id = idOf(i, n), tag = " | TDSDesk:" + id;
     const text = cleanText("Salary for " + (o.label || "") + " as per the salary sheet (" + es.length + " employee" + (es.length === 1 ? "" : "s") + (n > 1 ? ", part " + (i + 1) + " of " + n : "") + ")", MAX_NARRATION - chars(tag));
-    return { id, type, date: o.date, payable, category, narration: text,
+    return { id, type, date: o.date, payable, category: es[0].cat, narration: text,
       employees: es.map((e) => ({ name: e.name, amount: e.p / 100, heads: e.al.map((x) => ({ head: x.head, earn: x.earn, amount: x.p / 100 })) })),
       gross: -es.reduce((s, e) => s + e.al.filter((x) => x.earn).reduce((t, x) => t + x.p, 0), 0) / 100, net: net / 100, part: i + 1, parts: n };
   });

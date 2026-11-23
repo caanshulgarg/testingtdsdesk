@@ -53,3 +53,4 @@
   .pr-mrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .pr-mval { display: none; }
   .pr-drcr { max-width: 100%; } .pr-drcr th, .pr-drcr td { white-space: normal; }
 }
+.pr-warn { padding: 8px 10px; border-radius: 8px; background: var(--surface-muted); border-left: 3px solid var(--warn); }

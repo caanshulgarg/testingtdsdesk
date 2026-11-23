@@ -191,13 +191,16 @@ function Proof({ res }) {
 function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
   const pd = payData(), heads = pd.heads || {}, [, kick] = useState(0);
   const ym = (rows[0] || {}).month || "";
-  const p = TPost.prepare({ co, ym, rows, date: TPost.lastDay(ym), pay: pd, ledgers });
-  const pick = (k, v) => { co.payHeadPlan = Object.assign({}, co.payHeadPlan, { [k]: v }); saveCo(co); kick((x) => x + 1); };
-  const once = (co.payrollJournal || {})[ym];
   const [ent, setEnt] = useState(undefined), [busy, setBusy] = useState(""), [res, setRes] = useState(null), [setup, setSetup] = useState(undefined), [past, setPast] = useState([]);
   useEffect(() => { let on = true; setEnt(undefined); TPost.loadEntry(co.id, ym).then((x) => on && setEnt(x)); return () => { on = false; }; }, [co.id, ym, res]);
   useEffect(() => { let on = true; TPost.setupLink().then((x) => on && setSetup(x)); return () => { on = false; }; }, []);
   useEffect(() => { let on = true; if (ent && ent.state === "approved") import("../../lib/asstEntries.js").then((A) => TPost.proofOf(co.id, ym, A)).then((x) => on && setPast(x || [])).catch(() => {}); return () => { on = false; }; }, [ent && ent.state]);
+  const ev = (ent && ent.voucher) || {};
+  const p = TPost.prepare({ co, ym, rows, date: TPost.lastDay(ym), pay: pd, ledgers, books: books(), payable: ev.kind === "tallyPayroll" ? ev.party : "" });
+  const pick = (k, v) => { co.payHeadPlan = Object.assign({}, co.payHeadPlan, { [k]: v }); saveCo(co); kick((x) => x + 1); };
+  // (review 3) the salary payable ledger and the payroll voucher type, kept on the client as its other settings are
+  const setCo = (k, v) => { if (v) co[k] = v; else delete co[k]; saveCo(co); kick((x) => x + 1); };
+  const types = TPost.vchTypesOf(pd, books()), payables = ledgers.filter((l) => /payable|salar|outstanding|due/i.test(l));
   const br = TPost.postingBridge(co), brOk = TPost.bridgeOk(br.version), cloud = cloudOn();
   const going = ent && ent.state === "approving" && Date.now() - Date.parse(ent.updated_at || 0) < 30 * 60000;
   const approve = async () => {
@@ -210,6 +213,12 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
   const net = p.vouchers.reduce((s, v) => s + v.net, 0), done = (ent && ent.state === "approved") || (res && res.ok);
   return <section className="pr-card" data-preview="tally">
     <div className="pr-title">Tally Payroll voucher · {PS.monLabel(ym)} {p.vouchers.length > 0 && <b className="pr-amt">{rs(net)}</b>} <span className={"pr-chip " + (done ? "ok" : p.problems.length || p.missing.length ? "bad" : "warn")} data-state="">{done ? "Approved" : p.problems.length || p.missing.length ? "Check first" : "To approve"}</span></div>
+    <div className="pr-heads" data-tp-settings="">
+      <label className="pr-hp">Salary payable ledger <select value={co.payrollPayable && ledgers.includes(co.payrollPayable) ? co.payrollPayable : ""} disabled={!canWrite()} onChange={(ev2) => setCo("payrollPayable", ev2.target.value)} aria-label="Salary payable ledger" data-pick-payable="">
+        <option value="">{p.payable ? "As FinCom finds it (" + p.payable + ")" : "Pick the ledger"}</option>{(payables.length ? payables : ledgers).map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
+      <label className="pr-hp">Voucher type <select value={co.payrollVchType || ""} disabled={!canWrite()} onChange={(ev2) => setCo("payrollVchType", ev2.target.value === "Payroll" ? "" : ev2.target.value)} aria-label="Payroll voucher type" data-pick-vchtype="">
+        {types.map((t) => <option key={t} value={t === "Payroll" ? "" : t}>{t}</option>)}</select></label>
+    </div>
     {p.missing.length > 0 && <div className="pr-heads">{p.missing.map((k) => <label key={k} className="pr-hp">{TP.keyWords(k)} → <select value={p.plan[k] || ""} onChange={(ev) => pick(k, ev.target.value)} aria-label={"Tally pay head for " + TP.keyWords(k)}>
       <option value="">Pick the pay head</option>{Object.keys(heads).map((h) => <option key={h} value={h}>{h}</option>)}</select></label>)}</div>}
     {p.problems.length > 0 && <div className="pr-need" data-need=""><p className="pr-line bad"><b>Before posting</b>, Tally needs:</p><ul className="pr-list">{p.problems.map((w, i) => <li key={i}>{w}.</li>)}</ul></div>}
@@ -219,6 +228,7 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
       <More label="Tally XML" id={"xml-" + v.id}><pre className="pr-pre" data-xml="">{TP.payrollVoucherXml(v)}</pre>
         <p className="note">One payroll voucher, Create only, in a posting of its own. FinCom creates no employee or pay head.</p></More>
     </div>)}
+    <p className="pr-line note" data-employer-note="">The employer’s PF and ESI are not in this voucher: book them in Tally separately, as now.</p>
     {res && <Proof res={res} />}
     {!res && past.length > 0 && <Proof res={{ ok: true, proof: past }} />}
     {!done && p.vouchers.length > 0 && (!brOk ? <p className="pr-line pr-install" data-install=""><AlertTriangle width={14} height={14} aria-hidden="true" /> {TPost.OLD_BRIDGE}{br.version ? " (" + (br.where || "the posting computer") + " has " + br.version + ")" : ""}.{" "}
@@ -235,7 +245,7 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
 
 // ---------------------------------------------------------------- the page
 export default function PayrollPage() {
-  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [, kick] = useState(0);
+  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [, kick] = useState(0);
   useEffect(() => { let on = true; import("../../lib/asstEntries.js").then((A) => A.clientLedgers(co)).then((l) => { if (on && l) setLedgers(l.map((x) => x.name)); }).catch(() => {}); return () => { on = false; }; }, [co && co.id]);
   useEffect(() => { if (co && !(S.books && S.books.cid === co.id) && typeof openBooks === "function") Promise.resolve(openBooks(co.id)).then(() => kick((x) => x + 1), () => {}); }, [co && co.id]);
   if (!co) return null;
@@ -257,19 +267,33 @@ export default function PayrollPage() {
     } catch (e) { say("Could not read that sheet: " + ((e && e.message) || e)); }
   };
   const rows = st && st.step === "read" ? st.rows : null, chk = rows ? PS.check(rows) : null, month = chk ? chk.months[0] || "" : "";
-  const keep = async () => { const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); say(rows.length + " employees kept for " + PS.monLabel(month) + "."); };
+  // (review 7) a month kept before (for 24Q too) is replaced only once the person has seen it said
+  const was = rows && !kept ? PS.replacing(books().salary, rows) : { n: 0 };
+  const keep = async () => {
+    if (was.n && !sure) { setSure(true); return; }
+    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); say(rows.length + " employees kept for " + PS.monLabel(month) + ".");
+  };
+  // (review 9) the month of a sheet with no month column: picked on the start card (last month at first); a sheet read by
+  // its saved rule is read again for the month picked
+  const pickMonth = (v) => {
+    const m = String(v || "").replace("-", ""); if (!/^\d{6}$/.test(m)) return;
+    setYm(m); setKept(false); setSure(false);
+    if (st && st.step === "read" && st.rule && st.grid && !(st.rule.map || {}).month && !(st.rule.map || {}).date) setSt(Object.assign({}, st, PS.apply(st.rule, st.grid, st.hi, { month: m })));
+  };
   const once = month && (co.payrollJournal || {})[month];
   const toggleOnce = () => { co.payrollJournal = Object.assign({}, co.payrollJournal); if (once) delete co.payrollJournal[month]; else co.payrollJournal[month] = { by: who(), at: new Date().toISOString() }; saveCo(co); kick((x) => x + 1); };
   return <div className="pr" data-payroll="">
     <Method co={co} onChange={() => kick((x) => x + 1)} />
     {(!st || st.step === "read") && !manual && <section className="pr-card pr-start">
       <label className="btn small primary pr-file"><Upload width={14} height={14} aria-hidden="true" />Salary sheet<input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" data-sheet-in="" onChange={(ev) => { const f = (ev.target.files || [])[0]; ev.target.value = ""; take(f); }} /></label>
+      <label className="pr-inline pr-month" data-sheet-month="">Month <input type="month" value={ym.slice(0, 4) + "-" + ym.slice(4)} onChange={(ev) => pickMonth(ev.target.value)} aria-label="Month of the salary sheet" /></label>
       <button type="button" className="btn small" onClick={() => { setSt(null); setManual(true); }} data-manual="">Enter by hand</button>
       <span className="note">{(co.payrollFormats || []).filter((r) => !r.deleted).length} saved layout{(co.payrollFormats || []).filter((r) => !r.deleted).length === 1 ? "" : "s"}</span>
     </section>}
     {st && st.step === "map" && (st.busy ? <section className="pr-card"><p className="pr-line note">Reading the columns…</p></section> : <MapStep st={st} setSt={setSt} co={co} />)}
     {manual && <Manual ym={ym} setYm={setYm} onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
     {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} />}
+    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them read for 24Q (their exemptions, deductions, regime and PAN are carried over by employee)" : ""}. Keeping this sheet replaces them. <button type="button" className="btn small" onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
     {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}

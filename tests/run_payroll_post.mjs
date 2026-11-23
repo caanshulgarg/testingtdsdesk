@@ -212,7 +212,7 @@ function world(o = {}) {
   };
   const answer = o.answer || ((v) => ({ id: v.id, ok: true, created: 1, vchId: String(100 + posts.length), word: "In Tally" }));
   const g = { tallyVia: () => o.via || "bridge", Bridge: { st: { version: o.version == null ? "2.5.18" : o.version }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers.map((v) => v.id).join(",")); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
-    TCloud: { postThrough: () => (o.through === undefined ? { version: "2.5.18", computer: "MADEUP-PC" } : o.through) }, Cloud: { api: async () => o.jobs || [] } };
+    TCloud: { on: () => true, has: () => o.via === "cloud", postThrough: () => (o.through === undefined ? { version: "2.5.18", computer: "MADEUP-PC" } : o.through) }, Cloud: { api: async () => o.jobs || [] } };
   const rpc = async (fn, a) => { log.push(fn); if (fn === "entry_claim" && o.claim) return o.claim; return { ok: true, a }; };
   const env = { g, A, rpc, co: Object.assign({ id: "c1", payrollMethod: { value: "tally" }, payHeadPlan: { "earn:Basic": "Basic Pay" } }, o.co || {}),
     recheck: async () => o.recheck || "", books: { salary: o.rows || ROWS }, pay: { employees: o.emps || EMPS, heads: o.heads || HEADS }, seen: o.seen };
