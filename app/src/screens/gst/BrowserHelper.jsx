@@ -3,6 +3,7 @@
 // before File. Here: whether it is installed, "Open the portal for this return", "Log in to GST portal" (a login saved in
 // GST settings), the status of each step, the comparison with the portal, and the ARN once filed. The talking to the
 // extension is GSTB (src/js/84-gst-browser.js).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 // GSTB (src/js/84-gst-browser.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/84-gst-browser.js";

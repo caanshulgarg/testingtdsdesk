@@ -29,6 +29,8 @@ function note(build) {
     document.body.appendChild(d);
   }
   d.querySelector("button").onclick = () => reloadNow(d);
+  // next-speed-2 (the speed plan, #8): the new build's first files fetched now (lib/prefetchBuild.js), so Reload is quick
+  import("./lib/prefetchBuild.js").then((m) => m.prefetchBuild(build), () => {});
 }
 // Reload pressed: what is waiting to be saved is saved first (the same path as hiding the tab, src/js/27
 // flushBillSavesAndSend), and the page waits for those saves (a few seconds at most); a page with unsaved changes

@@ -3,6 +3,7 @@
 // browser, never shown again once saved ("saved · change"), and given back only for the one fill when someone allowed
 // presses "Log in to GST portal" (each read logged). Only the firm's owner saves, changes or deletes it and picks the
 // staff who may use it. Talking to the server is GSTB (src/js/84-gst-browser.js).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 // GSTB (src/js/84-gst-browser.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../../src/js/84-gst-browser.js";

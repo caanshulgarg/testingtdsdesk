@@ -53,7 +53,6 @@ const GST_DEFAULTS = {cgst:"Input CGST", sgst:"Input SGST", igst:"Input IGST"};
 const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
-const DB_LIMIT = 5000;
 const APP_VERSION = "30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again)";
 // the bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "{{BRIDGE_SETUP_SHA}}";

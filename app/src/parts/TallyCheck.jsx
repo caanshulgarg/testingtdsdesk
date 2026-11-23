@@ -10,6 +10,7 @@
 // one day at a time, only while Tally is free, each request stopped at 2 seconds, postings first; "Bring books from Tally"
 // goes first. Its own file, loaded only with the Tally page and Books › From Tally (the app's first file and legacy.js stay
 // within budget).
+import "../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 import { nf, day8, dayLong, hm, fyNow, plural, rpc, missing, may, TurnOn, bookSum, summary, etaWords, partWords, askStatus, askOff, bookFetch, paceWords, useLive, entryCols } from "./TallyFetch.jsx";
 import ListTable from "./ListTable.jsx";

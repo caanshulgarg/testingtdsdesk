@@ -3,6 +3,7 @@
 // viewSelfTest (src/js/01) and ClosedP.pane (src/js/47). Buttons are doAct cases (resetRules, runSelfTest, copyDiag,
 // testOcr, testGoogle, testReader, askPerm, dlStandalone); boxes go through rateSet, readingToggle and closedSet
 // (src/js/18, 27, 47).
+import "../../../src/js/99-screen-parts.js";
 import CommitBox from "../parts/CommitBox.jsx";
 import DateBox from "../parts/DateBox.jsx";
 

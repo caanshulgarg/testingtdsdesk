@@ -140,12 +140,17 @@ Cloud.factors = async function(){
   return (u.factors || []).filter(f => f.factor_type === "totp");
 };
 // asks the server whether this sign-in still needs the code; sets st.mfa when it does
+// next-speed-2 (the speed plan, #15): the server's "no code needed" for this sign-in is taken again for 15 s (the sign-in
+// asks, and the sync it starts asked again at once); a code needed, or another sign-in, is always asked
 Cloud.checkMfa = async function(){
   if (!this.on()) { this.st.mfa = null; return null; }
+  const tok = (this.sess() || {}).access_token, kept = this._mfaNo;
+  if (kept && kept.tok === tok && Date.now() - kept.at < 15000){ this.st.mfa = null; return null; }
   let st;
   try { st = await this.rpc("mfa_status"); this.st.mfaInfo = st || null; }
   catch (e){ if (/mfa_status|could not find|404/i.test(e.message)) { this.st.mfa = null; return null; } throw e; }   // a server without two-step yet
-  if (!st || st.ok !== false){ this.st.mfa = null; return null; }
+  if (!st || st.ok !== false){ this.st.mfa = null; this._mfaNo = {tok, at: Date.now()}; return null; }
+  this._mfaNo = null;
   const list = await this.factors();
   const good = list.find(f => f.status === "verified");
   if (good){ this.st.mfa = {need: "code", factorId: good.id}; return this.st.mfa; }
@@ -171,8 +176,6 @@ function mfaQrSrc(qr){
   }
   return "";
 }
-// grouped for typing by hand: JBSW Y3DP EHPK 3PXP
-function mfaKeyGroups(k){ return String(k || "").replace(/\s+/g, "").replace(/(.{4})(?=.)/g, "$1 "); }
 // a new authenticator entry: the QR code and the key to type in by hand
 Cloud.enrolStart = async function(){
   // an earlier half-finished set-up is dropped first
@@ -268,15 +271,6 @@ function flushAuditLater(){
   if (!q.length) return;
   lsDel("tdsdesk:auditlater");
   q.forEach(row => auditEvent(row.what, row.detail + " (recorded after signing in again)"));
-}
-// Settings → Firm account, the owner: every computer and phone signed in to this account is signed out (Settings
-// screen: app/src/screens/Account.jsx)
-async function signOutAll(){
-  const a = await askConfirm({title: "Sign out of all devices?", ok: "Sign out everywhere", body: '<p class="note">Every computer and phone signed in to your account is signed out, this one too. Work already synced stays in the firm account.</p>'});
-  if (!a) return;
-  try { await Cloud.authApi("logout?scope=global", "POST"); }
-  catch (e){ toast("Could not reach the firm account: " + e.message); return; }
-  signOutHere("Signed out of all devices.", false, "");
 }
 // removes this firm's copy from this browser (only after everything has reached the firm account)
 async function clearLocalCopy(){

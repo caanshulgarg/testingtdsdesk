@@ -5,6 +5,7 @@
 // ltrCfgType (src/js/46).
 //
 // State: S.ltr (mode, asOn, remOn, sides, min, q, show, sel: parties ticked, credit, tone, busy, tally).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect } from "react";
 import NoBooks from "../../parts/NoBooks.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";

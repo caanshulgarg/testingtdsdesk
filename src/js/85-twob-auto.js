@@ -120,7 +120,6 @@ const GSTAutoMatch = {
   decide(reg, id, decision, checked){ if (id) m2bDecide(reg, [id], decision, checked); }
 };
 if (typeof window !== "undefined") window.GSTAutoMatch = GSTAutoMatch;
-function m2bAgain(reg){ M2B.sync(reg, "match again", true); }
 function m2bDecide(reg, ids, decision, checked){
   const s = M2B.st[M2B.key(reg, M2B.fyNow())], rows = ((s && s.run && s.run.result && s.run.result.rows) || []).filter(r => r.st === "probable" && ids.includes(r.id));
   M2B.decide(reg, rows, decision, checked);

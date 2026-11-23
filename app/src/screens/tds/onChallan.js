@@ -3,6 +3,7 @@
 // here (TDS.challans()); one pointing at a challan that is not here is NOT on a challan: it is listed under "Not on any
 // challan" with "Its challan <serial> is missing — choose again". The header's count, the Challans grid, the Deductions
 // selector, its footer and "+ Add deduction" all read these.
+import "../../../../src/js/99-screen-parts.js";
 import "../../lib/tdsGlobals.js";
 
 // the ids of the challans here

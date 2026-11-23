@@ -9,6 +9,7 @@
 //   what blocks the file; tips.
 // The figures and the decisions are TDSMatch's (src/js/86) and the register's (TDSReg, src/js/79); nothing here works
 // out a match.
+import "../../../../src/js/99-screen-parts.js";
 import { useState, useRef } from "react";
 import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 import { AddChallan, SrcBadge, say } from "./Register.jsx";

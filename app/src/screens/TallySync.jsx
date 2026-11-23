@@ -2,6 +2,7 @@
 // received it (tally_recorder_lines; Rec in src/js/61), newest first, 200 at most, for the firm or one client. A strip of
 // the lines waiting over 2 minutes in one flow (Needs you / Being fetched, below); filters Waiting, Mismatch (the ledger check, F37-40: none yet), Today; an
 // Apply now on a held line (tally_recorder_release_held; the owner's rule of 05-Oct-2026: any member who may write). New lines come in live (Live.joinRecorder, src/js/54).
+import "../../../src/js/99-screen-parts.js";
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import { ClearBtn } from "../parts/Bell.jsx";

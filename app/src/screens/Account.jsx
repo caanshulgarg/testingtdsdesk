@@ -4,6 +4,7 @@
 // viewDocsSettings and viewDropKeys (src/js/19). The work is Cloud and loadAccount; buttons go through doAct (cloudSignIn,
 // cloudSync, cloudPassword, addPerson, backupNow…), which read the boxes by their id or data-cloud as before, and
 // acctPerson, acctBackup, acctDropOff, cloudAuto, signOutAll, docsKeep, docYearsSet (src/js/27, 19, 43).
+import "../../../src/js/99-screen-parts.js";
 import Msg from "../parts/Msg.jsx";
 
 import { BotBox, KeepBox } from "./SignIn.jsx";

@@ -76,16 +76,33 @@ const TCloud = {
     this._del = {k, set};
     return set;
   },
+  // next-speed-2 (the speed plan, #11): one book's entries in GUID order (the GUID is unique in a book) are read page after
+  // page from the last GUID (keyset: guid=gt.), not by an offset the database counts through again for every page; the same
+  // rows in the same order. Any other list: by offset, as before
   async restPages(path){
-    let out = [], off = 0;
+    let keyed = /^tally_vouchers\?select=guid[,&]/.test(path) && /&book_id=eq\./.test(path) && /&order=guid\.asc$/.test(path);
+    let out = [], off = 0, after = null;
     for (;;){
-      const page = await Cloud.api(path + "&limit=1000&offset=" + off) || [];
+      const page = await Cloud.api(path + (keyed ? (after !== null ? "&guid=gt." + encodeURIComponent(after) : "") + "&limit=1000" : "&limit=1000&offset=" + off)) || [];
       if (!Array.isArray(page)) throw Error("not a list");
+      // (a server that did not take the GUID filter: the rest by offset, so nothing is read twice)
+      if (keyed && after !== null && page.length && !(String(page[0].guid) > after)){ keyed = false; continue; }
       out = out.concat(page);
       if (page.length < 1000) return out;
       off += 1000;
+      if (keyed){ const g = page[page.length - 1] && page[page.length - 1].guid; if (typeof g !== "string" || !g) throw Error("an entry without its GUID"); after = g; }
     }
   },
+  // next-speed-2 (the speed plan, #11): f over chunks of 40 GUIDs (the gateway's address limit), 4 chunks at a time, the
+  // answers in the chunks' order (one after another before)
+  async byChunks(g, f){
+    const ch = []; for (let i = 0; i < g.length; i += 40) ch.push(g.slice(i, i + 40));
+    const out = new Array(ch.length);
+    await this.capped4(ch.map((c, k) => async () => { out[k] = await f(c); }));
+    return out;
+  },
+  // (a chunk that fails: no further chunk is asked, the error is the answer)
+  async capped4(jobs){ let i = 0, bad = false; await Promise.all(Array.from({length: Math.min(4, jobs.length)}, async () => { while (i < jobs.length && !bad){ try { await jobs[i++](); } catch (e){ bad = true; throw e; } } })); },
   // the client's books in the cloud (one per Tally company; the latest first)
   async status(cid, force){
     const s = this.st[cid] = this.st[cid] || {};
@@ -548,7 +565,7 @@ const TCloud = {
     let last = [];
     try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
     const newest = (last[0] || {}).applied_at || seen;
-    const byGuids = async (g) => { let out = []; for (let i = 0; i < g.length; i += 40) out = out.concat(await read("&guid=in.(" + g.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")); return out; };
+    const byGuids = async (g) => [].concat(...await this.byChunks(g, c => read("&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")));
     // next-fast-open (Leads, 20-Oct-2026: 4,414 entries' full heads, 2.8 MB, on every opening): books already here are
     // checked with each entry's GUID, AlterID and deletion; only the entries new, later, deleted, or with Tally's TDS
     // details not here yet are read in full. A cloud without the columns, or a failed read: every head, as before
@@ -596,13 +613,13 @@ const TCloud = {
   async copyRows(b, bk, copy, held){
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
     const need = held ? (copy.heads || []).filter(h => h && h.guid && !h.deleted_at && BookSrc.wins(h.alter_id, held.get(h.guid) || null)).map(h => h.guid) : BookSrc.need(b, copy.heads);
-    let lines = [], bills = [];
-    for (let i = 0; i < need.length; i += 40){
-      const g = "&guid=in.(" + need.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
-      lines = lines.concat(await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc"));
-      try { bills = bills.concat(await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc")); } catch (e){}
-    }
-    return {lines, bills};
+    const got = await this.byChunks(need, async (c) => {
+      const g = "&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
+      const l = await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc");
+      let bl = []; try { bl = await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc"); } catch (e){}
+      return {l, bl};
+    });
+    return {lines: [].concat(...got.map(x => x.l)), bills: [].concat(...got.map(x => x.bl))};
   },
   copyPut(b, bk, copy, rows){
     const n = BookSrc.apply(b, copy.heads, rows.lines, rows.bills);

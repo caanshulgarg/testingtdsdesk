@@ -17,6 +17,7 @@
 //     keeps every earlier version with who saved it and when), each with its own log: drafted, every change, downloads,
 //     each press of Post and what Tally said. Removing a draft is soft (kept, marked removed, can be restored).
 // Nothing here posts by itself: post() runs only from the person's click on the preview.
+import "../../../src/js/99-screen-parts.js";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";

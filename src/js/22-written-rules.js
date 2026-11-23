@@ -239,20 +239,6 @@ async function copyRulesTo(rules){
   render();
 }
 
-/* ---------- the rules screen ---------- */
-function ruleWhenText(r){
-  const w = r.when || {}, bits = [];
-  (w.text || []).forEach(c => { if (String(c.v || "").trim()) bits.push({has: "contains", not: "does not contain", starts: "starts with", is: "is"}[c.op] + " \u201c" + c.v + "\u201d"); });
-  if (w.dir === "out") bits.push("money out");
-  if (w.dir === "in") bits.push("money in");
-  if ((w.modes || []).length) bits.push(w.modes.join("/"));
-  if (w.amtMin !== "" && w.amtMin != null) bits.push("at least " + INR.format(num(w.amtMin)));
-  if (w.amtMax !== "" && w.amtMax != null) bits.push("at most " + INR.format(num(w.amtMax)));
-  if (w.acNo) bits.push("account ending " + String(w.acNo).slice(-4));
-  if (w.account && w.account !== "any") bits.push("one bank account only");
-  if (w.from || w.to) bits.push("between " + (w.from ? fmtDate(w.from) : "start") + " and " + (w.to ? fmtDate(w.to) : "end"));
-  return bits.join(" \u00b7 ") || "no conditions yet";
-}
 /* ---------- writing a rule ---------- */
 async function openRuleEditor(rule, isNew){
   const b = B(), co = CO(b.cid);
@@ -840,17 +826,6 @@ function bankVisibleRows(){
   return b.rows.filter(r => !bankAside(r) && inBankRange(r) && (!states || bankTabOf(r) === tab || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
 }
 let bankLastClicked = null;
-function bankToggle(cb, shift){
-  const b = B(); if (!b) return;
-  const id = cb.dataset.bsel;
-  if (shift && bankLastClicked && bankLastClicked !== id){
-    const vis = bankVisibleRows().slice(0, b.limit).map(r => r.id);
-    const i = vis.indexOf(bankLastClicked), j = vis.indexOf(id);
-    if (i >= 0 && j >= 0){ const [lo, hi] = i < j ? [i, j] : [j, i]; vis.slice(lo, hi + 1).forEach(x => { if (cb.checked) b.sel.add(x); else b.sel.delete(x); }); }
-  } else if (cb.checked) b.sel.add(id); else b.sel.delete(id);
-  bankLastClicked = id;
-  bankLightRefresh();
-}
 // the ticks and the bottom bar only (React alone redraws, not the old screens around it)
 function bankLightRefresh(){ FinComReact.redraw(); }
 async function askClaudeForLedgers(){
@@ -1063,13 +1038,8 @@ function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith(
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }
 // one date format everywhere, DD-MMM-YYYY (review of 01-Oct-2026: lists showed "05 Aug" with no year)
 function shortDate(iso){ return iso ? fmtDate(String(iso).slice(0, 10)) : ""; }
-function bkAmt(n){ return n ? INR.format(r2(n)) : ""; }
 // a statement's account; one missing from the client (lost in an older sync) comes back from the statement (src/js/60)
 function accountFor(st){ const co = CO(B().cid); return (co.bankAccounts || []).find(a => a.id === st.acctId) || (st && st.acctId ? bankAccountOf(co, st) : null) || {}; }
-function stmtLabel(st){
-  const acc = accountFor(st);
-  return (exactLedger(acc.ledger) || (st.bank + (acc.last4 ? " \u00b7\u00b7" + acc.last4 : ""))) + " \u2014 " + shortDate(st.from) + " to " + shortDate(st.to) + " " + String(st.to || "").slice(0, 4);
-}
 function ledgerOptions(selected, preferGroups){
   const list = Array.from(knownLedgers().values());
   const pref = preferGroups ? list.filter(l => preferGroups.test(l.group || "")) : [];

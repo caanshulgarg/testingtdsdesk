@@ -363,12 +363,6 @@ function xesc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"
 function blobUrl(f){ return URL.createObjectURL(/^(application\/pdf|image\/(png|jpe?g|gif|webp))$/i.test(f.type || "") ? f : new Blob([f], {type: /\.pdf$/i.test(f.name || "") ? "application/pdf" : "application/octet-stream"})); }
 // a CSV cell's text: one that Excel would take for a formula (= + - @, not a number) is kept as text
 function csvTxt(v){ const s = String(v == null ? "" : v); return typeof v === "string" && /^[=+\-@\t\r]/.test(s) && !/^-?[\d,.]+$/.test(s) ? "'" + s : s; }
-// num, r2, INR, MONTHS3, toDateObj, fmtDate: server/_shared/gst3b.js (shared with the gst-run function)
-const INR0 = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
-// a negative amount reads "-₹1,234.00" (the minus before the rupee sign; colour scheme of 02-Oct-2026), shown in red by negAmounts
-// a Tally narration as shown on the screen: without FinCom's matching mark (" | TDSDesk:<id>", kept in Tally so FinCom can
-// find its own entries; never shown, owner's spec K1)
-function shownNarr(s){ return String(s == null ? "" : s).replace(/\s*\|?\s*TDSDesk:[A-Za-z0-9]+/gi, "").trim(); }
 function money(n){ const v = num(n); return (v < 0 ? "-₹" : "₹") + INR.format(Math.abs(v)); }
 // one amount format on the screen (owner's spec K5, 04-Oct-2026): Indian grouping, two decimals, ₹1,25,000.00; money0 was
 // whole rupees and is kept by name for its many callers
@@ -520,8 +514,6 @@ function plainMessage(s){
   if (!p) return null;
   return {text: (head ? head.replace(/[.:]+$/, "") + ". " : "") + p.text, details: p.details};
 }
-// the plain words alone, for a message built into a sentence
-function plainText(s){ const p = plainMessage(s); return p ? p.text.replace(/\.$/, "") : String(s == null ? "" : s); }
 // toast(msg, {actions: [{label, run}]}): the message, and after it a button for each action ("Stay here", "Undo",
 // "Review them →"; smart moves round 1, 09-Oct-2026). The message keeps its own words; the buttons sit beside it in
 // their own span (data-toast-acts), so a check of the message's words is not changed by them

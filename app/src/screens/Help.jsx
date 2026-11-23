@@ -6,6 +6,7 @@
 //
 // State: S.sup (tab, list, filter, q, gq: guide search, art: the article open, open/detail: a ticket, newOpen, draft,
 // files, rtext, rfiles, rint, dstat, dpri, dfirm, dq, busy).
+import "../../../src/js/99-screen-parts.js";
 import Loading from "../parts/Loading.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import { Calls } from "../calls/launch.js";
