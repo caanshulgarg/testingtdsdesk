@@ -9,7 +9,7 @@ import "../../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { r3bTables, r3bBills, R3B_CLICK } from "./portal.js";
-import { r3bNeeds } from "../../lib/gst3bNil.js";
+import { r3bNeeds, r3bCarry, nlsSet } from "../../lib/gst3bNil.js";
 import { Pop } from "./ItcParts.jsx";
 import FigureDetail, { FIG_LABEL } from "./ItcFigure.jsx";
 
@@ -50,7 +50,8 @@ function Bills({ id, per, reg, t, label }) {
 // 6.1, one head: the tax payable, the credit used head by head, the cash, the credit carried
 function PayDetail({ t, head }) {
   const P = t.pay || { use: {}, cash: {}, rcmCash: {}, carry: {} }, HW = { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" };
-  const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
+  // (A): 3.1(a) with 3.1(b)'s IGST and cess, as the set-off takes them (P.due; the owner, 23-Nov-2026)
+  const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((P.due || t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
     ["Credit brought forward", num((t.opening || {})[head])], ["Net ITC of the month, 4(C)", num((t.netItc || {})[head])]]
     .concat(num(((P.negAdj || {})[head])) ? [["Less: negative liability of an earlier month adjusted (Negative Liability Statement)", -num(P.negAdj[head])]] : [])
     .concat(["igst", "cgst", "sgst", "cess"].map((c) => ["Paid with " + HW[c] + " credit", num(((P.use || {})[c] || {})[head])]))
@@ -63,10 +64,12 @@ function PayDetail({ t, head }) {
 // under 6.1: the tax payable (A) + (B) by head, and the electronic credit ledger brought forward and carried (FinCom's working)
 function Ledger({ t }) {
   const H = ["igst", "cgst", "sgst", "cess"], P = t.pay, line = (f) => H.map((k) => HEADW[k] + " " + money(f(k))).join(" · ");
-  return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
+  return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((P.due || t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
     Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.
     {P.negAdj && <><br /><span data-r3b-negadj="">Negative liability of an earlier month set against this month's tax: {line((k) => num(P.negAdj[k]))}.</span></>}
-    {(P.carry || {}).neg && <><br /><b data-r3b-neg="" style={{ color: "var(--warn)" }}>Needs you: the tax in 3.1 is negative in a head (credit notes above the sales). FinCom carries {line((k) => num(P.carry.neg[k]))} as negative liability and sets it against next month's tax of the same head, as the portal's Negative Liability Statement does. Check that the portal shows the same figure there before filing; if the offline tool refuses the negative figure, enter 3.1 on the portal.</b></>}</p>;
+    {/* (re-review of bac94a801, N1) 3.1 is never negative in the return: a head below nil is shown nil and carried as
+        negative liability; it is set against a later month's tax only once the CA confirms the portal's statement */}
+    {(P.carry || {}).neg && <><br /><span data-r3b-neg="">Carried as negative liability (3.1 below nil in a head, shown as nil in the return): {line((k) => num(P.carry.neg[k]))}. It is set against a later month’s tax once you confirm the portal’s Negative Liability Statement shows it.</span></>}</p>;
 }
 
 export default function R3bPortal({ b, t, cloud }) {
@@ -80,9 +83,15 @@ export default function R3bPortal({ b, t, cloud }) {
   const close = () => { S.r3bOpen = ""; render(); };
   const openTb = open && tables.find((tb) => tb.rows.some((r) => r.id === open)), openRow = openTb && openTb.rows.find((r) => r.id === open);
   const is4 = /^4/.test(open), is61 = /^6\.1[AB]\|/.test(open);
-  const needs = r3bNeeds(t);
+  const needs = r3bNeeds(t, !!(typeof GSTF === "object" && (GSTF.peek(ym, reg) || {}).r3b)), carried = r3bCarry(t, ym);
+  // (re-review of bac94a801, N1) the CA's word that the portal's Negative Liability Statement shows the negative liability
+  // carried in (books.gst3b["<reg>|<month>"].nls, GSTR.nlsOk); then it is set off this month
+  const who = (S.account && S.account.me && S.account.me.email) || "", nlsTo = (on) => { nlsSet(S.books, reg, ym, on, who); GSTR._carry = null; saveBooks(); render(); }, nlsYes = () => nlsTo(true);
+  const nlsDone = !!((S.books.gst3b || {})[reg + "|" + ym] || {}).nls && t.pay && t.pay.negAdj;
   return <div data-r3b-portal="">
-    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}</p>)}
+    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}{/Negative Liability Statement/.test(m) && <> <button type="button" className="btn small" data-r3b-nls="" onClick={nlsYes}>The portal shows it</button></>}</p>)}
+    {carried.map((m, i) => <p key={"c" + i} className="note" data-r3b-carry={i}>{m}</p>)}
+    {nlsDone && <p className="note" data-r3b-nls-done="">You confirmed the portal’s Negative Liability Statement shows the negative liability set off here. <button type="button" className="linkbtn" onClick={() => nlsTo(false)}>Undo</button></p>}
     {tables.map((tb) => {
       return <section key={tb.id} className="r3b-t" data-r3b-table={tb.id}>
         <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="">

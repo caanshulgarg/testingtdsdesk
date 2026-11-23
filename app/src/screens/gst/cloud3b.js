@@ -33,10 +33,20 @@ function ask(cid, reg, ym, s) {
   Cloud.fn("gst-run", { action: "month", client_id: cid, reg, ym }).catch(() => null);
 }
 
+// (re-review of bac94a801) what the cloud does not read: the GSTR-1 corrections (books.r1Fix) and the ITC adjustments
+// (books.itcAdj) are laid over the 3B here (gstr1Fix.js, itcFinal.js), and a month's carry reaches the months after it:
+// a month at or after one corrected so is worked out here, never the cloud's
+export function correctedHere(reg, ym) {
+  const b = S.books || {}, r1 = b.r1Fix || {};
+  return Object.keys(r1).some((k) => { const [g, m] = k.split("|"), c = r1[k] && r1[k].cur; return g === reg && m <= ym && c && ((c.adds || []).length || Object.keys(c.mods || {}).length || Object.keys(c.dels || {}).length); })
+    || Object.values(b.itcAdj || {}).some((a) => a && (a.reg || "") === reg && String(a.ym || "") <= ym)
+    || Object.entries(b.itcDec || {}).some(([k, d]) => k.split("|")[0] === reg && d && String(d.ym || "") <= ym);   // an ITC decision too
+}
+
 // -> {t, at}: the cloud's 3B to show; {wait: true}: its first answer awaited; null: work it out here
 export function cloud3b(ym, reg) {
   const cid = S.coId;
-  if (!cid || !ym || !reg || !S.books || typeof Cloud !== "object" || !Cloud.on() || typeof GST3B_SRC !== "string" || !GST3B_SRC) return null;
+  if (!cid || !ym || !reg || !S.books || typeof Cloud !== "object" || !Cloud.on() || typeof GST3B_SRC !== "string" || !GST3B_SRC || correctedHere(reg, ym)) return null;
   const k = cid + "|" + reg + "|" + ym;
   let s = st.get(k);
   if (!s) st.set(k, s = { done: false, busy: false, at: 0, asked: 0, res: null });

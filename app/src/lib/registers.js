@@ -781,18 +781,70 @@ const SheetPost = {
     const run = () => this.toSalesNow(docs, cid, fileName);
     return typeof salesByNo === "function" ? salesByNo(run) : run();
   },
+  // a credit note's number from its invoice's (as cnNumber, src/js/26-sales-invoice.js, Edit type): "<number>-CN<n>", at
+  // most 16 of letters, digits, - and / (GSTR-1's note number), the invoice's end kept, cut at a / or -
+  cnNumber(base, n, tag){
+    const suf = "-" + (tag || "CN") + n, keep = 16 - suf.length, b = String(base).replace(/[^A-Za-z0-9\/-]/g, "");
+    let t = b.slice(-keep); if (t.length < b.length && !/[\/-]/.test(b[b.length - keep - 1])) t = t.replace(/^[^\/-]*/, "") || b.slice(-keep);
+    return t.replace(/^[\/-]+/, "") + suf;
+  },
   toSalesNow(docs, cid, fileName){
     const s = SL(), res = {added: 0, held: 0, again: 0, fixed: 0, ids: []};
     const byNo = new Map(), put = v => { const k = normInv(v.x.number); (byNo.get(k) || byNo.set(k, []).get(k)).push(v);
       if (typeof salesNoIdx !== "undefined" && salesNoIdx && typeof normInvNo === "function"){ const j = normInvNo(v.x.number); (salesNoIdx.get(j) || salesNoIdx.set(j, []).get(j)).push(v); } };
     s.list.forEach(v => { const k = normInv(v.x.number); (byNo.get(k) || byNo.set(k, []).get(k)).push(v); });
     const ofNo = n => byNo.get(normInv(n)) || [];
+    // (the owner, 23-Nov-2026; review of ad4be74c3) a marketplace credit note with no number of its own (a return of the
+    // invoice, read under the invoice's number): "<invoice>-CN1", "-CN2" in order of return date, a number GSTR-1 takes
+    // (letters, digits, - and /, at most 16: the invoice's end kept, never two alike). Kept on a re-import: a return of the
+    // same invoice, day and party already here (so numbered, or "<invoice> (CN)" / "(CN-n)" before) keeps its number; its
+    // amount revised, that note is put right while it waits (cnRev), a further note once posted; a new return takes the
+    // next number after the highest here
+    const cnNo = new Map(), cnOf = new Map(), cnRev = new Map(), cnOld = new Set(), taken = new Set(s.list.map(v => String(v.x.number || "").toUpperCase()));
+    const pty = d => d.party || (d.gstin ? "" : "Retail customer");
+    // (decided after the review of ad4be74c3) every credit note so (a register's negative row as a marketplace's return),
+    // whose number does not already start "CN" or end "-CN<n>"
+    docs.forEach(d => { if (d.note === "credit" && d.no && !/^cn|-CN\d+$/i.test(d.no)) (cnOf.get(d.no) || cnOf.set(d.no, []).get(d.no)).push(d); });
+    cnOf.forEach((list, base) => {
+      const esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), old = new RegExp("^" + esc + " \\(CN(?:-(\\d+))?\\)$", "i"), used = new Set();
+      const safe = base.replace(/[^A-Za-z0-9\/-]/g, ""), isNew = (no) => { const m = /-CN(\d+)$/i.exec(no || ""); return !!m && this.cnNumber(safe, +m[1]).toUpperCase() === String(no).toUpperCase(); };
+      // (re-review of bf5c7f9c0) a note kept with its invoice (cnOf) is that invoice's only: two invoices whose numbers end
+      // alike never share one; a note kept before cnOf by its number
+      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && (v.x.cnOf ? v.x.cnOf === base : (normInv(v.x.number) === normInv(base) || old.test(v.x.number || "") || (v.x.againstInvoice === base && /-CN\d+$/i.test(v.x.number || "")) || isNew(v.x.number))));
+      let k = have.reduce((a, v) => Math.max(a, +((/(?:-CN|\(CN-)(\d+)\)?$/i.exec(v.x.number) || [])[1] || 0)), 0);
+      let kd = 0;
+      const mk = (tag) => { let n; do { n = this.cnNumber(safe, tag ? ++kd : ++k, tag); } while (taken.has(n.toUpperCase())); taken.add(n.toUpperCase()); return n; };
+      // a number of its own (no invoice of it, here or in the sheet, and no earlier note numbered from it; never a
+      // marketplace return, read under its invoice's): kept as it is, the first note of it
+      let own = !have.length && !["amazon", "flipkart", "shopify"].includes(list[0].market) && !docs.some(x => x.note !== "credit" && normInv(x.no) === normInv(base)) && !s.list.some(v => (v.x.noteKind || "") !== "credit" && !v.hold && normInv(v.x.number) === normInv(base));
+      list.slice().sort((a, c) => String(a.date || "").localeCompare(String(c.date || ""))).forEach(d => {
+        const hit = have.find(v => !used.has(v) && (v.x.date || "") === (d.date || "") && this.sameParty(v.x.customerGstin, v.x.customerName, d.gstin, pty(d)));
+        // (re-review of bac94a801) a figure this note had before (an older report brought in again) never puts it back
+        if (hit){ used.add(hit); const T0 = Math.abs(num(d.total)); if (Math.abs(num(hit.x.total) - T0) >= 0.005){ if ((hit.x.cnSeen || []).some(z => Math.abs(z - T0) < 0.005)) cnOld.add(d); else cnRev.set(d, hit); } }
+        const late = hit && cnRev.has(d) && !(["review", "ready"].includes(hit.status) && !hit.postJob && hit.x.irnStatus !== "active");
+        // posted: the difference only, held for a person, from the figures last seen (cnLast): more returned, a further
+        // credit note; less (s.34(3)), a debit note, or the credit note corrected in Tally (re-review of bf5c7f9c0)
+        let tag = "";
+        if (late){ cnRev.delete(d); const T0 = Math.abs(num(d.total)), F = ["taxable", "cgst", "sgst", "igst", "cess", "total"], last = hit.x.cnLast || hit.x, was = Math.abs(num(last.total));
+          const df = {}; F.forEach(f => { df[f] = r2(Math.abs(num(d[f])) - Math.abs(num(last[f]))); });
+          hit.x.cnSeen = (hit.x.cnSeen || [Math.abs(num(hit.x.total))]).concat([T0]); hit.x.cnLast = {}; F.forEach(f => { hit.x.cnLast[f] = Math.abs(num(d[f])); });
+          if (df.total > 0){ F.forEach(f => { d[f] = -df[f]; });
+            d.hold = d.hold || "This return's amount went up after its credit note " + hit.x.number + " was posted (" + was + " then, " + T0 + " now): this further credit note is for the difference only; check it"; }
+          else { tag = "DN"; d.note = "debit"; F.forEach(f => { d[f] = -df[f]; });
+            d.hold = d.hold || "This return was reduced after its credit note " + hit.x.number + " was posted (" + was + " then, " + T0 + " now): this debit note of " + r2(-df.total) + " takes back the difference (section 34(3)). Post it, or instead correct the credit note in Tally to " + T0 + " and delete this one"; } }
+        cnNo.set(d, hit && !late ? hit.x.number : tag ? mk(tag) : own && !taken.has(String(base).toUpperCase()) ? (taken.add(String(base).toUpperCase()), base) : mk()); own = false; });
+    });
     docs.forEach(d => {
+      const cnMine = cnNo.get(d), rev = cnRev.get(d);
+      if (cnOld.has(d)){ res.again++; return; }   // an older figure of a note already here
+      // a return's amount revised in a later report: its note, still waiting, put right in place
+      if (rev){ rev.x.cnSeen = (rev.x.cnSeen || [num(rev.x.total)]).concat([Math.abs(num(d.total))]); Object.assign(rev.x, {taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, items: this.items(d, Math.abs)});
+        if (rev.status === "ready") rev.status = "review"; mapInvoice(rev); res.fixed++; res.ids.push(rev.id); return; }
       // (the registration the invoice is issued from is never the customer's; the client's other registration, a supply
       // between its own branches, is: reviews of 2b565f7e7 and a61ffbb12)
       const own = [this.issuer(d, "sales", cid)].filter(Boolean);
       d = this.notOwn(d, own[0]);
-      const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
+      const no = cnMine || d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
       const ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
       // already here: the same number and date AND the same party (its GSTIN, else its name) AND the same total (review
       // H1 of cf58b7cc9: number and date alone let another party's invoice of that number be written over). Anything
@@ -845,7 +897,7 @@ const SheetPost = {
       const mk = ["amazon", "flipkart", "shopify"].includes(d.market) ? d.market : "";
       const v = newInvoice(Object.assign({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total),
-        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab)},
+        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", ...(cnMine && cnMine !== d.no ? {cnOf: d.no} : {}), sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab)},
         mk ? {ecommerce: mk, tcs: Math.abs(num(d.tcs)), placeOfSupply: (d.pos && typeof GST_STATES === "object" && GST_STATES[d.pos]) || d.pos || ""} : null), mk && !d.hold ? "market" : "sheet", {fileName, market: mk || undefined, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""},
         // (item 1: what the sheet itself gave; a GSTIN or place of supply it did not give comes from the party's Tally
         // ledger, src/js/25 salesPartyFill)

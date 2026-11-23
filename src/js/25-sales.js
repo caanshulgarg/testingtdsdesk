@@ -701,6 +701,7 @@ function salesVoucherXml(v, co){
     (pos && GST_STATES[pos] ? "<STATENAME>" + xesc(GST_STATES[pos]) + "</STATENAME>\n<PLACEOFSUPPLY>" + xesc(GST_STATES[pos]) + "</PLACEOFSUPPLY>\n" : "") +
     "<COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>\n" +
     (salesCmpGstin(v, co) ? "<CMPGSTIN>" + xesc(salesCmpGstin(v, co)) + "</CMPGSTIN>\n" : "") +
+    (co.multiGstin ? vchGstReg(co, salesCmpGstin(v, co)) : "") +   // (the owner's approval of 23-Nov-2026: src/js/01)
     (x.irn && x.irnStatus !== "cancelled" ? "<IRN>" + xesc(x.irn) + "</IRN>\n" : "") +
     "<NARRATION>" + xesc((x.noteKind === "credit" ? "Being credit note " : x.noteKind === "debit" ? "Being debit note " : v.source === "created" ? "Sales invoice " : "Being sales invoice ") + x.number + " dated " + fmtDate(x.date) + " to " + (x.customerName || v.customerLedger) + " | TDSDesk:" + v.id) + "</NARRATION>\n" +
     "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISINVOICE>No</ISINVOICE>\n<ISOPTIONAL>" + (co.createOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";

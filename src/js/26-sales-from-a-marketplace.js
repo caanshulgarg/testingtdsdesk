@@ -281,7 +281,7 @@ async function salesCheckTally(list){
     // (an invoice posted before as a duplicate on a person's say-so: a voucher of its number and amount may be the one
     // that attempt made, or the one it duplicated; never taken for it by itself: the person is asked again)
     const hit = v.dupOverrideLog ? null : same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
-    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); n++; }
+    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
     else if (had) mapInvoice(v);
   });
@@ -352,6 +352,9 @@ async function salesAutoSync(checkOnly, asked){
 }
 // next-fix-sales-sync (16-Nov-2026: "Post to Tally" did nothing on one computer): never silent. Whatever stops a post,
 // before its own try below (finding the Tally company, reading the ledgers) or in it, ends in a message
+// next-fix-sales-readback (23-Nov-2026): since FinCom Bridge round 15 nothing is read back; Tally's own reply
+// (byReply) is the answer, as for bills (postTaken). Optional: the voucher was sent so (Client setup) or Tally said so
+function salesOptional(r, co){ return !!(r && r.optional) || !!(co && co.createOptional); }
 async function postSalesToTally(){ try { return await postSalesRun(); } catch (e){ salesPostFailed(e); } }
 function salesPostFailed(e){ const s = SL(); if (s) s.busy = ""; toast("Posting failed: " + plainMsg((e && (e.message || e.code)) || String(e || "unknown error"))); render(); }
 async function postSalesRun(){
@@ -388,7 +391,7 @@ async function postSalesRun(){
       // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
-      if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
+      if (r && r.ok && !postTaken(r)){ bad++; const x = r; v.postError = "In Tally, not yet read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     salesOverrideSpent(list);
     saveBank({newLed: true});

@@ -221,7 +221,7 @@ export function Gstr3b({ b, sub }) {
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>6.1 Payment of tax</th><th className="n">Tax payable</th><th className="n">Through IGST credit</th><th className="n">CGST credit</th><th className="n">SGST credit</th><th className="n">Cess credit</th><th className="n">In cash</th><th className="n">Reverse charge, in cash</th></tr></thead>
       <tbody>
-        {HD.map(([k, l]) => <tr key={k}><td>{l}</td><td className="n">{money(num(t.net[k]) + num(t.rcmOut[k]))}</td>
+        {HD.map(([k, l]) => <tr key={k}><td>{l}</td><td className="n">{money(num((P.due || t.net)[k]) + num(t.rcmOut[k]))}</td>
           {["igst", "cgst", "sgst", "cess"].map((c) => <td key={c} className="n">{money((P.use[c] || {})[k])}</td>)}
           <td className="n"><b>{money(r2(P.cash[k] - P.rcmCash[k]))}</b></td><td className="n"><b>{money(P.rcmCash[k])}</b></td></tr>)}
         <Gap n={8} h={6} />

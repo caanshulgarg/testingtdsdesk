@@ -1064,7 +1064,8 @@ function itcCheck(e, co){
   else if (billedTo && !own.includes(billedTo)){ ok = false; why = "other-gstin"; if (gst > 0) notes.push({lvl:"hi", t:"No input credit: the bill is billed to GSTIN " + billedTo + ", not this client's " + cli + ". The GST of " + money(gst) + " is added to the expense. Ask the supplier for a bill on the right GSTIN."}); }
   // each GSTIN is a distinct person (s.25(4) CGST Act) and the credit is the registration's the bill is made out to (s.16):
   // posted to this client's GST ledgers it is that GSTIN's only once a person says so (e.regOk; compute's missing)
-  if (reg !== cli && gst > 0) notes.push({lvl:e.regOk === reg ? "" : "hi", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. " + (e.regOk === reg ? "You confirmed the GST ledgers are " + reg + "'s." : "Check the GST ledgers are the ones for " + reg + ".")});
+  // (the owner, 23-Nov-2026) co.multiGstin, Client setup's "This Tally company has more than one GSTIN": no per-bill word
+  if (reg !== cli && gst > 0) notes.push({lvl:e.regOk === reg || co.multiGstin ? "" : "hi", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. " + (e.regOk === reg ? "You confirmed the GST ledgers are " + reg + "'s." : co.multiGstin ? "This Tally company has more than one GSTIN (Client setup): use " + reg + "'s GST ledgers." : "Check the GST ledgers are the ones for " + reg + ".")});
   if (ok && gst > 0 && pos.expect && pos.charged && pos.expect !== pos.charged)
     notes.push({lvl:"hi", t:pos.expect === "cgst" ? "The supplier is in the client's state (" + sup + "), so CGST + SGST are expected, but the bill charges IGST. Check the place of supply." : "The supplier is in another state (" + sup + ", client " + home + "), so IGST is expected, but the bill charges CGST + SGST. Check the place of supply."});
   return {ok, why, pos, notes, reg};
@@ -1279,7 +1280,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (co.gstin && !mine && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
-  if (itc.reg !== String(co.gstin || "").toUpperCase() && num(x.cgst) + num(x.sgst) + num(x.igst) > 0 && e.regOk !== itc.reg) missing.push("your word that the GST ledgers are " + itc.reg + "'s");
+  if (itc.reg !== String(co.gstin || "").toUpperCase() && num(x.cgst) + num(x.sgst) + num(x.igst) > 0 && e.regOk !== itc.reg && !co.multiGstin) missing.push("your word that the GST ledgers are " + itc.reg + "'s");
   if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");
@@ -2210,11 +2211,20 @@ function supplierBills(e, cid){
   return vs.filter(v => (v.ent || []).filter(x => normName(x.l) === key).reduce((a, x) => a + num(x.a), 0) > 0)
     .map(v => ({v, w: exp && v.ent.some(x => normName(x.l) === exp) ? 3 : 1, key}));
 }
+// the client's other registration a bill is made out to (as itcCheck), else ""
+function billReg(e, co){ const g = String((e.x || {}).buyerGstin || "").toUpperCase(); return g && g !== String(co.gstin || "").toUpperCase() && ownGstins(co).includes(g) ? g : ""; }
 function gstLedgerFor(e, co, cid, head, kind, rate){
   const lk = kind + ":" + head.toLowerCase(), label = head + (kind === "rcm-in" ? " reverse charge input" : kind === "rcm-out" ? " reverse charge payable" : "");
   const ask = "Choose the " + label + " ledger";
   const own = e.taxLed && e.taxLed[lk];
   if (own){ const c = gstLedgerCheck(cid, own, head, kind); return c.ok ? {ledger: c.name, why: "Chosen on this bill"} : {ledger: own, bad: c.msg}; }
+  // (review of ad4be74c3) one Tally company with several GSTINs: a bill to another of them takes that GSTIN's ledgers, set
+  // once in Client setup (co.gstByReg); none set, it is held (never the client's own GST ledgers)
+  const rg = co.multiGstin ? billReg(e, co) : "";
+  // (reverse charge: picked on the first such bill, kept for that GSTIN: billSetTaxLed)
+  if (rg){ const m = (co.gstByReg || {})[rg.slice(0, 2)] || {}, v = kind === "gst" ? m[head.toLowerCase()] : m[lk];
+    if (!v) return {ledger: "", ask: kind === "gst" ? ask : ask + " (for GSTIN " + rg + ": kept for its next bills)", bad: kind === "gst" ? "the " + head + " input ledger of GSTIN " + rg + " (Client setup)" : ""};
+    const c = gstLedgerCheck(cid, v, head, kind); return c.ok ? {ledger: c.name, why: "Client setup: GSTIN " + rg} : {ledger: v, bad: c.msg}; }
   const sk = kind === "gst" ? head.toLowerCase() : (RCM_KEYS[kind] || {})[head];
   const setv = kind === "gst" ? (co.gst || {})[sk] || "" : sk ? rcmLedger(co, sk) : "";
   const known = Ledgers.cid() === cid && hasLedgerList(), books = !!(S.books && S.books.cid === cid && (S.books.vouchers || []).length);
@@ -2226,7 +2236,7 @@ function gstLedgerFor(e, co, cid, head, kind, rate){
     return {ledger: setv, why: "Client setup"};
   }
   const pinned = !!(co.gstPin && co.gstPin[sk]);
-  return taxPickMemo([taxStamp(cid), "gst", lk, rate, e.partyLedger, e.expenseLedger, setv, pinned].join("|"), () => {
+  return taxPickMemo([taxStamp(cid), "gst", lk, rate, e.partyLedger, e.expenseLedger, setv, pinned, billReg(e, co)].join("|"), () => {
     if (pinned && setv){ const c = gstLedgerCheck(cid, setv, head, kind); if (c.ok) return {ledger: c.name, why: "Client setup: used on every bill"}; }
     const memo = new Map();
     const auto = n => {
@@ -3226,6 +3236,14 @@ function remoteIdFor(e, co){
 function remoteIdTrial(co){
   return !!(co && String(co.postRemoteIdFixed || "").trim() && remoteIdFor({id: "x"}, co));
 }
+// (the owner's approval of 23-Nov-2026, docs/multi-gstin-voucher-registration-for-owner.md) one Tally company with several
+// GSTINs (Client setup's tick): the entry names the GST registration it is for (its name in Tally: Client setup, else
+// "<State> Registration", TallyPrime's own); a company of one GSTIN gets exactly the entry it got before
+function vchGstReg(co, g){
+  if (!co.multiGstin || !g) return "";
+  const st = GST_STATES[g.slice(0, 2)] || "", nm = (co.gstRegName || {})[g.slice(0, 2)] || (st ? st + " Registration" : g);
+  return '<GSTREGISTRATION TAXTYPE="GST" TAXREGISTRATION="' + xesc(g) + '">' + xesc(nm) + "</GSTREGISTRATION>\n";
+}
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
   const s = e.snapshot, vt = xesc(note ? (co.debitNoteType || "Debit Note") : vchTypeOf(e, co)), d = toTallyDate(e.x.invoiceDate);
@@ -3244,6 +3262,7 @@ function voucherXml(e, co){
   x += "<REFERENCE>" + xesc(e.x.invoiceNo) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n";
   x += "<PARTYLEDGERNAME>" + xesc(tallyLedgerName(e.partyLedger)) + "</PARTYLEDGERNAME>\n";
   const nar0 = e.narration || narrationFor(e), nar = remoteIdTrial(co) && !/^TRIAL \| /.test(nar0) ? "TRIAL | " + nar0 : nar0;
+  if (co.multiGstin){ const g = billReg(e, co) || String(co.gstin || "").toUpperCase(); if (g) x += "<CMPGSTIN>" + xesc(g) + "</CMPGSTIN>\n" + vchGstReg(co, g); }
   x += "<NARRATION>" + xesc(nar + " | TDSDesk:" + e.id) + "</NARRATION>\n";
   x += "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISINVOICE>No</ISINVOICE>\n";
   x += "<ISOPTIONAL>" + (co.createOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";
