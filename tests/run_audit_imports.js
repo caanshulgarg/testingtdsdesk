@@ -293,6 +293,14 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
       return c.added === 1 && c.again === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=236", "FK-055-CN3@2026-10-02=59"]); }, "a later report with a third return: -CN3, the second kept as -CN2");
     tryOk(() => { const d = up([r("20/09/2026", 150)]);
       return d.added === 0 && d.fixed === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=177", "FK-055-CN3@2026-10-02=59"]); }, "the 20 September return revised to 150: -CN2 updated, not a new note");
+    // (re-review of bac94a801) an older report again does not put the waiting note back; once posted, a revision is a
+    // further note of the DIFFERENCE only; a note matched by its number when its invoice is not kept on it
+    tryOk(() => { const e = up([r("20/09/2026", 200)]); return e.added === 0 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=177", "FK-055-CN3@2026-10-02=59"]); }, "the older report again: -CN2 stays at the revised 177, not back to 236");
+    tryOk(() => { list.forEach(v => { if (v.x.number === "FK-055-CN2") { v.status = "posted"; v.x.total = 236; v.x.cnSeen = [236]; } });
+      const g = up([r("20/09/2026", 350)]), fn = list.find(v => v.hold && /^FK-055-CN/.test(v.x.number));
+      return g.added === 1 && fn && Math.abs(Math.abs(fn.x.total) - 177) < 0.01 && fn.x.number === "FK-055-CN4"; }, "posted at 236, revised to 413: a further note -CN4 of the difference 177, held (" + "" + ")");
+    tryOk(() => { list.length = 0; list.push({id: "n1", x: {number: "FK-055-CN1", date: "2026-09-12", total: 118, noteKind: "credit", customerName: "Retail customer", againstInvoice: ""}, status: "posted", source: "market"});
+      const h = up([r("12/09/2026", 100)]); return h.added === 0 && list.length === 1; }, "a note FK-055-CN1 kept without its invoice: matched by its number, not added again");
     tryOk(() => { list.length = 0; list.push({id: "old1", x: {number: "FK-055 (CN)", date: "2026-09-12", total: 118, noteKind: "credit", customerName: "Retail customer"}, status: "posted", source: "sheet"});
       const d = up([r("12/09/2026", 100), r("20/09/2026", 200)]);
       return d.added === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055 (CN)@2026-09-12=118", "FK-055-CN1@2026-09-20=236"]); }, "one kept before as (CN): still that one, not added again; the new return -CN1");

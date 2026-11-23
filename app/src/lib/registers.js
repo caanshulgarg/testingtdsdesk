@@ -799,31 +799,37 @@ const SheetPost = {
     // same invoice, day and party already here (so numbered, or "<invoice> (CN)" / "(CN-n)" before) keeps its number; its
     // amount revised, that note is put right while it waits (cnRev), a further note once posted; a new return takes the
     // next number after the highest here
-    const cnNo = new Map(), cnOf = new Map(), cnRev = new Map(), taken = new Set(s.list.map(v => String(v.x.number || "").toUpperCase()));
+    const cnNo = new Map(), cnOf = new Map(), cnRev = new Map(), cnOld = new Set(), taken = new Set(s.list.map(v => String(v.x.number || "").toUpperCase()));
     const pty = d => d.party || (d.gstin ? "" : "Retail customer");
     // (decided after the review of ad4be74c3) every credit note so (a register's negative row as a marketplace's return),
     // whose number does not already start "CN" or end "-CN<n>"
     docs.forEach(d => { if (d.note === "credit" && d.no && !/^cn|-CN\d+$/i.test(d.no)) (cnOf.get(d.no) || cnOf.set(d.no, []).get(d.no)).push(d); });
     cnOf.forEach((list, base) => {
       const esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), old = new RegExp("^" + esc + " \\(CN(?:-(\\d+))?\\)$", "i"), used = new Set();
-      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && (normInv(v.x.number) === normInv(base) || old.test(v.x.number || "") || ((v.x.cnOf || v.x.againstInvoice) === base && /-CN\d+$/i.test(v.x.number || ""))));
+      const safe = base.replace(/[^A-Za-z0-9\/-]/g, ""), isNew = (no) => { const m = /-CN(\d+)$/i.exec(no || ""); return !!m && this.cnNumber(safe, +m[1]).toUpperCase() === String(no).toUpperCase(); };
+      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && (normInv(v.x.number) === normInv(base) || old.test(v.x.number || "") || ((v.x.cnOf || v.x.againstInvoice) === base && /-CN\d+$/i.test(v.x.number || "")) || isNew(v.x.number)));
       let k = have.reduce((a, v) => Math.max(a, +((/(?:-CN|\(CN-)(\d+)\)?$/i.exec(v.x.number) || [])[1] || 0)), 0);
-      const safe = base.replace(/[^A-Za-z0-9\/-]/g, "");
       const mk = () => { let n; do { n = this.cnNumber(safe, ++k); } while (taken.has(n.toUpperCase())); taken.add(n.toUpperCase()); return n; };
       // a number of its own (no invoice of it, here or in the sheet, and no earlier note numbered from it; never a
       // marketplace return, read under its invoice's): kept as it is, the first note of it
       let own = !have.length && !["amazon", "flipkart", "shopify"].includes(list[0].market) && !docs.some(x => x.note !== "credit" && normInv(x.no) === normInv(base)) && !s.list.some(v => (v.x.noteKind || "") !== "credit" && !v.hold && normInv(v.x.number) === normInv(base));
       list.slice().sort((a, c) => String(a.date || "").localeCompare(String(c.date || ""))).forEach(d => {
         const hit = have.find(v => !used.has(v) && (v.x.date || "") === (d.date || "") && this.sameParty(v.x.customerGstin, v.x.customerName, d.gstin, pty(d)));
-        if (hit){ used.add(hit); if (Math.abs(num(hit.x.total) - Math.abs(num(d.total))) >= 0.005) cnRev.set(d, hit); }
+        // (re-review of bac94a801) a figure this note had before (an older report brought in again) never puts it back
+        if (hit){ used.add(hit); const T0 = Math.abs(num(d.total)); if (Math.abs(num(hit.x.total) - T0) >= 0.005){ if ((hit.x.cnSeen || []).some(z => Math.abs(z - T0) < 0.005)) cnOld.add(d); else cnRev.set(d, hit); } }
         const late = hit && cnRev.has(d) && !(["review", "ready"].includes(hit.status) && !hit.postJob && hit.x.irnStatus !== "active");
-        if (late){ cnRev.delete(d); d.hold = d.hold || "This return's amount changed after its credit note " + hit.x.number + " was posted (it was " + num(hit.x.total) + "): this is a further note for the difference; check it"; }
+        // posted: a further note of the difference only, held for a person
+        if (late){ cnRev.delete(d); const was = num(hit.x.total);
+          ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { d[f] = -r2(Math.abs(num(d[f])) - Math.abs(num(hit.x[f]))); });
+          hit.x.cnSeen = (hit.x.cnSeen || [was]).concat([Math.abs(num(d.total)) + was]);
+          d.hold = d.hold || "This return's amount changed after its credit note " + hit.x.number + " was posted (it was " + was + "): this further note is for the difference only; check it"; }
         cnNo.set(d, hit && !late ? hit.x.number : own && !taken.has(String(base).toUpperCase()) ? (taken.add(String(base).toUpperCase()), base) : mk()); own = false; });
     });
     docs.forEach(d => {
       const cnMine = cnNo.get(d), rev = cnRev.get(d);
+      if (cnOld.has(d)){ res.again++; return; }   // an older figure of a note already here
       // a return's amount revised in a later report: its note, still waiting, put right in place
-      if (rev){ Object.assign(rev.x, {taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, items: this.items(d, Math.abs)});
+      if (rev){ rev.x.cnSeen = (rev.x.cnSeen || [num(rev.x.total)]).concat([Math.abs(num(d.total))]); Object.assign(rev.x, {taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, items: this.items(d, Math.abs)});
         if (rev.status === "ready") rev.status = "review"; mapInvoice(rev); res.fixed++; res.ids.push(rev.id); return; }
       // (the registration the invoice is issued from is never the customer's; the client's other registration, a supply
       // between its own branches, is: reviews of 2b565f7e7 and a61ffbb12)
