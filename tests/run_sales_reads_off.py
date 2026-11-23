@@ -31,7 +31,7 @@ def ok(c, w):
 NOCOPY = ("Not posted: FinCom could not check Tally for these invoice numbers. Turn on reading entries in FinCom Bridge on this "
           "computer, or upload the Day Book. Nothing was sent.")
 NOCHECK = ("Not posted: FinCom could not check Tally for these invoice numbers (reading entries from Tally is off on this computer "
-           "and FinCom's cloud copy is not available). Nothing was sent; try again in a minute or post from another computer.")
+           "and FinCom's cloud copy is not available). Nothing was sent; try again in a minute.")
 NOTE = "Checked against FinCom's copy of Tally, last updated "
 NOTE_END = ". Invoices entered in Tally after that were not checked."
 def nodayrow(day): return ("Not posted: FinCom's copy of Tally has no entries for " + day + ", so this invoice number could not be checked. "
@@ -57,6 +57,11 @@ STUB = """() => { window.__toasts = []; const t0 = window.toast; window.toast = 
     if (window.__bridge === "down") throw {code: "bridge", message: "Tally did not answer in time."};
     return {ok: true, vouchers: []}; };
   window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; window.__held = {to: "2026-11-30", doneTo: "", skipped: []};
+  window.__dcalls = []; const api0 = Cloud.api.bind(Cloud);
+  Cloud.api = async (q, o) => { if (!/^tally_days\?/.test(q)) return api0(q, o); window.__dcalls.push(q); const h = window.__held;
+    if (h.daysFail) throw {message: "Failed to fetch"};
+    const ds = decodeURIComponent((q.match(/day=in\.\(([^)]*)\)/) || [])[1] || "").split(",").filter(Boolean);
+    return ds.filter(d => d >= "2026-04-01" && d <= h.to && !(h.gap || []).some(([a, b]) => d >= a && d <= b)).map(d => ({day: d, at: new Date().toISOString(), note: (h.notes || {})[d] || null})); };
   const bk = () => ({book: "bk-zz", from: "2026-04-01", to: window.__held.to, company: "ZZ Test Readsoff Traders", daysAt: window.__cloud.at,
     state: {seen: window.__cloud.at, doneTo: window.__held.doneTo, skipped: window.__held.skipped}});
   TCloud.on = () => true; TCloud.has = () => !!window.__cloud.has; TCloud.book = () => window.__cloud.has ? bk() : null;
@@ -67,7 +72,7 @@ STUB = """() => { window.__toasts = []; const t0 = window.toast; window.toast = 
 STATE = "() => SL().list.map(v => ({n: v.x.number, st: v.status, err: v.postError || '', copy: (v.copyCheck && v.copyCheck.note) || ''}))"
 IN_CLOUD = "[{guid: 'g-1', masterId: '1', date: '20261102', type: 'Sales', number: 'ZR/1', party: 'Kappa Retail', cancelled: 'No', entries: [{ledger: 'Kappa Retail', amount: '-1180.00'}, {ledger: 'Sales Account', amount: '1000.00'}, {ledger: 'Output IGST', amount: '180.00'}]}]"
 def fresh(A, *nos, d="2026-11-02"):
-    A.evaluate("() => { SL().list = []; window.__held = {to: '2026-11-30', doneTo: '', skipped: []}; window.__sent = []; window.__bcalls = []; window.__ccalls = []; window.__toasts = []; }")
+    A.evaluate("() => { SL().list = []; window.__held = {to: '2026-11-30', doneTo: '', skipped: []}; window.__dcalls = []; window.__sent = []; window.__bcalls = []; window.__ccalls = []; window.__toasts = []; }")
     return [A.evaluate(ADD, [n, d, G["k"]]) for n in nos]
 last = lambda A: A.evaluate("() => window.__toasts.slice(-1)[0] || ''")
 
@@ -148,11 +153,16 @@ with sync_playwright() as p:
     ok(st[0]["st"] == "review", "still To review (%s)" % st)
 
     print("7. invoice dates the cloud copy does not hold: those held (Ready, a red note), the others checked and posted")
-    A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+    # (Optional vouchers are off by default since migration 213: switched on here, so the held part is seen after its note)
+    A.evaluate("() => { CO().createOptional = true; window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
     for label, held, dates, miss in [
         ("after the later of its end and the last day read", {"to": "2026-11-05", "doneTo": "2026-11-10", "skipped": []}, ["2026-11-08", "2026-11-12", "2026-11-14"], ["2026-11-12", "2026-11-14"]),
         ("a skipped day", {"to": "2026-11-30", "doneTo": "", "skipped": ["20261103"]}, ["2026-11-02", "2026-11-03"], ["2026-11-03"]),
-        ("before its start", {"to": "2026-11-30", "doneTo": "", "skipped": []}, ["2026-03-31", "2026-04-02"], ["2026-03-31"])]:
+        ("before its start", {"to": "2026-11-30", "doneTo": "", "skipped": []}, ["2026-03-31", "2026-04-02"], ["2026-03-31"]),
+        # Apr-Sep and Nov uploaded, October never: an October day inside the book's range is not held by the copy
+        ("a gap in the days uploaded (October)", {"to": "2026-11-30", "doneTo": "", "skipped": [], "gap": [["2026-10-01", "2026-10-31"]]}, ["2026-09-30", "2026-10-15", "2026-11-02"], ["2026-10-15"]),
+        ("a day read short", {"to": "2026-11-30", "doneTo": "", "skipped": [], "notes": {"2026-11-04": "short read: 3 of 5"}}, ["2026-11-02", "2026-11-04"], ["2026-11-04"]),
+        ("an empty read waiting for a second", {"to": "2026-11-30", "doneTo": "", "skipped": [], "notes": {"2026-11-06": "empty day with 30 entries before: confirm by a second empty read"}}, ["2026-11-02", "2026-11-06"], ["2026-11-06"])]:
         A.evaluate("() => { SL().list = []; window.__sent = []; window.__ccalls = []; window.__toasts = []; }")
         for i, d in enumerate(dates): A.evaluate(ADD, ["ZD/%d" % (i + 1), d, G["k"]])
         A.evaluate("(h) => { window.__held = h; }", held)
@@ -167,8 +177,17 @@ with sync_playwright() as p:
         n = len(dates) - len(miss)
         ok(t.startswith("%d posted to Tally (%d as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers), %d held: FinCom's copy has no entries for %s." % (n, n, len(miss), ", ".join(fm))),
            label + ": the counts said, the held part after the Optional note (%s)" % t)
+    A.evaluate("() => { CO().createOptional = false; }")
+    ok(any("tally_days?select=" in q and "book_id=eq.bk-zz" in q for q in A.evaluate("() => window.__dcalls")), "the days read from FinCom's cloud (tally_days), not from Tally")
     A.evaluate("() => { SL().filter = 'ready'; render(); }"); A.wait_for_timeout(400)
     ok("has no entries for" in A.inner_text("#app"), "the held invoice's red note shown on its row")
+    A.evaluate("() => { SL().filter = 'all'; render(); }")
+    print("   the days could not be read: nothing posted, said plainly")
+    fresh(A, "ZD/5", "ZD/6")
+    A.evaluate("() => { window.__held = {to: '2026-11-30', doneTo: '', skipped: [], daysFail: true}; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
+    st = A.evaluate(STATE)
+    ok(A.evaluate("() => window.__sent") == [] and last(A) == NOCHECK and [x["st"] for x in st] == ["ready", "ready"], "nothing sent, the plain message (%s)" % last(A))
     print("   all on days not held: nothing sent, the copy not asked")
     fresh(A, "ZD/7", d="2026-11-20")
     A.evaluate("() => { window.__held = {to: '2026-11-10', doneTo: '', skipped: []}; }")

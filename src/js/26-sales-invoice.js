@@ -131,7 +131,7 @@ function salesSetKind(id, k){
 // one by one both check this way
 const SALES_COPY_OLD = 10 * 60000;
 const SALES_NO_COPY = "Not posted: FinCom could not check Tally for these invoice numbers. Turn on reading entries in FinCom Bridge on this computer, or upload the Day Book. Nothing was sent.";
-const SALES_NO_CHECK = "Not posted: FinCom could not check Tally for these invoice numbers (reading entries from Tally is off on this computer and FinCom's cloud copy is not available). Nothing was sent; try again in a minute or post from another computer.";
+const SALES_NO_CHECK = "Not posted: FinCom could not check Tally for these invoice numbers (reading entries from Tally is off on this computer and FinCom's cloud copy is not available). Nothing was sent; try again in a minute.";
 function salesReadsOff(e){ return !!e && /Reading entries from Tally is off/i.test(String(e.message || "")); }
 // the cloud copy's last read from Tally: the latest of the bridge's read, its check of the copy against Tally, the last
 // days read in
@@ -139,14 +139,24 @@ function salesCopyAt(cid){
   const bk = TCloud.book(cid), st = (bk && bk.state) || {};
   return [st.readAt, st.seen, bk && bk.daysAt].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || "";
 }
-// the invoices' dates (yyyy-mm-dd) the cloud copy does not hold, as src/js/51-tally-queue.js (TallyGone.check) and
-// booksFresh count its days: before the book's start, after the later of its end and the last day read (state.doneTo),
-// or a day not read (state.skipped)
-function salesCopyMissing(cid, list){
+// the invoices' dates (yyyy-mm-dd) the cloud copy does not hold (review of 7df0b8932: the book's start to its end is not
+// enough, a day inside it may never have been uploaded). A day is held only when FinCom's cloud has a row for it in
+// tally_days (the same read as app/src/lib/payrollPost.js readMonth: a cloud read, not a Tally request) and that row says
+// no short read and no empty read waiting for a second one; or when it is on or before the last day the bridge read
+// (state.doneTo). The copy never holds a day before the book's start, or a day not read (state.skipped). A failed read of
+// tally_days is thrown (nothing is posted)
+const SALES_DAY_BAD = /short read|confirm by a second empty read/i;
+async function salesCopyMissing(cid, list){
   const bk = TCloud.book(cid) || {}, st = bk.state || {}, d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
-  const from = d8(bk.from), to = [d8(bk.to), d8(st.doneTo)].filter(Boolean).sort().pop() || "", skipped = new Set([].concat(st.skipped || []).map(d8));
-  return [...new Set(list.map(v => String(v.x.date || "").slice(0, 10)).filter(Boolean))].sort()
-    .filter(d => { const k = d8(d); return (from && k < from) || !to || k > to || skipped.has(k); });
+  const from = d8(bk.from), doneTo = d8(st.doneTo), skipped = new Set([].concat(st.skipped || []).map(d8));
+  const days = [...new Set(list.map(v => String(v.x.date || "").slice(0, 10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  const never = d => (from && d8(d) < from) || skipped.has(d8(d)), byDone = d => !!doneTo && d8(d) <= doneTo;
+  const ask = days.filter(d => !never(d) && !byDone(d)), rows = new Map();
+  for (let i = 0; i < ask.length; i += 100){
+    const got = await Cloud.api("tally_days?select=day,at,note&book_id=eq." + encodeURIComponent(bk.book) + "&day=in.(" + ask.slice(i, i + 100).join(",") + ")");
+    [].concat(got || []).forEach(r => { if (r && r.day) rows.set(String(r.day).slice(0, 10), r); });
+  }
+  return days.filter(d => never(d) || (!byDone(d) && (!rows.has(d) || SALES_DAY_BAD.test(String(rows.get(d).note || "")))));
 }
 async function salesCheckSafe(list){
   const co = CO(SL().cid), none = {note: "", held: ""};
@@ -155,7 +165,9 @@ async function salesCheckSafe(list){
   try { await salesCheckTally(list); list.forEach(v => { delete v.copyCheck; }); return none; }
   catch (e){ if (!salesReadsOff(e) || tallyVia(co) !== "bridge") throw e; }
   if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) throw {code: "check_off", message: SALES_NO_COPY};
-  const miss = new Set(salesCopyMissing(co.id, list)), day = v => String(v.x.date || "").slice(0, 10);
+  let miss;
+  try { miss = new Set(await salesCopyMissing(co.id, list)); } catch (e){ throw {code: "check_off", message: SALES_NO_CHECK}; }
+  const day = v => String(v.x.date || "").slice(0, 10);
   const held = list.filter(v => miss.has(day(v))), go = list.filter(v => !miss.has(day(v)));
   held.forEach(v => { delete v.copyCheck; v.copyHeld = v.postError = "Not posted: FinCom's copy of Tally has no entries for " + fmtDate(day(v)) + ", so this invoice number could not be checked. Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer."; });
   const heldWords = held.length ? held.length + " held: FinCom's copy has no entries for " + [...miss].map(fmtDate).join(", ") : "";
