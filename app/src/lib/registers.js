@@ -786,23 +786,33 @@ const SheetPost = {
       if (typeof salesNoIdx !== "undefined" && salesNoIdx && typeof normInvNo === "function"){ const j = normInvNo(v.x.number); (salesNoIdx.get(j) || salesNoIdx.set(j, []).get(j)).push(v); } };
     s.list.forEach(v => { const k = normInv(v.x.number); (byNo.get(k) || byNo.set(k, []).get(k)).push(v); });
     const ofNo = n => byNo.get(normInv(n)) || [];
-    // (the owner, 23-Nov-2026) a marketplace credit note with no number of its own (a return of the invoice, read under
-    // the invoice's number): "<invoice> (CN-1)", "(CN-2)" in order of return date, not "(CN)" for all. Kept on a
-    // re-import: a return already here (the same date and total, numbered so, or "(CN)" as before) keeps its number;
-    // a new one takes the next after the highest here
-    const cnNo = new Map(), cnOf = new Map();
+    // (the owner, 23-Nov-2026; review of ad4be74c3) a marketplace credit note with no number of its own (a return of the
+    // invoice, read under the invoice's number): "<invoice>-CN1", "-CN2" in order of return date, a number GSTR-1 takes
+    // (letters, digits, - and /, at most 16: the invoice's end kept, never two alike). Kept on a re-import: a return of the
+    // same invoice, day and party already here (so numbered, or "<invoice> (CN)" / "(CN-n)" before) keeps its number; its
+    // amount revised, that note is put right while it waits (cnRev), a further note once posted; a new return takes the
+    // next number after the highest here
+    const cnNo = new Map(), cnOf = new Map(), cnRev = new Map(), taken = new Set(s.list.map(v => String(v.x.number || "").toUpperCase()));
+    const pty = d => d.party || (d.gstin ? "" : "Retail customer");
     docs.forEach(d => { if (d.market && d.note === "credit" && d.no && (!d.against || d.against === d.no) && !/^cn/i.test(d.no)) (cnOf.get(d.no) || cnOf.set(d.no, []).get(d.no)).push(d); });
     cnOf.forEach((list, base) => {
-      const re = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\(CN(?:-(\\d+))?\\)$", "i"), used = new Set();
-      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && re.test(v.x.number || ""));
-      let k = have.reduce((a, v) => Math.max(a, +((re.exec(v.x.number) || [])[1] || 0)), 0);
+      const esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), old = new RegExp("^" + esc + " \\(CN(?:-(\\d+))?\\)$", "i"), used = new Set();
+      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && (old.test(v.x.number || "") || (v.x.againstInvoice === base && /-CN\d+$/i.test(v.x.number || ""))));
+      let k = have.reduce((a, v) => Math.max(a, +((/(?:-CN|\(CN-)(\d+)\)?$/i.exec(v.x.number) || [])[1] || 0)), 0);
+      const safe = base.replace(/[^A-Za-z0-9\/-]/g, "");
+      const mk = () => { let n; do { const suf = "-CN" + (++k); n = safe.slice(Math.max(0, safe.length - (16 - suf.length))).replace(/^[\/-]+/, "") + suf; } while (taken.has(n.toUpperCase())); taken.add(n.toUpperCase()); return n; };
       list.slice().sort((a, c) => String(a.date || "").localeCompare(String(c.date || ""))).forEach(d => {
-        const hit = have.find(v => !used.has(v) && (v.x.date || "") === (d.date || "") && Math.abs(Math.abs(num(v.x.total)) - Math.abs(num(d.total))) < 0.005);
-        if (hit) used.add(hit);
-        cnNo.set(d, hit ? hit.x.number : base + " (CN-" + (++k) + ")"); });
+        const hit = have.find(v => !used.has(v) && (v.x.date || "") === (d.date || "") && this.sameParty(v.x.customerGstin, v.x.customerName, d.gstin, pty(d)));
+        if (hit){ used.add(hit); if (Math.abs(num(hit.x.total) - Math.abs(num(d.total))) >= 0.005) cnRev.set(d, hit); }
+        const late = hit && cnRev.has(d) && !(["review", "ready"].includes(hit.status) && !hit.postJob && hit.x.irnStatus !== "active");
+        if (late){ cnRev.delete(d); d.hold = d.hold || "This return's amount changed after its credit note " + hit.x.number + " was posted (it was " + num(hit.x.total) + "): this is a further note for the difference; check it"; }
+        cnNo.set(d, hit && !late ? hit.x.number : mk()); });
     });
     docs.forEach(d => {
-      const cnMine = cnNo.get(d);
+      const cnMine = cnNo.get(d), rev = cnRev.get(d);
+      // a return's amount revised in a later report: its note, still waiting, put right in place
+      if (rev){ Object.assign(rev.x, {taxable: Math.abs(d.taxable), cgst: Math.abs(d.cgst), sgst: Math.abs(d.sgst), igst: Math.abs(d.igst), cess: Math.abs(d.cess), total: Math.abs(d.total), rate: d.rate, items: this.items(d, Math.abs)});
+        if (rev.status === "ready") rev.status = "review"; mapInvoice(rev); res.fixed++; res.ids.push(rev.id); return; }
       // (the registration the invoice is issued from is never the customer's; the client's other registration, a supply
       // between its own branches, is: reviews of 2b565f7e7 and a61ffbb12)
       const own = [this.issuer(d, "sales", cid)].filter(Boolean);

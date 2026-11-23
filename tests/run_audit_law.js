@@ -173,7 +173,7 @@ if (x.Audit.form3cd){
   // as the ITR adds it back (app/src/lib/itr/books.js): the 50,000 once, not also as "without deduction" in 34(a)
   const kb = cl("21(b)(ii)(A)").rows.filter(z => z[0] === "K");
   ok(kb.length === 1 && kb[0][1] === 50000 && kb[0][2] === 15000 && /short/i.test(kb[0][3]), "21(b)(ii)(A): K's 50,000 not covered by the short TDS, 15,000 (30%) inadmissible under 40(a)(ia) (got " + JSON.stringify(cl("21(b)(ii)(A)").rows) + ")");
-  ok(/40\(a\)\(ia\)/.test(cl("21(b)(ii)(A)").note) && /15,000/.test(cl("21(b)(ii)(A)").note) && /34\(a\)/.test(cl("21(b)(ii)(A)").note), "21(b)'s note: the 30% inadmissible, the short part also in 34(a) at a lower rate (" + cl("21(b)(ii)(A)").note + ")");
+  ok(/40\(a\)\(ia\)/.test(cl("21(b)(ii)(A)").note) && /15,000/.test(cl("21(b)(ii)(A)").note) && /34\(a\)/.test(cl("21(b)(ii)(A)").note) && /Tekriwal/.test(cl("21(b)(ii)(A)").note) && /auditor decides/.test(cl("21(b)(ii)(A)").note), "21(b)'s note: the 30% inadmissible, the short part also in 34(a) at a lower rate, and the courts that hold otherwise: the auditor decides (" + cl("21(b)(ii)(A)").note + ")");
   // a party with a bill wholly without TDS and another deducted short: the two parts add up to the finding's base, once
   x.TDS.allRows = () => [{date: "20250710", fy: "2025-26", section: "194J", party: "M", paid: 200000, tds: 2000, sepShort: true, covers: 20000}];
   const d2 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: [{id: "tdsMissed:M|194J|2025-26", check: "tdsMissed", base: 280000, section: "194J", party: "M", fy: "2025-26", count: 2, amount: 28000,
@@ -199,7 +199,7 @@ if (x.Audit.form3cd){
     V("20250930", "Payment", [["Directors Sitting Fees", -50000], ["Made-up Bank", 50000]])]);
   const c44 = x.Audit.form3cd({from: FROM, to: TO, at: "", code: "", findings: []}).clauses.find(c => c.no === "44"), g44 = c44.rows[0];
   ok(g44[0] === 60000 && g44[5] === 60000, "clause 44: the purchase 10,000 and the sitting fees 50,000 (unregistered); not the whole-time, managing or WTD director's 8,00,000 (got total " + g44[0] + ", unregistered " + g44[5] + ")");
-  ok(/sitting fees|director/i.test(c44.note) && /50,000/.test(c44.note) && /reverse charge/i.test(c44.note) && /9,000/.test(c44.note), "clause 44's note: 50,000 of fees to directors who are not employees, GST 9,000 under reverse charge (" + c44.note + ")");
+  ok(/sitting fees|director/i.test(c44.note) && /50,000/.test(c44.note) && /reverse charge/i.test(c44.note) && /9,000/.test(c44.note) && /unless already booked under reverse charge/.test(c44.note), "clause 44's note: 50,000 of fees to directors who are not employees, GST 9,000 under reverse charge unless already booked (" + c44.note + ")");
 
   console.log("13. clause 31(bc): cash paid of 2 lakh or more that 40A(3) leaves out is listed to check");
   books([V("20250720", "Payment", [["Mohan Loan", -250000], ["Cash", 250000]]), V("20250721", "Payment", [["Capital", -300000], ["Cash", 300000]]), V("20250722", "Payment", [["Ravi Stores", -150000], ["Cash", 150000]])]);

@@ -478,7 +478,7 @@ const AuditRep = {
       [[x.party, shortOf(x), dis(shortOf(x)), sec(x) + "its TDS, deducted short of the rate, does not cover (also in 34(a), at a lower rate)"], [x.party, noDed(x), dis(noDed(x)), sec(x) + "with no TDS deducted"]].filter(z => z[1] > 0.005));
     const s21 = r2(r21.reduce((a2, z) => a2 + num(z[1]), 0));
     add("21(b)(ii)(A)", "Amounts inadmissible under section 40(a)(ia): TDS not deducted, or deducted short", ["Party", "Amount", "Inadmissible, 30% (40(a)(ia))", "Detail"], r21,
-      tm.length ? "Inadmissible under section 40(a)(ia): 30% of \u20b9" + m(s21) + ", \u20b9" + m(dis(s21)) + ", allowed in the year the TDS is paid." + (tm.some(x => shortOf(x) > 0) ? " A deduction short of the rate: the part its TDS does not cover is here, and the payment in 34(a) at a lower rate." : "") : "None found.");
+      tm.length ? "Inadmissible under section 40(a)(ia): 30% of \u20b9" + m(s21) + ", \u20b9" + m(dis(s21)) + ", allowed in the year the TDS is paid." + (tm.some(x => shortOf(x) > 0) ? " A deduction short of the rate: the part its TDS does not cover is here, and the payment in 34(a) at a lower rate. Some courts (for example CIT v S.K. Tekriwal, Calcutta High Court) hold that section 40(a)(ia) does not reach a short deduction: the auditor decides." : "") : "None found.");
     const c3 = f("cash40A3");
     add("21(d)(A)", "Cash payments above the limit, section 40A(3)", ["Date", "Party or ledger", "Amount"], c3 ? c3.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], c3 ? "" : "None found.");
     const ms = f("msme43Bh");
@@ -549,7 +549,7 @@ const AuditRep = {
       [[r2(g44.total), r2(g44.exempt), r2(g44.comp), r2(g44.other), r2(g44.exempt + g44.comp + g44.other), r2(g44.unreg)]],
       "Purchases, expenses and fixed assets booked in the period; \u201cexempt or nil\u201d is a registered supplier's bill with no GST on it. Composition dealers are recognised from their GST type in Tally. " +
         "Employees' pay and partners' and directors' remuneration (whole-time and managing directors: employees) are left out (Schedule III); a director who is not an employee supplies a service under reverse charge (circular 140/10/2020-GST): add such a director's remuneration if so." +
-        (g44.dirFee >= 0.005 ? " Included: \u20b9" + m(g44.dirFee) + " of fees to directors (sitting fees), a service under reverse charge (Notification 13/2017-CT(Rate), entry 6): GST of \u20b9" + m(g44.dirFee * 0.18) + " (18%) payable by the company in 3.1(d); with unregistered suppliers unless the director is registered." : ""));
+        (g44.dirFee >= 0.005 ? " Included: \u20b9" + m(g44.dirFee) + " of fees to directors (sitting fees), a service under reverse charge (Notification 13/2017-CT(Rate), entry 6): GST of \u20b9" + m(g44.dirFee * 0.18) + " (18%) payable by the company in 3.1(d), unless already booked under reverse charge; with unregistered suppliers unless the director is registered." : ""));
     return {from, to, at: run.at, code: run.code, clauses: C};
   },
   async form3cdExcel(run){
