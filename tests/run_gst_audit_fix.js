@@ -358,6 +358,10 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     books([s1, pv("SH/41", 2000, 360, "", "20251002")]);
     ok(seenNo().includes("SH-41"), "… and SH/41 of 2 October, 2,360, is (" + seenNo() + ")");
     delete L[2].tallyMatch;
+    // (closing the edge) an invoice still "ready" whose tagged entry is in the books: counted once, as its entry
+    books([s1, pv("AMZ-21", 10000, 1800, AMZ, "20251001"), Object.assign(pv("FK-31", 5000, 900, "", "20251001"), {narr: fc.narr, fid: fc.fid}), pv("SH-41", 2000, 360, "", "20251001")]); ctx.S.books.meta.at = after;
+    Object.assign(L[0], {status: "ready"}); delete L[0].postedAt;
+    check("AMZ-21 still ready, its tagged entry in the books", ctx.S.books);
     ctx.S.sales = null;
   }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
