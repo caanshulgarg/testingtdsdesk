@@ -66,7 +66,7 @@ with sync_playwright() as p:
     # (review of ad4be74c3) each other GSTIN's input ledgers, picked once here
     pg.evaluate("() => { const g = '27AANFG3202D1Z'; CO().otherGstins = g + gstinCheckChar(g); FinComReact.redraw(); }"); pg.wait_for_timeout(400)
     bx = '#app [data-gst-by-reg] [data-reg="27"] label:has-text("input CGST") input'
-    ok(pg.locator('#app [data-gst-by-reg] [data-reg="27"] input').count() == 3, "more than one GSTIN: CGST, SGST and IGST input ledgers for the other GSTIN 27")
+    ok(pg.locator('#app [data-gst-by-reg] [data-reg="27"] input').count() == 4 and pg.locator('#app [data-gst-by-reg] label:has-text("name in Tally") input').count() == 2, "more than one GSTIN: CGST, SGST, IGST and cess input ledgers for the other GSTIN 27; each GSTIN's registration name in Tally")
     pg.fill(bx, "Input CGST Maharashtra"); pg.locator(bx).blur(); pg.wait_for_timeout(400)
     ok(pg.evaluate("((CO().gstByReg || {})['27'] || {}).cgst") == "Input CGST Maharashtra", "its CGST input ledger kept on the client (%s)" % pg.evaluate("JSON.stringify(CO().gstByReg || null)"))
     pg.screenshot(path=OUT + "/react-settings-multi-gstin.png")
