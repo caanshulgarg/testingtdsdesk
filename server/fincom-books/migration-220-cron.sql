@@ -1,7 +1,7 @@
 -- Migration 220, part 2: FinCom Books' timers (23-Nov-2026, branch next-books-p1). A DRAFT, NOT run anywhere.
 -- Run AFTER migration-220-fincom-books.sql. Database-only jobs (pg_cron; no edge function, no call to Tally):
 --   fincom-books-catchup   every 10 minutes: builds enrolled books in chunks and applies anything a failed flush left
---                          (fb_mirror_catchup_all, at most 5,000 entries a run)
+--                          (fb_mirror_catchup_run: one transaction per book, at most 5,000 entries a run)
 --   fincom-books-tieout    nightly at 02:17 India time (20:47 UTC): the tie-out of every enrolled book against the copy
 --                          (D21; "Not in step" warns only, D18). The part against Tally's own figures waits for the new
 --                          bridge read (TODO D16, bridge 2.5.19): it runs in the bridge's idle window, not here
@@ -19,7 +19,7 @@ begin
   elsif to_regprocedure('public.fb_tieout_all()') is null then
     raise exception 'migration 220 cron: run migration-220-fincom-books.sql first';
   else
-    perform cron.schedule('fincom-books-catchup', '*/10 * * * *', 'select public.fb_mirror_catchup_all(5000)');
+    perform cron.schedule('fincom-books-catchup', '*/10 * * * *', 'call public.fb_mirror_catchup_run(5000)');
     perform cron.schedule('fincom-books-tieout', '47 20 * * *', 'select public.fb_tieout_all()');
     perform cron.schedule('fincom-books-selfcheck', '13 21 * * *', 'select public.fb_selfcheck_all()');
   end if;
