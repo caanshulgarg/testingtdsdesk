@@ -19,7 +19,7 @@ const GST9 = {
         // (re-review: the quarter's last month in the books carries it, when the quarter's end is not in the books)
         const qLast = inBooks.filter(x => GSTSet.qEnd(x) === qe).pop();
         if (fq && fq.quarter) t3[m] = m === qLast ? fq : {net: {}, rcmOut: {}, pay: {cash: {}, use: {}}};
-        else { const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q}); } } });
+        else { const q = GSTSet.isQEnd(m) ? GSTR.threeB(m, reg).pay : {cash: {}, use: {}}; t3[m] = Object.assign({}, t3[m], {pay: q, dueQ: q.due || {}}); } } });
     const S1 = f => this.sumRows(out.filter(f));
     const taxable = r => r.cls === "taxable" && !r.rcm;
     const T = {};
@@ -103,8 +103,11 @@ const GST9 = {
     // Part IV: tax payable and paid
     const pay = {};
     ["igst", "cgst", "sgst", "cess"].forEach(h => {
-      // (the owner, 23-Nov-2026) with 3.1(b)'s IGST and cess, tax payable as 3.1(a)'s (section 49, rule 88A): GSTR.setOff
-      const due = inBooks.reduce((s2, m) => s2 + num(t3[m].net[h]) + (h === "igst" || h === "cess" ? num((t3[m].zero || {})[h]) : 0) + num(t3[m].rcmOut[h]), 0);
+      // (the owner, 23-Nov-2026) with 3.1(b)'s IGST and cess, tax payable as 3.1(a)'s (section 49, rule 88A): the set-off's
+      // own (pay.due: a 3.1(b) box shown nil keeps its tax there; review of ad4be74c3); a quarter not kept as filed, the
+      // quarter's at its end, as its cash (dueQ); a 3B kept before pay.due, 3.1(a) with 3.1(b)'s IGST and cess
+      const dueOf = (t) => { const d = t.dueQ || (t.pay && t.pay.due); return d ? num(d[h]) : num(t.net[h]) + (h === "igst" || h === "cess" ? num((t.zero || {})[h]) : 0); };
+      const due = inBooks.reduce((s2, m) => s2 + dueOf(t3[m]) + num(t3[m].rcmOut[h]), 0);
       const cash = inBooks.reduce((s2, m) => s2 + num(t3[m].pay.cash[h]), 0);
       const by = {}; ["igst", "cgst", "sgst", "cess"].forEach(f => { by[f] = r2(inBooks.reduce((s2, m) => s2 + num(((t3[m].pay.use[f] || {})[h]) || 0), 0)); });
       pay[h] = {due: r2(due), cash: r2(cash), itc: r2(by.igst + by.cgst + by.sgst + by.cess), by};

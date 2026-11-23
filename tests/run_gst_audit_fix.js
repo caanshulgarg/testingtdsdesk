@@ -46,7 +46,7 @@
 //      in cash), CGST/SGST 4,500 each and cess 1,000 in cash; the set-off journal the same. January 2026: the SEZ
 //      supply's credit note (IGST 3,600) alone: IGST -3,600, carried as negative liability. February 2026: an export
 //      with payment 50,000 (IGST 9,000): 3,600 adjusted, 5,400 in cash. GSTR-9 table 9: IGST payable 27,000, cess 1,000.
-//      (January since test 12: 3.1(b) nil, the 20,000 and its IGST 3,600 carried to February's 3.1(b); the cash the same.)
+//      (January since test 12: 3.1(b) nil, its value 20,000 carried to February's 3.1(b); its IGST 3,600 negative liability.)
 //  12. (the owner, 23-Nov-2026) a negative 3.1(b), 3.1(c) or 3.1(e) (credit notes above the month's supplies of the class)
 //      is reported nil and the excess carried to the next return's box until absorbed, with a plain note (r3bCarry).
 //      Exempt: December 2025 a sale 10,000; January a credit note 25,000 and a sale 5,000 (-20,000: nil, 20,000 carried);
@@ -403,11 +403,12 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     ok(DJ.setoffMin(d.pay.due, d.rcmOut, d.netItc, d.opening).cash === Math.round((11600 + 4500 + 4500 + 1000) * 100), "and the least cash the law allows is the same 21,600");
     ok(!r3bNeeds(d).length, "nothing for the CA (" + JSON.stringify(r3bNeeds(d)) + ")");
     const j = T("202601");
-    // (the owner, 23-Nov-2026, test 12: a negative 3.1(b) is nil and carried to the next month's 3.1(b), tax with it)
-    ok(near(j.zero.taxable, 0) && near(j.zero.igst, 0) && near(j.pay.cash.igst, 0) && !j.pay.carry.neg && j.pay.carry.cls && near(j.pay.carry.cls.zero.taxable, 20000) && near(j.pay.carry.cls.zero.igst, 3600),
-      "January: 3.1(b) nil; the SEZ credit note's 20,000 and IGST 3,600 carried to February's 3.1(b) (" + f(j.zero) + ", " + JSON.stringify(j.pay.carry) + ")");
+    // (the owner, 23-Nov-2026, test 12; review of ad4be74c3: a negative 3.1(b) is nil, its VALUE carried to the next
+    // month's 3.1(b); its tax is set off against IGST and what is left carried as negative liability, section 49 / r.88A)
+    ok(near(j.zero.taxable, 0) && near(j.zero.igst, 0) && near(j.pay.cash.igst, 0) && j.pay.carry.neg && near(j.pay.carry.neg.igst, 3600) && j.pay.carry.cls && near(j.pay.carry.cls.zero.taxable, 20000),
+      "January: 3.1(b) nil; the SEZ credit note's 20,000 carried to February's 3.1(b), its IGST 3,600 as negative liability (" + f(j.zero) + ", " + JSON.stringify(j.pay.carry) + ")");
     const fb = T("202602");
-    ok(near(fb.zero.taxable, 30000) && near(fb.zero.igst, 5400) && !fb.pay.negAdj && near(fb.pay.cash.igst, 5400), "February: 3.1(b) 50,000 less 20,000, IGST 9,000 less 3,600: 5,400 in cash (" + f(fb.zero) + ", " + f(fb.pay.cash) + ")");
+    ok(near(fb.zero.taxable, 30000) && near(fb.zero.igst, 9000) && fb.pay.negAdj && near(fb.pay.negAdj.igst, 3600) && near(fb.pay.cash.igst, 5400), "February: 3.1(b) 50,000 less 20,000 (IGST 9,000); 3,600 adjusted, 5,400 in cash (" + f(fb.zero) + ", " + JSON.stringify(fb.pay.negAdj) + ", " + f(fb.pay.cash) + ")");
     const d9 = x.GST9.build("2025", reg);
     ok(near(d9.pay.igst.due, 27000) && near(d9.pay.cess.due, 1000) && near(d9.pay.igst.cash, 17000), "GSTR-9 table 9: IGST payable 27,000 (21,600 - 3,600 + 9,000), cess 1,000; IGST cash 17,000 (" + JSON.stringify(d9.pay.igst) + ")");
     const p = G.setOff({igst: 0, cgst: 100, sgst: 100, cess: 0}, {}, {igst: 0, cgst: 0, sgst: 0, cess: 300}, {}, {igst: 500, cess: 200});

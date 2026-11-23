@@ -215,7 +215,8 @@ export function gstMonths(E, months) {
 // 6.1's tax payable by head, other than reverse charge: 3.1(a), with 3.1(b)'s IGST and cess (exports and SEZ supplies with
 // payment of tax), set off and paid with it under sections 49(4), 49(5) and 49A with rule 88A (the owner, 23-Nov-2026), as
 // GSTR.setOff (server/_shared/gst3b.js) takes them; a month the night carried without 3.1(b) is its 3.1(a)
-export const due61 = (t) => { const o = {}; for (const h of H) o[h] = r2(num((t.net || {})[h]) + (h === "igst" || h === "cess" ? num((t.zero || {})[h]) : 0)); return o; };
+// (review of ad4be74c3: the set-off's own pay.due when the 3B has it: a 3.1(b) box shown nil keeps its tax there)
+export const due61 = (t) => { const o = {}, d = (t.pay || {}).due; for (const h of H) o[h] = d ? r2(num(d[h])) : r2(num((t.net || {})[h]) + (h === "igst" || h === "cess" ? num((t.zero || {})[h]) : 0)); return o; };
 // a nil GSTR-3B for the late fee: no tax payable (Notification 19/2021-CT) in 3.1(a), 3.1(b) (IGST and cess on exports
 // or SEZ supplies with payment, re-review) or 3.1(d), whatever the credit (as app/src/lib/gst3bNil.js)
 export const nil3bOf = (t) => H.every((h) => ["net", "zero", "rcmOut"].every((k) => P((t[k] || {})[h]) <= 0));
@@ -255,7 +256,11 @@ export function setoffOne(m, inp, others) {
   const feeAmt = m.portalFee != null ? r2(m.portalFee) : m.fee && m.fee.unknown ? null : m.fee && m.fee.fee > 0 ? null : 0;
   if (!J.lines.length && !intAmt && !feeAmt && intAmt !== null && feeAmt !== null) return null;                          // nothing to set off
   // 2. the books changed since the 3B was kept as filed
-  if (m.snapPay && !samePay(m.snapPay, t.pay)) return you("Set-off " + label + ": the books changed since the 3B was filed. Look at the 3B first.");
+  // (review of ad4be74c3) a 3B kept as filed before 3.1(b)'s IGST and cess were in FinCom's set-off (the owner, 23-Nov-2026)
+  // differs for that alone: said, so the CA checks the filed 3B rather than the books
+  const z31b = H.some((h) => (h === "igst" || h === "cess") && Math.abs(num((t.zero || {})[h])) >= 0.005 && Math.abs(num((m.snapPay.due || {})[h]) - num((t.pay.due || {})[h])) >= 0.005);
+  if (m.snapPay && !samePay(m.snapPay, t.pay)) return you("Set-off " + label + ": " + (z31b ? "this 3B was kept as filed before FinCom counted 3.1(b)'s IGST and cess (exports and SEZ supplies with tax) in the set-off, so its figures differ now. Check the 3B as filed on the portal and keep it as filed again."
+    : "the books changed since the 3B was filed. Look at the 3B first."));
   if ((J.missing || []).length) return you("Set-off " + label + ": no " + J.missing.join(", ") + " in FinCom's GST ledgers. Set it in GST settings.");
   if (intAmt === null) return you("Set-off " + label + ": interest of about " + inr(m.interest.total) + " (" + m.interest.days + " days late). Type the portal's figure on the GST page.");
   if (feeAmt === null) return you("Set-off " + label + ": a late fee is due. Type the portal's figure on the GST page.");

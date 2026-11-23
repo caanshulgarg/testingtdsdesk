@@ -244,14 +244,19 @@ function fix3b(t, ym, reg) {
   const d = delta3b(ym, reg);
   if (!d) return t;
   const plus = (o, x) => { const r = Object.assign({}, o || {}); Object.keys(x).forEach((k) => { r[k] = R(N(r[k]) + N(x[k])); }); return r; };
-  t.net = plus(t.net, d.a); t.zero = plus(t.zero, d.b); t.nil = plus(t.nil, { taxable: d.c.taxable }); t.nongst = plus(t.nongst, { taxable: d.e.taxable });
+  t.net = plus(t.net, d.a);
+  // (review of ad4be74c3) 3.1(b), (c), (e): the corrections go on the boxes as the books gave them (before a carry), and
+  // the carry is worked out again on the result (GSTR.carry31): a box never negative, the value carried on right
+  const raw = (k) => (t.c31 && t.c31.raw[k]) || t[k];
+  t.zero = plus(raw("zero"), d.b); t.nil = plus(raw("nil"), { taxable: d.c.taxable }); t.nongst = plus(raw("nongst"), { taxable: d.e.taxable });
+  if (GSTR.carry31) { const c31 = GSTR.carry31(t, t.opening); if (c31) t.c31 = c31; else delete t.c31; }
   const up = {}; (t.unregPos || []).forEach((x) => { up[x.pos] = Object.assign({}, x); });
   let ut = 0, ui = 0;
   Object.keys(d.unreg).forEach((p) => { const x = up[p] = up[p] || { pos: p, taxable: 0, igst: 0 }; x.taxable = R(x.taxable + d.unreg[p].taxable); x.igst = R(x.igst + d.unreg[p].igst); ut += d.unreg[p].taxable; ui += d.unreg[p].igst; });
   t.unregPos = Object.values(up).filter((x) => Math.abs(x.taxable) >= 0.005 || Math.abs(x.igst) >= 0.005).sort((a, c) => a.pos.localeCompare(c.pos));
   t.toUnreg = plus(t.toUnreg, { taxable: ut, igst: ui });
   t.r1Fix = d;
-  if (t.netItc && typeof GSTR.setOff === "function") { t.pay = GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening, t.zero); t.payable = t.pay.cash; }
+  if (t.netItc && typeof GSTR.setOff === "function") { t.pay = GSTR.pay31 ? GSTR.pay31(t.net, t.rcmOut, t.netItc, t.opening, t.zero, t.c31) : GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening, t.zero); t.payable = t.pay.cash; }
   return t;
 }
 

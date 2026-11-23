@@ -14,12 +14,14 @@ export function nil3b(t) {
 // (3.1(b)'s IGST and cess are in FinCom's 6.1 set-off, cash and set-off journal: GSTR.setOff)
 const INR = (v) => "Rs " + Math.round(Math.abs(v)).toLocaleString("en-IN");
 const BOX = [["zero", "3.1(b) zero rated supplies"], ["nil", "3.1(c) nil rated and exempt supplies"], ["nongst", "3.1(e) non-GST supplies"]];
-export function r3bNeeds(t) {
+export function r3bNeeds(t, filed) {
   const w = [];
   if (!t) return w;
   BOX.forEach(([k, l]) => {
     const v = n((t[k] || {}).taxable);
-    if (v <= -0.005) w.push(l + ": the taxable value is negative (-" + INR(v) + "). FinCom now shows such a box as nil and carries the excess to the next return; this figure was worked out before that, so work the month out again before filing.");
+    // (review of ad4be74c3) a 3B filed so: nothing to change in it; the next return takes nothing off for it
+    if (v <= -0.005) w.push(l + ": the taxable value is negative (-" + INR(v) + "). " + (filed ? "This 3B was filed so, before FinCom showed such a box as nil: nothing to change in it now, and the next 3B takes nothing off for it."
+      : "FinCom now shows such a box as nil and carries the excess to the next return; this figure was worked out before that, so work the month out again before filing."));
   });
   return w;
 }
@@ -32,11 +34,15 @@ const RS = (v) => "\u20b9" + Math.round(Math.abs(v)).toLocaleString("en-IN");
 export function r3bCarry(t, ym) {
   const c = t && t.c31, w = [];
   if (!c) return w;
-  const q = !!t.quarter, next = q ? "the next quarter (" + ymLabel(addM(ym, 1)) + " to " + ymLabel(addM(ym, 3)) + ")" : ymLabel(addM(ym, 1)), prev = q ? "the quarter before" : ymLabel(addM(ym, -1));
+  // (review of ad4be74c3) "this quarter" for a quarterly return; said when what was brought in took the box below nil;
+  // 3.1(b)'s tax below nil is set off against its head (negative liability), never carried in the box
+  const q = !!t.quarter, per = q ? "this quarter" : "this month", next = q ? "the next quarter (" + ymLabel(addM(ym, 1)) + " to " + ymLabel(addM(ym, 3)) + ")" : ymLabel(addM(ym, 1)), prev = q ? "the quarter before" : ymLabel(addM(ym, -1));
   BOX.forEach(([k, l]) => {
-    const i = c.cin && c.cin[k], o = c.out && c.out[k], s = [];
+    const i = c.cin && c.cin[k], o = c.out && c.out[k], r = (c.raw || {})[k] || {}, s = [];
     if (i) s.push(RS(i.taxable) + " of credit notes brought from " + prev + " taken off here.");
-    if (o) s.push("Credit notes more than supplies this month: shown as nil, " + RS(o.taxable) + " carried to " + next + ".");
+    if (o) s.push((i && n(r.taxable) >= 0 ? "With them the box is below nil" : "Credit notes more than supplies " + per) + ": shown as nil, " + RS(o.taxable) + " carried to " + next + ".");
+    const ig = Math.min(0, n(r.igst)), cs = Math.min(0, n(r.cess));
+    if (ig || cs) s.push("Its " + [ig ? "IGST " + RS(ig) : "", cs ? "cess " + RS(cs) : ""].filter(Boolean).join(" and ") + " below nil " + (ig && cs ? "are" : "is") + " shown as nil here and set off against " + (ig && cs ? "IGST and cess" : ig ? "IGST" : "cess") + " in 6.1; what is left is carried as negative liability.");
     if (s.length) w.push(l + ": " + s.join(" "));
   });
   return w;
