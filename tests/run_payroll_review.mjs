@@ -75,7 +75,9 @@ function world(rows, o = {}) {
   const A = {
     postGate: () => ({ ok: true }), postCompany: () => "ZZ Made Up Traders", me: () => "Made-up Person", plainWhy: (m) => String(m || "").replace(/^Failed:\s*/, ""),
     tallyIdOf: (x) => String(x.vchId || ""), clientLedgers: async () => rows.ledgers.map((l) => ({ name: l.name })),
-    Drafts: { get: (cid, id) => drafts[id] || null, load: async () => Object.values(drafts), save: async (cid, d, what) => { drafts[d.id] = JSON.parse(JSON.stringify(d)); log.push("save " + d.id + " " + d.state); return true; } },
+    // what the cloud keeps (a copy each time): a draft whose save never went through is not kept, as after a closed page
+    Drafts: { get: (cid, id) => (drafts[id] ? JSON.parse(JSON.stringify(drafts[id])) : null), load: async () => Object.values(drafts).map((d) => JSON.parse(JSON.stringify(d))), save: async (cid, d, what) => { if (o.closeAt && o.closeAt(d)) throw new Error("the page was closed");
+      drafts[d.id] = JSON.parse(JSON.stringify(d)); log.push("save " + d.id + " " + d.state); return true; } },
   };
   const answer = o.answer || ((v) => ({ id: v.id, ok: true, created: 1, vchId: String(100 + posts.length), word: "In Tally" }));
   const g = { tallyVia: () => "bridge", Bridge: { st: { version: "2.5.18" }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers[0].id); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
@@ -143,9 +145,9 @@ console.log("B3 and B2: a split month, part 1 in Tally, then the rest");
   let r = await w.run(t.entry);
   ok(!r.ok && w.posts.map((p) => p.vouchers[0].id).join() === "dc-tp-202610-1,dc-tp-202610-2" && w.log.includes("entry_release"), "the real second check passes; part 1 posted, part 2 refused, released");
   const i1 = w.log.indexOf("post dc-tp-202610-1"), i2 = w.log.indexOf("post dc-tp-202610-2"), saves = w.log.filter((l) => /^save/.test(l));
-  ok(w.log.slice(0, i1).filter((l) => /^save/.test(l)).join() === "save dc-tp-202610-1 posting,save dc-tp-202610-2 waiting" && w.log.slice(i1, i2).filter((l) => /^save/.test(l)).every((l) => !/ posted$/.test(l))
+  ok(w.log.slice(0, i1).filter((l) => /^save/.test(l)).join() === "save dc-tp-202610-1 posting,save dc-tp-202610-2 waiting" && w.log.slice(i1, i2).filter((l) => /^save/.test(l)).join() === "save dc-tp-202610-1 posted,save dc-tp-202610-2 waiting,save dc-tp-202610-2 posting"
     && saves[saves.length - 1] === "save dc-tp-202610-2 failed",
-    "re-review 5: part 2 saved waiting before part 1 is sent, no posted part saved before part 2 is tried, the last part tried saved last: " + saves.join(" > "));
+    "third review: part 2 saved waiting before part 1 is sent; part 1's answer saved straight after it, then part 2 waiting again: " + saves.join(" > "));
   ok(draftState({ vid: "dc-tp-202610-2", dedupe: "payroll:202610", state: "waiting", results: w.drafts["dc-tp-202610-2"].results }, {}, Date.now()) === "failed", "  so the cloud's settle (the latest draft) sends the entry back to ready, never to approved");
   // the books synced: part 1 is in Tally (FinCom's id in its narration, its allocations in Tally's payroll read)
   const p1 = TPost.prepare({ co: rows.co, ym: YM, rows: sheet, pay: w.b.payroll, ledgers: rows.ledgers.map((l) => l.name), books: w.b }).vouchers[0], x = inTally(p1, "tp1");
@@ -164,7 +166,7 @@ console.log("B3 and B2: a split month, part 1 in Tally, then the rest");
   const fwd = TPost.prepare({ co: rows.co, ym: YM, rows: sheet, pay: w.b.payroll, ledgers: rows.ledgers.map((l) => l.name), books: w.b });
   ok(rev.vouchers.map(TP.payrollVoucherXml).join("") === fwd.vouchers.map(TP.payrollVoucherXml).join(""), "B2: the sheet re-sorted: the same parts, byte for byte (Tally's employee order)");
   // a part in Tally that is not the part built now (an employee moved between parts): refused, nothing sent
-  const odd = JSON.parse(JSON.stringify(w.drafts)); odd["dc-tp-202610-1"].vouchers[0].xml = odd["dc-tp-202610-1"].vouchers[0].xml.replace("Made Up Person 000", "Made Up Person 149");
+  const odd = JSON.parse(JSON.stringify(w.drafts)); odd["dc-tp-202610-1"].vouchers[0].xml = odd["dc-tp-202610-1"].sent.xml = odd["dc-tp-202610-1"].sent.xml.replace("Made Up Person 000", "Made Up Person 149");
   delete odd["dc-tp-202610-2"];
   const w3 = world(synced, { sheet, drafts: odd, allocs: x.allocs, pv: x.pv });
   r = await w3.run(t.entry);
@@ -196,12 +198,18 @@ console.log("2, 3, 4, 6: the bridge asked, the payable and type, cost categories
   let w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: false, alreadySent: true, sentJob: "job-77", message: "Already sent from this computer (job job-77): not sent again" }) });
   let r6 = await w6.run(e6);
   ok(r6.ok && r6.queued && /on its way to Tally \(sent before; not sent again\)/.test(r6.words) && !w6.log.includes("entry_release") && w6.drafts["dc-tp-202610-1"].job === "job-77", "6: alreadySent: on its way (its job kept), not failed, not released");
-  w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: false, message: "Already in Tally (voucher no. 41)" }) });
+  // (third review) "already in Tally" counts only when FinCom's record of the earlier, unanswered send is this very XML
+  const v6 = TPost.prepare({ co: rows6.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows6.ledgers.map((l) => l.name), books: {} }).vouchers[0], x6 = TP.payrollVoucherXml(v6);
+  const lost = (xml) => ({ "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", kind: "tallyPayroll", part: 1, parts: 1, state: "posting", sent: { xml, at: "2026-11-22T10:00:00Z" }, results: { "dc-tp-202610-1": { ok: false, state: "sent" } }, vouchers: [{ xml }] } });
+  w6 = world(rows6, { drafts: lost(x6), answer: (v) => ({ id: v.id, ok: false, message: "Already in Tally (voucher no. 41)" }) });
   r6 = await w6.run(e6);
-  ok(r6.ok && /already in Tally \(not sent again\)/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  already in Tally (voucher no. 41): in Tally, with its number");
-  w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: true, existed: true, vchId: "42" }) });
+  ok(r6.ok && /already in Tally \(not sent again\)/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  already in Tally (voucher no. 41) after an unanswered send of the same XML: in Tally, with its number");
+  w6 = world(rows6, { drafts: lost(x6), answer: (v) => ({ id: v.id, ok: true, existed: true, vchId: "42" }) });
   r6 = await w6.run(e6);
   ok(r6.ok && /already in Tally/.test(r6.words), "  existed: in Tally");
+  w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: true, existed: true, vchId: "42" }) });
+  r6 = await w6.run(e6);
+  ok(!r6.ok && /from an earlier send FinCom has no record of/.test(r6.why) && w6.log.includes("entry_release"), "  already in Tally with no record of sending it: refused, released (what is in Tally can't be vouched for)");
 }
 
 console.log("lows: two employees in Tally whose names fold to one");
@@ -350,6 +358,76 @@ console.log("re-review 7: Tally's payroll read leaves out merged and deleted led
   const src = (await import("node:fs")).readFileSync(new URL("../src/js/73-payroll.js", import.meta.url), "utf8");
   ok(/tally_ledgers\?select=name,pay_type,pay_stat_type,it_component,for_payroll&for_payroll=eq\.true&merged_into=is\.null&deleted_at=is\.null"/.test(src), "Payroll.into: the pay heads with merged_into and deleted_at null");
   ok(/tally_vouchers\?select=guid,alter_id,day,vtype,vno,narration,/.test(src) && /narr: String\(v\.narration \|\| ""\)/.test(src), "  and each payroll entry's narration kept (re-review 6)");
+}
+
+console.log("third review: the page closed between parts, and the sheet changed before the retry");
+{
+  // a made-up Tally that keeps each voucher by FinCom's id: a second send of an id is "Already in Tally"
+  const tallyOf = () => { const T = new Map(); return { T, answer: (v) => { if (T.has(v.id)) return { id: v.id, ok: false, message: "Already in Tally (voucher no. " + (Array.from(T.keys()).indexOf(v.id) + 1) + ")" }; T.set(v.id, v.xml); return { id: v.id, ok: true, created: 1, vchId: String(500 + T.size) }; } }; };
+  const paid = (T) => Array.from(T.values()).flatMap((x) => TPost.readVoucherXml(x).employees.map((e) => e.name));
+  const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
+  // the late joiner comes first in Tally's employee list (by name), so part 1 built now is not part 1 as sent
+  const late = emp("Aaa Late Joiner", 9000, 1000, { pt: 200 }), sheet2 = [late].concat(sheet);
+  for (const [lostAnswer, words] of [[false, "after part 1's answer was saved"], [true, "before part 1's answer was saved"]]) {
+    const ty = tallyOf();
+    const w = world(rows, { sheet, answer: (v) => ty.answer({ id: v.id, xml: w.posts[w.posts.length - 1].vouchers[0].xml }),
+      closeAt: (d) => (lostAnswer ? d.id === "dc-tp-202610-1" && d.state === "posted" : d.id === "dc-tp-202610-2" && d.state === "posting") });
+    let closed = false; try { await w.run(t.entry); } catch (x) { closed = /closed/.test(String(x && x.message)); }
+    ok(closed && ty.T.size === 1, "the page closed " + words + ": part 1 in Tally, part 2 never sent");
+    const p1 = TPost.readVoucherXml(ty.T.get("dc-tp-202610-1"));
+    const x = inTally({ id: "dc-tp-202610-1", narration: "Salary", payable: "Salary Payable", net: p1.net, employees: p1.employees.map((e) => ({ name: e.name, heads: e.heads })) }, "tp1");
+    const rows2 = rowsOf({ sheet: sheet2, vouchers: [x.voucher] }), t2 = night(rows2, { draftRecs: asRecs(w.drafts) });
+    const w2 = world(rows2, { sheet: sheet2, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv, answer: (v) => ty.answer({ id: v.id, xml: w2.posts[w2.posts.length - 1].vouchers[0].xml }) });
+    const r = await w2.run(t2.entry);
+    ok(t2.entry && !r.ok && r.stuck && ty.T.size === 1 && !w2.posts.length, "  the retry with a late joiner: refused, nothing sent (" + String(r.why || "it was posted").slice(0, 120) + "…)");
+    if (!lostAnswer) {
+      w2.run.extra = { accept: true };
+      const r2 = await w2.run(t2.entry), names = paid(ty.T);
+      ok(r2.ok && names.length === 151 && new Set(names).size === 151 && names.includes("Aaa Late Joiner"), "  accepted as it is in Tally: everyone on the sheet paid exactly once (151), the late joiner too");
+    } else ok(/never had Tally’s answer/.test(String(r.why || "")), "  the part whose answer was lost goes again only as the very XML sent then");
+    const names = paid(ty.T);
+    ok(new Set(names).size === names.length, "  nobody paid twice");
+  }
+}
+
+console.log("third review: types first, the accepted parts counted, acceptance asked again, books before 'Not confirmed'");
+{
+  ok(!earningHead("Company PF Share", "") && !earningHead("Mediclaim (Company)", "") && !earningHead("Employer ESI", "") && earningHead("Arrears", "") && earningHead("Arrears", "Reimbursements to Employees")
+    && !earningHead("Conveyance", "Reimbursements to Employees") && earningHead("Company Car Allowance", "Earnings for Employees") && !earningHead("Basic Pay", "Employer's Other Charges"),
+    "(a) a type given: the type alone (an earning named “Company …” is salary; one typed employer's is not); no type: employer-style names are not salary; arrears always are");
+  const heads = HEADROWS.concat([{ name: "Company Car Allowance", type: "Earnings for Employees" }]);
+  const gross = r2(SHEET.reduce((x, r) => x + r.gross, 0));
+  const car = { guid: "car1", day: "2026-10-31", type: "Payroll", narr: "Oct salary", lines: [["Company Car Allowance", -gross], ["Salary Payable", gross]] };
+  const t = night(rowsOf({ vouchers: [car], ledgers: { "Company Car Allowance": "Indirect Expenses" } }), { payHeads: heads });
+  ok(!t.entry && !t.finding, "  the night: a hand payroll voucher to an earning named “Company Car Allowance” (typed an earning) is salary booked");
+  // (b), (c): accepting where the rest makes two parts (a second category in it): the month's count of parts on every part
+  const sheet = many(150), rows = rowsOf({ sheet }), t0 = night(rows);
+  let first = true;
+  const w = world(rows, { sheet, answer: (v, k) => (v.id.endsWith("-2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "6" + k }) });
+  await w.run(t0.entry); first = false;
+  const p1 = TPost.prepare({ co: rows.co, ym: YM, rows: sheet, pay: w.b.payroll, ledgers: rows.ledgers.map((l) => l.name), books: w.b }).vouchers[0], x = inTally(p1, "tp1");
+  const synced = rowsOf({ sheet, vouchers: [x.voucher] });
+  const emps = sheet.map((r, i) => ({ name: r.name, category: i === 0 || i === 120 ? "Head Office" : "" }));
+  let refuse = true;
+  const w2 = world(synced, { sheet, emps, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv });
+  w2.env.g.Bridge.post = async (pl) => { w2.posts.push(pl); return { ok: true, results: [refuse ? { id: pl.vouchers[0].id, ok: false, message: "Ledger 'Salary Payable' does not exist" } : { id: pl.vouchers[0].id, ok: true, created: 1, vchId: "8" + w2.posts.length }] }; };
+  w2.run.extra = { accept: true };
+  let r = await w2.run(t0.entry);
+  ok(!r.ok && w2.drafts["dc-tp-202610-1"].accepted && w2.drafts["dc-tp-202610-1"].parts === 3, "(b) accepted, the rest in two parts: part 1's draft says the month now has 3 parts");
+  refuse = false; w2.run.extra = {};
+  r = await w2.run(t0.entry);
+  ok(r.ok && w2.posts.slice(-2).map((pl) => pl.vouchers[0].id).join() === "dc-tp-202610-2,dc-tp-202610-3", "(c) the same differences as accepted: not asked again; parts 2 and 3 posted");
+  const tn = night(rowsOf({ sheet, vouchers: [x.voucher] }), { draftRecs: asRecs(w2.drafts) });
+  ok(!tn.entry && !tn.finding, "(b) the night counts the month done (3 parts of 3)");
+  const w3 = world(synced, { sheet, emps: sheet.map((r0, i) => ({ name: r0.name, category: i === 0 || i === 120 || i === 130 ? "Head Office" : "" })), drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv });
+  const d1 = w3.drafts["dc-tp-202610-1"]; d1.accepted = JSON.parse(JSON.stringify(w2.drafts["dc-tp-202610-1"].accepted));
+  r = await w3.run(t0.entry);
+  ok(!r.ok && r.stuck && r.canAccept && !w3.posts.length, "(c) something else differs since the acceptance (another category moved): asked again, nothing sent");
+  // (d) a part whose draft says unconfirmed but whose FinCom id is in the books: no "Not confirmed in Tally"
+  const v1 = TPost.prepare({ co: rows.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows.ledgers.map((l) => l.name), books: {} }).vouchers[0], xi = inTally(v1, "tq1");
+  const dr = { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", parts: 1, part: 1, state: "posted", results: { "dc-tp-202610-1": { ok: true, at: new Date(Date.now() - 30 * 3600e3).toISOString() } } } };
+  const tb = night(rowsOf({ vouchers: [xi.voucher] }), { draftRecs: asRecs(dr) }), all = journals(tb.inp).findings;
+  ok(!all.some((f) => f.kind === "sent_check") && !tb.entry, "(d) its FinCom id in the books: in Tally, no “Not confirmed in Tally”, the month done");
 }
 
 console.log("the drafts the night reads carry the parts");

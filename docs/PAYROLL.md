@@ -285,6 +285,15 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   leaves out merged and deleted ledgers; an entry FinCom has no narration for asks to read the books again. Dates are
   masked in full except in the pay month column; the server masks text cells itself. 24Q's figures carry over by code,
   then PAN, then name, and the warning names who did not carry over.
+- **Third review (23-Nov-2026)**: the XML actually sent is kept on the part's draft (`sent`), never overwritten until
+  its answer is saved. A part whose earlier send was never answered goes again only as that very XML (else refused,
+  naming what changed); "already in Tally" counts as done only when FinCom's record of the earlier send is the XML
+  being sent. Each part's answer is saved straight after its posting, then the last part still to go is saved
+  "waiting" again (one save's window). A pay head with a Tally type goes by its type alone (night and page); names only
+  without one ("Company PF Share", "Mediclaim (Company)" not salary; arrears always salary). Accepting a part saves the
+  month's new count of parts on every part and a fingerprint of the accepted differences (each employee's amounts by
+  pay head among them): anything else differing is asked again. The night checks the books for a part's FinCom id
+  before saying "Not confirmed in Tally".
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: the `assistant-night` function (dailyjournals.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.

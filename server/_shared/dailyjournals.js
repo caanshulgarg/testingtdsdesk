@@ -333,10 +333,10 @@ export function payrollPlain(rows) {
 // heads: the ledgers of Tally's payroll, as names or {name, type} (Tally's pay head type): heads keeps the earnings,
 // notEarn the rest (the employer's contributions, gratuity, deductions ...: never salary booked)
 export function payrollSettings(co, heads) {
-  const c = co || {}, m = (c.payrollMethod || {}).value, earn = new Set(), not = new Set();
-  (heads || []).forEach((h) => { const name = String(typeof h === "string" ? h : (h && h.name) || ""), type = typeof h === "string" ? "" : (h && (h.type || h.pay_type)) || ""; if (name) (earningHead(name, type) ? earn : not).add(name); });
+  const c = co || {}, m = (c.payrollMethod || {}).value, earn = new Set(), not = new Set(), typed = new Set();
+  (heads || []).forEach((h) => { const name = String(typeof h === "string" ? h : (h && h.name) || ""), type = typeof h === "string" ? "" : (h && (h.type || h.pay_type)) || ""; if (!name) return; (earningHead(name, type) ? earn : not).add(name); if (String(type).trim()) typed.add(name); });
   return { method: m === "tally" || m === "journal" ? m : "", journal: Object.assign({}, c.payrollJournal || {}), payable: String(c.payrollPayable || ""),
-    vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort() };
+    vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort(), typed: Array.from(typed).sort() };
 }
 export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
 const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
@@ -345,8 +345,9 @@ const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + 
 // a payroll-type voucher debits; FinCom's own Tally Payroll vouchers of the month left out when skipOwn (a split month
 // half posted is finished, not taken for salary booked by hand)
 function bookedFor(ym, inp, skipOwn) {
-  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []), ne = new Set(((inp.payroll || {}).notEarn) || []);
-  const not = (l) => ne.has(l) || notSalaryHeadName(l);
+  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []), ne = new Set(((inp.payroll || {}).notEarn) || []), ty = new Set(((inp.payroll || {}).typed) || []);
+  // (third review) a pay head Tally gives a type to goes by its type alone; the name only for one with none
+  const not = (l) => ne.has(l) || (!ty.has(l) && !ph.has(l) && notSalaryHeadName(l));
   const V = live(inp.books).filter((v) => !(skipOwn && ownTp(v, ym)));
   const pt = new Set(); V.forEach((v) => { if (/payroll/i.test(String(v.type || ""))) (v.ent || []).forEach((e) => { if (e.a < 0 && A.isExpense(e.l) && !not(e.l)) pt.add(e.l); }); });
   // (re-review 1) the employer's contributions, gratuity and the like are never salary: an entry touching only them is not
@@ -431,11 +432,15 @@ export function payrollOne(ym, rows, inp) {
 function tallyOne(ym, rows, inp, c) {
   const { key, dedupe, vid, label, date, base, you } = c, tp = inp.payroll || {}, T = "Tally Payroll " + label;
   if (posted(inp, vid) || (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && !/^dc-tp-/.test(String(d.vid || "")))) return null;   // booked as a journal through Daily Check
-  { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
-  const mine = (inp.drafts || []).filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")));
+  // (third review) a part whose FinCom id is in the books is in Tally, whatever its draft says: never "Not confirmed"
+  const inBooks = new Set();
+  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)")); if (m) inBooks.add(m[1]); });
+  const drafts = (inp.drafts || []).map((d) => (d && inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" }) : d));
+  { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you); if (sc) return sc; }
+  const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")));
   if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
   const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));
-  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)")); if (m) done.add(m[1]); });
+  inBooks.forEach((x) => done.add(x));
   const parts = Math.max(0, ...mine.map((d) => Number(d.parts) || 0));
   if (parts > 0 && Array.from({ length: parts }, (_, i) => TP_ID(ym) + "-" + (i + 1)).every((x) => done.has(x))) return null;
   // 1. the sheet
