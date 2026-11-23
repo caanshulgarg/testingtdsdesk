@@ -119,3 +119,14 @@ Range of the fixes: edad89a1c..315b08c78
 - I3: unchanged (the owner's decision C7; privacy wording).
 - I4: FIXED. The tray item reads "Hide this icon (reading continues; the icon comes back in 10 minutes)"
   (TestR2519TrayQuitWords).
+
+## Fixes after the security re-review of 9ed81e0c9 (bridge-go only; to be re-reviewed)
+
+- I2 (follow-up): the employee groups and payroll centres of a cost-centre round are carried across all its chunks,
+  and the round's list drops every centre under one whichever chunk brought the group
+  (TestR2519CostCentreGroupAcrossChunks, both orders).
+- I5: the local copy takes an entry found by the look only when Tally's entry also matches by its amount and its
+  number of lines; FinComTag's heads carry neither, so in practice the keeper reads that day (TestR2519ResentCopyNeedsAmount).
+- I6: a failed look is forgotten after 24 hours in resent-looks.json (TestR2519ResentFailForgotten).
+- The owner's decision of 23-Nov-2026 (1fde25f65): FinCom's mark found on another date holds the entry for a person
+  ("FinCom's entry is in Tally on <date>; check it there."), never sent.

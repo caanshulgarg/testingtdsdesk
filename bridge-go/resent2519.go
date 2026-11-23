@@ -106,8 +106,19 @@ func resentRedatedWords(d string) string {
 	return "Not posted: FinCom's entry is in Tally on " + liveDay(d) + "; check it there."
 }
 
-// --- the looks that failed, by company and date (resent-looks.json): the second failure holds that date's entries for
-// a person; a look that answers clears it
+// L1, I5 (the security reviews): Tally's entry is the one sent by type, date and party, and by its amount and its
+// lines too. FinComTag's heads carry no amount or lines, so in practice the keeper reads that day
+func resentCopyMatches(e vchKey, x string) bool {
+	vs := xmlDoc(x).All("VOUCHER")
+	if len(vs) == 0 || !headMatchesXML(headOfKey(e), x) {
+		return false
+	}
+	p := keyOfVoucher(vs[0])
+	return e.total >= 0 && e.total == p.total && len(e.ledger) > 0 && len(e.ledger) == len(p.ledger)
+}
+
+// --- the looks that failed, by company and date (resent-looks.json): the second failure within 24 hours holds that
+// date's entries for a person; a look that answers clears it
 var resentFailMu sync.Mutex
 
 func resentFailFile() string { return sp("resent-looks.json") }
@@ -120,7 +131,11 @@ func resentFailNote(company, date string) int {
 		all = M{}
 	}
 	k := companyKey(company) + "|" + date
-	n := toInt(obj(all[k])["n"]) + 1
+	was := obj(all[k])
+	n := toInt(was["n"]) + 1
+	if t, err := time.Parse(time.RFC3339, str(was["at"])); err != nil || time.Since(t) > 24*time.Hour {
+		n = 1 // I6: a failure more than 24 hours ago is forgotten
+	}
 	all[k] = M{"n": n, "at": time.Now().Format(time.RFC3339)}
 	_ = saveFile(resentFailFile(), jsonText(all))
 	return n
@@ -243,8 +258,8 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 		writeLog("  entry " + k + ": NOT SENT: FinCom had handed it out before and its mark is in Tally already: " + e.vtype + " no. " + e.number + " of " + ddmmyyyy(e.date) + " (GUID " + e.guid + ")")
 		h := headOfKey(e)
 		_ = noteVerified(acceptedKey(k, x), company, h) // this computer's record: never sent again
-		if headMatchesXML(h, x) {
-			addPostedForCopy(company, h, x) // the local copy only when Tally's entry is the one sent (L1); else the keeper reads it
+		if resentCopyMatches(e, x) {
+			addPostedForCopy(company, h, x) // the local copy only when Tally's entry is the one sent (L1, I5); else the keeper reads it
 		}
 		results = append(results, M{"id": k, "kind": "voucher", "ok": false, "already": true, "sameId": true, "company": company, "port": port, "message": msg,
 			"guid": e.guid, "vchNo": e.number, "vchNumber": e.number, "vchType": e.vtype, "masterId": e.masterID, "vchDate": e.date, "optional": e.optional})

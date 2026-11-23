@@ -1189,3 +1189,55 @@ func TestR2519TrayQuitWords(t *testing.T) {
 		t.Fatal("the tray's Quit words")
 	}
 }
+
+// the security re-review's I2: an employee whose group came in another chunk of the same round is still dropped
+// (whichever chunk came first)
+func TestR2519CostCentreGroupAcrossChunks(t *testing.T) {
+	grp := `<ENVELOPE><COSTCENTRE NAME="Office Staff"><GUID>cc-3</GUID><MASTERID> 53</MASTERID><PARENT>&#4; Primary</PARENT><FORPAYROLL>No</FORPAYROLL><ISEMPLOYEEGROUP>Yes</ISEMPLOYEEGROUP></COSTCENTRE></ENVELOPE>`
+	emp := `<ENVELOPE><COSTCENTRE NAME="Ravi Menon"><GUID>cc-4</GUID><MASTERID> 2054</MASTERID><PARENT>Office Staff</PARENT><FORPAYROLL>No</FORPAYROLL><ISEMPLOYEEGROUP>No</ISEMPLOYEEGROUP></COSTCENTRE>` +
+		`<COSTCENTRE NAME="Branch East"><GUID>cc-1</GUID><MASTERID> 2055</MASTERID><PARENT>&#4; Primary</PARENT><FORPAYROLL>No</FORPAYROLL><ISEMPLOYEEGROUP>No</ISEMPLOYEEGROUP></COSTCENTRE></ENVELOPE>`
+	for _, order := range [][]string{{grp, emp}, {emp, grp}} {
+		ls := M{"bm_costCentresDone": true}
+		for _, raw := range order {
+			rows, _ := costCentreRowsOf(raw)
+			ls["bm_costCentres"] = append(arr(ls["bm_costCentres"]), rows...)
+			costCentresOffNote(ls, raw)
+		}
+		cc := arr(booksOfRound(ls)["costCentres"])
+		if len(cc) != 1 || str(at(arr(cc[0]), 3)) != "Branch East" {
+			t.Fatalf("the round's cost centres: %v", cc)
+		}
+	}
+}
+
+// I5: a mark found by the look puts the entry into the local copy only when Tally's entry matches it by its amount and
+// lines too; FinComTag's heads carry neither, so the keeper reads that day
+func TestR2519ResentCopyNeedsAmount(t *testing.T) {
+	x := finVoucher("r95", fgParty, "R-95", "20261123", "95.00")
+	sent := keyOfVoucher(xmlDoc(x).All("VOUCHER")[0])
+	head := sent
+	head.total, head.amount, head.ledger = -1, -1, map[string]bool{} // as FinComTag gives it
+	if resentCopyMatches(head, x) {
+		t.Fatal("a head with no amount or lines taken for the copy")
+	}
+	if !resentCopyMatches(sent, x) {
+		t.Fatal("the same entry not taken")
+	}
+	other := sent
+	other.total++
+	if resentCopyMatches(other, x) {
+		t.Fatal("another amount taken")
+	}
+}
+
+// I6: a failed look is forgotten after 24 hours (the next failure is a first one again)
+func TestR2519ResentFailForgotten(t *testing.T) {
+	standBridge(t, newStandTally(t), "")
+	_ = saveFile(resentFailFile(), jsonText(M{companyKey(zz) + "|20261123": M{"n": 1, "at": time.Now().Add(-25 * time.Hour).Format(time.RFC3339)}}))
+	if n := resentFailNote(zz, "20261123"); n != 1 {
+		t.Fatalf("a failure of 25 hours ago still counted: %d", n)
+	}
+	if n := resentFailNote(zz, "20261123"); n != 2 {
+		t.Fatalf("a failure just now not counted: %d", n)
+	}
+}

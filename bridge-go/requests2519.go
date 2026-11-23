@@ -316,6 +316,46 @@ func costCentreRowsOf(raw string) ([]any, int64) {
 	return out, top
 }
 
+// the round's employee groups and payroll centres (lower-cased names), across all its chunks (the security
+// re-review's I2): booksOfRound drops every centre under one, whichever chunk brought the group
+func costCentresOffNote(ls M, raw string) {
+	have := map[string]bool{}
+	for _, x := range arr(ls["bm_costCentresOff"]) {
+		have[str(x)] = true
+	}
+	for _, c := range xmlDoc(raw).All("COSTCENTRE") {
+		if n := strings.ToLower(strings.TrimSpace(nameOf(c))); n != "" && (yes(nt(c, "FORPAYROLL")) || yes(nt(c, "ISEMPLOYEEGROUP"))) && !have[n] {
+			have[n] = true
+			ls["bm_costCentresOff"] = append(arr(ls["bm_costCentresOff"]), n)
+		}
+	}
+}
+
+// the round's cost centres without any under an employee group or payroll centre of the round
+func costCentresKept(ls M, rows []any) []any {
+	off, parent := map[string]bool{}, map[string]string{}
+	for _, x := range arr(ls["bm_costCentresOff"]) {
+		off[str(x)] = true
+	}
+	for _, r := range rows {
+		parent[strings.ToLower(str(at(arr(r), 3)))] = strings.ToLower(str(at(arr(r), 4)))
+	}
+	out := []any{}
+	for _, r := range rows {
+		bad := false
+		for i, p := 0, strings.ToLower(str(at(arr(r), 4))); p != "" && i < 50; i, p = i+1, parent[p] {
+			if off[p] {
+				bad = true
+				break
+			}
+		}
+		if !bad && !off[strings.ToLower(str(at(arr(r), 3)))] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // C4: [guid, MasterID, AlterID, name, revenue, non-revenue]
 func costCatRowsOf(raw string) ([]any, int64) {
 	var out []any
@@ -514,6 +554,9 @@ func (k *keepRun) booksMasters(company string, port int, bf string, st, ls M, in
 				break
 			}
 			rows, top := sp.rows(raw)
+			if sp.key == "costCentres" {
+				costCentresOffNote(ls, raw) // I2: the groups of this chunk, for every chunk of the round
+			}
 			ls[dk] = append(arr(ls[dk]), rows...)
 			ls[dk+"Began"] = true
 			ls["reqs"] = toInt(ls["reqs"]) + 1
@@ -561,6 +604,9 @@ func booksOfRound(ls M) M {
 		l := []any{}
 		for _, g := range order {
 			l = append(l, by[g])
+		}
+		if sp.key == "costCentres" {
+			l = costCentresKept(ls, l)
 		}
 		o[sp.key] = l
 	}
