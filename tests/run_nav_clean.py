@@ -62,12 +62,13 @@ try:
 
         print("1. the firm's sidebar")
         E("navHome('today')"); W(1200)
-        ok(side() == ["Today", "Compliance", "Clients", "Tally", "Integrations", "Settings", "Help"], "firm: Today · Compliance · Clients · Tally · Integrations · Settings · Help (%s)" % side())
+        # (next-assistant added Daily Check; Integrations shows only when signed in to the cloud, which this test is not)
+        ok(side() == ["Today", "Daily Check", "Compliance", "Clients", "Tally", "Settings", "Help"], "firm: Today · Daily Check · Compliance · Clients · Tally · Settings · Help (%s)" % side())
         ok(lit() == ["Today"] and title() == "Today", "Today is lit on Today, and titled Today (%s)" % lit())
         pg.screenshot(path=os.path.join(OUT, "desk-firm-today.png"))
         E("navHome('inbox')"); W(600)
         ok(lit() == ["Today"], "the firm's Inbox (opened from Today's To read) lights Today")
-        for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Integrations", "#/integrations", "Integrations"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
+        for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
             side_click(label); W(900)
             ok(E("location.hash") == want_hash and title() == want_title and lit() == [label], "%s: %s, titled %s, lit (%s, %s, %s)" % (label, want_hash, want_title, E("location.hash"), title(), lit()))
         # People and Plan and credit: Settings' sections, and the firm menu's
