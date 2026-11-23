@@ -117,22 +117,36 @@ function Employees({ rows, chk }) {
       {ded.map((h) => <td key={h} className="n">{rs(rows.reduce((s, r) => s + ((r.ded || {})[h] || 0), 0))}</td>)}<td className="n">{rs(chk.tot.net)}</td><td></td></tr></tfoot>
   </table></div>;
 }
-function Summary({ rows, chk, how, rule, onKeep, kept }) {
+// (the owner, 23-Nov-2026) what happens to a month once kept: Daily Check makes its entry at night, after the month ends
+const nextWords = (ym, method) => ym > curYm() ? "Kept. Daily Check makes its " + (method === "tally" ? "Tally Payroll entry" : "journal") + " after " + PS.monLabel(ym) + " ends."
+  : method === "tally" ? "Kept. Tonight’s Daily Check checks it; then Approve it here." : "Kept. Tonight’s Daily Check makes this journal; approve it tomorrow on Daily Check › Entries.";
+function Summary({ rows, chk, how, rule, onKeep, kept, method }) {
   const ym = chk.months[0] || "";
   return <section className="pr-card" data-step="read" data-how={how}>
     <div className="pr-title">{how === "rule" ? <ScrollText width={15} height={15} aria-hidden="true" /> : <Check width={15} height={15} aria-hidden="true" />}
-      {how === "rule" ? "Read by your saved layout" : how === "manual" ? "Typed in" : "Layout saved"}{rule ? " “" + rule.name + "”" : ""}{how === "rule" ? " · no AI" : ""}</div>
+      {how === "rule" ? "Read by your saved layout" : how === "manual" ? "Typed in" : how === "kept" ? "Kept with the books" : "Layout saved"}{rule ? " “" + rule.name + "”" : ""}{how === "rule" ? " · no AI" : ""}</div>
     <p className="pr-line"><b>{PS.monLabel(ym) || "No month"}</b> · {rows.length} employee{rows.length === 1 ? "" : "s"} · gross <b>{rs(chk.tot.gross)}</b> · net <b>{rs(chk.tot.net)}</b> <Ok ok={chk.ok}>{chk.ok ? "Adds up" : chk.bad.length ? chk.bad.length + " to check" : chk.months.length > 1 ? "More than one month" : "Does not add up"}</Ok></p>
     {chk.bad.slice(0, 3).map((b, i) => <p key={i} className="pr-line bad">{b.name}: {b.why.join("; ")}</p>)}
     <More label="Employees" id="employees"><Employees rows={rows} chk={chk} />
       {chk.tot.pfEr || chk.tot.esiEr ? <p className="note">Employer’s PF {rs(chk.tot.pfEr)} and ESI {rs(chk.tot.esiEr)}: not in the employee’s pay.</p> : null}</More>
-    {onKeep && <div className="pr-acts"><button type="button" className="btn small" disabled={!chk.ok || kept} onClick={onKeep} data-keep="">{kept ? "Kept with the books" : "Keep with the books"}</button></div>}
+    {onKeep && <div className="pr-acts"><button type="button" className={"btn small" + (kept ? "" : " primary")} disabled={!chk.ok || kept} onClick={onKeep} data-keep="">{kept ? "Kept with the books" : "Keep with the books"}</button>
+      {!kept && <span className="note" data-not-kept="">Not kept yet: press Keep with the books to save it.</span>}</div>}
+    {kept && chk.ok && <p className="pr-line note" data-next="">{nextWords(ym, method)}</p>}
   </section>;
 }
 
 // ---------------------------------------------------------------- 3. manual entry
-function Manual({ ym, setYm, onDone }) {
-  const [heads, setHeads] = useState({ earn: ["Basic", "HRA"], ded: [] }), [t, setT] = useState([{}]), [nh, setNh] = useState("");
+// the typed rows live on the page (draft), so Cancel, a sheet uploaded meanwhile or the month kept opened again keep them
+function draftOf(rows) {
+  const earn = Array.from(new Set(rows.flatMap((r) => Object.keys(r.earn || {})))), ded = Array.from(new Set(rows.flatMap((r) => Object.keys(r.ded || {}))));
+  const s = (v) => (v == null || v === 0 || v === "" ? "" : String(v)), heads = { earn: earn.length ? earn : ["Gross"], ded };
+  return { heads, t: rows.length ? rows.map((r) => ({ name: r.name || "", code: r.code || "", days: s(r.days), earn: earn.length ? Object.fromEntries(earn.map((h) => [h, s((r.earn || {})[h])])) : { Gross: s(r.gross) },
+    ded: Object.fromEntries(ded.map((h) => [h, s((r.ded || {})[h])])), tds: s(r.tds), pt: s(r.profTax), pf: s(r.pf), esi: s(r.esi), net: s(r.net) })) : [{}] };
+}
+const BLANK = { heads: { earn: ["Basic", "HRA"], ded: [] }, t: [{}] };
+function Manual({ ym, setYm, onDone, draft, setDraft, onCancel }) {
+  const { heads, t } = draft || BLANK, [nh, setNh] = useState("");
+  const setT = (x) => setDraft({ heads, t: x }), setHeads = (h) => setDraft({ heads: h, t });
   const rows = t.map((x) => PS.typedRow(x, ym, heads)).filter((r, i) => r.name || i < t.length - 1 ? true : r.gross || r.net);
   const live = rows.filter((r) => r.name), chk = PS.check(live);
   const upd = (i, k, v, sub) => setT(t.map((x, j) => j !== i ? x : sub ? Object.assign({}, x, { [sub]: Object.assign({}, x[sub], { [k]: v }) }) : Object.assign({}, x, { [k]: v })));
@@ -154,7 +168,8 @@ function Manual({ ym, setYm, onDone }) {
       <span className="pr-inline"><input aria-label="New head" placeholder="Add a head (Bonus)" value={nh} onChange={(ev) => setNh(ev.target.value)} />
         <button type="button" className="linkbtn" disabled={!nh.trim()} onClick={() => { setHeads({ earn: heads.earn.concat([nh.trim()]), ded: heads.ded }); setNh(""); }}>Earning</button>
         <button type="button" className="linkbtn" disabled={!nh.trim()} onClick={() => { setHeads({ earn: heads.earn, ded: heads.ded.concat([nh.trim()]) }); setNh(""); }}>Deduction</button></span>
-      <button type="button" className="btn small primary" disabled={!chk.ok} onClick={() => onDone(live)} data-manual-done="">Use these</button></div>
+      <button type="button" className="btn small primary" disabled={!chk.ok} onClick={() => onDone(live)} data-manual-done="">Use these</button>
+      <button type="button" className="linkbtn" onClick={onCancel} data-manual-cancel="">Cancel</button></div>
   </section>;
 }
 
@@ -246,9 +261,28 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
   </section>;
 }
 
+// ---------------------------------------------------------------- the months kept with the books (b.salary)
+const monthOfRow = (r) => r.month || String(r.date || "").slice(0, 7).replace("-", "");
+function keptMonths(salary) {
+  const by = new Map();
+  (salary || []).forEach((r) => { const m = monthOfRow(r); if (!/^\d{6}$/.test(m)) return; if (!by.has(m)) by.set(m, []); by.get(m).push(r); });
+  return Array.from(by.keys()).sort().reverse().map((m) => ({ ym: m, rows: by.get(m) }));
+}
+function KeptMonths({ list, onOpen, onEdit }) {
+  const [all, setAll] = useState(false), shown = all ? list : list.slice(0, 6);
+  return <section className="pr-card" data-kept-months="">
+    <div className="pr-title"><Check width={15} height={15} aria-hidden="true" />Kept with the books</div>
+    {shown.map(({ ym, rows }) => { const g = rows.reduce((s, r) => s + (Number(r.gross) || 0), 0), hand = rows.every((r) => r.src === "manual");
+      return <p className="pr-line pr-kept" key={ym} data-kept={ym}><b>{PS.monLabel(ym)}</b> · {rows.length} employee{rows.length === 1 ? "" : "s"} · gross {rs(g)} · {hand ? "typed in" : "from a sheet"}{" "}
+        <button type="button" className="linkbtn" onClick={() => onOpen(ym, rows)} data-kept-open={ym}>Open</button>{" "}
+        <button type="button" className="linkbtn" onClick={() => onEdit(ym, rows)} data-kept-edit={ym}>Change by hand</button></p>; })}
+    {list.length > 6 && !all && <button type="button" className="linkbtn" onClick={() => setAll(true)}>All {list.length} months</button>}
+  </section>;
+}
+
 // ---------------------------------------------------------------- the page
 export default function PayrollPage() {
-  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [, kick] = useState(0);
+  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [draft, setDraft] = useState(null), [, kick] = useState(0);
   useEffect(() => { let on = true; import("../../lib/asstEntries.js").then((A) => A.clientLedgers(co)).then((l) => { if (on && l) setLedgers(l.map((x) => x.name)); }).catch(() => {}); return () => { on = false; }; }, [co && co.id]);
   useEffect(() => { if (co && !(S.books && S.books.cid === co.id) && typeof openBooks === "function") Promise.resolve(openBooks(co.id)).then(() => kick((x) => x + 1), () => {}); }, [co && co.id]);
   if (!co) return null;
@@ -274,8 +308,17 @@ export default function PayrollPage() {
   const was = rows && !kept ? PS.replacing(books().salary, rows) : { n: 0 };
   const keep = async () => {
     if (was.n && !sure) { setSure(true); return; }
-    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); say(rows.length + " employees kept for " + PS.monLabel(month) + ".");
+    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); if (st && st.how === "manual") setDraft(null); say(rows.length + " employee" + (rows.length === 1 ? "" : "s") + " kept for " + PS.monLabel(month) + ".");
   };
+  // by hand: the draft typed so far, else the month's rows typed in and kept with the books (to change), else a blank row;
+  // a month kept from a sheet is changed by hand from its own line (Change by hand)
+  const openManual = (m, rows0) => {
+    const k = m || ym, has = draft && draft.t.some((x) => String(x.name || "").trim());
+    if (rows0) setDraft(draftOf(rows0)); else if (!has || (draft.ym && draft.ym !== k)) { const r = (keptMonths(books().salary).find((x) => x.ym === k) || {}).rows; setDraft(r && r.every((x) => x.src === "manual") ? draftOf(r) : null); }
+    setYm(k); setSt(null); setKept(false); setSure(false); setManual(true);
+  };
+  const openKept = (m, r) => { setManual(false); setYm(m); setSure(false); setSt({ step: "read", rows: r, skipped: [], how: "kept", rule: null }); setKept(true); };
+  const kept0 = keptMonths(books().salary);
   // (review 9) the month of a sheet with no month column: picked on the start card (last month at first); a sheet read by
   // its saved rule is read again for the month picked
   const pickMonth = (v) => {
@@ -287,19 +330,21 @@ export default function PayrollPage() {
   const toggleOnce = () => { co.payrollJournal = Object.assign({}, co.payrollJournal); if (once) delete co.payrollJournal[month]; else co.payrollJournal[month] = { by: who(), at: new Date().toISOString() }; saveCo(co); kick((x) => x + 1); };
   return <div className="pr" data-payroll="">
     <Method co={co} onChange={() => kick((x) => x + 1)} />
-    {(!st || st.step === "read") && !manual && <section className="pr-card pr-start">
+    {(!st || st.step === "read") && <section className="pr-card pr-start">
       <label className="btn small primary pr-file"><Upload width={14} height={14} aria-hidden="true" />Salary sheet<input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" data-sheet-in="" onChange={(ev) => { const f = (ev.target.files || [])[0]; ev.target.value = ""; take(f); }} /></label>
-      <label className="pr-inline pr-month" data-sheet-month="">Month <input type="month" value={ym.slice(0, 4) + "-" + ym.slice(4)} onChange={(ev) => pickMonth(ev.target.value)} aria-label="Month of the salary sheet" /></label>
-      <button type="button" className="btn small" onClick={() => { setSt(null); setManual(true); }} data-manual="">Enter by hand</button>
+      {!manual && <label className="pr-inline pr-month" data-sheet-month="">Month <input type="month" value={ym.slice(0, 4) + "-" + ym.slice(4)} onChange={(ev) => pickMonth(ev.target.value)} aria-label="Month of the salary sheet" /></label>}
+      {!manual && <button type="button" className="btn small" onClick={() => openManual()} data-manual="">Enter by hand</button>}
       <span className="note">{(co.payrollFormats || []).filter((r) => !r.deleted).length} saved layout{(co.payrollFormats || []).filter((r) => !r.deleted).length === 1 ? "" : "s"}</span>
     </section>}
     {st && st.step === "map" && (st.busy ? <section className="pr-card"><p className="pr-line note">Reading the columns…</p></section> : <MapStep st={st} setSt={setSt} co={co} />)}
-    {manual && <Manual ym={ym} setYm={setYm} onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
-    {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} />}
+    {manual && <Manual ym={ym} setYm={(m) => { setYm(m); setDraft(Object.assign({}, draft || BLANK, { ym: m })); }} draft={draft} setDraft={(d) => setDraft(Object.assign({ ym }, d))} onCancel={() => setManual(false)}
+      onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
+    {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} method={method} />}
     {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
     {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}
     {rows && chk.ok && !method && <p className="pr-line note">Set how this company books salary to see the entry.</p>}
+    {kept0.length > 0 && !manual && !(st && st.step === "map") && <KeptMonths list={kept0} onOpen={openKept} onEdit={(m, r) => openManual(m, r)} />}
   </div>;
 }

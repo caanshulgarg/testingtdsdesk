@@ -13,6 +13,10 @@ made-up books and sheets (tests/payroll_sheets.mjs), FinCom's AI mocked (window.
      the second check, the claim before the posting, ONE voucher in the ONE Bridge.post (the bridge's shape, no REMOTEID),
      the proof (Tally's created count and voucher id), entry_approved after; an employee Tally lacks listed and nothing
      posted; a bridge older than 2.5.18: the install line and its download, nothing posted
+ 11. by hand (the owner, 23-Nov-2026: "no option to upload salary after that ... not able to see after that"), classic and
+     New look: the sheet upload stays on the page while typing, Cancel goes back, the typed rows are kept while switching;
+     "Not kept yet" until Keep with the books; the month kept is listed when the page is opened again ("Kept with the
+     books"), opened to see it and changed by hand from the rows kept; when Daily Check makes its journal is said
 Screenshots (deviceScaleFactor 2, desktop 1440 and phone 390) into SHOTS (default scratchpad/shots-payroll). UI_PORT (8476)."""
 import os, sys, json, subprocess, threading, functools, http.server, tempfile
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -239,12 +243,67 @@ def approve_flow(br, w, kind):
     ok(len(A()["posts"]) == 1, kind + " 8. nothing more posted")
     if w < 600: ok(noside(pg), kind + " 8. no sideways scroll")
     ctx.close()
+NL_ON = "try { localStorage.setItem('fincom:newlook:local', 'on'); } catch (e) {}"
+def hand_flow(br, w, kind, nl):
+    ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
+    if nl: ctx.add_init_script(NL_ON)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
+    pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
+    pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    P = lambda: pg.evaluate("() => window.__pr")
+    if nl: ok(pg.evaluate("() => document.documentElement.classList.contains('nl')"), kind + " 11. New look on")
+    pg.click("[data-pick=journal]"); settle(pg, 250)
+    pg.click("[data-manual]"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    f = lambda i, k, v: pg.fill("[data-entry-row='%d'] input[aria-label='%s row %d']" % (i, k, i + 1), v)
+    f(0, "Employee", "Ravi Kumar"); f(0, "Basic", "25,000"); f(0, "HRA", "10,000"); f(0, "TDS", "1,500"); settle(pg, 200)
+    ok(pg.locator("[data-sheet-in]").count() == 1, kind + " 11. by hand: the salary sheet upload is still offered")
+    shot(pg, "11-hand-typing", kind)
+    ok(pg.locator("[data-manual-cancel]").count() == 1, kind + " 11. by hand: Cancel goes back")
+    if pg.locator("[data-manual-cancel]").count(): pg.click("[data-manual-cancel]"); settle(pg, 200)
+    ok(pg.locator("[data-step=manual]").count() == 0, kind + " 11. Cancel: the typing closed")
+    if pg.locator("[data-manual]").count():
+        pg.click("[data-manual]"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    ok(pg.input_value("input[aria-label='Employee row 1']") == "Ravi Kumar", kind + " 11. opened again: the typed rows are still there")
+    if pg.input_value("input[aria-label='Employee row 1']") != "Ravi Kumar":
+        f(0, "Employee", "Ravi Kumar"); f(0, "Basic", "25,000"); f(0, "HRA", "10,000"); f(0, "TDS", "1,500"); settle(pg, 200)
+    pg.click("[data-manual-done]"); settle(pg, 300)
+    ok(pg.locator("[data-not-kept]").count() == 1, kind + " 11. Use these: said plainly it is not kept yet")
+    pg.click("[data-keep]"); settle(pg, 300)
+    sal = pg.evaluate("() => S.books.salary")
+    ok(P()["saved"] == 1 and len(sal) == 1 and sal[0]["name"] == "Ravi Kumar" and sal[0]["month"] == "202610" and sal[0]["gross"] == 35000, kind + " 11. kept with the books: Oct 2026, Ravi Kumar, gross 35,000")
+    ok("tonight" in (pg.inner_text("[data-next]") if pg.locator("[data-next]").count() else "").lower() and "Daily Check" in (pg.inner_text("[data-next]") if pg.locator("[data-next]").count() else ""), kind + " 11. kept: says Daily Check makes the journal tonight")
+    shot(pg, "12-hand-kept", kind)
+    # the page opened again (another tab and back): the month kept is listed
+    pg.evaluate("() => { S.booksTab = 'ledgers'; render(); return true; }"); settle(pg, 300)
+    pg.evaluate("() => { S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    km = pg.inner_text("[data-kept-months]") if pg.locator("[data-kept-months]").count() else ""
+    ok("Oct 2026" in km and "1 employee" in km and "typed in" in km, kind + " 11. opened again: Kept with the books lists Oct 2026, 1 employee, typed in")
+    shot(pg, "13-kept-months", kind)
+    if pg.locator("[data-kept-open='202610']").count(): pg.click("[data-kept-open='202610']"); settle(pg, 300)
+    rd = pg.inner_text("[data-step=read]") if pg.locator("[data-step=read]").count() else ""
+    ok("Oct 2026" in rd and "₹35,000" in rd and "Kept with the books" in rd, kind + " 11. Open: the month kept shown (Oct 2026, gross ₹35,000, kept)")
+    ok(pg.locator("[data-preview=journal]").count() == 1, kind + " 11. Open: the payroll journal preview")
+    if pg.locator("[data-kept-edit='202610']").count(): pg.click("[data-kept-edit='202610']"); settle(pg, 300)
+    elif pg.locator("[data-manual]").count(): pg.click("[data-manual]"); settle(pg, 300)
+    ok(pg.locator("[data-step=manual]").count() == 1 and pg.input_value("input[aria-label='Employee row 1']") == "Ravi Kumar" and pg.input_value("input[aria-label='Basic row 1']") in ("25000", "25,000"), kind + " 11. Change by hand: the rows kept, to change")
+    # switching: a sheet uploaded while typing
+    if pg.locator("[data-sheet-in]").count() == 0:
+        ok(False, kind + " 11. a sheet uploaded while typing: no upload offered"); ctx.close(); return
+    pg.set_input_files("[data-sheet-in]", FILES["A"]); pg.wait_for_selector("[data-step=map] [data-save-rule]", timeout=10000); settle(pg, 300)
+    ok(pg.locator("[data-step=manual]").count() == 0, kind + " 11. a sheet uploaded while typing: the sheet is read")
+    if w < 600: ok(noside(pg), kind + " 11. no sideways scroll")
+    ctx.close()
 with sync_playwright() as p:
     br = p.chromium.launch()
     if not os.environ.get("ONLY8"): run(br, 1440, "desktop")
     if not os.environ.get("ONLY8"): run(br, 390, "phone")
-    approve_flow(br, 1440, "desktop")
-    approve_flow(br, 390, "phone")
+    if not os.environ.get("ONLY11"):
+        approve_flow(br, 1440, "desktop")
+        approve_flow(br, 390, "phone")
+    hand_flow(br, 1440, "hand-classic", False)
+    hand_flow(br, 1440, "hand-newlook", True)
+    hand_flow(br, 390, "hand-phone", True)
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
 print("FAILED: %d" % len(fails) if fails else "all passed")
