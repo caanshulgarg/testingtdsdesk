@@ -16,10 +16,15 @@ export function fastOn(beat) {
   return !!(f && typeof f === "object" && f.on === true);
 }
 
-// {max, night}: the days an answer, and the pace said to the database
-export function periodPace(night, beat) {
-  const n = night === true;
-  return { max: n || fastOn(beat) ? WIDE_MAX : DAY_MAX, night: n };
+// next-speed (the speed plan, #1): Tally left alone this long (the beat's typing gate quiet, lightIdle in index.ts) counts
+// as the night's pace by day: up to 30 days an answer, the bridge still reading each day under its own typing gate
+export const QUIET_WIDE_MS = 60000;
+
+// {max, night}: the days an answer, and the pace said to the database. quietMs: how long Tally has been left alone (a
+// number; anything else, as from an older beat, is not quiet)
+export function periodPace(night, beat, quietMs) {
+  const n = night === true, quiet = typeof quietMs === "number" && quietMs >= QUIET_WIDE_MS;
+  return { max: n || fastOn(beat) || quiet ? WIDE_MAX : DAY_MAX, night: n };
 }
 
 // the bridge's speed per company from its beat, only while its fast read is on (review of 0de692f49, 1 and 7):
