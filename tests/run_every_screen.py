@@ -45,7 +45,7 @@ SEED = """([books, withBooks]) => { S.firm.firmName = "Test Firm of Accountants"
 CLIENT = [["Overview", "goClient('dash')", None], ["Inbox", "goClient('inbox')", None], ["Transactions", "goClient('txn')", None],
   ["Purchase", "goClient('bills')", None], ["Bank", "goClient('bank')", None], ["Sales", "goClient('sales')", None],
   ["Post to Tally", "goClient('post')", None]] + [["Books " + t, "goClient('books:%s')" % t, None] for t in
-  ["import", "tds", "gst", "recon", "reports", "mis", "mymis", "fs", "audit", "tieout", "lookup", "letters", "ledgers", "corp", "corp-forms", "corp-docs", "corp-aoc4", "itr", "itr-comp", "itr-checks", "itr-json"]] + \
+  ["import", "tds", "gst", "recon", "reports", "mis", "mymis", "fs", "audit", "tieout", "lookup", "letters", "ledgers", "corp", "corp-forms", "corp-docs", "corp-aoc4", "itr", "itr-sch", "itr-comp", "itr-checks", "itr-json"]] + \
   [["Client setup " + t, "S.step = null; S.tab = '%s'; render()" % t, None] for t in
   ["settings", "cotally", "cotds", "deductees", "gstset", "bankset", "bankrules", "coclosed", "cosheets", "coremove"]]
 HOME = [["Today", "navHome('today')"], ["Compliance", "navHome('compliance')"], ["Daily Check", "navHome('daily')"], ["Clients", "navHome('clients')"], ["Tally", "navHome('tally')"],
