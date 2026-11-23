@@ -15,8 +15,10 @@ after; never a real database) with the queue of 32 -> 203 run first; made-up fir
   4. cost: a 20,000-entry posting queued with and without the guards (the firm holding a withdrawn id), timed
 RED_WITHOUT_212=1: the same checks without the files (fails)."""
 import os, re, sys, json, time, shutil, subprocess
-os.environ.setdefault("TMPDIR", "/tmp/payroll10")
-os.makedirs(os.environ["TMPDIR"], exist_ok=True)
+# the stand's data and socket outside the scratchpad (the postgres user must reach them), removed after
+os.environ["TMPDIR"] = os.environ.get("PAYROLL_PGDIR") or "/tmp/payroll10"
+os.makedirs(os.environ["TMPDIR"], exist_ok=True); os.chmod(os.environ["TMPDIR"], 0o777)
+os.environ.setdefault("PG_STAND_SOCKDIR", os.environ["TMPDIR"])
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import post_queue_stand as PS, pg_stand
 from post_queue_stand import q, F, CO, OWNER, STAFF, DA, BA
@@ -33,10 +35,11 @@ code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the files")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '3s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 3 s")
 ok(not re.search(r"\b(drop|truncate|delete from)\b", code) and code.count("alter table public.tally_post_ids add column") == 1 and "'alter table public.tally_post_ids add column '" in code
-   and "create index" not in code and code.count("create trigger") == 2 and code.index("create trigger") > code.index("function public.tally_post_withdraw_arm") and not re.search(r"create or replace function public\.tally_post_(enqueue|take|ids_sync|reroute)", code),
+   and "create index" not in code and code.count("create trigger") == 3 and code.index("create trigger") > code.index("function public.tally_post_withdraw_arm") and not re.search(r"create or replace function public\.tally_post_(enqueue|take|ids_sync|reroute)", code),
    "add-only: the columns only when absent (no ALTER on a second run), no index or trigger here, no queue function replaced, nothing dropped")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", (text + itext).lower()), "names no real database")
-FNS = ["tally_post_withdraw(uuid, text, text)", "tally_post_withdraw_undo(uuid, text, text)", "tally_post_withdraw_busy(uuid)", "tally_post_withdrawn_guard()", "tally_post_jobs_withdrawn_filter()"]
+FNS = ["tally_post_withdraw(uuid, text, text)", "tally_post_withdraw_undo(uuid, text, text)", "tally_post_withdraw_busy(uuid)", "tally_post_withdrawn_guard()", "tally_post_jobs_withdrawn_filter()",
+       "tally_post_checks_withdrawn_guard()", "tally_post_withdrawn_words(uuid, text)"]
 ok(all(("revoke all on function public.%s from public, anon, authenticated, service_role;" % f) in text for f in FNS + ["tally_post_withdraw_arm()"])
    and sorted(re.findall(r"grant execute on function public\.([\w(), ]+?) to (\w+);", text)) == [("tally_post_withdraw(uuid, text, text)", "authenticated"), ("tally_post_withdraw_undo(uuid, text, text)", "authenticated")]
    and all(seg.count("security definer set search_path = public, pg_temp") == 1 for seg in code.split("create or replace function")[1:])
@@ -56,6 +59,10 @@ m182 = open(os.path.join(SQL, "migration-182-gap-after-post.sql")).read()
 t0_ = m182.index("create table if not exists public.tally_light_days ("); t1_ = m182.index(");", t0_) + 2
 f0_ = m182.index("create or replace function public.tally_post_job_read_back()"); f1_ = m182.index("end $$;", f0_) + len("end $$;")
 db.sql(m182[t0_:t1_] + "\n" + m182[f0_:f1_])
+# (132's tally_post_record: a posting already made straight to a bridge, recorded; its function only, as staging has it)
+m132 = open(os.path.join(SQL, "migration-132-post-record.sql")).read()
+f0_ = m132.index("create or replace function public.tally_post_record("); f1_ = m132.index("$function$;", f0_) + len("$function$;")
+db.sql(m132[f0_:f1_] + "\ngrant execute on function public.tally_post_record(uuid, text, text, text, jsonb, jsonb, text) to authenticated;")
 for p in ("migration-199-post-match-fast.sql", "migration-200-post-settle-itself.sql", "migration-201-post-register-async.sql", "migration-202-post-recheck.sql", "migration-201a-post-grants.sql", "migration-203-post-linked-guid.sql"):
     r = st.psql_text(open(os.path.join(SQL, p)).read())
     if r.returncode: raise SystemExit("%s does not run on the stand: %s" % (p, r.stderr[-300:]))
@@ -79,10 +86,6 @@ def finish(n, status="failed"): db.sql("set role service_role; update tally_post
 status = lambda n: db.one("select status from tally_post_jobs where id = %s" % q(J(n)))
 def big(n, k):
     t = time.time(); r = enqueue(n, ["e-big-%d-%05d" % (n, i) for i in range(k)]); return r, time.time() - t
-t_before = None
-if BIG:
-    r, t_before = big(90, 20000); db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(90)))
-    ok(r.get("ok") is True, "a 20,000-entry posting queued before 212: %.2f s" % t_before)
 
 # someone else's function of the same name: refused, nothing changed
 db.sql("create function public.tally_post_withdraw(p_job uuid, p_id text, p_why text) returns jsonb language sql as $$ select '{}'::jsonb $$")
@@ -101,7 +104,7 @@ if not RED:
     ok("AccessExclusiveLock" not in (locks[0]["m"] if locks else ""), "a second run takes no ACCESS EXCLUSIVE lock on tally_post_ids (%s)" % (locks[0]["m"] if locks else ""))
     r = st.psql_text(text); ok(r.returncode == 0, "step 1 runs twice %s" % r.stderr.strip()[-200:])
 st.grants()
-db.sql("revoke all on function public.tally_post_withdrawn_guard(), public.tally_post_jobs_withdrawn_filter(), public.tally_post_withdraw_busy(uuid), public.tally_post_withdraw_arm() from service_role") if not RED else None
+db.sql("revoke all on function public.tally_post_withdrawn_guard(), public.tally_post_jobs_withdrawn_filter(), public.tally_post_withdraw_busy(uuid), public.tally_post_withdraw_arm(), public.tally_post_checks_withdrawn_guard(), public.tally_post_withdrawn_words(uuid, text) from service_role") if not RED else None
 
 print("== 1. tally_post_withdraw")
 r = enqueue(1, ["dc-tp-202610-1"]); t = take(); finish(1)
@@ -111,7 +114,7 @@ if not RED:
     runner = "python3 %s %d" % (os.path.join(HERE, "api_standin.py"), db.port)
     a = subprocess.run([sys.executable, os.path.join(HERE, "..", "tools", "apply_concurrent_indexes.py"), "--run", runner, "--pause", "1", I212], capture_output=True, text=True)
     ok(a.returncode == 0 and db.one("select count(*)::text from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname in ('tally_post_ids_withdrawn', 'tally_post_ids_withdrawn_job') and i.indisvalid") == "2"
-       and db.one("select count(*)::text from pg_trigger where tgname in ('tally_post_jobs_withdrawn', 'tally_post_jobs_withdrawn_filter')") == "2", "step 2: the indexes built CONCURRENTLY and valid, then the two triggers (%s)" % (a.stdout + a.stderr).strip()[-160:])
+       and db.one("select count(*)::text from pg_trigger where tgname in ('tally_post_jobs_withdrawn', 'tally_post_jobs_withdrawn_filter', 'tally_post_checks_withdrawn')") == "3", "step 2: the indexes built CONCURRENTLY and valid, then the three triggers (%s)" % (a.stdout + a.stderr).strip()[-160:])
     a = subprocess.run([sys.executable, os.path.join(HERE, "..", "tools", "apply_concurrent_indexes.py"), "--run", runner, "--pause", "1", I212], capture_output=True, text=True)
     ok(a.returncode == 0, "step 2 runs twice")
 r = enqueue(2, ["dc-tp-202610-2"]); take()
@@ -134,13 +137,24 @@ db.sql("update tally_post_ids set live = false, released_at = now(), released_by
 owed = db.one("select count(*)::text from tally_post_resend_reserved(%s::uuid) where job_id = %s" % (q(F), q(J(3))))
 w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202612-1', 'retired')::text" % q(J(3)))
 ok(owed == "1" and w.get("busy") is True and "still has an entry to send again" in err(w), "busy while the posting owes another entry (reserved %s): %s" % (owed, err(w)[-60:]))
+db.sql("alter table tally_post_jobs disable trigger tally_post_jobs_withdrawn_filter")
+w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-1', 'retired')::text" % q(J(1)))
+db.sql("alter table tally_post_jobs enable trigger tally_post_jobs_withdrawn_filter")
+ok(w.get("ok") is False and "second step is not run" in err(w), "a guard trigger disabled: refused (%s)" % err(w)[-50:])
+r = enqueue(10, ["dc-tp-202610-c1-3"]); take(); finish(10)
+db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why) values (%s, %s, 'dc-tp-202610-c1-3', %s, %s, 'look')" % (q(F), q(J(10)), q(CO), q(OWNER)))
+w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-3', 'retired')::text" % q(J(10)))
+ok(w.get("busy") is True and "A check of Tally is waiting" in err(w), "busy while a check of Tally waits for an entry of it (%s)" % err(w)[-60:])
+db.sql("update tally_post_checks set state = 'withdrawn' where job_id = %s" % q(J(10)))
+w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-3', 'retired')::text" % q(J(10)))
+ok(w.get("ok") is True, "a part id carrying its client (dc-tp-202610-c1-3): withdrawn")
 w = rpc(STAFF, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-1', 'retired by Daily Check: not in Tally')::text" % q(J(1)))
 row = json.loads(db.one("select to_jsonb(t)::text from (select withdrawn_at is not null w, withdrawn_by::text b, withdrawn_why y from tally_post_ids where job_id = %s) t" % q(J(1))) or "{}")
 ok(w.get("ok") is True and w.get("withdrawn") == 1 and row == {"w": True, "b": STAFF, "y": "retired by Daily Check: not in Tally"}, "withdrawn by staff, who and why kept")
 
 print("== 2. withdrawn: never again")
 r = rpc(OWNER, "select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J(1)))
-ok(r.get("ok") is not True and "was withdrawn" in err(r) and status(1) == "failed", "its Retry refused in words (%s)" % err(r)[-90:])
+ok(r.get("ok") is not True and "was withdrawn (retired by Daily Check: not in Tally)" in err(r) and "replaced by" not in err(r) and status(1) == "failed", "its Retry refused in words, its own reason (%s)" % err(r)[-90:])
 e = sql_try("set role service_role; update tally_post_jobs set status = 'waiting' where id = %s" % q(J(1)))
 ok("was withdrawn" in e and status(1) == "failed", "no way back to waiting (the requeue): %s" % e[-70:])
 ok(take() is None, "never handed out")
@@ -158,8 +172,37 @@ pl = json.loads(db.one("select payload::text from tally_post_jobs where id = %s"
 ok(r.get("ok") is True and [v["id"] for v in pl.get("vouchers", [])] == ["dc-tp-202610-7"] and any(x.get("id") == "dc-tp-202610-1" and x.get("withdrawn") for x in res)
    and db.one("select count(*)::text from tally_post_ids where job_id = %s" % q(J(5))) == "1", "a new posting: the withdrawn id left out (its result says so), the rest queued")
 db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(5)))
-r = enqueue(6, ["DC-TP-202610-1"])
-ok(r.get("ok") is not True and "was withdrawn" in err(r) and db.one("select count(*)::text from tally_post_jobs where id = %s" % q(J(6))) == "0", "a posting of it alone (another spelling): refused in words, nothing queued")
+r = enqueue(6, ["dc-tp_202610_1"])
+j6 = json.loads(db.one("select to_jsonb(t)::text from (select status, n, message, results from tally_post_jobs where id = %s) t" % q(J(6))) or "{}")
+ok(r.get("ok") is True and j6.get("status") == "cancelled" and j6.get("n") == 0 and "dc-tp_202610_1 was withdrawn" in str(j6.get("message")) and any(x.get("withdrawn") and x.get("byItself") for x in j6.get("results") or []),
+   "a posting of it alone (another spelling, matched as tally_post_id_match does): queued cancelled, its words and result say why (%s)" % j6.get("message"))
+r = enqueue(7, ["dc-tp-202610-1", "dc-tp-202611-1"])
+j7 = json.loads(db.one("select to_jsonb(t)::text from (select status, message from tally_post_jobs where id = %s) t" % q(J(7))) or "{}")
+ok(r.get("ok") is True and j7.get("status") == "cancelled" and "dc-tp-202610-1, dc-tp-202611-1 were withdrawn" in str(j7.get("message")), "two of them: \"were\" (%s)" % j7.get("message"))
+# (re-review B1) ids are per client: the queue's own rules are per firm (one live FinCom id, the posting register), so a
+# client-less id of another client is held back by them (why a part's id now carries its client); another client's own
+# part beside a withdrawn one: queued as it is
+r = enqueue(8, ["dc-tp-202610-c1-8"]); finish(8)
+w8 = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-8', 'retired')::text" % q(J(8)))
+db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, created_by) values (%s, %s, 'c2', 'Made-up Egret', null, %s, 1, %s)"
+       % (q(J(11)), q(F), q(json.dumps({"masters": [], "vouchers": [{"id": "dc-tp-202610-c2-8", "xml": X("dc-tp-202610-c2-8")}], "ledger": ""})), q(OWNER)))
+pl = json.loads(db.one("select payload::text from tally_post_jobs where id = %s" % q(J(11))) or "{}")
+ok(w8.get("ok") is True and [v["id"] for v in pl.get("vouchers", [])] == ["dc-tp-202610-c2-8"] and status(11) == "waiting", "another client's own part 8 beside client c1's withdrawn part 8: queued as it is")
+db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(11)))
+e = sql_try("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, created_by) values (%s, %s, 'c2', 'Made-up Egret', null, %s, 1, %s)"
+            % (q(J(12)), q(F), q(json.dumps({"masters": [], "vouchers": [{"id": "dc-tp-202610-1", "xml": X("dc-tp-202610-1")}], "ledger": ""})), q(OWNER)))
+ok(e != "" and "withdrawn" not in e, "  (an older client-less id of another client is held back by the queue's own per-firm rules, not by 212: %s)" % e[-90:])
+# a record of a posting already made straight to a bridge (tally_post_record, 132): kept whole, never stripped or refused
+r = rpc(OWNER, "select tally_post_record(%s::uuid, 'c1', %s, 'done', %s::jsonb, %s::jsonb, 'posted straight to the bridge')::text" % (q(J(9)), q(CO), q(json.dumps([{"id": "dc-tp-202610-1", "ok": True}])), q(json.dumps(["dc-tp-202610-1"]))))
+j9 = json.loads(db.one("select to_jsonb(t)::text from (select status, payload, results from tally_post_jobs where id = %s) t" % q(J(9))) or "{}")
+ok(r.get("ok") is True and j9.get("status") == "done" and "dc-tp-202610-1" in json.dumps(j9.get("payload")) and not any((x or {}).get("withdrawn") for x in j9.get("results") or []), "a record of a posting already made (tally_post_record): kept whole (%s)" % (r if not r.get("ok") else j9.get("status")))
+# a check of Tally for a withdrawn entry: never asked or confirmed
+e = sql_try("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why) values (%s, %s, 'dc-tp-202610-1', %s, %s, 'look')" % (q(F), q(J(1)), q(CO), q(OWNER)))
+ok("was withdrawn" in e, "a check asked for a withdrawn entry: refused (%s)" % e[-70:])
+db.sql("alter table tally_post_checks disable trigger tally_post_checks_withdrawn; insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why) values (%s, %s, 'dc-tp-202610-1', %s, %s, 'look'); alter table tally_post_checks enable trigger tally_post_checks_withdrawn" % (q(F), q(J(1)), q(CO), q(OWNER)))
+e = sql_try("update tally_post_checks set state = 'confirmed' where job_id = %s" % q(J(1)))
+ok("was withdrawn" in e, "  nor confirmed (so the posting never owes it): %s" % e[-60:])
+db.sql("update tally_post_checks set state = 'withdrawn' where job_id = %s" % q(J(1)))
 
 print("== 3. the owner's undo")
 w = rpc(STAFF, "select tally_post_withdraw_undo(%s::uuid, 'dc-tp-202610-1', 'mistake')::text" % q(J(1)))
@@ -171,9 +214,17 @@ ok(w.get("ok") is True and row == {"w": True, "b": OWNER, "y": "checked: not pai
 
 print("== 4. cost")
 if BIG and not RED:
-    r, t_after = big(91, 20000)
-    ok(r.get("ok") is True and t_after <= t_before * 1.5 + 1.0, "a 20,000-entry posting with the guards (the firm holding withdrawn ids): %.2f s (before 212: %.2f s)" % (t_after, t_before))
-    t = time.time(); e = sql_try("set role service_role; update tally_post_jobs set status = 'failed' where id = %s" % q(J(91))); e = e or sql_try("set role service_role; update tally_post_jobs set status = 'waiting' where id = %s" % q(J(91)))
-    ok(e == "" and time.time() - t < 3, "its status back to waiting through the guard: %.2f s" % (time.time() - t))
+    # the filter's own cost: the same 20,000-entry posting queued with it and without it (disabled), alternately, the
+    # fastest of three each (a busy machine slows a run, never speeds one)
+    k, tw, tn = 0, [], []
+    for rep_ in range(3):
+        for on in (True, False):
+            k += 1
+            if not on: db.sql("alter table tally_post_jobs disable trigger tally_post_jobs_withdrawn_filter")
+            r, t_ = big(100 + k, 20000)
+            if not on: db.sql("alter table tally_post_jobs enable trigger tally_post_jobs_withdrawn_filter")
+            db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(100 + k)))
+            (tw if on else tn).append(t_ if r.get("ok") else 999)
+    ok(min(tw) <= min(tn) * 1.25 + 0.25, "a 20,000-entry posting with the filter (the firm holding withdrawn ids): fastest %.2f s, without it %.2f s" % (min(tw), min(tn)))
 print("\n" + ("all passed" if not fails else "%d FAILED" % len(fails)))
 sys.exit(1 if fails else 0)

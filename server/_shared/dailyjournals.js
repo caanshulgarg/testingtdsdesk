@@ -26,7 +26,7 @@
 //   picks      a person's ledger choices ({role: ledger}), from prior ledger_pick findings
 import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries, earningHead, notSalaryHeadName } from "./nightchecks.js";
 import { voucherId } from "./dailytrust.js";
-import { partsIn } from "./tpparts.js";
+import { partsIn, tpIdRe } from "./tpparts.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
 export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "sent_check"];
@@ -339,7 +339,7 @@ export function payrollSettings(co, heads) {
   return { method: m === "tally" || m === "journal" ? m : "", journal: Object.assign({}, c.payrollJournal || {}), payable: String(c.payrollPayable || ""),
     vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort(), typed: Array.from(typed).sort() };
 }
-export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
+export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<client>-<part> (tpparts.js)
 // (fifth, sixth reviews) a Tally Payroll part holds a journal back while it may be in Tally: its FinCom id in the books, or
 // its own day (the part's voucher date, else the month-end) not read from Tally at least 5 minutes after the part was sent
 // or answered (tally_days.at: inp.daysAt; tally_books.days_at moves with any day read, so it proves nothing here)
@@ -347,7 +347,7 @@ const isoDay = (x) => { const s = String(x || "").replace(/-/g, "").slice(0, 8);
 export const tpDayRead = (inp, d) => { const ym = (String(d.vid || "").match(/^dc-tp-(\d{6})-/) || [])[1] || "", day = isoDay(d.date || (ym ? lastDay(ym) : ""));
   const r = Date.parse(String((inp.daysAt || {})[day] || "")), t = Math.max(Date.parse(String(d.sentAt || "")) || 0, Date.parse(String(d.at || "")) || 0); return isFinite(r) && t > 0 && r >= t + 5 * 60000; };
 const tpHolds = (inp, d) => live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !tpDayRead(inp, d);
-const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
+const ownTp = (v, ym, cid) => tpIdRe(ym, cid).test(String(v.narr || ""));   // (212 re-review) the client's own part ids
 // the salary booked for a month (review H2, N5; next-payroll review B1): any entry with a salary expense on the debit side
 // (salaryClass), a pay head of Tally's payroll (an earning: an expense ledger for payroll, "Basic", "HRA"), or any ledger
 // a payroll-type voucher debits; FinCom's own Tally Payroll vouchers of the month left out when skipOwn (a split month
@@ -356,7 +356,7 @@ function bookedFor(ym, inp, skipOwn) {
   const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []), ne = new Set(((inp.payroll || {}).notEarn) || []), ty = new Set(((inp.payroll || {}).typed) || []);
   // (third review) a pay head Tally gives a type to goes by its type alone; the name only for one with none
   const not = (l) => ne.has(l) || (!ty.has(l) && !ph.has(l) && notSalaryHeadName(l));
-  const V = live(inp.books).filter((v) => !(skipOwn && ownTp(v, ym)));
+  const V = live(inp.books).filter((v) => !(skipOwn && ownTp(v, ym, inp.clientId)));
   const pt = new Set(); V.forEach((v) => { if (/payroll/i.test(String(v.type || ""))) (v.ent || []).forEach((e) => { if (e.a < 0 && A.isExpense(e.l) && !not(e.l)) pt.add(e.l); }); });
   // (re-review 1) the employer's contributions, gratuity and the like are never salary: an entry touching only them is not
   // salary booked
@@ -447,7 +447,7 @@ function tallyOne(ym, rows, inp, c) {
   // (fifth review) and how many parts the month has, from those vouchers' own narration ("part 1 of 2", the builder's
   // own words: tpparts.js) when the drafts are lost
   const inBooks = new Set(); let tagParts = 0;
-  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)(?!\\d)")); if (m) { inBooks.add(m[1]); tagParts = Math.max(tagParts, partsIn(v.narr)); } });
+  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(tpIdRe(ym, inp.clientId)); if (m) { inBooks.add(m[1]); tagParts = Math.max(tagParts, partsIn(v.narr)); } });
   // (sixth review) a part "sent before" with no Tally id (the posting computer's own record) waits while its day was not
   // read from Tally after the send, and is "Not confirmed in Tally" (Needs you) at once when it was and the id is not
   // there: no 24 hours either way

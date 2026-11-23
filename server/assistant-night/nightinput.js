@@ -146,7 +146,7 @@ export function nightInput(rows, b, x) {
     ledgersFor: ledgersFor(b), prior: x.prior || [],
     gst: x.gst || [], drafts: draftsOf(x.draftRecs, x.jobs, x.prior, x.now), picks: picksOf(x.prior), picksOut: picksOf(x.prior, true), excluded: excludedOf(x.prior),
     // the book the night read: Approve refuses on another (a client's books split by year)
-    bookId: String((rows.book && rows.book.book_id) || ""),
+    bookId: String((rows.book && rows.book.book_id) || ""), clientId: String(rows.client || ""),   // (212 re-review) the client its part ids carry
     // next-payroll: how the client books salary (a Tally Payroll company's months are prepared as Tally payroll vouchers)
     payroll: payrollSettings(co, x.payHeads),
     // (sixth review) when each Tally Payroll part's day was last read from Tally (tally_days.at): a part not in the books

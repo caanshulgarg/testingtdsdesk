@@ -8,7 +8,7 @@
 //      gross and net as the night's entry, and (on the Payroll page) the very vouchers the person was shown
 //   3. the claim (migration 208 entry_claim: ready -> approving, one person at a time), so two people never post it twice
 //   4. each voucher in a posting of its own (Bridge.post: the bridge here or the cloud's queue; the bridge posts a payroll
-//      voucher alone too), its draft kept with the client's books (asstEntries Drafts, "dc-tp-<yyyymm>-<n>", the night's
+//      voucher alone too), its draft kept with the client's books (asstEntries Drafts, "dc-tp-<yyyymm>-<client>-<n>", the night's
 //      dedupe), the bridge's own check by FinCom's id against posting twice
 //   5. the proof: Tally's answer for each voucher (created, with its voucher id) or Tally's refusal in plain words; then
 //      entry_approved, or entry_release so it can be tried again
@@ -16,7 +16,7 @@
 import * as TP from "./tallyPayroll.js";
 import { monLabel } from "./payrollSheet.js";
 import { sheetMonth, earningHead, notSalaryHeadName } from "../../../server/_shared/nightchecks.js";
-import { partsIn } from "../../../server/_shared/tpparts.js";
+import { partsIn, tpPrefix, tpIdRe } from "../../../server/_shared/tpparts.js";
 
 export const NEED = "2.5.18";
 export const OLD_BRIDGE = "Install FinCom Bridge " + NEED + " to post Tally Payroll";
@@ -36,7 +36,7 @@ export const bridgeOk = (v) => !!String(v || "").trim() && vkey(v) >= vkey(NEED)
 const errWords = (x) => String((x && x.message) || x || "").replace(/^.*?ERROR:\s*/, "");
 const iso = (d) => { const t = String(d || "").replace(/-/g, ""); return /^\d{8}$/.test(t) ? t.slice(0, 4) + "-" + t.slice(4, 6) + "-" + t.slice(6, 8) : ""; };
 export const lastDay = (ym) => ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-" + String(new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(4, 6), 0)).getUTCDate()).padStart(2, "0");
-export const voucherIdOf = (ym, i) => "dc-tp-" + ym + "-" + (i + 1);
+export const voucherIdOf = (ym, i, cid) => tpPrefix(ym, cid) + (i + 1);   // dc-tp-<yyyymm>-<client>-<n> (tpparts.js)
 export const dedupeOf = (ym) => "payroll:" + ym;
 
 // ---------------------------------------------------------------- the bridge that will post it
@@ -118,7 +118,7 @@ export function prepare(o) {
   const L = o.ledgers || [], payable = co.payrollPayable && L.includes(co.payrollPayable) ? co.payrollPayable : o.payable && L.includes(o.payable) ? o.payable : payableOf(co, L);
   const read = emps.length > 0 || Object.keys(heads).length > 0;
   const no = o.partNo || ((i) => i + 1);
-  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, (o.idNo || no)(i) - 1), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
+  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, (o.idNo || no)(i) - 1, co.id), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
     payable, rows: o.rows || [], plan, employees: emps, skip: o.skip, partNo: o.partNo, parts: o.parts });
   let problems = out.problems.filter((p) => !/^Pick the pay head for /.test(p));
   if (!read) problems = ["FinCom has not read this company’s payroll from Tally yet (its employees and pay heads). Open the company in Tally and read the books again"];
@@ -351,7 +351,7 @@ export function partChanges(was, now, id) {
 //   - a posting of the part still running in the cloud's queue: waited for
 export const FRESH_MS = 5 * 60000;
 export const freshAfter = (readAt, sentAt) => { const r = Date.parse(String(readAt || "")), s = Date.parse(String(sentAt || "")); return isFinite(r) && isFinite(s) && r >= s + FRESH_MS; };
-const tagRe = (ym) => new RegExp("TDSDesk:(dc-tp-" + ym + "-\\d+)(?!\\d)");
+const tagRe = (ym, cid) => tpIdRe(ym, cid);
 const heads3 = (rows) => { const by = new Map(); rows.forEach((a) => { const k = String(a.centre || ""); if (!k) return; if (!by.has(k)) by.set(k, { name: k, amount: 0, heads: [] }); const e = by.get(k), x = Math.round(Number(a.amount) * 100) / 100; e.heads.push({ head: String(a.ledger || ""), amount: x }); e.amount = Math.round((e.amount + x) * 100) / 100; }); return Array.from(by.values()); };
 // readMonth(cid, ym, days) -> null (cannot read) | {dayAt: {yyyy-mm-dd: when that day was last read from Tally}, parts:
 // {id: {found: true, no, narr, employees} | {found: false, deleted}}}
@@ -369,7 +369,7 @@ export async function readMonth(cid, ym, days, g = G) {
     const ds = Array.from(new Set(days)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)), byBook = new Map();
     Array.from(new Set(ds.concat([lastDay(ym)]))).forEach((d) => { const b = bookFor(g, cid, d); if (b) byBook.set(b, (byBook.get(b) || []).concat(ds.includes(d) ? [d] : [])); });
     if (!byBook.size || !g.Cloud || typeof g.Cloud.api !== "function") return null;
-    const books = Array.from(byBook.keys()), B = "&book_id=in.(" + books.map(encodeURIComponent).join(",") + ")", re = tagRe(ym);
+    const books = Array.from(byBook.keys()), B = "&book_id=in.(" + books.map(encodeURIComponent).join(",") + ")", re = tagRe(ym, cid);
     const [vs, ...dr] = await Promise.all([g.Cloud.api("tally_vouchers?select=guid,alter_id,vno,narration,cancelled,optional,deleted_at,book_id" + B + "&narration=like." + encodeURIComponent("*TDSDesk:dc-tp-" + ym + "-*"))]
       .concat(books.filter((b) => byBook.get(b).length).map((b) => g.Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(b) + "&day=in.(" + byBook.get(b).join(",") + ")"))));
     const parts = {}, live = [], dayAt = {};
@@ -386,8 +386,8 @@ export async function readMonth(cid, ym, days, g = G) {
   } catch (x) { return null; }
 }
 // the same from the books and the payroll read here (no read time: never trusted to say a part is not in Tally)
-export function localMonth(ym, pay, b) {
-  const re = tagRe(ym), parts = {}, allocs = (pay && pay.allocs) || [];
+export function localMonth(ym, pay, b, cid) {
+  const re = tagRe(ym, cid), parts = {}, allocs = (pay && pay.allocs) || [];
   ((b && b.vouchers) || []).forEach((v) => { const m = v && !v.cancel && !v.opt && String(v.narr || "").match(re); if (!m) return;
     parts[m[1]] = { found: true, no: String(v.no || ""), narr: String(v.narr || ""), employees: heads3(allocs.filter((a) => a && String(a.guid) === String(v.id)).map((a) => ({ centre: a.employee, ledger: a.head, amount: a.amt }))) }; });
   return { dayAt: {}, parts };
@@ -407,7 +407,7 @@ export async function settleParts(co, e, drafts, built, A, g = G, o = {}) {
   const mine = drafts.filter((x) => x && /^dc-tp-/.test(String(x.id || "")) && x.dedupe === e.dedupe && !x.removed), retried = retriedOf(o.prior);
   const days = [lastDay(ym)].concat(mine.map((d) => dayOf(d, built[d.id], ym)), Object.values(built).map((v) => String(v.date || "").slice(0, 10)));
   const copy = (await (o.readMonth ? o.readMonth(co.id, ym, days) : readMonth(co.id, ym, days, g))) || null;
-  const local = localMonth(ym, o.pay, o.books), parts = Object.assign({}, local.parts, (copy || {}).parts || {});
+  const local = localMonth(ym, o.pay, o.books, co.id), parts = Object.assign({}, local.parts, (copy || {}).parts || {});
   const nParts = Math.max(Object.keys(built).length, ...Object.values(parts).filter((p) => p.found).map((p) => partsIn(p.narr)));
   const found = async (d, t, id) => {
     const r = (d && d.results || {})[id] || {};

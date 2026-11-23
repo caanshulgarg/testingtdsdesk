@@ -15,8 +15,10 @@ queue answered by that PostgreSQL (fake_supabase.py for the rest). Made-up firm,
   4. the same when the first posting ended "done" (Tally said created, the part not in Tally after all)
 Needs Deno (DENO, or deno on the PATH)."""
 import os, sys, json, time, shutil, hashlib, subprocess, threading, urllib.request, tempfile
-os.environ.setdefault("TMPDIR", "/tmp/payroll10")
-os.makedirs(os.environ["TMPDIR"], exist_ok=True)
+# the stand's data and socket outside the scratchpad (the postgres user must reach them), removed after
+os.environ["TMPDIR"] = os.environ.get("PAYROLL_PGDIR") or "/tmp/payroll10"
+os.makedirs(os.environ["TMPDIR"], exist_ok=True); os.chmod(os.environ["TMPDIR"], 0o777)
+os.environ.setdefault("PG_STAND_SOCKDIR", os.environ["TMPDIR"])
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 DENO = os.environ.get("DENO") or shutil.which("deno")
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
@@ -47,7 +49,7 @@ for p in LATER + [os.path.join(SQL, "migration-201a-post-grants.sql"), os.path.j
 st.grants()
 info = st.beat("made-up-a", BA, [CO]); st.setbeat(DA, info)
 J1, J2 = "00000000-0000-4000-8000-0000000000a1", "00000000-0000-4000-8000-0000000000a2"
-PART = "dc-tp-202610-1"
+PART = "dc-tp-202610-c1-1"
 XML = ("<VOUCHER VCHTYPE=\"Payroll\" ACTION=\"Create\" OBJVIEW=\"PaySlip Voucher View\"><DATE>20261031</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME>"
        "<NARRATION>Salary for Oct 2026 as per the salary sheet (2 employees, part 1 of 2) | TDSDesk:" + PART + "</NARRATION></VOUCHER>")
 PAY = json.dumps({"masters": [], "vouchers": [{"id": PART, "xml": XML}], "ledger": ""})
@@ -121,7 +123,7 @@ if t2: report(J2, [{"id": PART, "kind": "voucher", "ok": False, "alreadySent": T
 db.sql("update tally_post_jobs set status = 'cancelled' where id = %s and status <> 'failed'" % q(J2))
 
 print("== 3. the part under a fresh id: queued, handed out with nothing to release; Tally takes it")
-FRESH_ID = "dc-tp-202610-3"
+FRESH_ID = "dc-tp-202610-c1-3"
 def fresh(jid, xml_id):
     pay = PAY.replace(PART, xml_id)
     r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(jid), q(pay)))
@@ -145,18 +147,20 @@ except RuntimeError as e: back = "refused"
 ok(back == "refused", "a resumed posting (the requeue after a crash) cannot wait again: %s" % back)
 t = take()
 ok(t is None or t.get("id") != J1, "tally-ingest hands nothing of it out (%s)" % ((t or {}).get("id")))
-r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q("00000000-0000-4000-8000-0000000000a7"), q(PAY)))
-ok(r.get("ok") is not True, "the old id in a new posting: refused")
+J7 = "00000000-0000-4000-8000-0000000000a7"
+r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(J7), q(PAY)))
+t = take()
+ok((r.get("ok") is not True or job(J7)["status"] == "cancelled") and (t is None or t.get("id") != J7), "the old id in a new posting: never queued to be sent (%s)" % (job(J7) or {}).get("status") if r.get("ok") else "refused")
 
 print("== 4. the first posting ended done (Tally said created), the part not in Tally after all: a fresh id still queued")
 J5, J6 = "00000000-0000-4000-8000-0000000000a5", "00000000-0000-4000-8000-0000000000a6"
-P2 = "dc-tp-202612-1"
+P2 = "dc-tp-202612-c1-1"
 r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(J5), q(PAY.replace(PART, P2).replace("20261031", "20261231"))))
 t = take()
 db.sql("set role service_role; update tally_post_jobs set status = 'done', results = %s::jsonb, done = 1 where id = %s" % (q(json.dumps([{"id": P2, "kind": "voucher", "ok": True, "created": 1, "vchId": "62", "state": "in_tally"}])), q(J5)))
 r2 = member("select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J5))
 ok(r.get("ok") is True and t and t.get("id") == J5 and job(J5)["status"] == "done" and r2.get("ok") is True and not r2.get("retry"), "the first posting done: a Retry of it queues nothing (%s), the dead end the fresh id avoids" % r2)
-r, t, _ = fresh(J6, "dc-tp-202612-2")
+r, t, _ = fresh(J6, "dc-tp-202612-c1-2")
 ok(r.get("ok") is True and t and t.get("id") == J6 and t.get("released") == [], "the part under its fresh id: queued and handed out (%s)" % (r if not r.get("ok") else t.get("id")))
 db.sql("update tally_post_jobs set status = 'done' where id = %s" % q(J6))
 

@@ -218,9 +218,9 @@ def approve_flow(br, w, kind):
     a = A(); posts = a["posts"]
     order = [x for x in a["order"] if x == "post" or x.startswith("entry_")]
     ok(order == ["entry_claim", "post", "entry_approved"], kind + " 8. claimed first, then posted, then approved: " + " > ".join(order))
-    ok(len(posts) == 1 and len(posts[0]["vouchers"]) == 1 and posts[0]["vouchers"][0]["id"] == "dc-tp-202610-1" and not posts[0]["masters"], kind + " 8. one Bridge.post, ONE payroll voucher (dc-tp-202610-1), no master")
+    ok(len(posts) == 1 and len(posts[0]["vouchers"]) == 1 and posts[0]["vouchers"][0]["id"] == "dc-tp-202610-c1-1" and not posts[0]["masters"], kind + " 8. one Bridge.post, ONE payroll voucher (dc-tp-202610-c1-1), no master")
     x = posts[0]["vouchers"][0]["xml"] if posts else ""
-    ok(x.startswith('<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="PaySlip Voucher View">') and "REMOTEID" not in x and "TDSDesk:dc-tp-202610-1</NARRATION>" in x and x.count("<EMPLOYEEENTRIES.LIST>") == 3, kind + " 8. the bridge's shape: Create only, no REMOTEID, FinCom's id, 3 employees")
+    ok(x.startswith('<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="PaySlip Voucher View">') and "REMOTEID" not in x and "TDSDesk:dc-tp-202610-c1-1</NARRATION>" in x and x.count("<EMPLOYEEENTRIES.LIST>") == 3, kind + " 8. the bridge's shape: Create only, no REMOTEID, FinCom's id, 3 employees")
     pr = pg.inner_text("[data-proof]")
     ok("Posted to Tally" in pr and "Tally created 1 payroll voucher (voucher id 101)." in pr and pg.locator("[data-approve]").count() == 0, kind + " 8. the proof: Tally created 1 payroll voucher (voucher id 101); no Approve again")
     ok("save_book_items" in a["rpc"], kind + " 8. the draft kept with the books (save_book_items)")

@@ -368,6 +368,18 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   by a bridge or that bridge answered for the part; else it waits ("the Tally computer that took it has not reported;
   open FinCom Bridge there first"); and a cloud without 212 (or its second step) means wait ("FinCom's cloud is not ready
   for this yet"), never retire.
+- **Migration 212's re-review (23-Nov-2026)**: a Tally Payroll part's id now carries its client:
+  `dc-tp-<yyyymm>-<client>-<n>` (the client's id in small letters and digits; `server/_shared/tpparts.js`), so the Tally
+  narration's mark is `TDSDesk:dc-tp-202610-<client>-1`. The ids were per firm in the cloud (one live FinCom id per firm,
+  the posting register, 184's dupes) and per computer on the bridge (posted-ids.json keys the tag alone): two clients'
+  "part 1 of October" held each other back, or the second was refused as "already sent". bridge-go matches marks by
+  `TDSDesk:[A-Za-z0-9._-]+` and keys them by letters and digits, so the new mark needs no bridge change; the night and
+  Approve read the client's own ids (an older id with no client too: `tpIdRe`). 212: a withdrawn id matched within its
+  client (index on firm, client, FinCom id); the filter only for queued postings (status waiting, not a record of one
+  already made: tally_post_record); a posting with nothing else is queued cancelled, its results saying why (184's dupes
+  answer kept; the note kept by tally-ingest's merge: byItself); a check of Tally is never asked or confirmed for a
+  withdrawn entry, and withdrawing waits for a check that is waiting; the words name who withdrew it and why; plural
+  "were"; spellings as tally_post_id_match; the guards must be there and enabled.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: migration 212 applied first (a draft: its own review); the app (legacy.js: `CloudPost.run`
   tells the posting id; the Post page's part, 59-post-owner.js), the `assistant-night` function

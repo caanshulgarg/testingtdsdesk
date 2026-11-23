@@ -36,7 +36,7 @@ export function inputOf(cid, o) {
     gst: typeof GSTR === "object" && typeof GSTF === "object" ? gstMonths({ GSTR, GSTF, GSTSet: typeof GSTSet === "object" ? GSTSet : null }, months) : [],
     drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed, vid: String(d.id), parts: Number(d.parts) || 0, at: String((((d.results || {})[d.id]) || {}).at || d.savedAt || d.at || ""),
       date: String((((d.vouchers || [])[0]) || {}).date || ""), sentAt: String((d.sent || {}).at || ""), retired: !!d.retiredBy })),
-    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "",
+    picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "", clientId: String(cid || ""),
     // next-payroll: how the client books salary, and Tally's pay heads (the cloud copy's payroll, S.books.payroll)
     daysAt: o.daysAt || {},   // (sixth review) when each Tally Payroll part's day was last read from Tally (tally_days.at)
     payroll: payrollSettings(co, Object.entries(((b.payroll || {}).heads) || {}).map(([name, h]) => ({ name, type: (h && h.type) || "" }))),
