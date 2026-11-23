@@ -13,7 +13,8 @@ staff / a look-only member for check 6). The page itself has nothing test-only.
      last minutes shows "Updating" (FinCom Books follows within 10 minutes), and more than 10 minutes behind shows
      "Not in step"
   6. a client without FinCom Books: a look-only member is told who can set it up; staff are offered "Set up FinCom
-     Books" (owner decision 23-Nov-2026) and it sets it up
+     Books" (owner decision 23-Nov-2026) and it sets it up at once (migration 218): "Being built", then "Building: n of
+     m entries" as the 3-minute catch-up builds it, then the book by itself, with no error and no warning
   7. a phone's width: nothing scrolls sideways; no page error anywhere; the page is its own lazy chunk, which keeps the
      MIT notice of the ported rules; no test hook in the built app
 FB_SHOTS=<dir>: also saves the design screenshots there (deviceScaleFactor 2, 1440 and 390 wide).
@@ -23,7 +24,7 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from playwright.sync_api import sync_playwright
 import pg_stand
-from fbooks_stand import F1, F2, OWN, STAFF, OTHER, TB1, COPY, MIG, load_sql, books
+from fbooks_stand import F1, F2, OWN, STAFF, OTHER, TB1, COPY, MIG, MIG218, load_sql, books
 VIEW = "aaaaaaaa-0000-0000-0000-000000000004"
 WHO = [OWN]   # who the test server answers as
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
@@ -42,10 +43,12 @@ db.sql("""insert into firms values ('%s', 'Sample & Co'), ('%s', 'Other Firm');
     ('bbbbbbbb-0000-0000-0000-000000000009', '%s', 'c9', 'Second Demo LLP (made up)', '2025-04-01', '2025-04-01');
   grant select on firms, members to authenticated;""" % (F1, F2, OWN, F1, STAFF, F1, OTHER, F2, VIEW, F1, TB1, F1, F1))
 db.sql(open(MIG).read())
+db.sql(open(MIG218).read())
 B = books(400, 7)
 db.sql(load_sql(TB1, F1, B))
 db.sql(load_sql("bbbbbbbb-0000-0000-0000-000000000009", F1, books(60, 21)))
 BK = json.loads(db.one("set role authenticated; select fb_enroll('c1')", OWN))["books"][0]["book"]
+db.sql("call fb_mirror_catchup_run(5000)")   # the timer builds it
 # put the made-up "held" entry right (so the banner is about the missed change only), then a change the mirror misses
 odd = db.one("select guid from tally_vouchers where book_id = '%s' and vno = 'J/ODD-1'" % TB1)
 db.sql("begin; update tally_lines set amount = -100 where book_id = '%s' and guid = '%s' and amount = -100.01; update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = '%s'; commit;" % (TB1, odd, TB1, odd))
@@ -67,7 +70,7 @@ class Q(http.server.SimpleHTTPRequestHandler):
         args = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         if not fn.startswith("fb_") or not fn.replace("_", "").isalnum(): self.send_response(400); self.end_headers(); return
         CALLS.append(fn)
-        q = "set role authenticated; select %s(%s)" % (fn, ", ".join("%s => %s" % (k, lit(v)) for k, v in args.items() if k.replace("_", "").isalnum()))
+        q = "set role authenticated; set statement_timeout = '8s'; select %s(%s)" % (fn, ", ".join("%s => %s" % (k, lit(v)) for k, v in args.items() if k.replace("_", "").isalnum()))
         try: out, code = db.one(q, WHO[0]), 200
         except RuntimeError as e: out, code = json.dumps({"message": str(e).split("\n")[0]}), 400
         body = (out or "null").encode()
@@ -180,8 +183,26 @@ try:
         start(pg, "c9")
         ok(pg.locator("[data-fb-setup]").count() == 1, "6. a client without FinCom Books: staff are offered Set up")
         shot(pg, "p1-06-not-set-up", full=False)
-        pg.click("[data-fb-setup]"); settle(pg, 1500)
-        ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-source]").count() == 1, "6. set up: the trial balance is there")
+        import time as _t
+        t0 = _t.time(); pg.click("[data-fb-setup]")
+        pg.wait_for_selector("[data-fb-building]", timeout=8000); dt = _t.time() - t0; settle(pg)
+        ban = text(pg, "[data-fb-step]")
+        ok(dt < 3 and "Being built" in ban and "within 3 minutes" in ban and pg.locator("[data-fbooks] [role=alert]").count() == 0,
+           "6. Set up answers at once (%.1f s): '%s'; no error" % (dt, ban.split("\n")[0][:120]))
+        shot(pg, "p1-12-being-built", full=False)
+        bk9 = db.one("select book_id from fb_books where client_id = 'c9'")
+        db.sql("set role service_role; select fb_mirror_catchup('%s', 12)" % bk9)   # part of the timer's first chunk
+        pg.wait_for_function("() => /Building: 12 of/.test(document.querySelector('[data-fb-step]').innerText)", timeout=40000)
+        ban = text(pg, "[data-fb-step]")
+        ok("Building: 12 of" in ban and "fills in by itself" in ban and pg.locator("[data-fbooks] [role=alert]").count() == 0, "6. the page shows how far, by itself: '%s'" % ban.split("\n")[0][:120])
+        shot(pg, "p1-13-building", full=False)
+        db.sql("call fb_mirror_catchup_run(5000)")   # the timer's next run finishes it
+        pg.wait_for_function("() => !document.querySelector('[data-fb-building]')", timeout=40000); settle(pg)
+        ban = text(pg, "[data-fb-step]")
+        ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-source]").count() == 1 and pg.evaluate("() => document.querySelector('[data-fb-ties]').dataset.fbTies") == "1"
+           and pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.tone") in ("info", "ok") and pg.locator("[data-fbooks] [role=alert]").count() == 0,
+           "6. built: the trial balance by itself, Debit = Credit; no error, no warning ('%s')" % ban.split("\n")[0][:100])
+        shot(pg, "p1-14-built", full=False)
         ctx.close()
         WHO[0] = OWN
         # 7. a phone
