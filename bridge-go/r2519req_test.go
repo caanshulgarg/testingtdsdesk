@@ -752,8 +752,38 @@ func TestR2519ResentLookDateChecked(t *testing.T) {
 	if f.tagged("TDSDesk:r41") != 1 {
 		t.Fatalf("sent on a look whose date was not applied (%d in Tally)", f.tagged("TDSDesk:r41"))
 	}
-	if !r2519Result(p, "r41", "checkFailed", "notSent") {
+	// the owner's decision of 23-Nov-2026: FinCom's mark found on another date (an entry re-dated in Tally) holds the entry
+	// for a person, with that date in plain words; never sent
+	if !r2519Result(p, "r41", "needsReview", "notSent") {
 		t.Fatalf("r41's result: %v", p["results"])
+	}
+	for _, r := range arr(p["results"]) {
+		if o := obj(r); str(o["id"]) == "r41" && !strings.Contains(str(o["message"]), "FinCom's entry is in Tally on "+liveDay(other)+"; check it there") {
+			t.Fatalf("the words: %v", o["message"])
+		}
+	}
+}
+
+// an entry of another date WITHOUT this entry's mark (Tally did not apply the date): the look failed, nothing sent, not
+// held for a person the first time
+func TestR2519ResentOtherDateNoMark(t *testing.T) {
+	td := today()
+	other := tallyDate(time.Now().AddDate(0, 0, -3))
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	f.add(other, fgParty, "R-42", "TDSDesk:r99 | another entry", "-42.00")
+	f.mu.Lock()
+	f.dates = func(id, body string) (string, string) {
+		if id == tagCheckID {
+			return "", ""
+		}
+		return group(`<SVFROMDATE>(\d{8})</SVFROMDATE>`, body, 1), group(`<SVTODATE>(\d{8})</SVTODATE>`, body, 1)
+	}
+	f.mu.Unlock()
+	p := r2519Resent(t, c, "job-e11-00001", "r42", finVoucher("r42", fgParty, "R-42", td, "42.00"))
+	if f.tagged("TDSDesk:r42") != 0 || !r2519Result(p, "r42", "checkFailed", "notSent") || r2519Result(p, "r42", "needsReview") {
+		t.Fatalf("r42: %d in Tally, %v", f.tagged("TDSDesk:r42"), p["results"])
 	}
 }
 

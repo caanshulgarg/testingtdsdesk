@@ -10,6 +10,8 @@ package main
 //   - An entry whose mark "TDSDesk:<id>" is in an entry of that date that is not cancelled is not sent: it is reported
 //     posted already with Tally's GUID and MasterID and kept in this computer's record (posted-ids.json). It goes into
 //     the local copy only when Tally's entry is the one sent by type, date and party (the security review's L1).
+//   - FinCom's mark found on another date (an entry re-dated in Tally; the owner's decision of 23-Nov-2026): held for a
+//     person, "FinCom's entry is in Tally on <date>; check it there", never sent.
 //   - Held for a person, never sent unchecked: an entry with no FinCom mark or no valid date to look for (N1); the
 //     entries of a date whose look failed twice (E.3.4, N2); the entries beyond the first 7 dates of one job (I1).
 
@@ -78,14 +80,30 @@ func resentLook(port int, company, date string) ([]vchKey, error) {
 		return nil, errors.New("Tally's answer could not be read whole: " + cut(flat(raw), 120))
 	}
 	var out []vchKey
+	var bad error
 	for _, v := range xmlDoc(raw).All("VOUCHER") {
 		k := keyOfVoucher(v)
-		if k.date != date {
-			return nil, fmt.Errorf("Tally answered an entry of another date (%s) for %s: the date was not applied", or(k.date, "none"), ddmmyyyy(date))
+		if k.date != date && bad == nil {
+			bad = &resentDateErr{fmt.Sprintf("Tally answered an entry of another date (%s) for %s: the date was not applied", or(k.date, "none"), ddmmyyyy(date))}
 		}
 		out = append(out, k)
 	}
+	if bad != nil {
+		return out, bad // every row, for the mark on another date only (resentLookFirst); the look failed
+	}
 	return out, nil
+}
+
+// the look's answer held an entry of another date: the look failed for its date; its rows say only whether FinCom's
+// mark is in Tally on another date
+type resentDateErr struct{ s string }
+
+func (e *resentDateErr) Error() string { return e.s }
+
+// the owner's decision of 23-Nov-2026: FinCom's mark found on another date (an entry re-dated in Tally) holds the
+// entry for a person, never sent
+func resentRedatedWords(d string) string {
+	return "Not posted: FinCom's entry is in Tally on " + liveDay(d) + "; check it there."
 }
 
 // --- the looks that failed, by company and date (resent-looks.json): the second failure holds that date's entries for
@@ -135,7 +153,8 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 	}
 	reads := map[string][]vchKey{}
 	fails := map[string]error{}
-	held := map[string]bool{} // a date whose look failed twice
+	others := map[string][]vchKey{} // a failed look's rows of every date (resentDateErr)
+	held := map[string]bool{}       // a date whose look failed twice
 	var dates []string
 	for _, it := range todo {
 		k := str(it["id"])
@@ -167,6 +186,10 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 				dates = append(dates, d)
 			}
 			there, err := resentLook(port, company, d)
+			var de *resentDateErr
+			if errors.As(err, &de) {
+				others[d] = there
+			}
 			if err != nil {
 				fails[d] = err
 				if resentFailNote(company, d) >= 2 {
@@ -179,6 +202,20 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 			}
 		}
 		if err, failed := fails[d]; failed {
+			var moved *vchKey
+			for i, e := range others[d] {
+				if e.date != d && hasTag(e.narration, tag) && !e.cancelled {
+					moved = &others[d][i]
+					break
+				}
+			}
+			if moved != nil {
+				writeLog("  entry " + k + ": NOT SENT: FinCom had handed it out before and its mark is in Tally on another date (" + ddmmyyyy(moved.date) + ", " + moved.vtype + " no. " + moved.number + ", GUID " + moved.guid + "): held for a person")
+				r := resentHeld(k, company, port, resentRedatedWords(moved.date), "")
+				r["guid"], r["vchNo"], r["vchType"], r["masterId"], r["vchDate"], r["redated"] = moved.guid, moved.number, moved.vtype, moved.masterID, moved.date, true
+				results = append(results, r)
+				continue
+			}
 			if held[d] {
 				results = append(results, resentHeld(k, company, port, resentHeldWords, tallyTrouble(err.Error())))
 			} else {

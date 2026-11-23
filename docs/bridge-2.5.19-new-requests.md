@@ -580,3 +580,6 @@ The worst time and date of each go into its row in `docs/tally-allowlist.md` and
 - B1's first band is cut to a sixteenth of the highest entry number seen when that is below AltVchId (N4); C1 at most
   once a day (N7); cost centres also drop employee groups and every centre under one (I2); the tray's Quit reads "Hide
   this icon (reading continues; the icon comes back in 10 minutes)" (I4).
+- The owner's decision of 23-Nov-2026 on the open question: FinCom's mark found in Tally on ANOTHER date (an entry
+  re-dated in Tally) holds the entry for a person, "Not posted: FinCom's entry is in Tally on <date>; check it there.",
+  never sent. An entry of another date without the mark: the look failed, as above.

@@ -50,6 +50,8 @@ test company with made-up entries only.
     You should see: the bridge looks in Tally for that date, finds FinCom's mark, does not post it again, and FinCom
     shows it as already in Tally. Then stop Tally while such a posting waits: the entry is not sent ("Not
     posted yet: Tally was busy..."); the second time it is held for you with words to look in Tally and release it.
+    Then change the date of a posted made-up entry in Tally and have FinCom hand it out again: you should see it is
+    not posted, and FinCom says "FinCom's entry is in Tally on <the new date>; check it there."
  7. A very big day read in pieces (B1). On ZZ BIG TEST with an 18,000-entry day picked in FinCom: the day's list is
     stopped at 2 s, then read in pieces ("read again in pieces of entry numbers" in the log), each piece under 2 s,
     and FinCom closes the day. While a piece is at Tally, type in Tally: no piece goes until Tally is left alone a
