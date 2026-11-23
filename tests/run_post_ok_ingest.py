@@ -81,7 +81,7 @@ def real_guard(old, d):   # the stand-in's PATCH of a posting to "waiting": the 
     except RuntimeError as e: return str(e).split("CONTEXT")[0].strip()[-300:] or "refused"
 F.PATCH_GUARD["tally_post_jobs"] = real_guard
 F.start()
-env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key")
+env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key", TALLY_PAUSE_SWEEP_MS="3000")   # (next-post-resume-2: a sweep for pauses noted elsewhere every 3 s here)
 fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 log = []
 threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
@@ -249,6 +249,15 @@ try:
     c, r = up("p141", 5)
     n141 = (row("p141").get("timing") or {}).get("pauses")
     ok(c == 200 and row("p141")["status"] == "taken" and row("p141")["message"].startswith(PAUSED) and n141 == 1, "a late repeat once taken again: Paused, not counted again (pauses %s)" % n141)
+    # (the third review, items 2 and 3) a late repeat on a waiting posting whose words changed since (203's gate): it stays
+    # waiting, those words kept; one stop-flagged meanwhile: never kept waiting by the repeat
+    stop_mid("p155"); row("p155").update(status="waiting", seq=None, message="Not posted yet: ZZ HERON CO is not open in Tally on this computer (made-up words of the gate).")
+    c, r = up("p155", 5)
+    ok(c == 200 and row("p155")["status"] == "waiting" and row("p155")["message"].startswith("Not posted yet"), "a late repeat, the words changed since: still waiting, its words kept (%s; %s)" % (row("p155")["status"], row("p155")["message"][:60]))
+    stop_mid("p156"); row("p156").update(status="waiting", seq=None, message="Carrying on: FinCom Bridge sends the rest of this posting now; what it already sent to Tally is never sent again.",
+                                        stop_reason="Not posted: posting into Tally was stopped for ZZ Heron after this was queued.")
+    c, r = up("p156", 5)
+    ok(c == 200 and row("p156")["status"] != "waiting", "a late repeat on a stop-flagged posting: not kept waiting (%s; %s)" % (row("p156")["status"], row("p156")["message"][:60]))
     # 1. it cannot carry on by itself: the words say what it waits for, never "in a few minutes"
     c, r = stop_mid("p151")   # an entry released meanwhile
     F.T["tally_post_ids"].append({"job_id": "p151", "fincom_id": "K2", "entry_id": "K2", "accepted_at": None, "released_at": "2026-11-23T10:01:00Z", "released_by": "owner", "live": False})
@@ -259,7 +268,14 @@ try:
     beat(); F.JOB_ACCEPTED[0] = None
     for jid, want in (("p151", "released"), ("p152", "Tally accepted K1"), ("p153", "re-send")):
         m_ = row(jid)["message"]
-        ok(row(jid)["status"] == "taken" and not m_.startswith(PAUSED) and "in a few minutes" not in m_ and want in m_, "%s: says what it waits for (%s)" % (jid, m_[:150]))
+        ok(row(jid)["status"] == "taken" and (jid == "p152" or not m_.startswith(PAUSED)) and "in a few minutes" not in m_ and want in m_, "%s: says what it waits for (%s)" % (jid, m_[:150]))
+    # (the third review, item 4) the Post page offers "It is in Tally: mark posted (Tally id)" for a posting still taken, not
+    # "Not in Tally - post again" (refused while it is being sent): the words name only what the person can do; once marked
+    # posted it carries on by itself (it keeps the Paused mark)
+    m_ = row("p152")["message"]
+    ok("It is in Tally: mark posted (Tally id)" in m_ and "Not in Tally" not in m_ and "release" not in m_ and m_.startswith(PAUSED), "p152: the words name the Post page's own button (%s)" % m_)
+    row("p152")["updated_at"] = ago(4); time.sleep(3.2); beat()   # (marked posted by a member: in the database, not through tally-ingest; the next sweep finds it)
+    ok(row("p152")["status"] == "waiting", "p152: marked posted meanwhile (nothing named now): put back (%s)" % row("p152")["status"])
     # 2. blocked rows never starve another: the oldest read first, each acted on (put back or relabelled)
     F.HONOR_LIMIT[0] = True
     for k in range(6):
@@ -295,6 +311,11 @@ try:
     q0 = len(F.QUERIES); beat(); beat()
     reads = [x for x in F.QUERIES[q0:] if x[0] == "GET" and x[1].endswith("/tally_post_jobs") and "like" in x[2]]
     ok(not reads, "nothing paused: the next beats do not look for paused postings (%d reads)" % len(reads))
+    # (the third review, item 1) two bridges on one computer key: one's beat never delays the other's put-back
+    F.T["tally_devices"][0]["info"]["bridges"][OTHER] = {"at": "2026-11-23T10:00:00Z", "user": "PC-MADEUP\\other"}
+    OB = dict(ME, id=OTHER, user="PC-MADEUP\\other")
+    c, r = call({"kind": "beat", "version": "2.5.19", "bridge": OB, "tally": True, "open": ["ZZ HERON CO"], "companies": [{"name": "ZZ HERON CO", "open": True}]})
+    ok(c == 200 and row("p142")["status"] == "waiting" and row("p142")["taken_by"] == OTHER, "the other bridge's paused posting: put back at its own beat (%s %s; %s)" % (c, r.get("error", ""), row("p142")["status"]))
     # 36b's resend guard and tally_post_job_accepted, the real ones (PostgreSQL): an entry stamped accepted by FinCom whose
     # result the bridge says "sent, no answer": not paused; one Tally's reply posted (confirmed): paused, then put back
     if PG:
