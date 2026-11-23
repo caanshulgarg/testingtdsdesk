@@ -259,9 +259,11 @@ function schedules(c, M, S, im, ais, as26, bk) {
         : matched("f16_regime", "sch", "Regime: Form 16 against the return", "The employer's Form 16 and the return are in the same regime (" + M.regime + ").", rowsR));
     }
   }
-  // section 194IA: the buyer deducts 1% of the higher of the consideration and the stamp duty value (from 1-10-2024)
-  // when either is Rs 50 lakh or more; the TDS in 26AS against what the sale should carry
-  const props = M.cgHead ? M.cgHead.rows.filter((x) => x.kind === "land" && (x.value >= 5000000 || x.sdv >= 5000000)) : [];
+  // section 194IA: the buyer deducts 1% of the higher of the consideration and the stamp duty value when the whole
+  // property's consideration (all sellers and buyers together, from 1-10-2024) is Rs 50 lakh or more; on the seller's own
+  // share. The TDS in 26AS against what the sale should carry
+  const whole = (x) => Math.max(x.totalConsid || 0, x.value);
+  const props = M.cgHead ? M.cgHead.rows.filter((x) => x.kind === "land" && (whole(x) >= 5000000 || x.sdv >= 5000000)) : [];
   if (props.length) {
     const t194 = ((M.paid || {}).tds || []).filter((x) => /^194IA$/i.test(String(x.sec || "").replace(/[()\s-]/g, "")));
     out.push(two("tds_194ia", "sch", "TDS on the sale of property (194IA): 26AS against the sale", { label: "Form 26AS, section 194IA", amt: as26 ? R(sumBy(t194, (x) => x.amt)) : null, src: "26AS Part I", why: "26AS is not brought in", how: "Bring in 26AS." },

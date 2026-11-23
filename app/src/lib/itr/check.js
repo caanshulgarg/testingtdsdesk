@@ -257,24 +257,43 @@ function heldLong(kind, acq, sale, listed) {
   return String(sale) > lim;
 }
 // the 54-series again: 54 (a residential house sold, the lower of the gain and the new house's cost), 54B (agricultural
-// land, the lower of the gain and the cost), 54F (a long-term asset other than a house: the gain in the proportion the
-// cost of the new house bears to the net consideration, 54F(1)(b)); 54 / 54B / 54F only for an individual or HUF; the
-// new house's cost counted up to 10 crore (54, 54F); 54EC for land or building, 50 lakh in all in the year (first
-// proviso to 54EC(1)): book.ec is what is left of it. Returns the claims as the law lets them stand for this sale
-function claimsAgain(r, kind, lng, ent, book, gain) {
-  const person = ent === "P" || ent === "H", out = [];
+// land used for agriculture in the two years before, the lower of the gain and the cost), 54F (a long-term asset other
+// than a house: the gain in the proportion the cost of the new house bears to the net consideration, 54F(1)(b)); 54 / 54B /
+// 54F only for an individual or HUF; the new house's cost counted up to 10 crore (54, 54F). The time limits: 54 / 54F
+// "within a period of one year before or two years after", "constructed within three years"; 54B "within two years
+// after"; or "deposited ... before the due date" of 139(1) in the Capital Gains Account Scheme (54(2), 54B(2), 54F(4)).
+// 54EC: land or building, the bonds "within a period of six months after the date of such transfer", and not above
+// 50 lakh in the year (first proviso to 54EC(1)): ecShare says how much of it each sale has
+function plusMonths(d, k) {
+  const y = Number(d.slice(0, 4)), m = Number(d.slice(4, 6)) - 1 + k, dd = Number(d.slice(6, 8));
+  const yy = y + Math.floor(m / 12), mm = ((m % 12) + 12) % 12, last = new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate();
+  return String(yy) + String(mm + 1).padStart(2, "0") + String(dd > last ? last : dd).padStart(2, "0");
+}
+function claimsAgain(r, kind, lng, ent, ecShare, ecAsk, due) {
+  const person = ent === "P" || ent === "H", out = [], sale = String(r.sale || "");
   for (const e of r.exempt || []) {
-    const sec = String(e.sec || "");
+    const sec = String(e.sec || ""), d = String(e.date || ""), how = e.how || "bought";
     if (!lng && (sec === "54" || sec === "54EC" || sec === "54F")) continue;
     if (!person && (sec === "54" || sec === "54B" || sec === "54F")) continue;
     if (sec === "54" && !(kind === "land" && r.residential)) continue;
     if (sec === "54F" && kind === "land" && r.residential) continue;
     if ((sec === "54B" || sec === "54EC") && kind !== "land") continue;
+    if (sec === "54B" && !r.agri) continue;
     if (sec === "54EC") {
-      let v = rup(e.amt); const g = gain > 0 ? gain : 0; if (v > g) v = g; if (v > book.ec) v = book.ec; book.ec -= v;
+      if (d && sale && (d < sale || d > plusMonths(sale, 6))) continue;
+      if (ecAsk) { ecAsk[r.id] = (ecAsk[r.id] || 0) + rup(e.amt); continue; }
+      let v = rup(e.amt); const have = ecShare[r.id] || 0; if (v > have) v = have; ecShare[r.id] = have - v;
       out.push({ sec, amt: v }); continue;
     }
     if (sec === "54" || sec === "54B" || sec === "54F") {
+      if (d && sale) {
+        let inTime;
+        if (how === "cgas") inTime = d <= due;
+        else if (how === "built") inTime = d >= sale && d <= plusMonths(sale, 36);
+        else if (sec === "54B") inTime = d >= sale && d <= plusMonths(sale, 24);
+        else inTime = d >= plusMonths(sale, -12) && d <= plusMonths(sale, 24);
+        if (!inTime) continue;
+      }
       let c = e.cost != null && e.cost !== "" ? rup(e.cost) : (sec === "54F" ? 0 : rup(e.amt));
       if (sec !== "54B" && c > 100000000) c = 100000000;
       out.push({ sec, cost: c }); continue;
@@ -294,51 +313,79 @@ function claimOn(g, list, cons) {
   }
   return t;
 }
-function gainsAgain(rows, ent, resident, upto) {
-  const one = (list) => {
-    const pot = { o: 0, a: 0, c: 0, b: 0 }, pool = [], book = { ec: 5000000 };
-    for (const r of list) {
-      const kind = r.kind || "other", acq = String(r.acq || ""), sale = String(r.sale || ""), lng = heldLong(kind, acq, sale, r.listed);
-      const val = kind === "buyback" ? 0 : rup(r.value), sd = rup(r.sdv);
-      let full = val; if (kind === "land" && sd > val * 1.1) full = sd; if (kind === "unlisted" && sd > val) full = sd;
-      let cost = rup(r.cost);
-      if (acq && acq < "20010401" && r.fmv2001 != null && r.fmv2001 !== "" && kind !== "eq") {
-        cost = rup(r.fmv2001);
-        // proviso to 55(2)(b): for land or building, not above the stamp duty value of 1-04-2001
-        if (kind === "land" && r.sdv2001 != null && r.sdv2001 !== "" && rup(r.sdv2001) < cost) cost = rup(r.sdv2001);
-      }
-      const stt = (kind === "eq" && r.stt !== false) || (kind === "buyback" && r.listed !== false);
-      let used = cost;
-      if (stt && lng && acq && acq < "20180201" && n(r.fmv2018) > 0) { const f = rup(r.fmv2018), cap = f < full ? f : full; used = cost > cap ? cost : cap; }
-      let imps = Array.isArray(r.improve) ? r.improve : r.improveCost ? [{ fy: String(fyStartOf(acq || "20200401")), amt: r.improveCost }] : [];
-      imps = imps.filter((x) => Number(x.fy) >= 2001);
-      let im = 0; for (const x of imps) im += n(x.amt); im = rup(im);
-      const ex0 = rup(r.expenses), gain = full - used - im - ex0, cons = full - ex0;
-      const cl = claimsAgain(r, kind, lng, ent, book, gain);
-      const net = gain - claimOn(gain, cl, cons);
-      const where = kind === "mf50AA" ? "o" : lng ? (stt ? "b" : "c") : (stt ? "a" : "o");
-      pot[where] += net;
-      if (where === "c" && net > 0) {
-        let i = null;
-        if (kind === "land" && lng && acq < "20240723" && (ent === "P" || ent === "H") && resident) {
-          const s = idxOf(fyStartOf(sale)), base = idxOf(fyStartOf(acq) < 2001 ? 2001 : fyStartOf(acq));
-          let ii = 0; for (const x of imps) ii += rup(n(x.amt) * s / idxOf(Number(x.fy)));
-          const ig = full - rup(cost * s / base) - rup(ii) - ex0;
-          i = ig - claimOn(ig, cl, cons);
-        }
-        pool.push({ g: rup(net), i: i == null ? null : rup(i), el: i != null });
-      }
+// one sale: its full value, cost, gain, exemptions and (for land or building bought before 23-07-2024 by a resident
+// individual / HUF) its gain with indexation
+function saleAgain(r, ent, resident, ecShare, ecAsk, due) {
+  const kind = r.kind || "other", acq = String(r.acq || ""), sale = String(r.sale || ""), lng = heldLong(kind, acq, sale, r.listed);
+  const val = kind === "buyback" ? 0 : rup(r.value), sd = rup(r.sdv);
+  let full = val; if (kind === "land" && sd > val * 1.1) full = sd; if (kind === "unlisted" && sd > val) full = sd;
+  let cost = rup(r.cost);
+  if (acq && acq < "20010401" && r.fmv2001 != null && r.fmv2001 !== "" && kind !== "eq") {
+    cost = rup(r.fmv2001);
+    // proviso to 55(2)(b): for land or building, not above the stamp duty value of 1-04-2001
+    if (kind === "land" && r.sdv2001 != null && r.sdv2001 !== "" && rup(r.sdv2001) < cost) cost = rup(r.sdv2001);
+  }
+  const stt = (kind === "eq" && r.stt !== false) || (kind === "buyback" && r.listed !== false);
+  let used = cost;
+  if (stt && lng && acq && acq < "20180201" && n(r.fmv2018) > 0) { const f = rup(r.fmv2018), cap = f < full ? f : full; used = cost > cap ? cost : cap; }
+  let imps = Array.isArray(r.improve) ? r.improve : r.improveCost ? [{ fy: String(fyStartOf(acq || "20200401")), amt: r.improveCost }] : [];
+  imps = imps.filter((x) => Number(x.fy) >= 2001);
+  let im = 0; for (const x of imps) im += n(x.amt); im = rup(im);
+  const ex0 = rup(r.expenses), gain = full - used - im - ex0, cons = full - ex0;
+  const cl = claimsAgain(r, kind, lng, ent, ecShare, ecAsk, due);
+  const net = gain - claimOn(gain, cl, cons);
+  const where = kind === "mf50AA" ? "o" : lng ? (stt ? "b" : "c") : (stt ? "a" : "o");
+  let i = null;
+  if (where === "c" && kind === "land" && lng && acq < "20240723" && (ent === "P" || ent === "H") && resident) {
+    const s = idxOf(fyStartOf(sale)), base = idxOf(fyStartOf(acq) < 2001 ? 2001 : fyStartOf(acq));
+    let ii = 0; for (const x of imps) ii += rup(n(x.amt) * s / idxOf(Number(x.fy)));
+    const ig = full - rup(cost * s / base) - rup(ii) - ex0;
+    i = ig - claimOn(ig, cl, cons);
+  }
+  return { id: r.id, where, net, i, sale };
+}
+function gainsAgain(rows, ent, resident, upto, order, due) {
+  const list0 = (rows || []).map((r, k) => (r.id ? r : Object.assign({ id: "cg" + k }, r)));
+  // the 54EC limit shared where the tax saved is the most: the sales the proviso to 112(1)(a) covers, up to their
+  // indexed gain, then the other sales, then the rest of the covered ones
+  const ask = {}, pre = list0.map((r) => saleAgain(r, ent, resident, {}, ask, due));
+  const share = {}; let room = 5000000;
+  const wantOf = (p) => Math.min(ask[p.id] || 0, p.net > 0 ? p.net : 0);
+  const give = (p, cap) => { const u = Math.max(0, Math.min(room, cap)); share[p.id] = (share[p.id] || 0) + u; room -= u; };
+  for (const p of pre) if (p.i != null && wantOf(p) > 0) give(p, Math.min(wantOf(p), p.i > 0 ? p.i : 0));
+  for (const p of pre) if (p.i == null && wantOf(p) > 0) give(p, wantOf(p));
+  for (const p of pre) if (p.i != null && wantOf(p) > 0) give(p, wantOf(p) - (share[p.id] || 0));
+  const sales = list0.map((r) => saleAgain(r, ent, resident, Object.assign({}, share), null, due));
+  const one = (ss) => {
+    // within each of the form's categories the gains and losses net: 20% (a), applicable rates (o), 12.5% (b: 112A, c: 112)
+    let a = 0, o = 0, b = 0, c = 0, lt = 0, cap = 0;
+    const pool = [];
+    for (const x of ss) {
+      if (x.where === "a") a += x.net; else if (x.where === "o") o += x.net;
+      else if (x.net < 0) lt -= x.net;
+      else if (x.where === "b") b += x.net;
+      else { c += x.net; pool.push({ g: rup(x.net), i: x.i == null ? null : rup(x.i), el: x.i != null }); cap += x.i == null ? x.net : Math.min(x.i > 0 ? x.i : 0, x.net); }
     }
-    // the long-term loss first (against 112, then 112A), then the short-term loss
-    const move = (from, to) => { if (pot[from] < 0 && pot[to] > 0) { const u = Math.min(-pot[from], pot[to]); pot[from] += u; pot[to] -= u; } };
-    move("c", "b"); move("b", "c");
-    for (const f of ["o", "a"]) for (const t of ["o", "a", "c", "b"]) if (f !== t) move(f, t);
-    const stl = rup(Math.max(0, -pot.o) + Math.max(0, -pot.a)), ltl = rup(Math.max(0, -pot.c) + Math.max(0, -pot.b));
-    return { a: rup(Math.max(0, pot.a)), b: rup(Math.max(0, pot.b)), c: rup(Math.max(0, pot.c)), o: rup(Math.max(0, pot.o)), pool, stl, ltl };
+    // 70(3): the long-term loss against 112 while it still saves tax there, then 112A above 1,25,000, then the rest
+    let cut112 = 0;
+    const onLong = (loss) => {
+      let u = Math.max(0, Math.min(loss, c, cap - cut112)); c -= u; cut112 += u; loss -= u;
+      u = Math.max(0, Math.min(loss, b - 125000)); b -= u; loss -= u;
+      u = Math.max(0, Math.min(loss, c)); c -= u; cut112 += u; loss -= u;
+      u = Math.max(0, Math.min(loss, b)); b -= u; loss -= u;
+      return loss;
+    };
+    lt = onLong(lt);
+    // 70(2): a short-term loss: the other short-term category and the long-term gains, in the order asked
+    let la = a < 0 ? -a : 0, lo = o < 0 ? -o : 0; if (a < 0) a = 0; if (o < 0) o = 0;
+    const onShort = (loss, toA) => { const have = toA ? a : o, u = Math.min(loss, have); if (toA) a -= u; else o -= u; return loss - u; };
+    if (order === "B") { lo = onShort(onLong(lo), true); la = onShort(onLong(la), false); }
+    else { lo = onLong(onShort(lo, true)); la = onLong(onShort(la, false)); }
+    return { a: rup(a), b: rup(b), c: rup(c), o: rup(o), pool, stl: rup(la + lo), ltl: rup(lt) };
   };
-  const all = one(rows || []);
+  const all = one(sales);
   // 2(22)(f): the money of a buy-back (from 1-10-2024) is dividend
-  let bbd = 0; for (const r of rows || []) if (r.kind === "buyback" && String(r.sale || "") >= "20241001") bbd += rup(r.value);
+  let bbd = 0; for (const r of list0) if (r.kind === "buyback" && String(r.sale || "") >= "20241001") bbd += rup(r.value);
   all.bbd = bbd;
   if (!upto) return all;
   // what had accrued by a date: the gains of the sales up to it, never more than the year's and never less than at the
@@ -346,7 +393,7 @@ function gainsAgain(rows, ent, resident, upto) {
   const run = { a: 0, b: 0, c: 0, o: 0, pool: [] };
   for (const d of ["20250615", "20250915", "20251215", "20260315", "20260331"]) {
     if (d > upto) break;
-    const q = one((rows || []).filter((r) => r.sale && String(r.sale) <= d));
+    const q = one(sales.filter((x) => x.sale && x.sale <= d));
     for (const k of ["a", "b", "c", "o"]) run[k] = Math.min(all[k], Math.max(run[k], q[k]));
     run.pool = q.pool;
   }
@@ -372,15 +419,23 @@ function tax112Again(pool, c) {
   return t < whole ? t : whole;
 }
 
+// a short-term capital loss may go first against the other short-term gains or against the long-term gains; the slab
+// decides which costs less, so both are worked and the lower liability kept
 export function check(inp) {
   inp = inp || {};
+  if (!inp.cgRows || inp._order) return checkOne(inp, inp._order || "A");
+  const x = checkOne(inp, "A"), y = checkOne(inp, "B");
+  return y.liability < x.liability ? y : x;
+}
+function checkOne(inp, order) {
   const ent = inp.entity;
+  const dueC0 = inp.tp ? "20261130" : (inp.audit || ent === "C") ? "20261031" : "20260831";
   const bz = business(inp);
   const sal = inp.salaryRows ? salaryAgain(inp.salaryRows, inp.regime) : inp.salary ? Math.max(0, rup(inp.salary.net != null ? inp.salary.net : n(inp.salary.gross) - n(inp.salary.std))) : 0;
   let hp = inp.houseRows ? houseAgain(inp.houseRows, inp.regime) : inp.hp != null ? rup(inp.hp) : 0;
   const hp0 = hp;
   const cg0 = inp.cg || {};
-  const cgx = inp.cgRows ? gainsAgain(inp.cgRows, ent, inp.resident !== false, null) : { a: rup(cg0.s111A), b: rup(cg0.s112A), c: rup(cg0.s112), o: rup(cg0.other), rel: rup(cg0.relief112), pool: cg0._pool || null, stl: rup(cg0.cfStcl), ltl: rup(cg0.cfLtcl), bbd: null };
+  const cgx = inp.cgRows ? gainsAgain(inp.cgRows, ent, inp.resident !== false, null, order, dueC0) : { a: rup(cg0.s111A), b: rup(cg0.s112A), c: rup(cg0.s112), o: rup(cg0.other), rel: rup(cg0.relief112), pool: cg0._pool || null, stl: rup(cg0.cfStcl), ltl: rup(cg0.cfLtcl), bbd: null };
   // other sources: what the model holds, the buy-back's dividend worked here again from the sales
   let os = 0; if (inp.os) for (const k of Object.keys(inp.os)) if (typeof inp.os[k] === "number" && !(k === "buyback" && cgx.bbd != null)) os += inp.os[k];
   os = rup(os + n(cgx.bbd));
@@ -413,12 +468,13 @@ export function check(inp) {
   // brought forward
   const L = inp.losses || {};
   const bfl = (L.business || []).slice().sort((x, y) => String(x.ay) < String(y.ay) ? -1 : 1);
-  for (const x of bfl) { if (2026 - +String(x.ay).slice(0, 4) > 8) continue; const u = Math.min(bp, n(x.amt)); bp -= u; }
+  for (const x of bfl) { if (2026 - +String(x.ay).slice(0, 4) > 8 || x.inTime === false) continue; const u = Math.min(bp, n(x.amt)); bp -= u; }
   // 71B (house property, eight years, against house property) and 74 (capital losses, eight years: short-term against
   // any gain, long-term against long-term)
-  const live = (list) => (list || []).filter((x) => 2026 - +String(x.ay).slice(0, 4) <= 8).sort((x, y) => String(x.ay) < String(y.ay) ? -1 : 1);
+  // section 80: no business or capital loss of a year whose return was not filed by its due date (71B is not in it)
+  const live = (list, isHp) => (list || []).filter((x) => 2026 - +String(x.ay).slice(0, 4) <= 8 && (isHp || x.inTime !== false)).sort((x, y) => String(x.ay) < String(y.ay) ? -1 : 1);
   let bfHp = 0, bfSt = 0, bfLt = 0;
-  for (const x of live(L.hp)) { const u = Math.min(Math.max(hp, 0), Math.max(0, n(x.amt))); hp -= u; bfHp += u; }
+  for (const x of live(L.hp, true)) { const u = Math.min(Math.max(hp, 0), Math.max(0, n(x.amt))); hp -= u; bfHp += u; }
   for (const x of live(L.stcl)) {
     let left = Math.max(0, n(x.amt));
     let u = Math.min(Math.max(o, 0), left); o -= u; left -= u; bfSt += u;
@@ -445,8 +501,11 @@ export function check(inp) {
   const d = inp.deductions || {};
   let ded = 0;
   const age = n(inp.age), senior = age >= 60;
-  // 80CCD(2): "salary" is basic + DA (Explanation to 80CCD); not given, nothing is allowed until it is
-  const salPay = inp.salary ? n(inp.salary.basicDa) : 0;
+  // 80CCD(2): "salary" is basic + DA (Explanation to 80CCD); from the employers' rows themselves when there are rows
+  // (every one must give it), else the figure entered; not given, nothing is allowed until it is
+  let salPay = 0;
+  if (inp.salaryRows && inp.salaryRows.length) { if (inp.salaryRows.every((r) => r.basicDa != null && r.basicDa !== "")) for (const r of inp.salaryRows) salPay += rup(r.basicDa); }
+  else if (inp.salary) salPay = n(inp.salary.basicDa);
   const lim = (v, m) => { v = n(v); return v < 0 ? 0 : v > m ? m : v; };
   const gifts = Array.isArray(d["80G"]) ? d["80G"] : n(d["80G"]) ? [{ amt: n(d["80G"]), pct: 100, qualifying: false }] : [];
   let may;   // the sections this person may take, or null for the old regime's full list
@@ -530,7 +589,7 @@ export function check(inp) {
     // when the tax on the later gains was paid by the remaining instalments up to 31 March
     const baseOn = (date) => {
       if (!inp.cgRows) return assessed;
-      const g2 = gainsAgain(inp.cgRows, ent, inp.resident !== false, date);
+      const g2 = gainsAgain(inp.cgRows, ent, inp.resident !== false, date, order, dueC0);
       if (g2.a === a0 && g2.b === b0 && g2.c === c0 && g2.o === o0) return assessed;
       const lw = check(Object.assign({}, inp, { cgRows: null, os: Object.assign({}, inp.os, { buyback: n(cgx.bbd != null ? cgx.bbd : (inp.os || {}).buyback) }), cg: { s111A: g2.a, s112A: g2.b, s112: g2.c, other: g2.o, _pool: g2.pool }, paid: {}, noInterest: true })).liability;
       return advBy("20260331") - advBy(date) >= liability - lw ? Math.max(0, lw - tds - tcs) : assessed;

@@ -6,7 +6,7 @@
 // what is entered is what the JSON carries.
 import { useState } from "react";
 import { money } from "../../lib/itr/sheet.js";
-import { salaryFromForm16, CG_KINDS } from "../../lib/itr/heads.js";
+import { salaryFromForm16, CG_KINDS, cgAsChosen } from "../../lib/itr/heads.js";
 import { nodeAt } from "../../lib/itr/sched.js";
 import { ROOT } from "../../lib/itr/forms.js";
 
@@ -135,12 +135,12 @@ function Houses({ X, set, open, tog }) {
 
 // ---------------- Capital gains ----------------
 function Gains({ X, set, open, tog }) {
-  const rows = X.state.cgRows || [], g = X.model.cgHead, C = X.comp.carry || {};
+  const rows = X.state.cgRows || [], g = cgAsChosen(X.model.cgHead, X.comp), C = X.comp.carry || {};
   const ais = X.imports.ais && X.imports.ais.data ? X.imports.ais.data.rows.filter((r) => r.cat === "cgsale" || r.cat === "cgprop") : [];
   const keyOf = (x) => [x.code, x.src || x.desc, x.amount, x.date].join("|"), taken = new Set(rows.map((r) => r.aisKey).filter(Boolean));
   const offers = ais.filter((x) => !taken.has(keyOf(x)));
   const upd = (i, p) => set({ cgRows: rows.map((r, j) => (j === i ? Object.assign({}, r, p) : r)) });
-  const head = g ? "111A " + money(g.s111A) + " · normal rates " + money(g.stApp) + " · 112A " + money(g.s112A) + " · 112 " + money(g.s112) + (X.comp.tax && X.comp.tax.relief112 ? " · ignored under the proviso to 112(1)(a) " + money(X.comp.tax.relief112) : "") + (C.stcl || C.ltcl ? " · loss carried forward " + money((C.stcl || 0) + (C.ltcl || 0)) : "") : "";
+  const head = g ? "111A " + money(g.s111A) + " · normal rates " + money(g.stApp) + " · 112A " + money(g.s112A) + " · 112 " + money(g.s112) + (X.comp.tax && X.comp.tax.relief112 ? " · ignored under the proviso to 112(1)(a) " + money(X.comp.tax.relief112) : "") + (C.stcl || C.ltcl ? " · loss carried forward " + money((C.stcl || 0) + (C.ltcl || 0)) : "") + (X.comp.cgAlt ? " · the short-term loss set off against the long-term gains first (less tax by " + money(X.comp.cgOther - X.comp.liability) + ")" : "") : "";
   return <Card k="cg" title="Capital gains (Schedule CG)" chip={g ? money(g.total) : null} note={head || "Each sale in the year: shares and funds, land or building, other assets. The AIS's sales are offered below."}
     action={<button className="linkbtn" data-itr-add-sale="" onClick={() => set({ cgRows: rows.concat([{ id: newId(), kind: "eq", exempt: [], improve: [] }]) })}>Add a sale</button>}>
     {offers.map((x, i) => <p key={i} className="itr-note" data-itr-ais-offer={i}>{"AIS: " + (x.desc || x.code) + (x.src ? ", " + x.src : "") + " " + money(x.amount) + " "}
@@ -157,6 +157,9 @@ function Gains({ X, set, open, tog }) {
           {r.kind !== "eq" && r.acq && r.acq < "20010401" && <Num label="FMV on 1-04-2001 (if taken as cost)" k="fmv2001" v={r.fmv2001} on={(v) => upd(i, { fmv2001: v })} />}
           {land && r.acq && r.acq < "20010401" && <Num label="Stamp duty value on 1-04-2001 (the FMV is capped at it)" k="sdv2001" v={r.sdv2001} on={(v) => upd(i, { sdv2001: v })} />}
           {land && <label className="itr-field itr-tick"><input type="checkbox" data-itr-in="residential" checked={!!r.residential} onChange={(e) => upd(i, { residential: e.target.checked })} /><span>A residential house (section 54)</span></label>}
+          {land && <label className="itr-field itr-tick"><input type="checkbox" data-itr-in="agri" checked={!!r.agri} onChange={(e) => upd(i, { agri: e.target.checked })} /><span>Agricultural land, farmed by the person or a parent for 2 years (54B)</span></label>}
+          {land && r.agri && <label className="itr-field itr-tick"><input type="checkbox" data-itr-in="agriurban" checked={!!r.agriUrban} onChange={(e) => upd(i, { agriUrban: e.target.checked })} /><span>Within municipal limits (urban): rural farm land is not taxed</span></label>}
+          {land && <Num label="Whole property's price, if co-owned (for 194IA)" k="totalConsid" v={r.totalConsid} on={(v) => upd(i, { totalConsid: v })} />}
           {r.kind === "eq" && <><Txt label="ISIN" up k="isin" v={r.isin} on={(v) => upd(i, { isin: v })} /><Num label="Number of shares / units" k="qty" v={r.qty} on={(v) => upd(i, { qty: v })} />
             <label className="itr-field itr-tick"><input type="checkbox" checked={r.stt !== false} onChange={(e) => upd(i, { stt: e.target.checked })} /><span>STT paid</span></label></>}
           {r.kind === "buyback" && <label className="itr-field itr-tick"><input type="checkbox" checked={r.listed !== false} onChange={(e) => upd(i, { listed: e.target.checked })} /><span>Listed shares</span></label>}
@@ -166,7 +169,8 @@ function Gains({ X, set, open, tog }) {
         {(land || r.kind === "other" || r.kind === "unlisted") && <Sub k="improve" title="Cost of improvement (from 2001-02)" rows={r.improve} blank={{ fy: "2015", amt: "" }} on={(v) => upd(i, { improve: v })} render={(m, p) => <>
           <Sel label="Year" v={m.fy} opts={FYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ fy: v })} /><Num label="Amount" v={m.amt} on={(v) => p({ amt: v })} /></>} />}
         <Sub k="cgexempt" title="Exemption (54-series)" rows={r.exempt} blank={{ sec: land ? "54" : "54F", amt: "" }} on={(v) => upd(i, { exempt: v })} render={(e, p) => <>
-          <Sel label="Section" v={e.sec} opts={CGEX.map((x) => [x, x])} on={(v) => p({ sec: v })} />{e.sec === "54EC" || !["54", "54B", "54F"].includes(e.sec) ? <Num label={e.sec === "54EC" ? "Amount invested in the bonds" : "Amount"} v={e.amt} on={(v) => p({ amt: v })} /> : null}<Day label="Invested / bought on" v={e.date} on={(v) => p({ date: v })} />{["54", "54B", "54F"].includes(e.sec) && <Num label="Cost of the new house / land" v={e.cost} on={(v) => p({ cost: v })} />}</>} />
+          <Sel label="Section" v={e.sec} opts={CGEX.map((x) => [x, x])} on={(v) => p({ sec: v })} />{e.sec === "54EC" || !["54", "54B", "54F"].includes(e.sec) ? <Num label={e.sec === "54EC" ? "Amount invested in the bonds" : "Amount"} v={e.amt} on={(v) => p({ amt: v })} /> : null}{["54", "54B", "54F"].includes(e.sec) && <Sel label="The new asset" v={e.how || "bought"} opts={[["bought", "Bought"], ["built", "Built"], ["cgas", "Money in the Capital Gains Account Scheme"]]} on={(v) => p({ how: v })} />}
+          <Day label={e.sec === "54EC" ? "Bonds bought on (within 6 months)" : e.how === "cgas" ? "Deposited on (by the return's due date)" : "Bought / built on"} v={e.date} on={(v) => p({ date: v })} />{["54", "54B", "54F"].includes(e.sec) && <Num label="Cost of the new house / land" v={e.cost} on={(v) => p({ cost: v })} />}</>} />
         {land && <Sub k="buyers" title="Buyers" rows={r.buyers} blank={{ name: "", pan: "", share: 100 }} on={(v) => upd(i, { buyers: v })} render={(b, p) => <><Txt label="Buyer" v={b.name} on={(v) => p({ name: v })} /><Txt label="PAN" up v={b.pan} on={(v) => p({ pan: v })} /><Num label="Share %" v={b.share} on={(v) => p({ share: v })} /></>} />}
         {c && <p className="itr-note" data-itr-cg-line={i}>{"Full value " + money(c.fullValue) + (c.fullValue !== c.value ? " (" + (land ? "50C" : "50CA") + ")" : "") + " · cost " + money(c.costUsed) + (c.costUsed !== c.cost ? " (55(2)(ac))" : "") + (c.imp ? " · improvement " + money(c.imp) : "") + " · gain " + money(c.gain) + (c.exemptAmt ? " · exempt " + money(c.exemptAmt) : "")
           + (c.idxGain != null ? " · with indexation " + money(c.idxGain) + proviso(X, c.id) : "")}</p>}
@@ -185,13 +189,14 @@ const LKIND = [["business", "Business loss (72)"], ["hp", "House property loss (
 const LAYS = ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"];
 function Losses({ X, set }) {
   const L = X.state.losses || {}, rows = [];
-  LKIND.forEach(([k]) => (L[k] || []).forEach((x) => rows.push({ kind: k, ay: x.ay, amt: x.amt })));
-  const save = (rs, ud) => { const o = { unabsorbedDep: ud === undefined ? L.unabsorbedDep : ud }; LKIND.forEach(([k]) => { o[k] = rs.filter((x) => x.kind === k).map((x) => ({ ay: x.ay, amt: x.amt })); }); set({ losses: o }); };
+  LKIND.forEach(([k]) => (L[k] || []).forEach((x) => rows.push({ kind: k, ay: x.ay, amt: x.amt, filed: x.filed, inTime: x.inTime })));
+  const save = (rs, ud) => { const o = { unabsorbedDep: ud === undefined ? L.unabsorbedDep : ud }; LKIND.forEach(([k]) => { o[k] = rs.filter((x) => x.kind === k).map((x) => ({ ay: x.ay, amt: x.amt, filed: x.filed, inTime: x.inTime })); }); set({ losses: o }); };
   const C = X.comp, used = (C.key || {});
   const note = "Only losses carried forward in a return filed by its due date (section 80), within eight years. Used this year: house property " + money(used.bfHp || 0) + ", capital " + money((used.bfStcl || 0) + (used.bfLtcl || 0)) + ".";
   return <Card k="losses" title="Losses of earlier years" note={note}>
     <Sub k="bfloss" title="Loss carried forward" rows={rows} blank={{ kind: "hp", ay: "2025", amt: "" }} on={(rs) => save(rs)} render={(x, p) => <>
-      <Sel label="Kind" v={x.kind} opts={LKIND} on={(v) => p({ kind: v })} /><Sel label="Of the year (AY)" v={x.ay} opts={LAYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ ay: v })} /><Num label="Amount left" v={x.amt} on={(v) => p({ amt: v })} /></>} />
+      <Sel label="Kind" v={x.kind} opts={LKIND} on={(v) => p({ kind: v })} /><Sel label="Of the year (AY)" v={x.ay} opts={LAYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ ay: v })} /><Num label="Amount left" v={x.amt} on={(v) => p({ amt: v })} />
+      <Day label="That year's return filed on" v={x.filed} on={(v) => p({ filed: v })} />{x.kind !== "hp" && <Sel label="Filed by its due date (section 80)" v={x.inTime === true ? "y" : x.inTime === false ? "n" : ""} opts={[["", "Choose"], ["y", "Yes"], ["n", "No: the loss is lost"]]} on={(v) => p({ inTime: v === "" ? undefined : v === "y" })} />}</>} />
     {X.model.business && <div className="itr-grid"><Num label="Unabsorbed depreciation brought forward (32(2))" k="bfud" v={L.unabsorbedDep} on={(v) => save(rows, v)} /></div>}
   </Card>;
 }

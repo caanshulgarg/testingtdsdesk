@@ -3,7 +3,7 @@
 // from the computation so a new schema version changes only this file. fill.js completes the JSON (zeros for amounts
 // FinCom does not map; questions for anything else), validate.js checks it against the official schema.
 import { put } from "./fill.js";
-import { salarySchedule, tdsSalary, hpSchedule, cgSchedule, siSchedule, tiCapGain, alSchedule, faSchedule, shSchedule, al6Schedule, bsIndAs, ociIndAs } from "./sched.js";
+import { fit, salarySchedule, tdsSalary, hpSchedule, cgSchedule, siSchedule, tiCapGain, alSchedule, faSchedule, shSchedule, al6Schedule, bsIndAs, ociIndAs } from "./sched.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -153,13 +153,31 @@ function lossSchedules(X, o) {
   // year's unabsorbed depreciation (that part goes to Schedule UD, section 32(2): carried without limit). Earlier years'
   // rows are not mapped: coverage() blocks the JSON when there are any.
   const C = S.carry || {}, cy = (C.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0);
-  if (cy || N(C.hp) || N(C.stcl) || N(C.ltcl)) {
+  // the earlier years' rows: each year's losses as brought forward (within eight years, and not lost under section 80
+  // for a return filed late), with the date that year's return was filed; then what BFLA set off and the balance
+  const Lx = X.model.losses || {}, years = {};
+  const okRow = (x, k) => x && N(x.amt) > 0 && +String(x.ay).slice(0, 4) >= 2018 && +String(x.ay).slice(0, 4) <= 2025 && (k === "hp" || x.inTime !== false);
+  [["business", "bus"], ["hp", "hp"], ["stcl", "stcl"], ["ltcl", "ltcl"]].forEach(([k, f]) => (Lx[k] || []).filter((x) => okRow(x, k)).forEach((x) => {
+    const y = String(x.ay).slice(0, 4), r = years[y] = years[y] || { hp: 0, bus: 0, stcl: 0, ltcl: 0, filed: "" };
+    r[f] += R(x.amt); if (x.filed && (!r.filed || x.filed < r.filed)) r.filed = String(x.filed); }));
+  const keyOf = (y) => (+y === 2018 ? "LossCFFromPrevYrToAY" : +y === 2019 ? "LossCFCurrentAssmntYear" : "LossCFCurrentAssmntYear" + (+y + 1));
+  const busF = (v) => (X.form === "ITR-6" ? { BroughtFrwrdBusLoss: R(v), AmtAdjAccOptTaxUs115BAA_115BA: 0, BroughtFrwdBusLossSetOffDrYr: R(v), LossFrmLifeInsBusUs115B: 0 } : { BrtFwdBusLoss: R(v), AdjustAccTax115BACAmt: 0, AdjustAccTax115BADAmt: 0, BusLossOthThanSpecLossCF: R(v) });
+  const ys = Object.keys(years).filter((y) => years[y].filed);
+  const prior = { hp: 0, bus: 0, stcl: 0, ltcl: 0 };
+  ys.forEach((y) => { const r = years[y]; ["hp", "bus", "stcl", "ltcl"].forEach((k) => { prior[k] += r[k]; });
+    const p = "ScheduleCFL/" + keyOf(y);
+    put(o, p, fit(X, p, { CarryFwdLossDetail: Object.assign({ DateOfFiling: r.filed.slice(0, 4) + "-" + r.filed.slice(4, 6) + "-" + r.filed.slice(6, 8), TotalHPPTILossCF: R(r.hp) }, busF(r.bus), { LossFrmSpecBusCF: 0, LossFrmSpecifiedBusCF: 0, TotalSTCGPTILossCF: R(r.stcl), TotalLTCGPTILossCF: R(r.ltcl), OthSrcLossRaceHorseCF: 0 }) })); });
+  const anyPrior = ys.length > 0;
+  if (cy || N(C.hp) || N(C.stcl) || N(C.ltcl) || anyPrior) {
     const lsd = (hp, bus, stcl, ltcl) => { const d = { TotalHPPTILossCF: R(hp) }; d[X.form === "ITR-6" ? "BroughtFrwdBusLossSetOffDrYr" : "BusLossOthThanSpecLossCF"] = R(bus); d.LossFrmSpecBusCF = 0; d.LossFrmSpecifiedBusCF = 0; if (X.form === "ITR-6") d.LossFrmLifeInsBusUs115B = 0; d.TotalSTCGPTILossCF = R(stcl); d.TotalLTCGPTILossCF = R(ltcl); d.OthSrcLossRaceHorseCF = 0; return { LossSummaryDetail: d }; };
-    put(o, "ScheduleCFL/CurrentAYloss", lsd(C.hp, cy, C.stcl, C.ltcl));
-    if (X.form !== "ITR-3") put(o, "ScheduleCFL/CurrentYearLossCF", lsd(C.hp, cy, C.stcl, C.ltcl));
-    put(o, "ScheduleCFL/TotalOfBFLossesEarlierYrs", lsd(0, 0, 0, 0));
-    put(o, "ScheduleCFL/AdjTotBFLossInBFLA", lsd(N(S.key.bfHp), R(so.bf), N(S.key.bfStcl), N(S.key.bfLtcl)));
-    put(o, "ScheduleCFL/TotalLossCFSummary", lsd(C.hp, cy, C.stcl, C.ltcl));
+    const adj = { hp: N(S.key.bfHp), bus: R(so.bf), stcl: N(S.key.bfStcl), ltcl: N(S.key.bfLtcl) };
+    if (cy || N(C.hp) || N(C.stcl) || N(C.ltcl)) {
+      put(o, "ScheduleCFL/CurrentAYloss", lsd(C.hp, cy, C.stcl, C.ltcl));
+      if (X.form !== "ITR-3") put(o, "ScheduleCFL/CurrentYearLossCF", lsd(C.hp, cy, C.stcl, C.ltcl));
+    }
+    put(o, "ScheduleCFL/TotalOfBFLossesEarlierYrs", lsd(prior.hp, prior.bus, prior.stcl, prior.ltcl));
+    put(o, "ScheduleCFL/AdjTotBFLossInBFLA", lsd(adj.hp, adj.bus, adj.stcl, adj.ltcl));
+    put(o, "ScheduleCFL/TotalLossCFSummary", lsd(prior.hp - adj.hp + N(C.hp), prior.bus - adj.bus + cy, prior.stcl - adj.stcl + N(C.stcl), prior.ltcl - adj.ltcl + N(C.ltcl)));
   }
   // Schedule UD: this year's row (CurBalCFNY: the year's depreciation not absorbed), and the totals (column 5 is the
   // sum of the rows' balances, this year's included: validation rules 626, 628, 629). Earlier years' rows are not
@@ -234,8 +252,9 @@ export function coverage(X, map) {
     if (miss.length) add("cf_unmapped", "Losses carried forward not in the JSON", "This year's " + miss.join(", ") + ": Schedules CFL and UD do not carry it.");
     if (bfLeft && !((M.losses || {}).business || []).length) add("cfl_prior", "Schedule CFL, earlier years", "Earlier years' losses are carried forward: their rows in Schedule CFL are not filled by FinCom yet.");
   }
-  const Lx = M.losses || {}, prior = ["business", "hp", "stcl", "ltcl"].filter((k) => (Lx[k] || []).some((x) => N(x.amt)));
-  if (prior.length) add("cfl_prior", "Schedule CFL, earlier years", "Losses of earlier years (" + prior.map((k) => ({ business: "business", hp: "house property", stcl: "short-term capital", ltcl: "long-term capital" })[k]).join(", ") + ") are set off in the computation, but their rows in Schedule CFL (year, date of filing) are not filled by FinCom yet.");
+  // the earlier years' rows of Schedule CFL need each year's date of filing (and whether it was in time, section 80)
+  const Lx = M.losses || {}, undated = ["business", "hp", "stcl", "ltcl"].filter((k) => (Lx[k] || []).some((x) => N(x.amt) && (!x.filed || (k !== "hp" && x.inTime == null))));
+  if (undated.length) add("cfl_prior", "Schedule CFL, earlier years", "Losses of earlier years (" + undated.map((k) => ({ business: "business", hp: "house property", stcl: "short-term capital", ltcl: "long-term capital" })[k]).join(", ") + "): give the date each year's return was filed and whether it was filed by its due date (section 80), on Schedules.");
   if (f !== "ITR-4" && M.business && N(M.business.itDep) && !((M.business.itBlocks || []).length)) add("dep", "Schedules DPM / DOA (depreciation by block)", "Depreciation under section 32 of " + R(M.business.itDep) + " has no block detail: fill Statements › Fixed assets.");
   if (f !== "ITR-4" && M.business && (M.business.itBlocks || []).length && R((M.business.itBlocks || []).filter((b) => BLOCK_PATH[b.key]).reduce((a, b) => a + N(b.dep), 0)) !== R(M.business.itDep)) add("dep_sum", "Schedules DPM / DOA add up", "The blocks' depreciation does not add up to the depreciation claimed.");
   if (M.audit && f !== "ITR-4" && !(P.auditor && P.auditor.firm && P.auditor.reportDate && P.auditor.ack)) add("audit_info", "Audit report details", "A tax audit applies: give the auditor's firm, PAN, the date of the report and its acknowledgement number on Data.");

@@ -338,9 +338,11 @@ To confirm:
     differ; run one through it.
 15. **The order of set-off** (settled by the review): across heads, the normal-rate heads first (a house property loss
     against salary first; a business loss and unabsorbed depreciation never against salary), then 111A (20%), 112, 112A.
-    Within capital gains: the long-term loss first (112, then 112A), the short-term loss against normal-rate gains, 111A,
-    112, 112A. **To confirm:** for a person on a slab rate below 20%, a short-term loss against 111A before normal-rate
-    gains would save more; FinCom does not choose by the slab.
+    Within capital gains (settled by the re-review of 23ee460d1): gains and losses net within Table E's categories (20%,
+    applicable rates, 12.5%); a long-term loss goes on 112 while it still saves tax there (a covered property up to its
+    indexed gain), then on 112A above its Rs 1.25 lakh exemption, then the rest; a short-term loss is set off both ways
+    (the other short-term category first, or the 12.5% gains first) and the order with the lower tax liability kept, in
+    both computations. **To confirm:** the slots ignore what the basic exemption or other heads' losses later take off.
 16. **234C proviso (a).** Applied only when the advance tax paid after an instalment date (up to 31 March) covers the extra
     tax from the capital gains that accrued after it; the proviso for dividends is not applied yet.
 17. **ITR-3's Schedule AL is "other than those included in Part A-BS"**: FinCom asks when an AL figure equals the
@@ -365,8 +367,16 @@ To confirm:
     (71B) and capital (74) losses entered and set off within eight years (their Schedule CFL rows still block the JSON);
     Ind AS: preference share capital a financial liability unless said to be irredeemable (Ind AS 32), asked.
 24. **To confirm:** a listed share bought back through the exchange is treated as STT-paid (its loss in the 20% / 112A
-    columns); 54F needs the new house's cost (asked when only an amount is given); the 54EC limit is given to the sales
-    in the order they are entered.
+    columns); 54F needs the new house's cost (asked when only an amount is given).
+25. **From the re-review of 23ee460d1, built:** each 54EC claim sits on the sale it relates to, and the Rs 50 lakh is
+    shared where it saves the most (a covered property up to its indexed gain first), never by entry order; the dates
+    checked: 54EC bonds within six months after the sale, 54 / 54F a house bought a year before to two years after or
+    built within three years, 54B land within two years, or the Capital Gains Account Scheme deposit by the due date of
+    139(1) (a claim without its date is asked); 54B only for land ticked as farmed for two years, and agricultural land
+    asked whether it is urban (rural land is not a capital asset); 194IA's Rs 50 lakh on the whole property's price;
+    the second computation's 80CCD(2) from its own salary rows; Schedule CFL's earlier-year rows filled (date of filing,
+    and a loss of a year filed late is not carried, section 80), so CFL no longer blocks once each year's date is given.
+    `ITR_LIB=<dir> node tests/run_itr_law.mjs` runs the hand-worked cases against an older copy of the library.
 22. **An unlisted company with no AL-1 asset**: asked with a note (`al6_none`), the JSON then carries no AL-1. Confirm.
 
 ## 8. Tests

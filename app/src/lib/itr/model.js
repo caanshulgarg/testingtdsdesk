@@ -1,7 +1,7 @@
 // The return model: what the two computations take (tax.js, check.js), put together from the books (books.js), the
 // files brought in (imports.js) and the owner's answers (b.itr "<ay>|state"). Pure. Every figure says where it came
 // from; what is not known stays empty and the checks say so.
-import { FORM_OF } from "./law.js";
+import { FORM_OF, DUE } from "./law.js";
 import { pf36va, settle36va, settle43B, settleMsme, adjustments } from "./books.js";
 import { salaryHead, houseHead, capitalGains } from "./heads.js";
 
@@ -108,7 +108,7 @@ export function buildModel(c) {
 // the sales; check.js works each again from the same rows (salaryRows, houseRows, cgRows). M: the model so far (regime,
 // entity, resident, os); st: the owner's answers
 export function headsInto(M, st) {
-  const entity = M.entity, hctx = { regime: M.regime, entity, resident: M.resident !== false };
+  const entity = M.entity, hctx = { regime: M.regime, entity, resident: M.resident !== false, due: M.tp ? DUE.tp : M.audit || entity === "C" ? DUE.audit : DUE.nonAudit };
   M.os = M.os || {};
   if (Array.isArray(st.salaries) && st.salaries.length && (entity === "P")) {
     const sh = salaryHead(st.salaries, hctx);
@@ -122,7 +122,7 @@ export function headsInto(M, st) {
   if (Array.isArray(st.cgRows) && st.cgRows.length) {
     const g = capitalGains(st.cgRows, hctx);
     M.cgRows = st.cgRows; M.cgHead = g;
-    M.cg = { s111A: g.s111A, s112A: g.s112A, s112: g.s112, other: g.stApp, cfStcl: g.cfStcl, cfLtcl: g.cfLtcl, at: g.at, pool112: g.pool112, poolAt: g.poolAt };
+    M.cg = { s111A: g.s111A, s112A: g.s112A, s112: g.s112, other: g.stApp, cfStcl: g.cfStcl, cfLtcl: g.cfLtcl, at: g.at, pool112: g.pool112, poolAt: g.poolAt, alt: g.alt };
     // a buy-back's money is dividend (2(22)(f)): other sources
     if (g.buybackDividend) M.os.buyback = g.buybackDividend;
     const a = g.rows.filter((x) => x.bucket === "s112A");

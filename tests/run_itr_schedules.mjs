@@ -195,6 +195,23 @@ eq(R3.doc.ScheduleCFL.CurrentAYloss.LossSummaryDetail.TotalLTCGPTILossCF, 300000
 R3 = await run("ITR-3", { regime: "new", cgRows: [{ id: "l3", kind: "other", desc: "DEMO GOLD", acq: "20190101", sale: "20251001", value: 100000, cost: 400000 }], filingDate: "20261125" }, "the same loss, a belated return");
 eq(R3.comp.carry.ltcl, 0, "section 80: no capital loss carried forward from a belated return");
 
+// earlier years' losses in Schedule CFL (each year's row with its date of filing) and BFLA: the house property loss of
+// AY 2023-24 1,50,000 against this year's house income 93,600 (71B), 56,400 left; the short-term loss of AY 2024-25
+// 50,000 against the 111A gain 60,000 (74), nil left
+R3 = await run("ITR-3", { regime: "new", houses: [let1], cgRows: [rows[1]], losses: { hp: [{ ay: "2023", amt: 150000, filed: "20230725", inTime: true }], stcl: [{ ay: "2024", amt: 50000, filed: "20240728", inTime: true }] } }, "losses of earlier years in Schedule CFL");
+const cfl = R3.doc.ScheduleCFL || {};
+eq(((cfl.LossCFCurrentAssmntYear2024 || {}).CarryFwdLossDetail || {}).TotalHPPTILossCF, 150000, "Schedule CFL, AY 2023-24: the house property loss brought forward");
+eq(((cfl.LossCFCurrentAssmntYear2024 || {}).CarryFwdLossDetail || {}).DateOfFiling, "2023-07-25", "Schedule CFL, AY 2023-24: its return's date of filing");
+eq(((cfl.LossCFCurrentAssmntYear2025 || {}).CarryFwdLossDetail || {}).TotalSTCGPTILossCF, 50000, "Schedule CFL, AY 2024-25: the short-term capital loss");
+eq(((cfl.AdjTotBFLossInBFLA || {}).LossSummaryDetail || {}).TotalHPPTILossCF, 93600, "Schedule CFL: house property loss set off this year 93,600");
+eq(((cfl.TotalLossCFSummary || {}).LossSummaryDetail || {}).TotalHPPTILossCF, 56400, "Schedule CFL: 56,400 carried on");
+eq(((cfl.TotalLossCFSummary || {}).LossSummaryDetail || {}).TotalSTCGPTILossCF, 0, "Schedule CFL: no short-term loss left");
+eq(R3.doc.ScheduleBFLA.HP.IncBFLA.BFlossPrevYrUndSameHeadSetoff, 93600, "Schedule BFLA: house property");
+eq(R3.doc.ScheduleBFLA.STCG20Per.IncBFLA.BFlossPrevYrUndSameHeadSetoff, 50000, "Schedule BFLA: 111A");
+ok(!R3.json.coverage.some((x) => x.key === "cfl_prior"), "earlier years' rows filled with their dates: Schedule CFL no longer blocks");
+R3 = await run("ITR-3", { regime: "new", houses: [let1], losses: { hp: [{ ay: "2023", amt: 150000 }] } }, "an earlier loss without its date of filing");
+ok(R3.json.coverage.some((x) => x.key === "cfl_prior"), "without the date of filing: asked (blocks)");
+
 // 234C, proviso (a): a gain of March is not a shortfall of the June instalment when its tax is paid by 31 March
 const march = [{ id: "z", kind: "eq", desc: "DEMO LATE SALE", acq: "20200101", sale: "20260310", value: 5000000, cost: 1000000 }];
 const payMarch = (m) => { m.paid.advance.push({ bsr: "0000001", date: "20260315", serial: "9", amt: 600000 }); };
@@ -300,22 +317,23 @@ const rnd = (a, b) => a + Math.floor(rand() * (b - a + 1));
 let firstBad = null;
 const kinds = ["eq", "eq", "land", "unlisted", "mf50AA", "other", "bond", "buyback"];
 const D3 = await demo("ITR-3"), files3 = Object.entries(D3.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v));
-for (let i = 0; i < 300; i++) {
+for (let i = 0; i < 400; i++) {
   const cgr = Array.from({ length: rnd(0, 4) }, (_, j) => { const k = kinds[rnd(0, kinds.length - 1)], y = rnd(2000, 2025), m = rnd(1, 12); const acq = String(y) + String(m).padStart(2, "0") + "15";
     const sale = "2025" + String(rnd(4, 12)).padStart(2, "0") + String(rnd(1, 28)).padStart(2, "0");
     return { id: "r" + j, kind: k, listed: true, acq: acq > sale ? "20200101" : acq, sale, value: rnd(0, 9000000), cost: rnd(0, 6000000), sdv: k === "land" ? rnd(0, 9000000) : 0, fmv2018: rnd(0, 3) ? rnd(0, 5000000) : 0, expenses: rnd(0, 50000), improve: k === "land" && rnd(0, 1) ? [{ fy: String(rnd(2001, 2024)), amt: rnd(0, 900000) }] : [],
       residential: k === "land" && !!rnd(0, 1), fmv2001: rnd(0, 2) ? undefined : rnd(0, 3000000), sdv2001: rnd(0, 1) ? rnd(0, 3000000) : undefined,
-      exempt: rnd(0, 2) ? [] : [{ sec: ["54", "54EC", "54F", "54B"][rnd(0, 3)], amt: rnd(0, 6000000), cost: rnd(0, 1) ? rnd(0, 9000000) : undefined }] }; });
+      agri: !!rnd(0, 1), agriUrban: !!rnd(0, 1), totalConsid: rnd(0, 1) ? rnd(0, 9000000) : undefined,
+      exempt: rnd(0, 2) ? [] : [{ sec: ["54", "54EC", "54F", "54B"][rnd(0, 3)], amt: rnd(0, 6000000), cost: rnd(0, 1) ? rnd(0, 9000000) : undefined, how: ["bought", "built", "cgas"][rnd(0, 2)], date: rnd(0, 3) ? "20" + String(rnd(23, 28)) + String(rnd(1, 12)).padStart(2, "0") + "15" : undefined }] }; });
   const hs = Array.from({ length: rnd(0, 3) }, () => ({ kind: ["L", "S", "D"][rnd(0, 2)], share: [100, 50][rnd(0, 1)], rent: rnd(0, 900000), muniTax: rnd(0, 30000), unrealised: rnd(0, 1) ? rnd(0, 50000) : 0, arrears: rnd(0, 3) ? 0 : rnd(0, 100000), loans: rnd(0, 1) ? [{ bank: "B", account: "1", date: "20200101", total: 1, outstanding: 1, interest: rnd(0, 400000) }] : [], oldLoan: !rnd(0, 3), preConst: rnd(0, 3) ? 0 : rnd(0, 300000) }));
   const sal = rnd(0, 1) ? [{ employer: "E", nature: ["OTH", "CGOV"][rnd(0, 1)], s171: rnd(0, 3000000), s172: rnd(0, 200000), s173: rnd(0, 100000), basicDa: rnd(0, 1500000), ptax: rnd(0, 2500), ent: rnd(0, 6000), exempt: [{ sec: ["10(5)", "10(10)", "10(10AA)", "10(13A)"][rnd(0, 3)], amt: rnd(0, 400000) }], hra: rnd(0, 1) ? { metro: !!rnd(0, 1), received: rnd(0, 300000), rent: rnd(0, 400000) } : null }] : [];
   const stR = Object.assign({}, D3.booksObj.itr["2026|state"], { regime: ["new", "old"][rnd(0, 1)], form10iea: "X", cgRows: cgr, houses: hs, salaries: sal, filingDate: ["20260720", "20261125", "20260301"][rnd(0, 2)], resident: rnd(0, 5) > 0 });
   const m = buildModel({ entity: "P", client: D3.client, imports: importsOf(files3), books: D3.books, state: stR });
   if (rnd(0, 2) === 0) m.business = Object.assign({}, m.business, { pbt: rnd(-3000000, 3000000) });
-  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000) }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000) }] };
+  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000), inTime: !!rnd(0, 3) }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000), inTime: !!rnd(0, 3) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000), inTime: !!rnd(0, 3) }], business: rnd(0, 1) ? [{ ay: "2022", amt: rnd(0, 900000), inTime: !!rnd(0, 3) }] : [] };
   const dd2 = differences(compute(m).key, check(m));
   if (!dd2.length) agree++; else if (!firstBad) firstBad = { i, dd: dd2.slice(0, 4), cgr, hs, sal, regime: stR.regime, losses: m.losses };
 }
-eq(agree, 300, "300 random returns with salary, houses and capital gains: both computations agree on every figure" + (firstBad ? ": the first that differs: " + JSON.stringify(firstBad) : ""));
+eq(agree, 400, "400 random returns with salary, houses and capital gains: both computations agree on every figure" + (firstBad ? ": the first that differs: " + JSON.stringify(firstBad) : ""));
 
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

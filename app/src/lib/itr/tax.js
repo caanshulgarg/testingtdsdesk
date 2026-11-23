@@ -84,8 +84,20 @@ export function partners40b(partners, pgbpBeforeRem) {
 }
 
 // ---------------- the heads, the set-off, the total income ----------------
+// a short-term capital loss can go against the other short-term gains or the 12.5% gains first (heads.js bucketsOf):
+// which saves more depends on the slab, so both are worked and the lower tax liability kept (S.cgAlt: the second order)
 export function compute(inp) {
   inp = inp || {};
+  const alt = inp.cg && inp.cg.alt;
+  if (!alt) return computeOne(inp);
+  const a = computeOne(Object.assign({}, inp, { cg: Object.assign({}, inp.cg, { alt: null }) }));
+  const b = computeOne(Object.assign({}, inp, { cg: Object.assign({}, inp.cg, { s111A: alt.s111A, s112A: alt.s112A, s112: alt.s112, other: alt.stApp, cfStcl: alt.cfStcl, cfLtcl: alt.cfLtcl, at: alt.at, alt: null }) }));
+  const pickB = b.liability < a.liability;
+  const S = pickB ? b : a;
+  S.cgAlt = pickB; S.cgOther = pickB ? a.liability : b.liability;
+  return S;
+}
+function computeOne(inp) {
   const S = { lines: [], needs: [], warn: [], entity: inp.entity, form: inp.form, regime: inp.regime };
   const line = (key, label, amt, o) => { const l = Object.assign({ key, label, amt: R(amt) }, o || {}); S.lines.push(l); return l.amt; };
   const ent = inp.entity, ind = ent === "P" || ent === "H", firm = ent === "F" || ent === "A" || ent === "B", co = ent === "C";
@@ -167,6 +179,9 @@ export function compute(inp) {
   const bfOf = (list, heads, by) => { let used = 0; const left = [];
     (list || []).slice().sort((a, b) => String(a.ay).localeCompare(String(b.ay))).forEach((x) => {
       if (+String(L.AY_START) - +String(x.ay).slice(0, 4) > L.LOSS.bizCarry) { left.push(Object.assign({}, x, { lapsed: true })); return; }
+      // section 80: a business or capital loss is carried forward only from a return filed by its due date (a house
+      // property loss, 71B, is not under section 80)
+      if (x.inTime === false && heads[0] !== "hp") { left.push(Object.assign({}, x, { lapsed: true, s80: true })); return; }
       let a = pos(x.amt);
       for (const k of heads) { if (a <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], a); h[k] -= u; a -= u; used += u; if (by) by[k] = (by[k] || 0) + u; } }
       if (a > 0) left.push({ ay: x.ay, amt: R(a) });

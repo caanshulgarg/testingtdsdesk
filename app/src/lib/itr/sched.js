@@ -6,7 +6,7 @@
 // and the tests check every form's figures (tests/run_itr_schedules.mjs). Nothing here makes up a non-amount field:
 // an address, a name or a choice not given is left out, and fill.js asks for it.
 import { put } from "./fill.js";
-import { CII, fyOf } from "./heads.js";
+import { CII, fyOf, cgAsChosen } from "./heads.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -186,7 +186,7 @@ function quarters(at, key, before, after) {
   return o;
 }
 export function cgSchedule(X, o) {
-  const M = X.model, g = M.cgHead, S = X.comp;
+  const M = X.model, S = X.comp, g = cgAsChosen(M.cgHead, S);
   if (!g || !g.rows.length) return;
   const f3 = X.form === "ITR-3", CG = f3 ? "ScheduleCGFor23" : "ScheduleCG", STk = f3 ? "ShortTermCapGainFor23" : "ShortTermCapGain", LTk = f3 ? "LongTermCapGain23" : "LongTermCapGain";
   const ST = CG + "/" + STk, LT = CG + "/" + LTk, rs = g.rows;

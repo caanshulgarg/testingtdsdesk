@@ -120,7 +120,7 @@ export function houseHead(props, ctx) {
 export const CII = { 2001: 100, 2002: 105, 2003: 109, 2004: 113, 2005: 117, 2006: 122, 2007: 129, 2008: 137, 2009: 148, 2010: 167, 2011: 184, 2012: 200, 2013: 220, 2014: 240,
   2015: 254, 2016: 264, 2017: 272, 2018: 280, 2019: 289, 2020: 301, 2021: 317, 2022: 331, 2023: 348, 2024: 363, 2025: 376 };
 export const CG_LAW = {
-  rates: { s111A: 0.2, s112A: 0.125, s112: 0.125, idx: 0.2 }, exempt112A: 125000, fyStart: "20250401", fyEnd: "20260331", cut: "20240723", gf: "20180201", y2001: "20010401", sdvTol: 1.1, s54EC: 5000000, s54cap: 100000000,
+  rates: { s111A: 0.2, s112A: 0.125, s112: 0.125, idx: 0.2 }, exempt112A: 125000, due: "20260831", fyStart: "20250401", fyEnd: "20260331", cut: "20240723", gf: "20180201", y2001: "20010401", sdvTol: 1.1, s54EC: 5000000, s54cap: 100000000,
   dates: ["20250615", "20250915", "20251215", "20260315", "20260331"],
   src: "Sections 2(42A) (long-term: more than 12 months for listed securities and equity fund units, 24 months for the rest, transfers from 23-07-2024), 45, 48 (no indexation from 23-07-2024), 49, 50AA (specified mutual funds, market-linked and unlisted debentures: short-term), 50C (stamp duty value above 110%), 50CA, 55(2)(ac) (cost of equity bought before 1-02-2018: FMV on 31-01-2018), 55(2)(b) (FMV on 1-04-2001), 46A and 2(22)(f) (buy-back from 1-10-2024: the money is dividend, the cost a capital loss), 54 / 54B / 54EC (Rs 50 lakh) / 54F (Rs 10 crore), 70(2)-(3), 74, 111A (20%), 112 (12.5%; proviso to 112(1)(a): for land or building bought before 23-07-2024 by a resident individual or HUF, the tax above 20% with indexation is ignored), 112A (12.5% above Rs 1.25 lakh)",
 };
@@ -155,11 +155,23 @@ function exemptOn(G, claims, netCons) {
   });
   return tot;
 }
-// which claims the law lets this row have: 54 a residential house sold; 54B agricultural land; 54EC land or building
-// (first proviso to 54EC(1): Rs 50 lakh in all in a year, ec.left); 54F any long-term asset other than a residential
-// house; 54 / 54B / 54F only for an individual or HUF; the new house's cost at most Rs 10 crore (54(1), 54F(1) provisos)
+// which claims the law lets this row have: 54 a residential house sold; 54B agricultural land used for agriculture for
+// two years; 54EC land or building, the bonds bought within six months of the sale (Rs 50 lakh in all in a year: ec, below);
+// 54F any long-term asset other than a residential house; 54 / 54B / 54F only for an individual or HUF; the new house's
+// cost at most Rs 10 crore (54(1), 54F(1) provisos); the new asset bought within its window (54 / 54F: a year before or
+// two years after; built within three years; 54B: two years after) or the money deposited in the Capital Gains Account
+// Scheme by the due date of 139(1) (54(2), 54B(2), 54F(4)). ec: {want} on the first pass (what 54EC each sale could
+// take), {alloc} on the second (the 50 lakh as shared out by capitalGains)
+function windowOk(sec, e, sale, ctx) {
+  const d = String(e.date || ""), how = e.how || "bought", due = ctx.due || CG_LAW.due;
+  if (!d || !sale) return true;
+  if (how === "cgas") return d <= due;
+  if (how === "built") return d >= sale && d <= addMonths(sale, 36);
+  if (sec === "54B") return d >= sale && d <= addMonths(sale, 24);
+  return d >= addMonths(sale, -12) && d <= addMonths(sale, 24);
+}
 function allowedClaims(r, kind, lt, ctx, ec, warn, needs, G) {
-  const who = r.desc || "a sale", out = [];
+  const who = r.desc || "a sale", out = [], sale = String(r.sale || "");
   (r.exempt || []).forEach((e, j) => {
     const sec = String(e.sec || ""), amt = R(e.amt), cost0 = e.cost != null && e.cost !== "" ? R(e.cost) : null;
     const no = (why) => { warn.push({ key: "cg_ex_" + sec + "_" + r.id + "_" + j, text: "Section " + sec + " " + why + ": left out for " + who + "." }); };
@@ -168,14 +180,19 @@ function allowedClaims(r, kind, lt, ctx, ec, warn, needs, G) {
     if (sec === "54" && !(kind === "land" && r.residential)) return no("is for the sale of a residential house (mark the sale as a residential house if it is one)");
     if (sec === "54F" && kind === "land" && r.residential) return no("is for an asset other than a residential house (section 54 is for a house)");
     if (sec === "54B" && kind !== "land") return no("is for agricultural land");
+    if (sec === "54B" && !r.agri) return no("is for agricultural land used for agriculture by the person or a parent in the two years before the sale (tick it on the sale if it was)");
     if (sec === "54EC" && kind !== "land") return no("is for land or building only");
     if (sec === "54EC") {
-      const want = Math.min(amt, pos(G));
-      const a = Math.min(want, ec.left); ec.left -= a;
-      if (a < want) warn.push({ key: "cg_54ec_" + r.id, text: "Section 54EC: at most Rs 50 lakh in all in a year (first proviso to 54EC(1)); " + (want - a) + " for " + who + " is not allowed." });
+      const d = String(e.date || "");
+      if (!d) needs.push({ key: "cg_54ec_date_" + r.id + "_" + j, text: who + ": give the date the 54EC bonds were bought (within six months of the sale)." });
+      else if (d < sale || d > addMonths(sale, 6)) return no("needs the bonds bought within six months after the sale (bought " + d.slice(6, 8) + "-" + d.slice(4, 6) + "-" + d.slice(0, 4) + ")");
+      if (ec.alloc == null) { ec.want[r.id] = (ec.want[r.id] || 0) + amt; return; }
+      const a = Math.min(amt, ec.alloc[r.id] || 0); ec.alloc[r.id] = (ec.alloc[r.id] || 0) - a;
       return out.push({ sec, amt: a });
     }
     if (sec === "54" || sec === "54F" || sec === "54B") {
+      if (!e.date) needs.push({ key: "cg_" + sec + "_date_" + r.id + "_" + j, text: who + ": give the date the new " + (sec === "54B" ? "land" : "house") + " was bought or built, or the money deposited in the Capital Gains Account Scheme (section " + sec + ")." });
+      else if (!windowOk(sec, e, sale, ctx)) return no(e.how === "cgas" ? "needs the money deposited in the Capital Gains Account Scheme by the due date of the return (139(1))" : sec === "54B" ? "needs the new land bought within two years after the sale" : e.how === "built" ? "needs the house built within three years after the sale" : "needs the house bought within a year before or two years after the sale");
       let cost = cost0 != null ? cost0 : sec === "54F" ? null : amt;
       if (cost == null) { needs.push({ key: "cg_54f_cost_" + r.id, text: who + ": give the cost of the new house for section 54F (the exemption is the gain x the cost / the net consideration)." }); cost = 0; }
       if (sec !== "54B" && cost > CG_LAW.s54cap) { warn.push({ key: "cg_54cap_" + r.id, text: "Section " + sec + ": the new house's cost above Rs 10 crore is not counted." }); cost = CG_LAW.s54cap; }
@@ -186,6 +203,7 @@ function allowedClaims(r, kind, lt, ctx, ec, warn, needs, G) {
   return out;
 }
 function rowGain(r, ctx, warn, needs, ec) {
+  ec = ec || { want: {} };
   const kind = r.kind || "other", acq = String(r.acq || ""), sale = String(r.sale || ""), lt = longTerm(kind, acq, sale, r), who = r.desc || "A sale";
   if (!sale) needs.push({ key: "cg_nosale_" + r.id, text: who + ": give the date of sale (it decides the holding period, the rate and the instalment of 234C)." });
   else if (sale < CG_LAW.fyStart || sale > CG_LAW.fyEnd) needs.push({ key: "cg_saledate_" + r.id, text: who + ": the date of sale must be within 1-04-2025 to 31-03-2026 (the previous year)." });
@@ -213,6 +231,8 @@ function rowGain(r, ctx, warn, needs, ec) {
   const imp = R(sum(imps.filter((x) => +x.fy >= 2001), (x) => x.amt)), exp = R(r.expenses);
   const gain = fullValue - costUsed - imp - exp, netCons = fullValue - exp;
   const bucket = kind === "mf50AA" ? "stApp" : !lt ? (stt ? "s111A" : "stApp") : stt ? "s112A" : "s112";
+  // agricultural land in a rural area is not a capital asset (2(14)(iii)): asked
+  if (kind === "land" && r.agri && r.agriUrban !== true) needs.push({ key: "cg_rural_" + r.id, text: who + ": agricultural land: is it within the limits of a municipality or the distance from one in 2(14)(iii)? Rural agricultural land is not a capital asset and its sale is not taxed; say it is urban to keep it here." });
   const claims = allowedClaims(r, kind, lt, ctx, ec, warn, needs, gain);
   const exemptAmt = exemptOn(gain, claims, netCons), net = gain - exemptAmt;
   // the proviso to 112(1)(a): land or building bought before 23-07-2024 by a resident individual or HUF: the gain with
@@ -225,36 +245,73 @@ function rowGain(r, ctx, warn, needs, ec) {
     idxGain = fullValue - idxCost - idxImp - exp;
     idxNet = idxGain - exemptOn(idxGain, claims, netCons);
   }
-  return { id: r.id, kind, desc: r.desc || "", acq, sale, lt, value, sdv, fullValue, cost, costUsed, imp, exp, gain, exemptAmt, net, bucket, stt, idxGain, idxNet, idxCost, idxImp, exempt: r.exempt || [], claims, residential: !!r.residential, src: r.src || "entered" };
+  return { id: r.id, kind, desc: r.desc || "", acq, sale, lt, value, sdv, totalConsid: R(r.totalConsid) || null, fullValue, cost, costUsed, imp, exp, gain, exemptAmt, net, bucket, stt, idxGain, idxNet, idxCost, idxImp, exempt: r.exempt || [], claims, residential: !!r.residential, src: r.src || "entered" };
 }
-// the head from the rows: set-off within the head (70(2): a short-term loss against any gain; 70(3): a long-term loss
-// against long-term gains only); the long-term loss is set off first, so the short-term loss, which goes further, is
-// kept for next years if anything is left; short-term loss against the normal-rate gains, then 111A, 112, 112A
-function bucketsOf(rs) {
-  const b = { stApp: 0, s111A: 0, s112: 0, s112A: 0 }, off = {};
-  rs.forEach((x) => { b[x.bucket] += x.net; });
-  const use = (from, to) => { const l = -b[from]; if (l <= 0 || b[to] <= 0) return; const u = Math.min(l, b[to]); b[from] += u; b[to] -= u; off[from + ">" + to] = (off[from + ">" + to] || 0) + u; };
-  for (const f of LT) for (const t of LT) if (f !== t) use(f, t);
-  for (const f of ST) for (const t of ["stApp", "s111A", "s112", "s112A"]) if (f !== t) use(f, t);
-  const cfStcl = R(sum(ST, (k) => pos(-b[k]))), cfLtcl = R(sum(LT, (k) => pos(-b[k])));
-  Object.keys(b).forEach((k) => { b[k] = R(pos(b[k])); });
-  return { b, off, cfStcl, cfLtcl };
+// the head from the rows: set-off within the head. Table E's categories: 20% (111A), the applicable rates, 12.5% (112 and
+// 112A together); within a category gains and losses net (the form's own lines). A category's net loss then goes: a
+// long-term loss only against the 12.5% gains (70(3)), a short-term loss against any (70(2)). Within the 12.5% category
+// the loss goes where it saves the most: on 112 up to what is still taxed there (a covered property up to its indexed
+// gain, the other 112 gains; tax.js tax112), then on 112A above its Rs 1.25 lakh exemption, then the rest of 112, then
+// 112A's exempt part (the review of 23ee460d1). A short-term loss: order "A" the other short-term category first, then
+// the 12.5% gains; "B" the 12.5% gains first. Which saves more depends on the slab: tax.js works both and keeps the lower
+function bucketsOf(rs, order) {
+  const off = {}, put = (k, v) => { off[k] = (off[k] || 0) + v; };
+  let a = 0, o = 0;
+  rs.forEach((x) => { if (x.bucket === "s111A") a += x.net; else if (x.bucket === "stApp") o += x.net; });
+  const g112 = rs.filter((x) => x.bucket === "s112" && x.net > 0), g112A = rs.filter((x) => x.bucket === "s112A" && x.net > 0);
+  let c112 = sum(g112, (x) => x.net), c112A = sum(g112A, (x) => x.net), r112 = 0;
+  const U = sum(g112, (x) => (x.idxNet != null ? Math.min(pos(x.idxNet), x.net) : x.net));
+  const toLT = (loss, from) => {
+    const take = (k, cap) => { const u = Math.min(loss, Math.max(0, cap)); if (u <= 0) return; loss -= u; if (k === "s112") { c112 -= u; r112 += u; } else c112A -= u; put(from + ">" + k, u); };
+    take("s112", Math.min(c112, U - r112)); take("s112A", c112A - CG_LAW.exempt112A); take("s112", c112); take("s112A", c112A);
+    return loss;
+  };
+  const ltLoss = toLT(sum(rs.filter((x) => (x.bucket === "s112" || x.bucket === "s112A") && x.net < 0), (x) => -x.net), "lt");
+  let la = Math.max(0, -a), lo = Math.max(0, -o); a = Math.max(0, a); o = Math.max(0, o);
+  const toST = (loss, from) => { const u = Math.min(loss, from === "stApp" ? a : o); if (u <= 0) return loss; if (from === "stApp") a -= u; else o -= u; put(from + ">" + (from === "stApp" ? "s111A" : "stApp"), u); return loss - u; };
+  const st = (loss, from) => (order === "B" ? toST(toLT(loss, from), from) : toLT(toST(loss, from), from));
+  lo = st(lo, "stApp"); la = st(la, "s111A");
+  return { b: { stApp: R(o), s111A: R(a), s112: R(c112), s112A: R(c112A) }, off, cfStcl: R(la + lo), cfLtcl: R(ltLoss) };
 }
 // the gains taxed under 112 before any set-off, row by row, for the proviso to 112(1)(a) (tax.js tax112): the gain
 // without indexation and, for a property the proviso covers, with it
 const poolOf = (rs) => rs.filter((x) => x.bucket === "s112" && x.net > 0).map((x) => ({ id: x.id, gain: R(x.net), idx: x.idxNet == null ? null : R(x.idxNet), elig: x.idxNet != null }));
-// rows: [{id, kind, desc, acq, sale, value, sdv, cost, improve: [{fy, amt}], expenses, fmv2018, fmv2001, sdv2001, stt, listed, residential, exempt: [{sec, amt, cost, date}], buyers, addr, isin, qty, inBooks}]
-// ctx: {entity, resident}
+// the Rs 50 lakh of 54EC shared among the sales that claim it (first proviso to 54EC(1)), where it saves the most tax:
+// a property the proviso to 112(1)(a) covers up to its indexed gain first (each rupee there saves 20% or at least
+// 12.5%), then the other sales, then what is left of the covered ones; never by the order the sales were entered
+function share54EC(first, want) {
+  let left = CG_LAW.s54EC; const alloc = {}, give = (x, cap) => { const u = Math.min(left, Math.max(0, cap)); if (u > 0) { alloc[x.id] = (alloc[x.id] || 0) + u; left -= u; } };
+  const ws = first.filter((x) => want[x.id] > 0).map((x) => ({ id: x.id, w: Math.min(want[x.id], pos(x.net)), i: x.idxNet == null ? null : pos(x.idxNet) }));
+  ws.filter((x) => x.i != null).forEach((x) => give(x, Math.min(x.w, x.i)));
+  ws.filter((x) => x.i == null).forEach((x) => give(x, x.w));
+  ws.filter((x) => x.i != null).forEach((x) => give(x, x.w - (alloc[x.id] || 0)));
+  return alloc;
+}
+// rows: [{id, kind, desc, acq, sale, value, sdv, totalConsid, cost, improve: [{fy, amt}], expenses, fmv2018, fmv2001, sdv2001, stt, listed, residential, agri, agriUrban, exempt: [{sec, amt, cost, date, how}], buyers, addr, isin, qty, inBooks}]
+// ctx: {entity, resident, due}
 export function capitalGains(rows, ctx) {
   ctx = ctx || {};
-  const warn = [], needs = [], ec = { left: CG_LAW.s54EC };
-  const rs = (rows || []).map((r, i) => rowGain(Object.assign({ id: r.id || "cg" + i }, r), ctx, warn, needs, ec));
-  const k = bucketsOf(rs);
+  const rows1 = (rows || []).map((r, i) => Object.assign({ id: r.id || "cg" + i }, r));
+  // first pass: each sale without 54EC, and what 54EC it claims; then the 50 lakh shared; then the sales again
+  const want = {}, first = rows1.map((r) => rowGain(r, ctx, [], [], { want }));
+  const alloc = share54EC(first, want), given = Object.assign({}, alloc);
+  const warn = [], needs = [];
+  const rs = rows1.map((r) => rowGain(r, ctx, warn, needs, { alloc }));
+  const wanted = R(sum(first, (x) => Math.min(want[x.id] || 0, pos(x.net)))), got = R(sum(Object.values(given)));
+  if (got < wanted) warn.push({ key: "cg_54ec_cap", text: "Section 54EC: " + wanted + " claimed on the sales' gains, at most Rs 50 lakh in all in a year (first proviso to 54EC(1)); " + got + " allowed, shared where it saves the most tax." });
+  const k = bucketsOf(rs, "A"), kB = bucketsOf(rs, "B");
   // what had accrued by each instalment date of 234C (the proviso to 234C: a capital gain is not an earlier shortfall)
-  const at = {}, poolAt = {}, run = { stApp: 0, s111A: 0, s112: 0, s112A: 0 };
-  CG_LAW.dates.forEach((d) => { const upto = rs.filter((x) => x.sale && x.sale <= d), q = bucketsOf(upto).b; const o = {}; Object.keys(run).forEach((key) => { run[key] = Math.min(k.b[key], Math.max(run[key], q[key])); o[key] = run[key]; }); at[d] = o; poolAt[d] = poolOf(upto); });
-  rs.forEach((x) => { if (x.kind === "eq" && x.lt && x.acq < CG_LAW.gf && !(N((rows.find((r) => (r.id || "") === x.id) || {}).fmv2018) > 0)) warn.push({ key: "cg_fmv_" + x.id, text: (x.desc || "An equity sale") + ": bought before 1-02-2018, the FMV on 31-01-2018 is not given (55(2)(ac)); the cost is taken as it is." }); });
+  const atOf = (ord, all) => { const at = {}, run = { stApp: 0, s111A: 0, s112: 0, s112A: 0 };
+    CG_LAW.dates.forEach((d) => { const q = bucketsOf(rs.filter((x) => x.sale && x.sale <= d), ord).b; const o = {}; Object.keys(run).forEach((key) => { run[key] = Math.min(all.b[key], Math.max(run[key], q[key])); o[key] = run[key]; }); at[d] = o; });
+    return at; };
+  const poolAt = {}; CG_LAW.dates.forEach((d) => { poolAt[d] = poolOf(rs.filter((x) => x.sale && x.sale <= d)); });
+  const at = atOf("A", k);
+  const differ = ["stApp", "s111A", "s112", "s112A"].some((x) => k.b[x] !== kB.b[x]) || k.cfStcl !== kB.cfStcl || k.cfLtcl !== kB.cfLtcl;
+  const alt = differ ? Object.assign({ order: "B", setoff: kB.off, cfStcl: kB.cfStcl, cfLtcl: kB.cfLtcl, at: atOf("B", kB) }, kB.b, { total: kB.b.stApp + kB.b.s111A + kB.b.s112 + kB.b.s112A }) : null;
+  rs.forEach((x) => { if (x.kind === "eq" && x.lt && x.acq < CG_LAW.gf && !(N((rows1.find((r) => r.id === x.id) || {}).fmv2018) > 0)) warn.push({ key: "cg_fmv_" + x.id, text: (x.desc || "An equity sale") + ": bought before 1-02-2018, the FMV on 31-01-2018 is not given (55(2)(ac)); the cost is taken as it is." }); });
   // a buy-back from 1-10-2024: the whole amount received is dividend (2(22)(f)), income from other sources
-  const buybackDividend = R(sum((rows || []).filter((r) => r.kind === "buyback" && String(r.sale || "") >= "20241001"), (r) => r.value));
-  return Object.assign({ rows: rs, setoff: k.off, cfStcl: k.cfStcl, cfLtcl: k.cfLtcl, pool112: poolOf(rs), at, poolAt, buybackDividend, warn, needs, src: CG_LAW.src }, k.b, { total: k.b.stApp + k.b.s111A + k.b.s112 + k.b.s112A });
+  const buybackDividend = R(sum(rows1.filter((r) => r.kind === "buyback" && String(r.sale || "") >= "20241001"), (r) => r.value));
+  return Object.assign({ rows: rs, order: "A", setoff: k.off, cfStcl: k.cfStcl, cfLtcl: k.cfLtcl, pool112: poolOf(rs), at, poolAt, alt, buybackDividend, warn, needs, src: CG_LAW.src }, k.b, { total: k.b.stApp + k.b.s111A + k.b.s112 + k.b.s112A });
 }
+// the head as the computation chose it (tax.js keeps the short-term loss order with the lower tax: S.cgAlt)
+export const cgAsChosen = (g, S) => (g && g.alt && S && S.cgAlt ? Object.assign({}, g, g.alt) : g);
