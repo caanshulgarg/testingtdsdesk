@@ -46,6 +46,16 @@ import { NewLedHint, NewLedBulk, NewLedReview } from "../parts/bank/NewLedgers.j
 // the new look (newlook/flag.js): the five status words on each line
 import { newLook } from "../newlook/flag.js";
 import { NL_BST } from "../newlook/words.js";
+// the statement's list in the header row. The new look draws the chosen statement's name itself, one line cut with …,
+// with the list laid over it unseen (Safari cut a list's own words at the top and the foot, and puts no … on them:
+// the owner's screenshot of 23-Nov-2026); off: the list as before
+function StmtPick({ b, st }) {
+  const sel = <select className="bk-stmtsel" aria-label="Statement" value={b.cur} onChange={(ev) => openStatement(ev.target.value)}>
+    {b.stmts.slice().reverse().map((s) => <option key={s.id} value={s.id}>{stmtLabel(s)}</option>)}</select>;
+  if (!newLook()) return sel;
+  const words = stmtLabel(st);
+  return <span className="nl-stmtpick" data-nl-stmtpick="" title={words}><span className="nl-stmtlbl" data-nl-stmtlbl="" aria-hidden="true">{words}</span>{sel}</span>;
+}
 export const bstOf = (r) => (!newLook() ? BST[r.state] : r.state === "ready" && r.postError ? ["bad", "Problem"] : NL_BST[r.state]) || ["no", r.state];
 
 // an empty tab says what to do next (spec K6, round 2)
@@ -470,8 +480,7 @@ export function BankPage() {
         <div className="bk-id">
           <span className="bsp-client" data-bank-client="" title={co.name}>{co.name}</span>
           {b.stmts.length > 1
-            ? <select className="bk-stmtsel" aria-label="Statement" value={b.cur} onChange={(ev) => openStatement(ev.target.value)}>
-                {b.stmts.slice().reverse().map((s) => <option key={s.id} value={s.id}>{stmtLabel(s)}</option>)}</select>
+            ? <StmtPick b={b} st={st} />
             : <h2 className="bk-title">{accLedger || st.bank}</h2>}
           {accSure && <BankLedger co={CO()} acc={accFull} compact />}
           <span className="bsp-period" data-bank-period="">{fmtDate(st.from)} – {fmtDate(st.to)}</span>

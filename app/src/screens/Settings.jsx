@@ -54,6 +54,7 @@ import "./settings-layout.css";
 import "../../../src/js/99-pending-suppliers.js";
 // the new look (newlook/flag.js): Settings in six plain groups, Tally out of it
 import { newLook, setNewLook } from "../newlook/flag.js";
+import { siteWords } from "../Side.jsx";
 const NLMail = lazy(() => import("../newlook/Mail.jsx"));
 import { density, setDensity } from "../parts/density.js";
 
@@ -186,6 +187,7 @@ function firmSignals() {
 }
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
 
+const lookItem = () => ({ id: "look", label: "Look", about: "The new look of FinCom, and how close the rows of a table sit. For you only.", status: newLook() ? "new look" : "classic" });
 function firmGroups(sig = firmSignals()) {
   const a = S.account, tally = tallyStatus(null).label;
   const gstApi = (() => { const xs = Object.values(GSTAPI.sess || {}).filter(Boolean); const soon = xs.filter((x) => x.accessUntil && Date.parse(x.accessUntil) - Date.now() < 3 * 86400000 && !x.endedAt).length; return xs.filter((x) => GSTAPI.live && x.connectedAt && !x.endedAt).length + " connected" + (soon ? ", " + soon + " ending soon" : ""); })();
@@ -198,6 +200,8 @@ function firmGroups(sig = firmSignals()) {
       { id: "plan", label: "Plan and credit", about: "What the firm pays, the credit left, and this month’s use.",
         status: a && a.firm ? money(num(a.firm.balance)) + " left" : "", tip: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
+    // the owner could not find the New look switch in the classic look (23-Nov-2026): Look is in both looks
+    { title: "My account", items: [lookItem()] },
     { title: "Tally", items: [
       { id: "bridge", label: "Connect Tally", about: "Connecting Tally, its companies and clients, and help: all on the one Tally page in the sidebar.",
         status: sig.off.length ? "1 offline" : tally, warn: !!sig.off.length, tip: "Tally: " + tally + (sig.off.length ? " · your computer with Tally is offline" : "") },
@@ -232,13 +236,12 @@ function nlGroups(groups) {
   const by = {}; groups.forEach((g) => g.items.forEach((i) => { by[i.id] = i; }));
   const pick = (...ids) => ids.map((id) => by[id]).filter(Boolean);
   const people = by.account && Object.assign({}, by.account, { label: "People and sign-in" });
-  const look = { id: "look", label: "Look", about: "The new look of FinCom, and how close the rows of a table sit. For you only.", status: newLook() ? "new look" : "classic" };
   // (the owner, 23-Nov-2026) GST portal links are on the firm's GST page (Due dates › GST portal links); Daily Check's
   // sending to clients is here, under Email and messages; Academy batches stay
   const mail = Cloud.on() ? { id: "mail", label: "Email to clients", about: "Daily Check’s questions to clients: test mode or for real, and the firm’s test email and WhatsApp.", status: "" } : null;
   return [
     { title: "Firm", items: [by.firm, people, by.batches].filter(Boolean) },
-    { title: "My account", items: [look] },
+    { title: "My account", items: pick("look") },
     { title: "Client defaults", items: pick("rates") },
     { title: "Email and messages", items: [mail].filter(Boolean) },
     { title: "Billing", items: pick("plan") },
@@ -323,7 +326,7 @@ export function FirmSettings() {
   return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}
       list={list} back={back} top={<NeedsStrip title="Needs you" items={firmNeeds(sig, ids)} pick={pick} />}>{body()}</Layout>
     {nl && <p className="note" data-set-tally-note="">Tally is set up on the Tally page only. <button type="button" className="linkbtn" onClick={() => goTallyPage("computers")}>Open the Tally page</button></p>}
-    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
+    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST") + (siteWords() ? " · " + siteWords() : "")}</p></>;
 }
 
 /* ---------------------------------------------------------------- for one client */
