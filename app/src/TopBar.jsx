@@ -27,6 +27,9 @@ import { clientTallyState } from "./lib/tallyState.js";
 // next-tally-icon (27-Oct-2026): the header's ONE Tally sign, an icon with a status dot (its words on hover and in its popover)
 import TallyIcon from "./parts/TallyIcon.jsx";
 import { density, setDensity } from "./parts/density.js";
+import { newLook, setNewLook } from "./newlook/flag.js";
+// the new look's + New and search (Ctrl+K), in its own file
+const NLTop = lazy(() => import("./newlook/Shell.jsx").then((m) => ({ default: m.NLTop })));
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings", daily: "Daily Check" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -226,6 +229,7 @@ function TopRight() {
       {inCo && !isSetupTab(S.tab) && <MainAction />}
       </span>
       <span className="tb-global">
+      {newLook() && <Suspense fallback={null}><NLTop /></Suspense>}
       <span className="tb-slot tb-inbox"><InboxBtn /></span>
       <span className="tb-slot tb-bell"><Bell /></span>
       <span className="tb-slot tb-tally"><TallyIcon /></span>
@@ -293,6 +297,7 @@ function FirmMenu() {
       {item("Plan and credit", () => goSettings("plan"))}
       {/* next-ui-table-filters: the rows' density, remembered per person in this browser (parts/density.js) */}
       <Menu.Item asChild onSelect={() => setDensity(density() === "compact" ? "comfortable" : "compact")}><button type="button" className={"fm-item " + menu.item} data-density={density()}>{density() === "compact" ? "Rows: Compact · switch to Comfortable" : "Rows: Comfortable · switch to Compact"}</button></Menu.Item>
+      <Menu.Item asChild onSelect={() => setNewLook(!newLook())}><button type="button" className={"fm-item " + menu.item} data-newlook-switch={newLook() ? "on" : "off"}>{newLook() ? "New look: on · switch off" : "Try the new look"}</button></Menu.Item>
       {Cloud.on() && item("Sign out", () => doAct("signOutNow"))}
   </Menu.Content></Menu.Portal>;
 }
@@ -312,7 +317,7 @@ export default function TopBar() {
   return <>
     {createPortal(
       <div className="headrow">
-        {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}
+        {inCo ? <ClientHeader /> : <Title title={(newLook() && { today: "Home", compliance: "Due dates" }[S.homeTab]) || HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}
         <TopRight />
       </div>, document.getElementById("cobar"))}
     <TallyPanel open={!!S.tallyPanel && !hide} />

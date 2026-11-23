@@ -53,7 +53,8 @@ const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 // next-tally-words: a client named as its Tally company (case and spaces aside): the button says only "Link"
 const sameName = (a, b) => !!shown(a) && shown(a).toLowerCase() === shown(b).toLowerCase();
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
-const UI = () => (S.tsm = S.tsm || { filter: "all", q: "", open: false, again: 0, check: 0 });
+// (the new look keeps its own, S.nlTsm, with the steps open unless hidden: the owner, 22-Nov-2026, "show the 6 steps")
+const UI = () => { const nl = typeof window === "object" && window.FCNewLook && window.FCNewLook.on(), k = nl ? "nlTsm" : "tsm"; return (S[k] = S[k] || { filter: "all", q: "", open: !!nl, again: 0, check: 0 }); };
 // a Check again's words, on the top line too: for 3 minutes, and only while the connection is as they saw it
 const keepSaid = (w) => { UI().said = { w, at: Date.now(), sig: connSig() }; };
 const saidNow = () => { const x = UI().said; return x && x.w && Date.now() - x.at < 180000 && x.sig === connSig() ? x.w : ""; };
