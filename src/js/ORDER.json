@@ -118,5 +118,6 @@
  "98-prefetch-books.js",
  "99-firm-gate.js",
  "99-bill-suppliers.js",
- "99-pending-suppliers.js"
+ "99-pending-suppliers.js",
+ "99-screen-parts.js"
 ]

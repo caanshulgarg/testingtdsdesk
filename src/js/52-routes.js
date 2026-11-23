@@ -233,7 +233,6 @@ if (typeof window !== "undefined"){
 // screen on a phone), never at the foot of the page. One at a time: S.detail = {k: kind, id, at: the page's address}.
 // Opening is a new step in the browser's history, so Back closes it; Esc and the drawer's ✕ close it the same way.
 function openDetail(k, id){ S.detail = {k: String(k), id: String(id), at: Route.of()}; render(); }
-function detailOpen(k){ return S.detail && S.detail.k === k && S.detail.at === Route.of() ? S.detail.id : null; }
 function closeDetail(){
   if (!S.detail) return;
   if (typeof history !== "undefined" && history.state && history.state.fcDetail && Route.ready){ try { history.back(); return; } catch (e){} }

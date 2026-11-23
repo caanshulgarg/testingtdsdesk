@@ -2,6 +2,7 @@
 // switched on), the checks the portal runs (DRC-01B, DRC-01C), rule 37, and after filing: the 3B kept as filed and the
 // set-off journal for Tally. Also GSTR-1A, under Amendments. Were viewGstFiling and viewGstr1a (src/js/35); the
 // figures are GSTF (35); what is typed goes through gstfSet, gstfSnap, gstfJournal, gst1aJson (35).
+import "../../../../src/js/99-screen-parts.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { nil3b as nil3bOf } from "../../lib/gst3bNil.js";
 import { ListRows } from "../../parts/ListTable.jsx";

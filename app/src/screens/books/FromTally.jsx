@@ -12,6 +12,7 @@
 //   4. How to export from Tally, folded, three steps.
 // Kept, minimally: the tie-out result (one line), the warning when the books are another PAN's, and More (Restore, the
 // removals, and the bridge's own update settings when this computer has one).
+import "../../../../src/js/99-screen-parts.js";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { JobsNote } from "../../parts/BookNotes.jsx";
 import DateBox from "../../parts/DateBox.jsx";

@@ -9,6 +9,7 @@
 //   <ChoiceTag co k /> — beside a choice of Client setup: "guessed · Confirm" when FinCom filled it, ✔ when confirmed.
 //   <BankLedger co acc /> — which Tally ledger a bank account is: chosen and confirmed once, then one line
 //     "Tally ledger: HDFC BANK · Change"; asked again only for a new account, or when the ledger has gone from Tally.
+import "../../../src/js/99-screen-parts.js";
 import { useEffect, useRef, useState } from "react";
 import Tag from "./Tag.jsx";
 import Button from "./Button.jsx";

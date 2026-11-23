@@ -5,6 +5,7 @@
 //
 // State: S.auditTab (find, rel, 3cd), S.auditRange, S.auditArea, S.auditSt (a status), S.auditOpen (a finding opened),
 // S.auditRecheck (round 69: each finding's last Recheck, {[id]: {co, f, busy | failed | still, at, run}}, page state only).
+import "../../../../src/js/99-screen-parts.js";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";

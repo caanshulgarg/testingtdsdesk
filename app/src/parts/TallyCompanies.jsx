@@ -25,6 +25,7 @@
 //     next-tally-linknow (28-Oct-2026): a company OPEN in Tally is registered and linked at the click (tally-ingest
 //     "link_now"); only a company no computer has open now waits for its computer this way.
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
+import "../../../src/js/99-screen-parts.js";
 import React, { useState, useEffect, Suspense } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";

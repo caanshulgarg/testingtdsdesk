@@ -160,8 +160,10 @@ function start() {
   try { installAutopost(); } catch (e) { /* never in the way of the page */ }
   createRoot(document.getElementById("react-root")).render(<Root />);
   watchFresh();
-  // the other screens' files (screens/lazy.js), fetched once the first page is up
-  afterFirstPage(preloadScreens, 1200);
+  // the other screens' files (screens/lazy.js), fetched once the first page is up. next-speed-2 (the speed plan, #10): and
+  // someone is signed in (signInNeeded, src/js/27: looked at every 2 s), so they never share the sign-in page's line
+  const signedIn = (f) => { let wait = true; try { wait = typeof signInNeeded === "function" && signInNeeded(); } catch (e) { wait = false; } if (wait) setTimeout(() => signedIn(f), 2000); else f(); };
+  afterFirstPage(() => signedIn(() => idle(preloadScreens, 1200)), 1200);
   // stability batch 4: the service worker (sw/sw.js) keeps the app's own files on this computer: instant second opens,
   // FinCom without a line. On the site only (staging.fincom.live, the live site); on a test's local server only when
   // asked for (localStorage "fincom.sw" = "on"), so the tests see the network as before

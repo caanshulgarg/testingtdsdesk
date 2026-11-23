@@ -14,6 +14,7 @@
 //                 was given by hand, and the quarter's own of its kind), so "3" is the same challan on both steps.
 // Nothing here works out a match or a figure: the register's (TDSReg) balance and use, TDSMatch's suggestions, and the
 // existing tag / move / take-off functions.
+import "../../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 import "../../lib/tdsGlobals.js";
 import { SideDrawer } from "./Shell.jsx";

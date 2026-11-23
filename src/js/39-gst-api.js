@@ -204,6 +204,3 @@ const GSTCMP = {
     return out;
   }
 };
-
-// the card is drawn by React (app/src/screens/GstApiCard.jsx) in this place
-function viewGstApiCard(b){ return GSTAPI.gstinOf(S.gstReg || ((GSTR.gstins(b) || [])[0] || "").slice(0, 2)) ? '<div data-react="GstApiCard"></div>' : ""; }

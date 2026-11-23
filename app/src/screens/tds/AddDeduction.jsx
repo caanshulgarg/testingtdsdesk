@@ -9,6 +9,7 @@
 //   correct  a deduction from Tally: section, amount, rate, TDS and certificate corrected as FinCom's corrections of the
 //            return (TDSEdit.set, the store of the corrected Excel): Tally is not changed, the row says "edited in FinCom"
 // S.tdsAdd = {key?, rowId?, chId?} opens it.
+import "../../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import { SideDrawer } from "./Shell.jsx";
 import { useDraft } from "../../parts/DetailDrawer.jsx";

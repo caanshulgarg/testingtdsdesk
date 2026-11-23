@@ -7,6 +7,7 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
+import "../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 import { useDismiss } from "../parts/dismiss.js";
 import { ColFunnel } from "../parts/ColHead.jsx";

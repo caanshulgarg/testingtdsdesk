@@ -1,5 +1,6 @@
 // Two-step sign-in (was in screens/SignIn.jsx; loaded only when an account signs in with, or sets up, an authenticator
 // app's code: the app's first file is at its size budget, tests/run_stability.py)
+import "../../../src/js/99-screen-parts.js";
 import { useRef } from "react";
 import { Box, Err } from "../screens/SignIn.jsx";
 

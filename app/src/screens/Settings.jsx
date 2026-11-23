@@ -12,6 +12,7 @@
 // (coSetText, coCommit, coCommitRuleLedger, …) but saved, and sent to the cloud, only when Save at its foot is pressed;
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 // next-room-2: AI help's own working and buttons (not in the program every page loads)
+import "../../../src/js/99-screen-parts.js";
 import "../../../src/js/50-ai-help-page.js";
 import { SheetFormats } from "../parts/SheetPanel.jsx";
 // GSTLock's checks of a change (the ISD switch, GST API all clients): with this screen, as with the GST screens (build.py lazy_files)
