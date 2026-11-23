@@ -667,6 +667,47 @@ func TestR2519ResentEntryLookedForFirst(t *testing.T) {
 	}
 }
 
+// E: a job of this computer handed back with an owner's release (the entry was let go after a stop, then posted by
+// another computer meanwhile) is looked for in Tally again before it goes, and not posted twice
+func TestR2519HandedBackJobLookedForAgain(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	va := []any{M{"id": "r61", "xml": finVoucher("r61", fgParty, "R-61", td, "61.00")}}
+	if _, err := newPostJob(M{"jobId": "job-e5-000001", "company": zz, "guid": "co-guid-1", "vouchers": va}); err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, "job-e5-000001")
+	if f.tagged("TDSDesk:r61") != 1 {
+		t.Fatalf("r61 not posted: %d", f.tagged("TDSDesk:r61"))
+	}
+	n0 := f.n(tagCheckID)
+	rel := []any{M{"id": "r61", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "not in Tally (checked by the bridge)"}}
+	if _, err := newPostJob(M{"jobId": "job-e5-000001", "company": zz, "guid": "co-guid-1", "vouchers": va, "released": rel, "resendOnly": []any{"r61"}}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	waitJob(t, "job-e5-000001")
+	if f.tagged("TDSDesk:r61") != 1 {
+		t.Fatalf("r61 posted twice: %d in Tally", f.tagged("TDSDesk:r61"))
+	}
+	if f.n(tagCheckID) <= n0 {
+		t.Fatal("the handed-back entry was not looked for in Tally")
+	}
+	// handed back once more, with a later release: looked for again (the job's earlier look is not taken for this one)
+	n1 := f.n(tagCheckID)
+	rel2 := []any{M{"id": "r61", "at": time.Now().Add(time.Minute).UTC().Format(time.RFC3339), "by": "owner", "why": "not in Tally (checked by the bridge)"}}
+	if _, err := newPostJob(M{"jobId": "job-e5-000001", "company": zz, "guid": "co-guid-1", "vouchers": va, "released": rel2, "resendOnly": []any{"r61"}}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	waitJob(t, "job-e5-000001")
+	if f.tagged("TDSDesk:r61") != 1 || f.n(tagCheckID) <= n1 {
+		t.Fatalf("handed back twice: %d in Tally, %d looks", f.tagged("TDSDesk:r61"), f.n(tagCheckID)-n1)
+	}
+}
+
 // E: the look's rows are taken only for the date asked (Tally not applying FinComTag's plain yyyymmdd period answers
 // other dates: a mark on another date is not the entry)
 func TestR2519ResentLookDateChecked(t *testing.T) {

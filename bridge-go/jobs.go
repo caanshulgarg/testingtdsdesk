@@ -239,6 +239,7 @@ func newPostJob(pl M) (M, error) {
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Sending again only what FinCom released", ""
+			delete(v, "resentLooked") // 2.5.19 (E): handed back again: its re-sent entries are looked for again
 			if !startJob(id, dir, v) {
 				return jobView(dir), nil // audit fix: its worker runs already
 			}
@@ -279,6 +280,7 @@ func newPostJob(pl M) (M, error) {
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			delete(v, "stoppedBy")
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
+			delete(v, "resentLooked") // 2.5.19 (E): handed back again: its re-sent entries are looked for again
 			if !startJob(id, dir, v) {
 				return jobView(dir), nil // audit fix: its worker runs already
 			}
