@@ -71,6 +71,8 @@ html.nl .nl-skel-row { border-top: 1px solid var(--border-subtle, var(--rule)); 
 html.nl .nl-skel .skel { display: block; height: 10px; border-radius: 5px; }
 
 /* ---- cards and the lists of the new pages */
+/* the step to do now: as tall as its words (tallySimple.css gives .tsm-now-text a 300 px basis, for a row) */
+html.nl #app [data-nl-steps] .tsm-step .tsm-now-text { flex: 0 0 auto; }
 html.nl .nl-card { border: 1px solid var(--border, var(--rule)); border-radius: 12px; padding: 12px 14px; margin: 10px 0; background: var(--surface, var(--sheet)); }
 html.nl .nl-h { margin: 4px 0 8px; font-size: 14px; font-weight: 600; }
 html.nl .nl-card .nl-h + .lt-wrap, html.nl .nl-card .bk-table { margin-bottom: 8px; }
@@ -176,7 +178,9 @@ html.nl .nle-foot { display: flex; justify-content: flex-end; gap: 8px; padding:
   html.nl.bk-spacious #app .bk-space td.lg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   html.nl.bk-spacious #app .bk-space td.lg .bs-led { display: inline-flex; vertical-align: middle; min-width: 170px; }
   html.nl.bk-spacious #app .bk-space td.lg .nl-hint { display: inline-block; vertical-align: middle; max-width: 130px; overflow: hidden; text-overflow: ellipsis; margin-left: 6px; font-size: 12px; white-space: nowrap; }
-  html.nl.bk-spacious #app .bk-space .bsp-foot { white-space: nowrap; }
+  /* one line, kept inside its own cells: never over the totals under Withdrawal and Deposit */
+  html.nl.bk-spacious #app .bk-space .bsp-foot { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  html.nl.bk-spacious #app .bk-space table.bk-table.lt > tfoot td { font-size: 12px; white-space: nowrap; }
 }
 
 /* ---- a phone */
