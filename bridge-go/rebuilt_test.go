@@ -718,6 +718,8 @@ type standCloud struct {
 	renumReply func(b M) (int, M)
 	// 2.4.5: any other kind (period_heads, period_entries, ledger_progress): answered by other when set (nil: 200 {ok})
 	other func(kind string, b M) (int, M)
+	// 2.5.19 (R3): a cloud that keeps no lease (lease_take answers {ok} only)
+	noLease bool
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -736,6 +738,9 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "companies":
 			out["links"] = M{zz: true}
 		case "lease_take", "lease_release":
+			if c.noLease {
+				break
+			}
 			if c.lease != nil {
 				who := str(obj(o["bridge"])["id"])
 				if k == "lease_take" {

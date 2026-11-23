@@ -49,7 +49,8 @@ test company with made-up entries only.
     FinCom ("Not in Tally - post again") while the entry IS in Tally (as if another computer had posted it).
     You should see: the bridge looks in Tally for that date, finds FinCom's mark, does not post it again, and FinCom
     shows it as already in Tally. Then stop Tally while such a posting waits: the entry is not sent ("Not
-    posted yet: Tally was busy..."); the second time it is held for you with words to look in Tally and release it.
+    posted yet: Tally was busy..."); the second time it is held for you: look in Tally, then choose "It is in Tally: mark
+    posted" or, once Tally is free, "Not in Tally – post again".
     Then change the date of a posted made-up entry in Tally and have FinCom hand it out again: you should see it is
     not posted, and FinCom says "FinCom's entry is in Tally on <the new date>; check it there."
  7. A very big day read in pieces (B1). On ZZ BIG TEST with an 18,000-entry day picked in FinCom: the day's list is
@@ -58,8 +59,11 @@ test company with made-up entries only.
     minute.
  8. The daily tie-out (C8), only once Confirmed2519GroupClosing is on: leave Tally alone for the day's catch-up. You
     should see one "Tie-out of ..." line a day; the main groups' closing balances match Tally's Trial Balance.
- 9. The tray's Quit now reads "Hide this icon (reading continues; the icon comes back in 10 minutes)". Check the menu
-    says so, and the icon comes back about 10 minutes after it is used.
+ 9. The tray's Quit item now says what it does. As a service it reads "Hide this icon (postings continue; reading
+    waits until the icon is back, in 10 minutes)"; installed just for you it reads "... until the icon is back, at your
+    next sign-in)". Check the menu says so in each mode. You should see: while the icon is away a posting from FinCom
+    still goes and background reading waits; as a service the icon is back after about 10 minutes, installed just for
+    you it is back when you sign in again.
 
 -------------------------------------------------------------------------------------------------------------------
 

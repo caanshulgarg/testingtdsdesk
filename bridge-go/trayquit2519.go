@@ -70,3 +70,16 @@ func trayForgetSignedOut(live map[int]bool) {
 	}
 	trayQuitMu.Unlock()
 }
+
+// the tray's hide item, true for the way the bridge runs (the code re-review's R1): while no icon reports, background
+// reading waits and only postings go; as a service the icon comes back by itself in 10 minutes, installed just for one
+// user it comes back when the bridge starts again (the next sign-in)
+func trayHideWords(runMode string) string {
+	switch runMode {
+	case "service":
+		return "Hide this icon (postings continue; reading waits until the icon is back, in 10 minutes)"
+	case "user":
+		return "Hide this icon (postings continue; reading waits until the icon is back, at your next sign-in)"
+	}
+	return "Hide this icon (postings continue; reading waits until the icon is back)"
+}

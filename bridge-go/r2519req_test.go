@@ -859,7 +859,8 @@ func TestR2519ResentLookFailedTwiceHeld(t *testing.T) {
 		t.Fatalf("the second failed look: %d in Tally, %v", f.tagged("TDSDesk:r82"), p["results"])
 	}
 	for _, r := range arr(p["results"]) {
-		if o := obj(r); str(o["id"]) == "r82" && !strings.Contains(str(o["message"]), "release it in FinCom") {
+		// the code re-review's R4: what a person can really do in FinCom (the Post page's buttons), never "release it"
+		if o := obj(r); str(o["id"]) == "r82" && (!strings.Contains(str(o["message"]), "It is in Tally: mark posted") || !strings.Contains(str(o["message"]), "Not in Tally – post again") || strings.Contains(str(o["message"]), "release it")) {
 			t.Fatalf("not plain words for a person: %v", o["message"])
 		}
 	}
@@ -1184,9 +1185,20 @@ func TestR2519FirstBandByHighestEntry(t *testing.T) {
 
 // the security review's I4: the tray's Quit says plainly what it does now (reading goes on; the icon comes back)
 func TestR2519TrayQuitWords(t *testing.T) {
+	// the code re-review's R1: true for each mode. While no icon reports, background reading waits and only postings go;
+	// the icon comes back in 10 minutes only under the service, else at the next start of the bridge (sign-in)
+	if w := trayHideWords("service"); w != "Hide this icon (postings continue; reading waits until the icon is back, in 10 minutes)" {
+		t.Fatalf("as a service: %q", w)
+	}
+	if w := trayHideWords("user"); w != "Hide this icon (postings continue; reading waits until the icon is back, at your next sign-in)" {
+		t.Fatalf("just for one user: %q", w)
+	}
+	if w := trayHideWords(""); strings.Contains(w, "10 minutes") || !strings.Contains(w, "postings continue") {
+		t.Fatalf("mode not known: %q", w)
+	}
 	src := readText("win_tray.go")
-	if !strings.Contains(src, `"Hide this icon (reading continues; the icon comes back in 10 minutes)"`) || strings.Contains(src, `"Quit (hide this icon)"`) {
-		t.Fatal("the tray's Quit words")
+	if !strings.Contains(src, `add(9, trayHideWords(str(st["runMode"])), mfString)`) || strings.Contains(src, "reading continues") {
+		t.Fatal("the tray menu does not use trayHideWords")
 	}
 }
 
@@ -1199,9 +1211,11 @@ func TestR2519CostCentreGroupAcrossChunks(t *testing.T) {
 	for _, order := range [][]string{{grp, emp}, {emp, grp}} {
 		ls := M{"bm_costCentresDone": true}
 		for _, raw := range order {
-			rows, _ := costCentreRowsOf(raw)
-			ls["bm_costCentres"] = append(arr(ls["bm_costCentres"]), rows...)
-			costCentresOffNote(ls, raw)
+			costCentresAdd(ls, raw) // as booksMasters takes each chunk
+		}
+		// the code re-review's R2: what the round holds (kept on this computer) is clean too, not only what is sent
+		if held := arr(ls["bm_costCentres"]); len(held) != 1 || str(at(arr(held[0]), 3)) != "Branch East" {
+			t.Fatalf("the round holds: %v", held)
 		}
 		cc := arr(booksOfRound(ls)["costCentres"])
 		if len(cc) != 1 || str(at(arr(cc[0]), 3)) != "Branch East" {
@@ -1239,5 +1253,49 @@ func TestR2519ResentFailForgotten(t *testing.T) {
 	}
 	if n := resentFailNote(zz, "20261123"); n != 2 {
 		t.Fatalf("a failure just now not counted: %d", n)
+	}
+}
+
+// the code re-review's R3: a cloud that keeps no lease: a lapse is never seen, so the re-sent entries still to send are
+// looked for again before every part after the first (the second was posted from another computer meanwhile)
+func TestR2519NoLeaseLooksBeforeEachPart(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	c.mu.Lock()
+	c.noLease = true
+	c.mu.Unlock()
+	standBridge(t, f, `,"PostWaitMs":200,"PostBatchBills":1,"PostPaceOff":true`+c.cfg())
+	first := true
+	f.mu.Lock()
+	f.importAt = func(id, body string) (bool, time.Duration) {
+		if first {
+			first = false
+			f.add(td, fgParty, "R-89", "TDSDesk:r89 | posted from another computer", "-89.00")
+		}
+		return true, 0
+	}
+	f.mu.Unlock()
+	va := []any{M{"id": "r88", "xml": finVoucher("r88", fgParty, "R-88", td, "88.00")}, M{"id": "r89", "xml": finVoucher("r89", fgParty, "R-89", td, "89.00")}}
+	c.mu.Lock()
+	c.takeJobs = []M{{"id": "job-e12-00001", "company": zz, "payload": M{"vouchers": va}, "resendOnly": []any{"r88", "r89"}}}
+	c.mu.Unlock()
+	cloudPostTake()
+	time.Sleep(300 * time.Millisecond)
+	p := waitJob(t, "job-e12-00001")
+	if f.tagged("TDSDesk:r88") != 1 || f.tagged("TDSDesk:r89") != 1 || !r2519Result(p, "r89", "already") {
+		t.Fatalf("r88 %d, r89 %d in Tally; %v", f.tagged("TDSDesk:r88"), f.tagged("TDSDesk:r89"), p["results"])
+	}
+}
+
+// R4: every held message names only what a person can do in FinCom
+func TestR2519HeldWordsArePaths(t *testing.T) {
+	for _, w := range []string{resentHeldWords, resentNoMarkWords, resentDatesWords, resentRedatedWords("20261120")} {
+		if strings.Contains(w, "release it") || !strings.Contains(w, "It is in Tally: mark posted") {
+			t.Errorf("held words: %q", w)
+		}
+	}
+	if !strings.Contains(resentRedatedWords("20261120"), "FinCom's entry is in Tally on 20-Nov-2026; check it there") {
+		t.Error("the re-dated words")
 	}
 }

@@ -935,6 +935,7 @@ func jobWorker(dir string) {
 	nVouchers := 0
 	total := toInt(p["total"])
 	round = 0
+	partsTried := 0 // 2.5.19 (R3): the part loop's turns (the first follows the job's own look)
 	for i := 0; pq.left(); {
 		K = i + pq.parts()
 		if cancelled() || stopping() {
@@ -957,8 +958,13 @@ func jobWorker(dir string) {
 			return
 		}
 		// 2.5.19 (E, review B1): the lease was let go and taken anew: another computer may have posted meanwhile, so the
-		// re-sent entries not sent yet are looked for in Tally again before anything more goes
-		if len(resent) > 0 && !hadLease && leaseHeldPost(asked) {
+		// re-sent entries not sent yet are looked for in Tally again before anything more goes. R3: a cloud that keeps no
+		// lease (or did not answer the lease) shows no lapse at all, so then they are looked for again before every part
+		// after the first
+		noLease := !leaseHeldPost(asked)
+		lookAgain := (!hadLease && !noLease) || (noLease && partsTried > 0)
+		partsTried++
+		if len(resent) > 0 && lookAgain {
 			pending := pq.pending()
 			left, rs := resentLookFirst(port, company, pending, resent)
 			if len(rs) > 0 {

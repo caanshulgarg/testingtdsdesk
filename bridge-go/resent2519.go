@@ -25,9 +25,9 @@ import (
 
 const (
 	resentWaitWords   = "Not posted yet: Tally was busy while FinCom checked for a copy; tried again shortly"
-	resentHeldWords   = "Not posted: FinCom could not check Tally for a copy of this entry twice. Look for it in Tally; if it is not there, release it in FinCom to post it."
-	resentNoMarkWords = "Not posted: FinCom had sent this entry before and cannot look for it in Tally (it has no FinCom mark or no date). Look for it in Tally; if it is not there, release it in FinCom to post it."
-	resentDatesWords  = "Not posted: FinCom had sent this entry before, and this posting has more than 7 dates to check in Tally. Look for it in Tally; if it is not there, release it in FinCom to post it."
+	resentHeldWords   = "Not posted: FinCom could not check Tally for a copy of this entry twice. Look for it in Tally. If it is there, choose \"It is in Tally: mark posted\" in FinCom; if it is not, choose \"Not in Tally – post again\" once Tally is free."
+	resentNoMarkWords = "Not posted: FinCom had sent this entry before and cannot look for it in Tally (it has no FinCom mark or no date). Look for it in Tally; if it is there, choose \"It is in Tally: mark posted\" in FinCom."
+	resentDatesWords  = "Not posted: FinCom had sent this entry before, and this posting has more than 7 dates to check in Tally. Look for it in Tally; if it is there, choose \"It is in Tally: mark posted\" in FinCom."
 	resentMaxDates    = 7
 )
 
@@ -103,7 +103,7 @@ func (e *resentDateErr) Error() string { return e.s }
 // the owner's decision of 23-Nov-2026: FinCom's mark found on another date (an entry re-dated in Tally) holds the
 // entry for a person, never sent
 func resentRedatedWords(d string) string {
-	return "Not posted: FinCom's entry is in Tally on " + liveDay(d) + "; check it there."
+	return "Not posted: FinCom's entry is in Tally on " + liveDay(d) + "; check it there. If it is the same entry, choose \"It is in Tally: mark posted\" in FinCom."
 }
 
 // L1, I5 (the security reviews): Tally's entry is the one sent by type, date and party, and by its amount and its

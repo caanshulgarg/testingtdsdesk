@@ -130,3 +130,13 @@ Range of the fixes: edad89a1c..315b08c78
 - I6: a failed look is forgotten after 24 hours in resent-looks.json (TestR2519ResentFailForgotten).
 - The owner's decision of 23-Nov-2026 (1fde25f65): FinCom's mark found on another date holds the entry for a person
   ("FinCom's entry is in Tally on <date>; check it there."), never sent.
+
+## Fixes after the code re-review (R1 to R4; to be re-reviewed)
+
+- R1 (I4's words): "Hide this icon (postings continue; reading waits until the icon is back, in 10 minutes)" as a
+  service; "..., at your next sign-in)" installed just for one user (trayHideWords; TestR2519TrayQuitWords).
+- R2 (I2): the cost centres the round holds are pruned with every group seen so far at each chunk, so nothing under an
+  employee group stays in the round's saved state either.
+- R3: with no lease kept by the cloud, the re-sent entries still to send are looked for again before every part after
+  the first (TestR2519NoLeaseLooksBeforeEachPart).
+- R4: the held words name the Post page's real buttons (TestR2519HeldWordsArePaths).

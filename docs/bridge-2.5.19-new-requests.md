@@ -579,7 +579,12 @@ The worst time and date of each go into its row in `docs/tally-allowlist.md` and
   the one sent by type, date and party, else the keeper reads it (L1).
 - B1's first band is cut to a sixteenth of the highest entry number seen when that is below AltVchId (N4); C1 at most
   once a day (N7); cost centres also drop employee groups and every centre under one (I2); the tray's Quit reads "Hide
-  this icon (reading continues; the icon comes back in 10 minutes)" (I4).
+  this icon (postings continue; reading waits until the icon is back, in 10 minutes)" as a service, "..., at your
+  next sign-in)" installed just for one user (I4, re-review R1).
 - The owner's decision of 23-Nov-2026 on the open question: FinCom's mark found in Tally on ANOTHER date (an entry
   re-dated in Tally) holds the entry for a person, "Not posted: FinCom's entry is in Tally on <date>; check it there.",
   never sent. An entry of another date without the mark: the look failed, as above.
+- The code re-review (R1 to R4): the tray words above; the cost centres the round holds are pruned with every employee
+  group seen so far, chunk by chunk (R2); a cloud that keeps no lease shows no lapse, so the re-sent entries still to
+  send are looked for again before every part after the first (R3); the held words name the Post page's buttons, "It is
+  in Tally: mark posted" and, for a look Tally did not answer, "Not in Tally – post again" (R4).

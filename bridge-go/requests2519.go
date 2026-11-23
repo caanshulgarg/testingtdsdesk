@@ -331,6 +331,16 @@ func costCentresOffNote(ls M, raw string) {
 	}
 }
 
+// one chunk of cost centres into the round (ls): its employee groups and payroll centres noted, and every centre the
+// round holds pruned with all the groups seen so far, so an employee whose group comes in a later chunk is dropped
+// then, before the round is saved again (the code re-review's R2); the chunk's rows and highest MasterID
+func costCentresAdd(ls M, raw string) ([]any, int64) {
+	rows, top := costCentreRowsOf(raw)
+	costCentresOffNote(ls, raw)
+	ls["bm_costCentres"] = costCentresKept(ls, append(arr(ls["bm_costCentres"]), rows...))
+	return rows, top
+}
+
 // the round's cost centres without any under an employee group or payroll centre of the round
 func costCentresKept(ls M, rows []any) []any {
 	off, parent := map[string]bool{}, map[string]string{}
@@ -553,11 +563,14 @@ func (k *keepRun) booksMasters(company string, port int, bf string, st, ls M, in
 				save()
 				break
 			}
-			rows, top := sp.rows(raw)
+			var rows []any
+			var top int64
 			if sp.key == "costCentres" {
-				costCentresOffNote(ls, raw) // I2: the groups of this chunk, for every chunk of the round
+				rows, top = costCentresAdd(ls, raw) // I2, R2: the round's held centres pruned with every group seen so far
+			} else {
+				rows, top = sp.rows(raw)
+				ls[dk] = append(arr(ls[dk]), rows...)
 			}
-			ls[dk] = append(arr(ls[dk]), rows...)
 			ls[dk+"Began"] = true
 			ls["reqs"] = toInt(ls["reqs"]) + 1
 			if tail {
