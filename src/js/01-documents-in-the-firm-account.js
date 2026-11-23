@@ -2219,11 +2219,19 @@ function supplierBills(e, cid){
   return vs.filter(v => (v.ent || []).filter(x => normName(x.l) === key).reduce((a, x) => a + num(x.a), 0) > 0)
     .map(v => ({v, w: exp && v.ent.some(x => normName(x.l) === exp) ? 3 : 1, key}));
 }
+// the client's other registration a bill is made out to (as itcCheck), else ""
+function billReg(e, co){ const g = String((e.x || {}).buyerGstin || "").toUpperCase(); return g && g !== String(co.gstin || "").toUpperCase() && ownGstins(co).includes(g) ? g : ""; }
 function gstLedgerFor(e, co, cid, head, kind, rate){
   const lk = kind + ":" + head.toLowerCase(), label = head + (kind === "rcm-in" ? " reverse charge input" : kind === "rcm-out" ? " reverse charge payable" : "");
   const ask = "Choose the " + label + " ledger";
   const own = e.taxLed && e.taxLed[lk];
   if (own){ const c = gstLedgerCheck(cid, own, head, kind); return c.ok ? {ledger: c.name, why: "Chosen on this bill"} : {ledger: own, bad: c.msg}; }
+  // (review of ad4be74c3) one Tally company with several GSTINs: a bill to another of them takes that GSTIN's ledgers, set
+  // once in Client setup (co.gstByReg); none set, it is held (never the client's own GST ledgers)
+  const rg = co.multiGstin ? billReg(e, co) : "";
+  if (rg){ const v = kind === "gst" ? ((co.gstByReg || {})[rg.slice(0, 2)] || {})[head.toLowerCase()] : "";
+    if (!v) return {ledger: "", ask, bad: kind === "gst" ? "the " + head + " input ledger of GSTIN " + rg + " (Client setup)" : ""};
+    const c = gstLedgerCheck(cid, v, head, kind); return c.ok ? {ledger: c.name, why: "Client setup: GSTIN " + rg} : {ledger: v, bad: c.msg}; }
   const sk = kind === "gst" ? head.toLowerCase() : (RCM_KEYS[kind] || {})[head];
   const setv = kind === "gst" ? (co.gst || {})[sk] || "" : sk ? rcmLedger(co, sk) : "";
   const known = Ledgers.cid() === cid && hasLedgerList(), books = !!(S.books && S.books.cid === cid && (S.books.vouchers || []).length);
@@ -2235,7 +2243,7 @@ function gstLedgerFor(e, co, cid, head, kind, rate){
     return {ledger: setv, why: "Client setup"};
   }
   const pinned = !!(co.gstPin && co.gstPin[sk]);
-  return taxPickMemo([taxStamp(cid), "gst", lk, rate, e.partyLedger, e.expenseLedger, setv, pinned].join("|"), () => {
+  return taxPickMemo([taxStamp(cid), "gst", lk, rate, e.partyLedger, e.expenseLedger, setv, pinned, billReg(e, co)].join("|"), () => {
     if (pinned && setv){ const c = gstLedgerCheck(cid, setv, head, kind); if (c.ok) return {ledger: c.name, why: "Client setup: used on every bill"}; }
     const memo = new Map();
     const auto = n => {

@@ -63,6 +63,14 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().multiGstin") is False and not pg.is_checked(mg), "untick: off again")
     pg.click(mg); pg.wait_for_timeout(300)
     if pg.locator('#app [data-confirm-foot] [data-cfm="save"]').count(): save()   # ticked again: back as saved, nothing left to save
+    # (review of ad4be74c3) each other GSTIN's input ledgers, picked once here
+    pg.evaluate("() => { const g = '27AANFG3202D1Z'; CO().otherGstins = g + gstinCheckChar(g); FinComReact.redraw(); }"); pg.wait_for_timeout(400)
+    bx = '#app [data-gst-by-reg] [data-reg="27"] label:has-text("input CGST") input'
+    ok(pg.locator('#app [data-gst-by-reg] [data-reg="27"] input').count() == 3, "more than one GSTIN: CGST, SGST and IGST input ledgers for the other GSTIN 27")
+    pg.fill(bx, "Input CGST Maharashtra"); pg.locator(bx).blur(); pg.wait_for_timeout(400)
+    ok(pg.evaluate("((CO().gstByReg || {})['27'] || {}).cgst") == "Input CGST Maharashtra", "its CGST input ledger kept on the client (%s)" % pg.evaluate("JSON.stringify(CO().gstByReg || null)"))
+    pg.screenshot(path=OUT + "/react-settings-multi-gstin.png")
+    if pg.locator('#app [data-confirm-foot] [data-cfm="save"]').count(): save()
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 0 and pg.locator("#app .setbody [data-tally-one]").count() == 1, "Tally section: one line for the client's Tally (24-Oct-2026: linked on the Tally page only)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list

@@ -2162,6 +2162,10 @@ function coCommit(path, v){
   } else if (path === "pan"){
     const p0 = String(co.pan || "").toUpperCase().trim(), g0 = String(co.gstin || "").toUpperCase();
     if (p0 && GSTIN_RE.test(g0) && g0.slice(2, 12) !== p0) toast("The client’s GSTIN " + g0 + " carries PAN " + g0.slice(2, 12) + ", not " + p0 + ". Correct one of them.");
+  } else if (/^gstByReg\.\d\d\.(cgst|sgst|igst|cess)$/.test(path)){
+    // (review of ad4be74c3) another GSTIN's input ledger (more than one GSTIN): checked against the ledger list as above
+    const k = path.split(".")[2], o = ((co.gstByReg = co.gstByReg || {})[path.split(".")[1]] = co.gstByReg[path.split(".")[1]] || {}), val = String(o[k] || "").trim(), c = val && Ledgers.cid() === co.id && hasLedgerList() ? gstLedgerCheck(co.id, val, k.toUpperCase(), "gst") : {ok: true, name: val};
+    if (!c.ok){ o[k] = ""; toast(c.msg + ". Not taken."); } else o[k] = c.name;
   } else if (/^gst\.(cgst|sgst|igst|rcm(Cgst|Sgst|Igst)(In|Out))$/.test(path)){
     // review of 02-Oct-2026: an optional override, checked against the ledger list: a ledger of another tax head, or
     // one Tally does not have, is refused (and what was there before is put back)
@@ -2244,7 +2248,7 @@ function firmNameToAccount(v){
   Cloud.rpc("firm_name_set", {p_name: n}).then(() => { if (S.account.firm) S.account.firm.name = n; }, e => { if (!/firm_name_set|PGRST202|schema cache/i.test(String(e && e.message || e))) toast("The firm's name could not be saved to the firm account: " + ((e && e.message) || e)); });
 }
 function firmSetName(v){ S.firm.firmName = v; later("firm", () => { if (typeof Drafts === "object" && Drafts.hold("firm")) return; Store.saveFirm(); firmNameToAccount(v); }, 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
-function setPath(o, path, v){ const k = path.split("."); if (k.length === 2){ if (!o[k[0]] || typeof o[k[0]] !== "object") o[k[0]] = {}; o[k[0]][k[1]] = v; } else o[k[0]] = v; }
+function setPath(o, path, v){ const k = path.split("."), last = k.pop(); k.forEach(p => { if (!o[p] || typeof o[p] !== "object") o[p] = {}; o = o[p]; }); o[last] = v; }
 
 document.addEventListener("change", ev => {
   if (reactOwned(ev.target)) return;

@@ -320,6 +320,13 @@ function EntityType({ co }) {
       {Object.entries(FS.ENTITY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>;
 }
 
+function OtherRegLedgers({ co }) {
+  const others = (String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || []).filter((g) => g !== String(co.gstin || "").toUpperCase());
+  if (!others.length) return <p className="note" data-gst-by-reg="">Add the other GSTINs above to set their GST ledgers.</p>;
+  return <div data-gst-by-reg="" style={{ marginTop: 6 }}><p className="note" style={{ margin: 0 }}>The input GST ledgers of each GSTIN. A bill to a GSTIN without them waits.</p>
+    {others.map((g) => <div key={g} className="grid" data-reg={g.slice(0, 2)}>{["cgst", "sgst", "igst"].map((h) => <CoText key={h} label={g + ": input " + h.toUpperCase()} path={"gstByReg." + g.slice(0, 2) + "." + h} />)}</div>)}</div>;
+}
+
 function Company() {
   const co = CO(), owner = S.account && S.account.me ? S.account.me.role === "owner" : true;
   return <Card title="The client" note="As on the client’s GST registration. The PAN is filled in from the GSTIN when left empty.">
@@ -328,7 +335,10 @@ function Company() {
     {/* (the owner, 23-Nov-2026) one Tally company with the GST ledgers of each registration: a bill to the client's other
         GSTIN then goes on without the per-bill "the GST ledgers are that GSTIN's" (compute, src/js/01) */}
     <div data-multi-gstin="" style={{ marginTop: 8 }}><CoCheck path="multiGstin" on={!!co.multiGstin}>This Tally company has more than one GSTIN</CoCheck>
-      <p className="note" style={{ margin: "2px 0 0" }}>Its GST ledgers cover each GSTIN: bills to its other GSTINs go on without asking.</p></div>
+      <p className="note" style={{ margin: "2px 0 0" }}>Its GST ledgers cover each GSTIN: bills to its other GSTINs go on without asking.</p>
+      {/* (review of ad4be74c3) each other GSTIN's input ledgers, picked once (gstLedgerFor, src/js/01); a bill to a GSTIN
+          without them is held */}
+      {co.multiGstin && <OtherRegLedgers co={co} />}</div>
     {/* review of 02-Oct-2026: a GSTIN or PAN cannot be emptied by a sync (the server keeps it); an owner clears a wrong one
         here, with a reason that is kept */}
     {owner && (co.gstin || co.pan) && <div className="row" data-clear-ids="" style={{ gap: 8, marginTop: 8 }}>

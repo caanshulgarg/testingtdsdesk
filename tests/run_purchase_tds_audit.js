@@ -25,6 +25,7 @@
 process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
 const {programHtml, load} = require("./purchase_tds_load");
 const HTML = programHtml(process.env.PTDS_ROOT);
+const fs = require("fs"), path = require("path"), vm = require("vm"), ROOT = process.env.PTDS_ROOT || path.join(__dirname, "..");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const guard = (w, f) => { try { f(); } catch (e){ ok(false, w + " (threw " + (e && e.message) + ")"); } };
 
@@ -212,6 +213,22 @@ guard("P8", () => {
   const cM = comp(e);
   ok(!cM.missing.some(m => /GST ledgers/.test(m)) && cM.itc.ok, "MG the client's Tally company has more than one GSTIN: a bill to " + gj + " does not stop for the GST ledgers (" + cM.missing.join("; ") + ")");
   ok(cM.flags.some(f => f.lvl === "" && /other registration/.test(f.t) && /more than one GSTIN/.test(f.t)) && !cM.flags.some(f => f.lvl === "hi" && /other registration/.test(f.t)), "MG a plain note names the setting, no warning (" + cM.flags.filter(f => /registration/.test(f.t)).map(f => f.lvl + ":" + f.t).join(" | ") + ")");
+  // (review of ad4be74c3) that GSTIN's own GST ledgers, set once in Client setup (co.gstByReg); none set: the bill is held,
+  // never posted to the client's default GST ledgers. (gstLedgerFor is a stub here: the real one, from the source, takes a
+  // bill to another registration; the rest stays the stub's)
+  const src01 = fs.readFileSync(path.join(ROOT, "src", "js", "01-documents-in-the-firm-account.js"), "utf8"), cut = (n0) => { const i = src01.indexOf("function " + n0 + "("); let d = 0, j = src01.indexOf("{", i); for (; j < src01.length; j++){ if (src01[j] === "{") d++; else if (src01[j] === "}" && !--d) break; } return src01.slice(i, j + 1); };
+  const stub = ctx.gstLedgerFor; vm.runInContext("globalThis.__realGL = (function(){ " + cut("billReg") + "\n" + cut("gstLedgerFor").replace("function gstLedgerFor(", "function realGL(") + "\n return realGL; })();", ctx);
+  ctx.gstLedgerCheck = ctx.gstLedgerCheck || ((cid, n0) => ({ok: true, name: n0}));
+  ctx.gstLedgerFor = (e0, co0, cid, head, kind, rate) => co0.multiGstin && String((e0.x || {}).buyerGstin || "") && e0.x.buyerGstin !== co0.gstin ? ctx.__realGL(e0, co0, cid, head, kind || "gst", rate) : stub(e0, co0, cid, head, kind, rate);
+  const cN = comp(e), gl = cN.lines.filter(l => l.role === "gst");
+  ok(gl.length === 2 && gl.every(l => !l.ledger) && cN.missing.some(m => /GSTIN 24/.test(m) && /Client setup/.test(m)), "MG2 no ledgers set for " + gj + ": its GST lines have none, the bill is held (" + cN.missing.join("; ") + ")");
+  const c0 = comp(Object.assign({}, e, {x: Object.assign({}, e.x, {buyerGstin: ""})}));
+  const def = (c0.lines.find(l => l.role === "gst" && l.head === "CGST") || {}).ledger || "";
+  co.gstByReg = {"24": {cgst: def, sgst: (c0.lines.find(l => l.role === "gst" && l.head === "SGST") || {}).ledger || ""}};
+  const cR = comp(e), gr = cR.lines.filter(l => l.role === "gst");
+  ok(def && gr.every(l => l.ledger && /GSTIN 24/.test(l.why)) && !cR.missing.some(m => /GSTIN 24/.test(m)), "MG2 set for 24: the bill takes them (" + gr.map(l => l.head + " " + l.ledger + " (" + l.why + ")").join(", ") + ")");
+  ok(comp(Object.assign({}, e, {x: Object.assign({}, e.x, {buyerGstin: ""})})).lines.filter(l => l.role === "gst").every(l => !/GSTIN 24/.test(l.why)), "MG2 a bill to the client's own GSTIN: its usual ledgers, not 24's (the pick is the registration's)");
+  delete co.gstByReg; ctx.gstLedgerFor = stub;
   co.multiGstin = false;
   ok(comp(e).missing.some(m => /GST ledgers/.test(m)), "MG the setting off again: the bill waits for the word once more");
   delete co.multiGstin;
