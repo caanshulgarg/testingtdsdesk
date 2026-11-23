@@ -9,7 +9,9 @@ staff / a look-only member for check 6). The page itself has nothing test-only.
   3. a ledger opened from the trial balance: its entries, running balance and closing = the trial balance's figure; a
      party ledger's pending bills and ageing (the ported bill-wise rules)
   4. the day book: entries with their status (held, memo, cancelled), the totals of posted entries only
-  5. Check now: after the next read brings the change, the banner says "In step with Tally"
+  5. Check now: after the next read brings the change, the banner says "In step with Tally"; a change written in the
+     last minutes shows "Updating" (FinCom Books follows within 10 minutes), and more than 10 minutes behind shows
+     "Not in step"
   6. a client without FinCom Books: a look-only member is told who can set it up; staff are offered "Set up FinCom
      Books" (owner decision 23-Nov-2026) and it sets it up
   7. a phone's width: nothing scrolls sideways; no page error anywhere; the page is its own lazy chunk, which keeps the
@@ -152,6 +154,20 @@ try:
         ok("In step with Tally" in ban and "fb_tieout_ask" in CALLS, "5. Check now: '%s'" % ban.split("\n")[0][:110])
         pg.click("[data-fb-tab=tb]"); settle(pg)
         shot(pg, "p1-05-tb-in-step", full=False)
+        # 5b. within 10 minutes (owner decision 23-Nov-2026): a change just written to the copy shows "Updating", never "Not in step"
+        db.sql("begin; update tally_vouchers set narration = 'changed just now (made up)' where book_id = '%s' and guid = '%s'; commit;" % (TB1, gd))
+        start(pg)
+        ban = text(pg, "[data-fb-step]")
+        ok(pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.fbStep") == "updating" and "Updating" in ban and "within 10 minutes" in ban and "last updated" in ban and "Not in step" not in ban,
+           "5. a change in the last minutes: '%s'" % ban.split("\n")[0][:120])
+        shot(pg, "p1-10-updating", full=False)
+        db.sql("update fb_mirror_dirty set first_at = now() - interval '14 minutes'")
+        start(pg)
+        ban = text(pg, "[data-fb-step]")
+        ok(pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.fbStep") == "out" and "Not in step" in ban and "14 minutes behind" in ban and "can still be filed" in ban,
+           "5. more than 10 minutes behind: '%s'" % ban.split("\n")[0][:120])
+        shot(pg, "p1-11-behind", full=False)
+        db.sql("call fb_mirror_catchup_run(5000)")
         ctx.close()
         # 6. not set up
         WHO[0] = VIEW

@@ -78,7 +78,7 @@ export default function FinComBooks() {
         {tab === "tb" && <Trial book={book} openLedger={(id) => { setLedgerId(id); go("ledger"); }} />}
         {tab === "ledger" && <Ledger book={book} id={ledgerId} setId={setLedgerId} />}
         {tab === "day" && <DayBook book={book} />}
-        <p className="fbk-note fbk-foot">{book.source === "own" ? "" : "Read-only: " + srcName(book.source) + " keeps these books, so changes are made in " + srcName(book.source) + ". FinCom Books copies every change and checks it every night."}</p>
+        <p className="fbk-note fbk-foot">{book.source === "own" ? "" : "Read-only: " + srcName(book.source) + " keeps these books, so changes are made in " + srcName(book.source) + ". FinCom Books copies every change within 10 minutes and checks it every night."}</p>
       </>}
   </div>;
 }
@@ -103,11 +103,15 @@ function StepBanner({ book, onChecked }) {
   let tone, head, text;
   if (book.state === "read_only") { tone = "bad"; head = "Read-only."; text = "FinCom Books’ own check found a problem: " + book.read_only_why; }
   else if (book.state === "setting_up") { tone = "info"; head = "Being built."; text = "FinCom is copying this client’s entries from " + src + ". This page fills in as it goes."; }
-  else if (book.in_step === true) { tone = "ok"; head = "In step with " + src + "."; text = "Checked " + dtshow(book.checked_at) + ": every ledger and every entry match " + src + "’s copy to the paisa" + (t && !t.source_read ? "." : ", and " + src + "’s own trial balance."); }
+  // FinCom Books follows the copy within 10 minutes (owner decision 23-Nov-2026): "Updating" inside that window, "Not in
+  // step" once a book is more than 10 minutes behind
+  else if (book.late) { tone = "warn"; head = "Not in step with " + src + " since " + dtshow(book.behind_since) + ":"; text = "FinCom Books is " + (book.behind_minutes || 10) + " minutes behind " + src + (book.mirrored_at ? " (last updated " + dtshow(book.mirrored_at) + ")" : "") + ". FinCom is bringing it up to date."; }
   else if (book.in_step === false) { tone = "warn"; head = "Not in step with " + src + (book.since ? " since " + dtshow(book.since) : "") + ":"; text = book.why || "a difference was found."; }
+  else if (book.behind_since) { tone = "info"; head = "Updating…"; text = "Changes from " + src + " show here within 10 minutes" + (book.mirrored_at ? "; last updated " + dtshow(book.mirrored_at) : "") + "."; }
+  else if (book.in_step === true) { tone = "ok"; head = "In step with " + src + "."; text = "Checked " + dtshow(book.checked_at) + ": every ledger and every entry match " + src + "’s copy to the paisa" + (t && !t.source_read ? "." : ", and " + src + "’s own trial balance."); }
   else { tone = "info"; head = "Not checked yet."; text = "The first check runs tonight."; }
   const diffs = (t && t.differences) || [];
-  return <section className="fbk-banner" data-tone={tone} data-fb-step={book.in_step === true ? "in" : book.in_step === false ? "out" : "unknown"} role={tone === "warn" || tone === "bad" ? "alert" : "status"}>
+  return <section className="fbk-banner" data-tone={tone} data-fb-step={tone === "warn" ? "out" : head === "Updating…" ? "updating" : book.in_step === true ? "in" : "unknown"} role={tone === "warn" || tone === "bad" ? "alert" : "status"}>
     <div className="fbk-banner-row">
       <p><b>{head}</b> {text}</p>
       <div className="fbk-actions">
