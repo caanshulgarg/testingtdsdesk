@@ -4,6 +4,7 @@
 // GSTAmend, LK, …) and puts its own on window, where the program and the screens find them.
 // It was src/js/81-sheet-import.js and 82-party-recon.js; the two parts follow as they were.
 // (VR.refs, the document numbers in a narration: the vendor reconciliation, loaded with it)
+import "../../../src/js/99-screen-parts.js";
 import "./vendorRecon.js";
 /* ================================================================== */
 /* A register uploaded as a sheet or JSON becomes entries to review   */

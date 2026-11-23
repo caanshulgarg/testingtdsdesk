@@ -4,6 +4,7 @@
 // foot), a line's details in a drawer on the right, and a Comfortable / Compact switch for the rows' height.
 // Loaded with the bank page's chunk (Bank.jsx). The layout itself is spacious.css, under html.bk-spacious (set here while
 // a statement is open on the Bank page).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import LedgerBox from "../LedgerBox.jsx";
 import { goneOpen, goneLine } from "./goneSent.js";

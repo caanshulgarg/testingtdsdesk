@@ -446,12 +446,6 @@ const PayTax = {
 
 // 24Q's text file (TDS24Q_FILE) and its download (payFvuDownload) are src/js/73-tds-24q-file.js, with the TDS screens
 
-/* ---------- the page's actions (app/src/screens/tds/Payroll.jsx) ---------- */
-function payDetailSet(guid, k, v){
-  const e = Payroll.employees().find(x => x.guid === guid);
-  if (!Payroll.setDetail(e, k, v)) return;
-  saveBooks(); render();
-}
 // round 92 (A): "This pay head is TDS" / "Not TDS": the person's choice, kept in the ledger map as a confirmed choice (payTds),
 // so the books read the head as TDS under 192 too; saved with the books
 function payTdsHead(name, yes){
@@ -465,9 +459,4 @@ function payTdsHead(name, yes){
   b.mapV = (b.mapV || 0) + 1;
   if (typeof toast === "function") toast(yes ? "“" + name + "” is the TDS pay head: each employee's TDS is read from it." : "“" + name + "” is not taken as TDS.");
   saveBooks(); render();
-}
-// F: pay heads read before Bridge 2.4.4 (no type): the ledgers read from Tally again, the existing ledgers-only wake
-async function payAskLedgers(){
-  try { const r = await Ledgers.askTally(S.coId); toast(r && r.via ? "Tally was asked for the ledgers; the pay heads' types come with them." : "FinCom Bridge or FinCom's cloud is not reaching the Tally computer now."); }
-  catch (e){ toast("Could not ask Tally: " + (e && e.message || e)); }
 }

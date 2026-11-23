@@ -5,6 +5,7 @@
 // challans with what is unconsumed and the way to the challan register.
 // The amounts are TDSYear.quarters (src/js/18) as before; a cell's status comes from that return's checks
 // (tds/Validate.jsx checkReturn), the same count the return's Validate & file shows.
+import "../../../../src/js/99-screen-parts.js";
 import ExcelTools from "../../parts/ExcelTools.jsx";
 import More from "../../parts/More.jsx";
 import HelpButton from "../../parts/HelpButton.jsx";

@@ -1,6 +1,7 @@
 // The bank page's filter bar (24-Oct-2026): the search over Particulars, quick chips read from the narration (UPI,
 // IMPS, NEFT, ...) with their counts, In / Out, unassigned only, suggestions only, more (dates, amounts, ledger set or
 // not); what is shown counted and added up; tick all of it; make a rule from it. The logic is ./smart.js.
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect } from "react";
 import LedgerBox from "../LedgerBox.jsx";
 import { Density, ActiveChips } from "./Spacious.jsx";

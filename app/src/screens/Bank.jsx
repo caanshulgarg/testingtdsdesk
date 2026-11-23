@@ -9,6 +9,7 @@
 // The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
 // The filter bar (search, quick chips UPI / IMPS / NEFT ... with counts, In / Out, unassigned, more filters, select all
 // shown, a rule from the filter), the bulk voucher type and narration and the keys are parts/bank/ (24-Oct-2026).
+import "../../../src/js/99-screen-parts.js";
 import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
 import { useRef, useEffect, useLayoutEffect, useState } from "react";

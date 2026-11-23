@@ -94,7 +94,8 @@ const FirstOpen = {
       }
     };
     let heads = [];
-    for (let i = 0; i < want.length; i += 40) heads = heads.concat(await read("&guid=in.(" + want.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")"));
+    // (next-speed-2: 4 chunks of 40 at a time, TCloud.byChunks)
+    heads = heads.concat(...await TCloud.byChunks(want, c => read("&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")));
     return {heads, seen: t.newest, changes: heads.length > 0, daysAt: bk.daysAt || "", fullAt: new Date().toISOString()};
   },
   // the progress line on the Books pages, changed in place (a full drawing of the TDS page for each day would cost more

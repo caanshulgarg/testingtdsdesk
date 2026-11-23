@@ -3,6 +3,7 @@
 // one line, TallyOne (24-Oct-2026: a client's Tally is linked on the Tally page only); for Zoho the organisation's last
 // read and its page.
 // booksSourceOf (src/js/74-zoho-books.js) decides; nothing here changes a link.
+import "../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 import { TallyOne } from "./TallyChip.jsx";
 

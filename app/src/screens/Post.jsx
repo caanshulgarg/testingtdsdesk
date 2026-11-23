@@ -19,6 +19,7 @@
 //      the counts are postCounts (postTabCounts), the tab with work opens by itself (Errors when any), and the tab chosen
 //      is kept for the client (S.postTabs).
 // Posting itself stays in the business logic (postAllToTally, postBillsToTally, …).
+import "../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";

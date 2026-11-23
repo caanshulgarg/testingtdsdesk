@@ -15,6 +15,7 @@
 //   - Back closes it and the page stays (a step in the browser's history while it is open, on a computer too);
 //   - what was typed and not saved is kept as a draft for that panel and item (useDraft, in memory for the session):
 //     opening the same item again shows it, with one line "Unsaved changes kept · Discard"; Save clears it.
+import "../../../src/js/99-screen-parts.js";
 import { useId, useRef, useState } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";

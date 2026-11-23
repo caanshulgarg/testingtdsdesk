@@ -3,8 +3,6 @@
 /* ================================================================== */
 const BANK_LEDGER_DEFAULTS = {charges:"Bank Charges", interest:"Interest Received", gstCash:"GST Electronic Cash Ledger", tds:"TDS Payable",
   advanceTax:"Advance Tax", pf:"PF Payable", esi:"ESI Payable", salary:"Salary Payable", cash:"Cash"};
-const BANK_LEDGER_LABELS = {charges:"Bank charges", interest:"Interest received", gstCash:"GST payment (cash ledger)", tds:"TDS payment", advanceTax:"Advance / self-assessment tax",
-  pf:"PF payment", esi:"ESI payment", salary:"Salary payment", cash:"Cash withdrawal / deposit"};
 const TALLY_GROUPS = ["Sundry Creditors","Sundry Debtors","Indirect Expenses","Direct Expenses","Indirect Incomes","Direct Incomes","Purchase Accounts","Sales Accounts",
   "Loans & Advances (Asset)","Loans (Liability)","Secured Loans","Unsecured Loans","Deposits (Asset)","Investments","Fixed Assets","Current Assets","Current Liabilities",
   "Duties & Taxes","Provisions","Capital Account","Reserves & Surplus","Bank Accounts","Bank OD A/c","Cash-in-Hand","Suspense A/c","Misc. Expenses (ASSET)"];

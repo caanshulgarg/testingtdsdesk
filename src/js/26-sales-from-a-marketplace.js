@@ -281,7 +281,7 @@ async function salesCheckTally(list){
     // (an invoice posted before as a duplicate on a person's say-so: a voucher of its number and amount may be the one
     // that attempt made, or the one it duplicated; never taken for it by itself: the person is asked again)
     const hit = v.dupOverrideLog ? null : same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
-    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); n++; }
+    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
     else if (had) mapInvoice(v);
   });
@@ -311,13 +311,6 @@ function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
   const never = /^(journal|receipt|payment|contra|credit\s*note|debit\s*note)$|return|order|quotation|delivery|memo/i;
   return t => { const n = lc(t); if (!n || never.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
-}
-// "It is this invoice": the Tally voucher of this number (another amount) is this invoice: In Tally, never posted
-function salesNearAnswer(id){
-  const s = SL(), v = inv(id), m = v && v.dupBlock; if (!m || m.src === "fincom" || !["review", "ready"].includes(v.status)) return;
-  delete v.dupBlock; v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = m;
-  auditEvent("sales_tally_same", "Invoice " + (v.x.number || v.id) + ": the Tally voucher " + [m.type, m.number, m.date, m.amount].join(" ") + " is this invoice", s.cid);
-  saveSales(); render();
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
@@ -359,6 +352,9 @@ async function salesAutoSync(checkOnly, asked){
 }
 // next-fix-sales-sync (16-Nov-2026: "Post to Tally" did nothing on one computer): never silent. Whatever stops a post,
 // before its own try below (finding the Tally company, reading the ledgers) or in it, ends in a message
+// next-fix-sales-readback (23-Nov-2026): since FinCom Bridge round 15 nothing is read back; Tally's own reply
+// (byReply) is the answer, as for bills (postTaken). Optional: the voucher was sent so (Client setup) or Tally said so
+function salesOptional(r, co){ return !!(r && r.optional) || !!(co && co.createOptional); }
 async function postSalesToTally(){ try { return await postSalesRun(); } catch (e){ salesPostFailed(e); } }
 function salesPostFailed(e){ const s = SL(); if (s) s.busy = ""; toast("Posting failed: " + plainMsg((e && (e.message || e.code)) || String(e || "unknown error"))); render(); }
 async function postSalesRun(){
@@ -395,7 +391,7 @@ async function postSalesRun(){
       // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
-      if (r && r.ok && r.verified !== true){ bad++; const x = r; v.postError = "Failed: not found in Tally when read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; if (r.optional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
+      if (r && r.ok && !postTaken(r)){ bad++; const x = r; v.postError = "In Tally, not yet read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     salesOverrideSpent(list);
     saveBank({newLed: true});
@@ -551,25 +547,8 @@ function salesRowAct(a, id, force){
 function salesAct(act){ return salesClick({dataset: {act}}); }
 function salesTabGo(k){ const s = SL(); s.filter = k; s.sel.clear(); s.sticky.clear(); render(); }
 function salesOpen(id){ SL().openId = id; render(); }
-function salesSearch(q){ const s = SL(); s.q = q; s.sticky.clear(); FinComReact.redraw(); later("sq", render, 250); }
 let salesLastClicked = null;
-function salesToggle(id, on, shift){
-  const s = SL();
-  if (shift && salesLastClicked){ const vis = salesVisible().map(v => v.id); const i = vis.indexOf(salesLastClicked), j = vis.indexOf(id); if (i >= 0 && j >= 0) vis.slice(Math.min(i, j), Math.max(i, j) + 1).forEach(x => on ? s.sel.add(x) : s.sel.delete(x)); }
-  else if (on) s.sel.add(id); else s.sel.delete(id);
-  salesLastClicked = id; salesLightRefresh();
-}
 function salesSelAll(on){ const s = SL(); salesVisible().filter(v => !salesInTally(v) && salesShown(v)).forEach(v => on ? s.sel.add(v.id) : s.sel.delete(v.id)); salesLightRefresh(); }
-// an invoice's customer ledger; false when it is not a Tally ledger (the box goes back)
-function salesSetCust(id, val){
-  const s = SL(), v = inv(id); if (!v) return true;
-  val = String(val || "").trim();
-  if (!val){ v.customerLedger = ""; v.userLedger = false; salesPartyFill(v); mapInvoice(v); saveSales(); render(); return true; }
-  if (!exactLedger(val)){ toast("“" + val + "” is not a Tally ledger. Choose one from the list, or create it."); return false; }
-  if (s.sel.has(v.id) && s.sel.size > 1){ salesBulk("ledger", exactLedger(val)); return true; }
-  if (setCustomerLedger(v, val)) render();
-  return true;
-}
 // a field of the invoice that is open (number, date, customer, amounts)
 function salesSetField(k, val){
   const v = inv(SL().openId); if (!v || salesIrnLocked(v)) return;
@@ -585,14 +564,6 @@ function salesSetField(k, val){
   if (v.refused && was !== v.x[k]) delete v.refused;
   mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " changed", before); saveSales(); render();
 }
-// the invoice being created
-function draftSet(k, val){
-  const s = SL(), x = s.draft.x;
-  x[k] = k === "dueDays" ? num(val) : k === "customerGstin" ? String(val).trim().toUpperCase() : val;
-  if (k === "customerGstin" && gstinValid(x.customerGstin)) x.pos = stateOfGstin(x.customerGstin);
-  if (k === "date" && !s.draft.editId){ const nn = nextInvoiceNumber(x.date); if (normInvNo(x.number) !== normInvNo(nn.number) && /\{FY\}/.test(s.cfg.series)){ x.number = nn.number; s.draft.seriesN = nn.n; } }
-  recalcDraft(); render();
-}
 function draftItem(i, k, val){
   const s = SL(), it = s.draft.x.items[i]; if (!it) return;
   it[k] = ["qty", "rate", "disc", "gstRate", "cess"].includes(k) ? num(val) : val;
@@ -601,18 +572,8 @@ function draftItem(i, k, val){
   if (k === "desc"){ const m = s.cfg.items[String(val).trim().toLowerCase()]; if (m){ if (!it.hsn) it.hsn = m.hsn; if (!num(it.rate)) it.rate = m.rate; it.unit = m.unit || it.unit; it.gstRate = m.gstRate; } }
   recalcDraft(); render();
 }
-function draftItemRemove(i){ const s = SL(); s.draft.x.items.splice(i, 1); if (!s.draft.x.items.length) s.draft.x.items.push(blankItem()); recalcDraft(); render(); }
-// the customer of the invoice being created; false when it is not a Tally ledger
-function draftCust(val){
-  const s = SL(); val = String(val || "").trim();
-  if (!val){ s.draft.customerLedger = ""; render(); return true; }
-  const l = exactLedger(val);
-  if (!l){ toast("“" + val + "” is not a Tally ledger. Choose one, or create it from the list."); return false; }
-  applyDraftCustomer(l); return true;
-}
 // Sales settings
 function salesCfg(k, val){ const s = SL(); if (k === "voucherType"){ s.cfg.vtBy = "you"; delete s.cfg.vtFrom; s.vtAsk = null; } s.cfg[k] = ["next", "pad"].includes(k) ? Math.max(1, Math.round(num(val))) : val; saveSales({cfg: true}); render(); }
-function salesCfgCheck(k, on){ const s = SL(); s.cfg[k] = on; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
 function salesCfgLedger(k, val){ const s = SL(); s.cfg.ledgers = s.cfg.ledgers || {}; s.cfg.ledgers[k] = val; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); saveSales(); render(); }
 function salesClick(t){
   const s = SL(); if (!s){ if (!/Post/.test(t.dataset.act)) return false; toast("Sales list still loading. Try again in a moment."); return true; }

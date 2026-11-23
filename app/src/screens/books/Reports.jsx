@@ -8,6 +8,7 @@
 // the one filter bar, then the areas as sections, folded but the first; the year said once, not on every area.
 //
 // State: S.rptQ (the search), S.rptFy (the year), S.folds (the areas opened).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect } from "react";
 import Bars from "../../parts/Bars.jsx";
 import NotRead from "../../parts/NotRead.jsx";

@@ -27,6 +27,7 @@
 // Every step is bounded (STEP_MS), so nothing spins for ever; each answer is {st, say} in plain words.
 /* global Bridge, TCloud, S, bridgePin, bridgeVer */
 
+import "../../../src/js/99-screen-parts.js";
 export const STEP_MS = 20000, LINK_MS = 45000;
 const BEAT_FRESH_MS = 120000;
 

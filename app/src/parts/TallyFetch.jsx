@@ -17,6 +17,7 @@
 // The cloud keeps it all (migrations 98 and 133: tally_fetch_summary, tally_period_choose / pause / cancel,
 // tally_check_status / resume, tally_today_from_tally); a cloud without 133 shows nothing of it. Nothing new is asked of
 // Tally: the bridge reads one day at a time, only while Tally is idle, each request stopped at 2 s, postings first.
+import "../../../src/js/99-screen-parts.js";
 import { useEffect, useRef, useState } from "react";
 import "./tallyCompanies.css";
 import ListTable from "./ListTable.jsx";
