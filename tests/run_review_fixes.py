@@ -71,7 +71,8 @@ with sync_playwright() as p:
     # 9 and 10. a new sales invoice
     pg.evaluate("(cid) => { goClient('sales'); }", cid); pg.wait_for_timeout(800)
     pg.evaluate("startDraft()"); pg.wait_for_timeout(700)
-    opts = pg.eval_on_selector_all('#app select:near(:text("Place of supply")) option', "os => os.map(o => o.value).filter(Boolean)")
+    # (the Supply select of the sales-einv track sits next to it, near the same words: the select inside the label itself)
+    opts = pg.eval_on_selector_all('#app label:has(> span:text-is("Place of supply")) select option', "os => os.map(o => o.value).filter(Boolean)")
     ok(opts[:3] == ["01", "02", "03"] and opts[-2:] == ["96", "97"], "9. states in code order: 01, 02, 03 … 96, 97 (" + ",".join(opts[:3]) + "…" + ",".join(opts[-2:]) + ")")
     pg.evaluate("() => { draftItem(0, 'desc', 'Chairs'); draftItem(0, 'rate', 1000); draftItem(0, 'gstRate', 28); }"); pg.wait_for_timeout(500)
     ok("28% applies after 22-09-2025 only to a few items" in app(), "10. 28% on an invoice after 22-09-2025: a warning")
