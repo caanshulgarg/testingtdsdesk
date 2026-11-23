@@ -396,10 +396,11 @@ function clientKeepChoices(data, mine, theirs){
 }
 // Optional vouchers (bills and sales: createOptional; bank entries: bankOptional), off in every client (owner,
 // 23-Nov-2026; migration 213 turned the server's copies off, stamped <key>At). A tick stamps when it was chosen. Against
-// the copy both sides last had (base): changed on one side only, that side's value stands (here only when ticked here,
-// a new stamp: an old copy in another tab is not a change), whatever the clocks say; changed on both, the newer stamp
-// decides and a side with no stamp never beats a stamped one. No base, neither stamped: an "on" here never turns the
-// server's "not on" on (the old default)
+// the copy both sides last had (base; shared by the tabs of a browser): changed on one side only, that side's value
+// stands (here only when ticked here: a stamp newer than the base's; an old copy in another tab, stamped or not, is not
+// a change); changed on both, the newer stamp decides and a side with no stamp never beats a stamped one. No base,
+// neither stamped: an "on" here never turns the server's "not on" on (the old default). A tick is stamped optStamp: never
+// older than the copy it was made on, so a tick on a slow clock still beats that copy
 function clientOptKeep(data, mine, theirs, base){
   if (!plainObj(data) || !plainObj(theirs)) return data;
   mine = plainObj(mine) ? mine : {};
@@ -407,7 +408,7 @@ function clientOptKeep(data, mine, theirs, base){
   ["createOptional", "bankOptional"].forEach(k => {
     const at = k + "At", m = String(mine[at] || ""), t = String(theirs[at] || "");
     const same = (x, y) => !!x[k] === !!y[k] && String(x[at] || "") === String(y[at] || "");
-    const take = b && same(theirs, b) ? (same(mine, b) ? null : m && m !== String(b[at] || "") ? mine : theirs)
+    const take = b && same(theirs, b) ? (same(mine, b) ? null : m > String(b[at] || "") ? mine : theirs)
       : b && same(mine, b) ? theirs
       : m > t ? mine : t > m ? theirs : !t && data[k] === true && theirs[k] !== true ? {} : null;
     if (!take || (data[k] === !!take[k] && (data[at] || "") === (take[at] || ""))) return;
@@ -416,6 +417,8 @@ function clientOptKeep(data, mine, theirs, base){
   });
   return data;
 }
+// when an Optional tick was made: now, or 1 ms after the stamp of the copy it was made on when this clock is behind it
+function optStamp(prev){ const n = Date.now(), p = Date.parse(prev || ""); return new Date(p >= n ? p + 1 : n).toISOString(); }
 const ClientBase = {
   async get(id){ try { const v = await BankDB.get("cbase:" + id); return v === undefined || v === null ? NOBASE : v; } catch (e){ return NOBASE; } },
   async set(id, data){ this.seeded.add(id); try { await BankDB.set("cbase:" + id, clone(data)); } catch (e){} },
@@ -2100,7 +2103,7 @@ function coCommit(path, v){
   // the voucher type chosen in Client setup is the client's: a "Post as" chosen on a purchase sheet over the old one goes
   if (path === "voucherType") delete co.postAs;
   // Optional vouchers ticked or unticked on purpose: when, so an old copy still on is told apart (clientOptKeep)
-  if (path === "createOptional") co.createOptionalAt = new Date().toISOString();
+  if (path === "createOptional") co.createOptionalAt = optStamp(co.createOptionalAt);
   if (v !== undefined) setPath(co, path, /^(gstin|pan|tan|tds26q\.(personPan|gstin))$/.test(path) ? String(v).toUpperCase().trim() : v);
   if (path === "gstin"){
     const g = String(co.gstin || "").toUpperCase().trim();

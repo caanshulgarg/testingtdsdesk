@@ -13,7 +13,7 @@ const shared = ["server/_shared/names.js", "server/_shared/gst3b.js"].map(f => f
 const html = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "oo-")), "index.html");
 fs.writeFileSync(html, '<script id="app-main">\n' + shared.concat(ORDER.map(f => fs.readFileSync(path.join(SRC, f), "utf8"))).join("\n") + "\n</script>");
 const {ctx, x} = load(html, ["uid", "GSTIN_RE", "GST_DEFAULTS", "TDS_LEDGER_DEFAULTS", "EXPENSE_DEFAULTS", "newCompany", "xesc", "r2", "num", "amt", "toTallyDate", "fmtDate",
-  "MONTHS", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial", "salesVoucherXml", "GST_STATES", "stateOfGstin", "fpHash", "vchTypeOf", "billVt", "salesVt", "salesAgainstOf", "coCommit", "bankOptSet"]);
+  "MONTHS", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial", "salesVoucherXml", "GST_STATES", "stateOfGstin", "fpHash", "vchTypeOf", "billVt", "salesVt", "salesAgainstOf", "coCommit", "bankOptSet", "optStamp"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 Object.assign(ctx, {tallyLedgerName: n => n, narrationFor: e => e.narr, exactLedger: n => n, knownLedgers: () => new Map(), B: () => ({salesRef: []}),
@@ -54,6 +54,12 @@ x.coCommit("createOptional", true);
 ok(co.createOptional === true && typeof co.createOptionalAt === "string" && co.createOptionalAt >= before, "ticked in Client setup: on, with the time it was chosen (" + co.createOptionalAt + ")");
 x.coCommit("createOptional", false);
 ok(co.createOptional === false && co.createOptionalAt >= before, "unticked: off, stamped too");
+// a slow clock: the stamp is never older than the copy's own (+1 ms), so a tick always beats the copy it was made on
+co.createOptionalAt = "2999-01-01T00:00:00.000Z"; x.coCommit("createOptional", true);
+ok(co.createOptionalAt === "2999-01-01T00:00:00.001Z", "ticked on a copy stamped later than this clock: stamped 1 ms after it (" + co.createOptionalAt + ")");
+co.bankOptionalAt = "2999-01-01T00:00:00.000Z"; x.bankOptSet("bankOptional", false);
+ok(co.bankOptionalAt === "2999-01-01T00:00:00.001Z", "the bank tick the same (" + co.bankOptionalAt + ")");
+co.bankOptionalAt = undefined;
 // bank entries' own tick (Bank settings, bankOptSet): stamped the same way (bankOptionalAt)
 const b0 = new Date().toISOString();
 x.bankOptSet("bankOptional", true);
