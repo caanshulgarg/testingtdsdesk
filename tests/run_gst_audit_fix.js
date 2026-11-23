@@ -36,8 +36,9 @@
 //      turnover. October 2025: a B2C sale S/1 50,000 (CGST/SGST 4,500) in the books; AMZ-21 (Amazon, 10,000, IGST
 //      1,800), FK-31 (Flipkart, 5,000, IGST 900) and SH-41 (the client's own Shopify store, 2,000, IGST 360) in Sales:
 //      3.1(a) 67,000 (IGST 3,060), table 14 Amazon 10,000 and Flipkart 5,000 (u/s 52), never Shopify (no e-commerce
-//      operator: the owner, 23-Nov-2026). Then AMZ-21 posted (its voucher in the books, "| TDSDesk:<id>"), FK-31's voucher
-//      in the books with the invoice not yet marked posted, SH-41 found already in Tally (intally, no tag): the same.
+//      operator: the owner, 23-Nov-2026). Then posted with the books not read again, posted and in the books (AMZ-21 by
+//      its tag, FK-31 by the cloud copy's fincom_id with a 60-character buyer cutting the tag off the narration, SH-41
+//      intally by its number and date), and AMZ-21's entry deleted in Tally since (What to fix says so): the same.
 //  11. (the owner, 23-Nov-2026) 3.1(b)'s IGST and cess (exports and SEZ supplies with payment of tax) are tax payable in
 //      6.1 with 3.1(a)'s (sections 49 and 49A, rule 88A), a negative one carried as negative liability. December 2025: a
 //      B2C sale 50,000 (CGST/SGST 4,500), an export with payment 1,00,000 (IGST 18,000, cess 1,000), an SEZ supply with
@@ -50,7 +51,7 @@ const fs = require("fs"), path = require("path"), vm = require("vm");
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "GST9", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "ITCLock", "entryShares"];
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "ITCLock", "entryShares", "BookSrc"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const {ctx, x} = load(HTML, NAMES);
 const CMP = "07AAKCT5678M1Z9", reg = "07", G = x.GSTR, H = ["igst", "cgst", "sgst", "cess"];
@@ -319,12 +320,53 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     books([s1]);
     ctx.S.sales = {cid: "t", list: [inv(AMZ, "AMZ-21", "amazon", 10000, 1800, "review", {ecoGstin: "07AAAAZ1111Z1CZ"}), inv(FK, "FK-31", "flipkart", 5000, 900, "review", {ecoGstin: "07AAAAZ2222Z1CZ"}), inv(SH, "SH-41", "shopify", 2000, 360, "review")]};
     check("before posting", ctx.S.books);
-    // posted: AMZ-21 posted and in the books; FK-31's voucher came back before its status was set; SH-41 was already in
-    // Tally (intally: matched by number, no FinCom tag on its voucher)
-    const pv = (no, amt, igst, id, date) => out("Sales", date, no, "Marketplace Customers", "", amt, {igst}, {pos: KA, narr: "Being sales invoice " + no + " dated 01-Oct-2025 to Retail customer" + (id ? " | TDSDesk:" + id : "")});
-    books([s1, pv("AMZ-21", 10000, 1800, AMZ, "20251001"), pv("FK-31", 5000, 900, FK, "20251001"), pv("SH-41", 2000, 360, "", "20251001")]);
-    ctx.S.sales.list[0].status = "posted"; ctx.S.sales.list[2].status = "intally";
-    check("after posting", ctx.S.books);
+    // (re-review of ffd1402d0) "posted" alone is not "in the books": an invoice is counted through its Tally entry only
+    // when that entry is found in the books (its FinCom id: the narration's tag or the cloud copy's fincom_id; an invoice
+    // found already in Tally (intally): an entry of its number and date); until then, and after the entry is deleted in
+    // Tally, from Sales, once. Posted but not in books read since: GST > What to fix says so
+    const GONE = "Posted to Tally but not in the books read since — check it wasn't deleted";
+    const gone = () => ((G.checks("202510", reg) || []).find((c) => c && c.what === GONE) || {all: []}).all.map((r) => r.no);
+    const pv = (no, amt, igst, id, date, o) => out("Sales", date, no, "Marketplace Customers", "", amt, {igst}, Object.assign({pos: KA, narr: "Being sales invoice " + no + " dated 01-Oct-2025 to Retail customer" + (id ? " | TDSDesk:" + id : "")}, o || {}));
+    // FK-31's entry as the cloud copy gives it: a 60-character buyer name, the narration cut to 120 characters (the tag
+    // lost), its FinCom id in the copy's fincom_id column (migration 37)
+    const buyer = "Zeta Sixty Character Made Up Retail Customer Private Limited";
+    const narrFk = "Being sales invoice FK-31 dated 01-Oct-2025 to " + buyer + " | TDSDesk:" + FK;
+    const fc = x.BookSrc.fromCopy([{guid: "g-fk31", day: "2025-10-01", alter_id: 1, vtype: "Sales", vno: "FK-31", party: "Marketplace Customers", narration: narrFk, fincom_id: FK, cancelled: false, optional: false, deleted_at: null, gstin: "", pos: KA, cmp_gstin: CMP}],
+      [{guid: "g-fk31", ledger: "Marketplace Customers", amount: -5900}, {guid: "g-fk31", ledger: "Sales", amount: 5000}, {guid: "g-fk31", ledger: "IGST", amount: 900}], [])[0];
+    ok(buyer.length === 60 && fc && !fc.narr.includes("TDSDesk:" + FK) && fc.fid === FK, "fromCopy: a 60-character buyer, the tag cut off the narration (" + (fc && fc.narr.length) + " characters), its FinCom id from fincom_id (" + (fc && fc.fid) + ")");
+    const T0 = "2025-10-05T10:00:00.000Z", before = "2025-10-05T09:00:00.000Z", after = "2025-10-05T11:00:00.000Z";
+    const L = ctx.S.sales.list;
+    // (a) posted, the books not read since: AMZ-21 from Sales
+    books([s1]); ctx.S.books.meta.at = before;
+    Object.assign(L[0], {status: "posted", postedAt: T0}); Object.assign(L[1], {status: "posted", postedAt: T0}); Object.assign(L[2], {status: "intally", postedAt: T0});
+    check("posted, the books not yet read again", ctx.S.books);
+    ok(!gone().length, "posted, the books not read since: nothing to fix (" + gone() + ")");
+    // (b) the books read since, every entry there: AMZ-21 by its tag, FK-31 by fincom_id, SH-41 (intally) by its number and date
+    books([s1, pv("AMZ-21", 10000, 1800, AMZ, "20251001"), Object.assign(pv("FK-31", 5000, 900, "", "20251001"), {narr: fc.narr, fid: fc.fid}), pv("SH-41", 2000, 360, "", "20251001")]); ctx.S.books.meta.at = after;
+    check("posted and in the books", ctx.S.books);
+    ok(!gone().length, "in the books: nothing to fix (" + gone() + ")");
+    // (c) AMZ-21's entry deleted in Tally, the books read after it was posted: from Sales again, and said
+    books([s1, Object.assign(pv("FK-31", 5000, 900, "", "20251001"), {narr: fc.narr, fid: fc.fid}), pv("SH-41", 2000, 360, "", "20251001")]); ctx.S.books.meta.at = after;
+    check("posted, its entry deleted in Tally since", ctx.S.books);
+    ok(JSON.stringify(gone()) === '["AMZ-21"]', "What to fix: AMZ-21 posted to Tally but not in the books read since (" + JSON.stringify(gone()) + ")");
+    // gst-run's month step has no entries: what the cloud copy shows (data.ts salesSeen, as engine.js seenOf gives it)
+    books([s1]); ctx.S.books.salesSeen = {fids: [AMZ, FK], nos: [{k: G.saleNoKey("SH-41", "20251001"), total: 2360}]};
+    const ms = G.marketRows("202510"), bk = ms.filter((r) => r.booked).map((r) => r.no).sort();
+    ok(JSON.stringify(bk) === '["AMZ-21","FK-31","SH-41"]' && !G.fromSales("202510").length, "the cloud's month step: AMZ-21 and FK-31 by the copy's fincom_id, SH-41 (intally) by its number: in the books, none from Sales (" + JSON.stringify(bk) + ")");
+    // (final review of 157da641f) an invoice in Tally: by the number and date Tally had (tallyMatch) when known, and only
+    // with the entry's amount (its total or taxable value, within Rs 1): "SH41" of another amount the same day is not SH-41
+    const seenNo = () => G.marketRows("202510").filter((r) => r.booked).map((r) => r.no);
+    ctx.S.books.salesSeen = {fids: [], nos: [{k: G.saleNoKey("SH-41", "20251001"), total: 999}]}; G._seen = null;
+    ok(!seenNo().includes("SH-41"), "the cloud's month step: a sale SH-41 of 999 the same day is not SH-41 of 2,360 (" + seenNo() + ")");
+    books([s1, pv("SH41", 500, 90, "", "20251001")]);
+    ok(!seenNo().includes("SH-41"), "a sale \"SH41\" of 590 the same day is not \"SH-41\" of 2,360: counted from Sales (" + seenNo() + ")");
+    books([s1, pv("SH41", 2000, 360, "", "20251001")]);
+    ok(seenNo().includes("SH-41"), "a sale \"SH41\" of 2,360 the same day is SH-41 (" + seenNo() + ")");
+    L[2].tallyMatch = {number: "SH/41", date: "20251002"};
+    ok(!seenNo().includes("SH-41"), "Tally's match was SH/41 of 2 October: the sale of 1 October is not taken for it (" + seenNo() + ")");
+    books([s1, pv("SH/41", 2000, 360, "", "20251002")]);
+    ok(seenNo().includes("SH-41"), "… and SH/41 of 2 October, 2,360, is (" + seenNo() + ")");
+    delete L[2].tallyMatch;
     ctx.S.sales = null;
   }
   // ---------------------------------------------------------------- 11. 3.1(b) IGST and cess in 6.1 (the owner, 23-Nov-2026)

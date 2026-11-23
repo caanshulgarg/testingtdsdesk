@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "se5f54bd755e4ea35";
+const GST3B_SRC = "sba785b61e560b4cc";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -183,6 +183,9 @@ const BookSrc = {
         regType: "", country: "", rcm: false, taxability: "", nature: "", supply: "", ineligibleFlag: false, hsn: [], by: "", upd: "",
         ...this.gstOf(h),
         cancel: h.cancelled === true || h.cancelled === "true", opt: h.optional === true || h.optional === "true", ent: [], alt: this.alt(h.alter_id), src: "bridge"};
+      // (re-review of ffd1402d0) the FinCom id the bridge read from the whole narration (migration 37), where the text
+      // here is cut to 120 characters
+      if (h.fincom_id) v.fid = String(h.fincom_id);
       const tx = this.tdsxOf(h); if (tx) v.tdsx = tx;
       const hs = new Set();
       (L[h.guid] || []).forEach(l => {
@@ -287,6 +290,8 @@ const BookSrc = {
   // bridge 2.4.3 (migration 73): a TDS payment's challan and the TDS references as Tally keeps them (TDSTally, src/js/72),
   // read first; a cloud without the columns is read with HEADS_GST and the rest
   HEADS_TDS: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id,tds_tally,tds_tally_alter_id",
+  // (re-review of ffd1402d0) with the FinCom id (migration 37), read first; a cloud without it is read with HEADS_TDS and the rest
+  HEADS_FID: "guid,day,alter_id,vtype,vno,party,narration,cancelled,optional,deleted_at,gstin,pos,ref,ref_date,cmp_gstin,irn,irn_ack_date,gst_reg_type,gst_country,gst_rcm,gst_nature,gst_taxability,gst_supply,gst_ineligible,gst_mixed,gst_alter_id,tds_tally,tds_tally_alter_id,fincom_id",
   words(v){ return v && v.src === "bridge" ? "Bridge" : "Day Book"; },
   // the copy's rows whose lines must be read: entries not in the books, or a later version than the one held
   need(b, heads){
@@ -1840,18 +1845,42 @@ const GSTR = {
   // and IGST 1,800, came to 20,000 and 3,600 in GSTR-1 and 3.1(a). An invoice in the books (inBooks) is counted only as
   // its Tally entry; table 14 takes it from here (ecoBooked, below), since the entry does not name the operator)
   fromSales(ym){ return this.marketRows(ym).filter(r => !r.booked); },
-  // the FinCom ids on the books' entries (" | TDSDesk:<id>" in the narration, as a posted sale carries it), lower case
-  // (read once for the books' list of entries as it is: by the list and its length)
-  bookTags(){
-    const vs = (S.books || {}).vouchers || [], c = this._tags;
-    if (c && c.vs === vs && c.n === vs.length) return c.t;
-    const t = new Set(); vs.forEach(v => { if (v.opt) return; (String(v.narr || "").match(/TDSDesk:([A-Za-z0-9]+)/ig) || []).forEach(m => t.add(m.slice(8).toLowerCase())); });
-    this._tags = {vs, n: vs.length, t};
+  // what of FinCom's sales the books' entries show (read once for the books' list of entries as it is: by the list, its
+  // length and the cloud's answer): ids, the FinCom ids on them (" | TDSDesk:<id>" in the narration, as a posted sale
+  // carries it, or the cloud copy's fincom_id, fid: migration 37, read from the full narration, where the copy's text is
+  // cut to 120 characters), lower case; nos, each sale's number and date ("<number>|<yyyymmdd>", the number in capitals
+  // and figures only). gst-run's month step has no entries: b.salesSeen, read from the cloud copy (gst-run/data.ts), is
+  // added to both
+  saleNoKey(no, d){ return String(no || "").toUpperCase().replace(/[^A-Z0-9]/g, "") + "|" + String(d || "").replace(/-/g, "").slice(0, 8); },
+  booksSeen(){
+    const b = S.books || {}, vs = b.vouchers || [], ss = b.salesSeen || null, c = this._seen;
+    if (c && c.vs === vs && c.n === vs.length && c.ss === ss) return c.t;
+    const ids = new Set(), nos = new Map(), put = (k, x) => { const l = nos.get(k); if (l) l.push(x); else nos.set(k, [x]); };
+    vs.forEach(v => { if (v.opt) return;
+      (String(v.narr || "").match(/TDSDesk:([A-Za-z0-9]+)/ig) || []).forEach(m => ids.add(m.slice(8).toLowerCase()));
+      if (v.fid) ids.add(String(v.fid).toLowerCase());
+      if (v.no && Books.isSale(v)) put(this.saleNoKey(v.no, v.date), {v}); });
+    if (ss){ (ss.fids || []).forEach(f => ids.add(String(f).toLowerCase())); (ss.nos || []).forEach(n => { if (n && n.k) put(String(n.k), {total: num(n.total)}); }); }
+    const t = {ids, nos};
+    this._seen = {vs, n: vs.length, ss, t};
     return t;
   },
-  // an invoice of Sales that is in the books: posted (Tally accepted it), found already in Tally (intally), or its
-  // FinCom id on an entry of the books (an entry that came back before the invoice was marked posted)
-  inBooks(v){ return ["posted", "intally"].includes(v.status) || this.bookTags().has(String(v.id || "").toLowerCase()); },
+  // an invoice of Sales that is in the books (re-review of ffd1402d0: never by its status alone, so an invoice posted is
+  // counted from Sales until the books show its entry, and again if the entry is deleted in Tally): its FinCom id on an
+  // entry of the books. One found already in Tally (intally: matched by number and amount, no FinCom id on it): a sale of
+  // the number and date Tally had (tallyMatch; else the invoice's own) whose amount is the invoice's, its total or its
+  // taxable value within Rs 1 (final review of 157da641f: "AMZ21" of another amount the same day is not "AMZ-21")
+  inBooks(v){
+    const t = this.booksSeen();
+    if (t.ids.has(String(v.id || "").toLowerCase())) return true;
+    if (v.status !== "intally") return false;
+    const x = v.x || {}, m = v.tallyMatch || {}, own = m.number && m.date;
+    const l = t.nos.get(own ? this.saleNoKey(m.number, m.date) : this.saleNoKey(x.number, x.date)) || [];
+    const tot = Math.abs(num(x.total)), txb = Math.abs(num(x.taxable)), near = (a, c) => c > 0 && Math.abs(Math.abs(a) - c) <= 1;
+    return l.some(e => { if (!e.v) return near(e.total, tot) || near(e.total, txb); const L = Books.lines(e.v); return near(L.total, tot) || near(L.taxable, txb); });
+  },
+  // when the books were last read (a Day Book, the bridge's copy, the cloud's): the latest time they say
+  booksAt(){ const m = (S.books || {}).meta || {}; return [m.at, (m.copy || {}).at, m.copyAt].filter(Boolean).map(String).sort().pop() || ""; },
   // every marketplace invoice of the month, booked: true when it is in the books (its entry counts it in tables 4-10 and 3B)
   marketRows(ym){
     const s = S.sales;
@@ -1867,12 +1896,16 @@ const GSTR = {
         taxable: num(x.taxable), cgst: num(x.cgst), sgst: num(x.sgst), igst: num(x.igst), cess: num(x.cess),
         rate: num(x.rate) || (num(x.taxable) ? Math.round(tax / num(x.taxable) * 10000) / 100 : 0), total: num(x.total)};
       if (this.inBooks(v)) r.booked = true;
+      // posted, and the books read since show no entry of it (deleted in Tally?): counted from here, and said (gone)
+      else if (v.status === "posted" && v.postedAt && this.booksAt() > String(v.postedAt)) r.gone = true;
       return r;
     }).filter(Boolean);
   },
   // table 14's rows of the marketplace invoices in the books: their Tally entries are counted in tables 4-10 (outward), so
   // only here, never in outward
   ecoBooked(ym){ return this.marketRows(ym).filter(r => r.booked); },
+  // GST > What to fix: the marketplace invoices posted to Tally whose entry the books read since do not have
+  goneFromBooks(ym){ return this.marketRows(ym).filter(r => r.gone); },
   // an e-commerce operator's GSTIN as written on a sale ("" when it is not one: Amazon's report names the operator only)
   ecoGstinOf(g){ const x = String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, ""); return /^\d{2}[A-Z0-9]{13}$/.test(x) ? x : ""; },
   // GSTR-1 table 14 (17-Oct-2026): supplies made through an e-commerce operator, by the operator's GSTIN (they are also in
