@@ -410,3 +410,59 @@ func TestFixThroughTheBridge(t *testing.T) {
 		t.Fatalf("%v", r)
 	}
 }
+
+// postings first: while an import goes to Tally a fix is held, nothing read or sent
+func TestFixWaitsForAPosting(t *testing.T) {
+	s := &fixStand{alter: "57", number: "A", reply: "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>"}
+	s.install(t)
+	importsInFlight.Add(1)
+	r := runFix(fixAsk("57"))
+	importsInFlight.Add(-1)
+	if r["ok"] != false || r["held"] != true || s.reads != 0 || len(s.sent) != 0 {
+		t.Fatalf("not held behind the posting: %v (reads %d, sent %d)", r, s.reads, len(s.sent))
+	}
+	if r := runFix(fixAsk("57")); r["ok"] != true || len(s.sent) != 1 {
+		t.Fatalf("not sent once the posting went: %v", r)
+	}
+}
+
+// a ledger's PAN: the PAN form only (no GST part); its AlterID, when FinCom gives one, is checked first; Tally's words
+func TestFixLedgerPAN(t *testing.T) {
+	s := &fixStand{}
+	s.install(t)
+	o1, o2, o3 := fixReadLedgerFn, fixLedgerSendFn, fixBooksFromFn
+	t.Cleanup(func() { fixReadLedgerFn, fixLedgerSendFn, fixBooksFromFn = o1, o2, o3 })
+	fixBooksFromFn = func(string) (string, error) { return "20250401", nil }
+	pan, alter, reply := "", "21", "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>"
+	fixReadLedgerFn = func(port int, company, bf, name string) (string, error) {
+		return `<ENVELOPE><LEDGER NAME="Sample Vendor"><GUID>g-led-2</GUID><MASTERID>6</MASTERID><ALTERID>` + alter + `</ALTERID><NAME>Sample Vendor</NAME><PARENT>Sundry Creditors</PARENT>` +
+			`<INCOMETAXNUMBER>` + pan + `</INCOMETAXNUMBER></LEDGER></ENVELOPE>`, nil
+	}
+	fixLedgerSendFn = func(company, guid, bf string, rows []ledRow) error { return nil }
+	fixSendFn = func(port int, x string) (string, error) {
+		s.sent = append(s.sent, x)
+		if strings.Contains(reply, "<ALTERED>1") {
+			pan, alter = group(`<INCOMETAXNUMBER>([^<]*)</INCOMETAXNUMBER>`, x, 1), "22"
+		}
+		return reply, nil
+	}
+	ask := M{"company": fxCo, "companyGuid": "co-guid-1", "target": "ledger", "ledger": "Sample Vendor", "alterId": "20", "was": M{"pan": ""}, "fields": M{"pan": "AAAPZ9999Z"}}
+	if r := runFix(ask); r["changed"] != true || len(s.sent) != 0 {
+		t.Fatalf("sent over a later change (AlterID 20, Tally 21): %v", r)
+	}
+	ask["alterId"] = "21"
+	reply = "<RESPONSE><ALTERED>0</ALTERED><ERRORS>1</ERRORS><LINEERROR>Made-up refusal words</LINEERROR></RESPONSE>"
+	if r := runFix(ask); r["refused"] != true || !strings.Contains(str(r["message"]), "Made-up refusal words") {
+		t.Fatalf("Tally's own words not given: %v", r)
+	}
+	reply = "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>"
+	r := runFix(ask)
+	if r["ok"] != true || len(s.sent) != 2 {
+		t.Fatalf("%v (%d sent)", r, len(s.sent))
+	}
+	x := s.sent[1]
+	if strings.Contains(x, "GSTIN") || strings.Contains(x, "LEDGSTREGDETAILS") || !strings.Contains(x, "<INCOMETAXNUMBER>AAAPZ9999Z</INCOMETAXNUMBER>\n</LEDGER>") ||
+		tallyRequestID(x) != fixLedgerID || checkAllowed(x) != nil {
+		t.Fatalf("not the approved PAN form: %s", x)
+	}
+}

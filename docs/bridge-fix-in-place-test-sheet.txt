@@ -60,7 +60,11 @@ Before you start
    c) While FinCom posts a batch of entries, Save a change. Expect it waits and goes right after the posting.
 
 9. Undo
-   After step 3, Changes made here > Undo on the place of supply change. Expect: Saved; Tally has the earlier state.
+   After step 1, Changes made here > Undo on the number change. Expect: Saved; Tally has the earlier number again, the
+   lines as in your screenshot. (A place of supply that was blank before is not offered an Undo: the approved form
+   cannot blank a field. Check that Changes made here shows no Undo for the step 3 change.)
+   Then take the second voucher of step 1: alter it in Tally (its narration), and press Undo on its number change in
+   FinCom. Expect "Changed in Tally since it was opened here" and nothing changed (Undo has the same AlterID check).
 
 10. Only the approved forms
     In the bridge's log (sync\bridge.log) every fix shows as FinComFixVoucher or FinComFixLedger. A posting made the
