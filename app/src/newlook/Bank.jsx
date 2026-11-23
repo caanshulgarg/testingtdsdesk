@@ -27,19 +27,29 @@ function countsOf(b, st) {
   if (b.cur === st.id && b.rows && b.rows.length) { const c = {}; b.rows.forEach((r) => { if (!(typeof bankAside === "function" && bankAside(r))) c[r.state] = (c[r.state] || 0) + 1; }); return c; }
   return st.counts || null;
 }
-// every statement, by account and date, with a dashed row for a month missing between two of them
+// every statement, by account and date, with a dashed row for a month missing between two of them. The missing months
+// and the opening chain are the old page's own (BankOverlap.join, src/js/96-bank-overlap.js: the printed periods; when it
+// cannot be told whether a period was printed, "Possibly no statement for …"; an opening or closing not known is never
+// read as 0; a statement that overlaps the one before is not a gap), never a rule of this page's (the review, 23-Nov-2026)
+const known = (x) => x !== undefined && x !== null && x !== "";
+const prevOf = (all, st) => all.filter((x) => x !== st && x.id !== st.id && x.acctId === st.acctId && x.to && st.from && x.to <= st.from && x.from < st.from)
+  .sort((a, b) => (a.to !== b.to ? (a.to < b.to ? 1 : -1) : String(b.uploadedAt || "").localeCompare(String(a.uploadedAt || ""))))[0] || null;
 export function stmtRows(b, co) {
-  const by = new Map();
-  (b.stmts || []).forEach((st) => { const k = st.acctId || st.bank || ""; (by.get(k) || by.set(k, []).get(k)).push(st); });
+  const by = new Map(), all = b.stmts || [], J = typeof BankOverlap === "object" && BankOverlap.join ? BankOverlap.join : () => null;
+  all.forEach((st) => { const k = st.acctId || st.bank || ""; (by.get(k) || by.set(k, []).get(k)).push(st); });
   const out = [];
   by.forEach((list) => {
     list.sort((x, y) => String(x.from || "").localeCompare(String(y.from || "")));
-    list.forEach((st, i) => {
-      const prev = list[i - 1], c = countsOf(b, st), n = st.n || (c ? Object.values(c).reduce((a, x) => a + x, 0) : 0);
+    list.forEach((st) => {
+      const c = countsOf(b, st), n = st.n || (c ? Object.values(c).reduce((a, x) => a + x, 0) : 0);
       const done = c ? (c.sent || 0) + (c.intally || 0) + (c.ignored || 0) : null, review = c ? (c.attention || 0) + (c.suggested || 0) : null, ready = c ? c.ready || 0 : null;
-      if (prev && prev.to && st.from && addDay(prev.to, 4) < d10(st.from)) out.push({ id: "gap:" + st.id, gap: true, acct: acctName(co, st), from: addDay(prev.to, 1), to: addDay(st.from, -1) });
-      // the chain: this statement opens where the one before it closed
-      const chain = prev && prev.closing !== undefined && st.opening !== undefined ? Math.abs(Number(prev.closing) - Number(st.opening)) < 0.01 : null;
+      let j = null; try { j = J(all, st); } catch (e) { j = null; }
+      const g = j && (j.gap || j.maybeGap);
+      if (g) out.push({ id: "gap:" + st.id, gap: true, sure: !!j.gap, words: g.words, acct: acctName(co, st), from: g.from, to: g.to });
+      // the chain: this statement opens where the one before it closed (both known; the one before by BankOverlap's rule)
+      // (join says nothing when the two meet with no difference: the one before is then picked as join picks it)
+      const prev = j ? j.prev : prevOf(all, st);
+      const chain = j && j.diff ? false : prev && known(prev.closing) && known(st.opening) && Math.abs(Number(prev.closing) - Number(st.opening)) < 0.01 ? true : null;
       const why = st.badRows ? st.badRows + " lines do not agree with the running balance" : chain === false ? "Opens at " + money(st.opening) + "; the statement before closed at " + money(prev.closing) : st.cut ? "Some pages were not read" : "";
       const word = why ? "Problem" : !c ? "New" : review ? "To review" : ready ? "Ready" : done >= n && n ? "Done" : "To review";
       out.push({ id: st.id, st, acct: acctName(co, st), from: d10(st.from), to: d10(st.to), file: st.fileName || "", up: d10(st.uploadedAt), n, done, word, why, chain, open: b.cur === st.id });
@@ -54,19 +64,19 @@ function Statements({ b, co }) {
     { k: "acct", role: "party", label: "Account", v: (r) => r.acct, cell: (r) => <b>{r.acct}</b> },
     { k: "from", role: "date", label: "From", v: (r) => r.from, cell: (r) => (r.from ? fmtDate(r.from) : "") },
     { k: "to", role: "date", label: "To", v: (r) => r.to, cell: (r) => (r.to ? fmtDate(r.to) : "") },
-    { k: "file", label: "File", v: (r) => (r.gap ? "" : r.file), cell: (r) => (r.gap ? <span className="nl-gap-w" data-nl-gap="">{"Statement missing for " + fmtDate(r.from) + " – " + fmtDate(r.to)}</span> : <span className="nl-cut" title={r.file}>{r.file || "—"}</span>) },
+    { k: "file", label: "File", v: (r) => (r.gap ? "" : r.file), cell: (r) => (r.gap ? <span className="nl-gap-w" data-nl-gap={r.sure ? "sure" : "maybe"}>{r.words}</span> : <span className="nl-cut" title={r.file}>{r.file || "—"}</span>) },
     { k: "up", role: "date", label: "Uploaded", v: (r) => r.up || "", cell: (r) => (r.up ? fmtDate(r.up) : "") },
     { k: "n", label: "Lines", cls: "n", v: (r) => (r.gap ? null : r.n), sum: (r) => (r.gap ? 0 : r.n), fmt: (t) => String(t), cell: (r) => (r.gap ? "" : r.n) },
-    { k: "open", role: "amount", label: "Opening", sum: false, v: (r) => (r.gap || r.st.opening === undefined ? null : Number(r.st.opening)),
-      cell: (r) => (r.gap || r.st.opening === undefined ? "" : <>{money(r.st.opening)}{r.chain === true && <span className="nl-ok" title="The statement before closed at this balance"> ✓</span>}</>) },
-    { k: "close", role: "amount", label: "Closing", sum: false, v: (r) => (r.gap || r.st.closing === undefined ? null : Number(r.st.closing)), cell: (r) => (r.gap || r.st.closing === undefined ? "" : money(r.st.closing)) },
+    { k: "open", role: "amount", label: "Opening", sum: false, v: (r) => (r.gap || !known(r.st.opening) ? null : Number(r.st.opening)),
+      cell: (r) => (r.gap || !known(r.st.opening) ? "" : <>{money(r.st.opening)}{r.chain === true && <span className="nl-ok" title="The statement before closed at this balance"> ✓</span>}</>) },
+    { k: "close", role: "amount", label: "Closing", sum: false, v: (r) => (r.gap || !known(r.st.closing) ? null : Number(r.st.closing)), cell: (r) => (r.gap || !known(r.st.closing) ? "" : money(r.st.closing)) },
     { k: "done", label: "Done", v: (r) => (r.gap || r.done === null ? null : r.n ? Math.round((100 * r.done) / r.n) : 0),
       cell: (r) => (r.gap || r.done === null ? "" : <span className="nl-prog" title={r.done + " of " + r.n + " lines done"}><i style={{ "--w": (r.n ? Math.min(100, (100 * r.done) / r.n) : 0) + "%" }} /><small>{r.done + " of " + r.n}</small></span>) },
-    { k: "st", role: "status", label: "Status", v: (r) => (r.gap ? "Problem" : r.word), cell: (r) => <><Pill w={r.gap ? "Problem · missing" : r.word} />{r.why && <div className="nl-why">{r.why}</div>}</> },
+    { k: "st", role: "status", label: "Status", v: (r) => (r.gap ? (r.sure ? "Problem" : "To review") : r.word), cell: (r) => <><Pill w={r.gap ? (r.sure ? "Problem · missing" : "To review · possibly missing") : r.word} />{r.why && <div className="nl-why">{r.why}</div>}</> },
     { k: "ac", role: "act", cls: "n", cell: (r) => <button type="button" className={"btn small" + (r.gap ? "" : r.open ? " primary" : "")} data-nl-stmt-open={r.id} onClick={open(r)}>{r.gap ? "Upload" : "Open"}</button> },
   ];
   return <div className="nl-stmts" data-nl-stmts="">
-    <ListTable name="nlStmts" className="bk-table nl-table" cols={cols} rows={rows} rowKey={(r) => r.id} unit={["statement", "statements"]}
+    <ListTable name="nlStmts" className="bk-table nl-table" cols={cols} rows={rows} rowKey={(r) => r.id} unit={["statement", "statements"]} counted={(r) => !r.gap}
       rowProps={(r) => ({ className: (r.gap ? "nl-gap" : "") + (r.open ? " nl-open" : ""), "data-nl-stmt": r.id, onDoubleClick: open(r) })}
       empty={<>No bank statement yet. <button type="button" className="linkbtn" onClick={() => doAct("uploadHere")}>Upload one</button>: Excel or CSV from net banking works best; PDFs are read too.</>} />
   </div>;

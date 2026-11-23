@@ -103,6 +103,10 @@ html.nl #app:has(nav[data-nl-bank="stmts"]) .sbar-band, html.nl #app:has(nav[dat
 
 /* ---- the entry form */
 html.nl .nle-veil { padding-top: 5vh; }
+/* the search opened over the entry window is on top of it; a box asking (askConfirm's #confirmBox, z-index 90 in app.css:
+   "Discard this entry?", "Post into a closed period?") is on top of both, never hidden behind the window */
+html.nl .nl-veil[data-nl-veil] { z-index: 125; }
+html.nl #confirmBox { z-index: 130; }
 html.nl .nle { width: min(1040px, 100%); max-height: 90vh; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden;
   background: var(--surface-raised, var(--surface)); border: 1px solid var(--border, var(--rule)); box-shadow: 0 24px 60px rgb(0 0 0 / .28); }
 html.nl .nle-head { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--border, var(--rule)); }
@@ -202,6 +206,18 @@ html.nl .nl-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4p
 html.nl .nl-needs > b { color: var(--warn); font-size: 14px; }
 html.nl .nl-needs > .linkbtn { font-size: 14px; text-align: left; min-height: 32px; }
 @media (max-width: 600px) { html.nl .nl-needs { flex-direction: column; align-items: flex-start; } }
+
+/* ---- Bank on a phone: the Bank tabs first, then the row of states, with no empty band above it; the foot bar's words
+   wrap instead of being cut; the missing month's card is dashed around, not each of its fields (the review, 23-Nov-2026) */
+@media (max-width: 600px) {
+  html.nl #app:has(> .react-host > nav.nl-banktabs) { display: flex; flex-direction: column; }
+  html.nl #app > .react-host > nav.nl-banktabs { order: -1; margin-top: 0; }
+  html.nl #app:has(> .react-host > nav.nl-banktabs) .sbar-band { padding-top: 4px; }
+  html.nl #app .bk-actionbar.bs-bankbar { flex-wrap: wrap; }
+  html.nl #app .bk-actionbar.bs-bankbar .ab-left, html.nl #app .bk-actionbar.bs-bankbar .bk-stat { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  html.nl table.cards tr.nl-gap > td, html.nl table.lt tr.nl-gap > td { border-top: 0 !important; border-bottom: 0 !important; }
+  html.nl table tr.nl-gap { outline: 1.5px dashed var(--nl-rose); outline-offset: -1px; border-radius: 12px; }
+}
 
 /* ---- a phone, signed in: the page's title fits beside the top bar's buttons (wraps to two lines, never cut) */
 @media (max-width: 600px) {

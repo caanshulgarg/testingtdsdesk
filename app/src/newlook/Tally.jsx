@@ -15,7 +15,7 @@ import SyncActivity from "../screens/TallySync.jsx";
 import { PostLog } from "../screens/Done.jsx";
 import AutoPostSettings from "../parts/AutoPostSettings.jsx";
 import ListTable from "../parts/ListTable.jsx";
-import { ownState, localBridges, bridgesOf, sameUser, placeOf } from "../lib/ownBridge.js";
+import { ownState, localBridges, bridgesOf, sameUser, placeOf, ownRule } from "../lib/ownBridge.js";
 import { freePort } from "../lib/tallyPort.js";
 import { connectSteps, TITLES } from "../lib/connectSteps.js";
 import { Pill } from "./parts.jsx";
@@ -39,16 +39,20 @@ export function portRows() {
   (localBridges() || []).forEach((x) => { const p = Number((x && (x.bridgePort || x.port)) || 0);
     if (x && x.sameSession === true) put(p, { what: "FinCom Bridge", who: "you", say: "Your FinCom Bridge" + (x.version ? " " + x.version : "") });
     else if (x && (x.sameSession === false || x.yours === false)) put(p, other("FinCom Bridge")); });
-  const tally = (p, mine, ok, words) => put(p.port, mine ? { what: "TallyPrime", who: "you", say: words || (ok ? "Your Tally" : "Your Tally, not answering") } : other("TallyPrime"));
+  const untold = { what: "TallyPrime", who: "other", say: "A Tally whose Windows user cannot be told (FinCom does not use it)" };
+  const tally = (p, mine, ok, words, unknown) => put(p.port, mine ? { what: "TallyPrime", who: "you", say: words || (ok ? "Your Tally" : "Your Tally, not answering") } : unknown ? untold : other("TallyPrime"));
   const beat = (ob && ob.beat) || {};
-  [].concat(beat.ports || []).forEach((p) => { if (p && Number(p.port) > 0) tally(p, !p.skipped, !!p.ok, p.ok ? "Your Tally" + (p.busy ? " (busy)" : "") : ""); });
+  // whose Tally: the bridge's own rule (lib/ownBridge.js ownRule, as upBeat reads a beat): a Tally of an owner Windows
+  // cannot tell is this user's only when the bridge tells no Tally's owner at all
+  const bp = [].concat(beat.ports || []).filter((p) => p && Number(p.port) > 0).map((p) => Object.assign({}, p, { mine: p.owner === "unknown" ? null : !p.skipped })), br = ownRule(bp);
+  bp.forEach((p) => tally(p, !p.skipped && br(p), !!p.ok, p.ok ? "Your Tally" + (p.busy ? " (busy)" : "") : "", p.owner === "unknown"));
   if (Number(beat.tallyPort) > 0) put(beat.tallyPort, { what: "TallyPrime", who: "you", say: "Your Tally" });
   // this browser's own bridge, answering now: its Tallys (another user's is "skipped" or not "mine")
   try {
     if (typeof Bridge === "object" && Bridge.on() && Bridge.st && Bridge.st.state === "ok" && own.from === "here")
-      [].concat(Bridge.st.sessions || []).forEach((se) => { if (!se || !(Number(se.port) > 0)) return; const mine = !se.skipped && se.mine !== false;
+      [].concat(Bridge.st.sessions || []).forEach((se, _i, ss) => { if (!se || !(Number(se.port) > 0)) return; const mine = !se.skipped && ownRule(ss)(se);
         const cos = mine ? [].concat(se.companies || []).map((c) => c && c.name).filter(Boolean) : [];
-        tally(se, mine, !!se.ok, mine && se.ok ? "Your Tally" + (cos.length ? " · " + cos.length + (cos.length === 1 ? " company open" : " companies open") : " · no company open") : ""); });
+        tally(se, mine, !!se.ok, mine && se.ok ? "Your Tally" + (cos.length ? " · " + cos.length + (cos.length === 1 ? " company open" : " companies open") : " · no company open") : "", !se.skipped && typeof se.mine !== "boolean"); });
   } catch (e) { /* the beats said it */ }
   // the other bridges heard on this computer this week: another Windows login's (whose: never said)
   if (pc) bridgesOf().forEach((b) => {
@@ -131,14 +135,14 @@ function ThisComputer() {
   return <>{typeof TCloud === "object" && !TCloud.on() && <Steps />}<section className="nl-card nl-this" data-nl-this="">
     <h3 className="nl-h">This computer</h3>
     <Ports rows={rows} />
-    <h3 className="nl-h">Computers that send Tally’s books</h3>
-    <Computers own={own} />
+    {typeof TCloud === "object" && TCloud.on() && <><h3 className="nl-h">Computers that send Tally’s books</h3>
+    <Computers own={own} /></>}
   </section></>;
 }
 
 export default function NLTally() {
-  // the six steps stay shown (the owner: "show the 6 steps"): the guide's own open switch, held on
-  (S.tsm = S.tsm || { filter: "all", q: "", open: false, again: 0, check: 0 }).open = true;
+  // (the six steps stay shown, the owner: "show the 6 steps": the guide keeps the new look's own state, open unless hidden,
+  // parts/TallySimple.jsx UI; the old look's S.tsm is never touched from here)
   const tab = TABS.some(([k]) => k === S.tallyTab) ? S.tallyTab : "computers";
   const go = (k) => () => { S.tallyTab = k; if (k === "activity" && typeof Rec === "object" && Rec.act) Rec.act.at = 0; render(); window.scrollTo(0, 0); };
   const { own, rows, free } = portRows(), line = statusLine(own, rows, free);

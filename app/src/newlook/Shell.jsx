@@ -41,7 +41,7 @@ function tree() {
     return [[null, [
       { icon: "today", label: "Home", on: t === "today" || t === "inbox", go: () => navHome("today"), bar: true, title: "What needs doing, every client" },
       { icon: "clients", label: "Clients", on: t === "clients", go: () => navHome("clients"), bar: true },
-      { icon: "compliance", label: "Due dates", on: t === "compliance", go: () => navHome("compliance"), bar: true, title: "Returns and payments due, every client" },
+      { icon: "compliance", label: "Due dates", on: t === "compliance", go: () => { S.nlDueTab = "due"; navHome("compliance"); }, bar: true, title: "Returns and payments due, every client" },
       { icon: "daily", label: "Daily Check", on: t === "daily", go: () => navHome("daily"), title: "What last night's checks found" },
       { icon: "integrations", label: "Tally", on: t === "tally" || t === "integrations", go: tallyGo(""), bar: true, title: "Connect Tally, its companies and ports" },
     ]], ["sep", [
@@ -133,7 +133,7 @@ const lc = (s) => String(s || "").toLowerCase();
 function pagesOf() {
   const co = coOpen(), out = [
     ["Home", () => navHome("today")], ["Clients", () => navHome("clients")], ["Due dates", () => { S.nlDueTab = "due"; navHome("compliance"); }], ["Daily Check", () => navHome("daily")],
-    ["Tally", tallyGo("")], ["Tally: sent to Tally", () => goTallyPage("sent")], ["Settings", () => goSettings(null)], ["Settings: people", () => goSettings("account")],
+    ["Tally", tallyGo("")], ["Tally: sent to Tally", () => goTallyPage("sent")], ["Integrations", () => navHome("integrations")], ["Settings", () => goSettings(null)], ["Settings: people", () => goSettings("account")],
     ["Settings: plan and credit", () => goSettings("plan")], ["Help", () => navHome("help")],
     ...(typeof Cloud === "object" && Cloud.on() ? [["GST portal links", () => { S.nlDueTab = "gstapi"; navHome("compliance"); }], ["Settings: email to clients", () => goSettings("mail")]] : [])];
   if (co) {
@@ -207,6 +207,8 @@ function useKeys() {
     const k = (e) => {
       if (!newLook()) return;
       const ctrl = e.ctrlKey || e.metaKey, inField = /INPUT|SELECT|TEXTAREA/.test((document.activeElement && document.activeElement.tagName) || "");
+      // Esc with the search open closes the search first, whatever has the focus (it may be open over the entry window)
+      if (e.key === "Escape" && S.nlSearch) { e.preventDefault(); e.stopImmediatePropagation(); S.nlSearch = null; render(); return; }
       if (ctrl && String(e.key).toLowerCase() === "k" && !S.switcher) { e.preventDefault(); e.stopImmediatePropagation(); S.nlSearch = S.nlSearch ? null : { q: "", i: 0 }; render(); }
       else if (e.key === "/" && !inField && !ctrl && !S.nlSearch && !S.nlEntry && !(S.view === "company" && S.tab === "books" && bt() === "lookup")) { e.preventDefault(); e.stopImmediatePropagation(); S.nlSearch = { q: "", i: 0 }; render(); }
     };

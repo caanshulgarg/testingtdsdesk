@@ -43,7 +43,8 @@ import LogoPick from "../parts/LogoPick.jsx";
 // next-assistant (phase 1 design): the client's own contacts, for Daily Check's weekly questions
 import ClientContacts from "./daily/ClientContacts.jsx";
 import TrustLevels from "./daily/TrustLevels.jsx";
-import { clientTallyState, tallyDevs, pcLive, seenWords, openOn } from "../lib/tallyState.js";
+import { clientTallyState } from "../lib/tallyState.js";
+import { tallyOffline, gstSignals } from "../lib/firmNeeds.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 // the two-pane look of both pages (the owner's redesign of 17-Nov-2026): with this screen's file, not in the main styles
@@ -178,24 +179,9 @@ function FirmDetails() {
 //   the tab was hidden)
 //   the GST API links that lapsed: a client's GSTIN that once had a session (connected, ended or failed) and is not live
 //   now; a GSTIN only looked up (GSTAPI.seen, set by every 2B page's card before the server answers) is not counted
-const WEEK = 7 * 864e5;
 function firmSignals() {
-  const beatOf = (d) => (((d && d.info) || {}).beat || {}), beatAt = (d) => Date.parse(beatOf(d).at || (d && d.last_seen) || "") || 0;
-  const TL = typeof TLight === "object" ? TLight.st || {} : {};
-  // read within 3 minutes (a beat every 30 s), each beat's age told as of that read (devState at TL.at), not as of now
-  const fresh = !!TL.at && Date.now() - TL.at < 180000 && !(typeof TStale === "object" && TStale.now(["light"]));
-  let own = null, answers = false;
-  try { own = window.FCOwn && window.FCOwn.bridge ? window.FCOwn.bridge() : null; answers = !!(window.FCOwn && window.FCOwn.state && (window.FCOwn.state() || {}).state === "ok"); } catch (e) { own = null; }
-  const liveAtRead = (d) => { try { const b = typeof devState === "function" ? devState(d, TL.at).bridge : ""; return b === "online" || b === "reconnecting"; } catch (e) { return pcLive(d); } };
-  const dev = own && own.dev && tallyDevs().find((d) => d.id === own.dev.id);
-  const hadTally = (d) => { const b = beatOf(d); return !!b.tally || b.tallyState === "open" || b.tallyState === "busy" || openOn(d).length > 0; };
-  // (their bridge answering this browser now: the top bar says Connected, so nothing here says otherwise)
-  const off = fresh && !answers && dev && beatAt(dev) && TL.at - beatAt(dev) < WEEK && hadTally(dev) && !liveAtRead(dev) ? [dev] : [];
-  const G = typeof GSTAPI === "object" ? GSTAPI : null;
-  const gstins = Array.from(new Set(Object.values(S.companies || {}).filter((c) => c && !c.deleted).map((c) => String(c.gstin || "").toUpperCase()).filter((g) => /^\d{2}[A-Z0-9]{13}$/.test(g))));
-  const lapsed = G ? gstins.filter((g) => { const x = (G.sess || {})[g]; return !!x && !!(x.connectedAt || x.endedAt || x.error) && !G.live(g); }).length : 0;
-  const soon = G ? gstins.filter((g) => { const x = G.live(g) && G.accessLeft ? G.accessLeft(g) : null; return x && x.soon && !x.over; }).length : 0;
-  return { off, offSince: off.length ? seenWords(new Date(beatAt(off[0])).toISOString()) : "", notLinked: lapsed, soon };
+  // (lib/firmNeeds.js: the same reading for the new look's firm Home)
+  return Object.assign({}, tallyOffline(), gstSignals());
 }
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
 
@@ -305,7 +291,7 @@ function AdminConsoleLink() {
 export function FirmSettings() {
   const nl = newLook();
   // an old address of a section now on the Tally page (#/settings/bridge, …) opens it there
-  if (nl && NL_MOVED[S.settingsTab]) { const t = NL_MOVED[S.settingsTab]; S.settingsTab = null; setTimeout(() => goTallyPage(t), 0); }
+  if (nl && NL_MOVED[S.settingsTab]) { const t = NL_MOVED[S.settingsTab]; S.settingsTab = null; setTimeout(() => { goTallyPage(t); if (t === "sent") { S.logAll = true; render(); } }, 0); }
   // GST portal links: on the firm's GST page (Due dates › GST portal links)
   if (nl && S.settingsTab === "gstapi") { S.settingsTab = null; setTimeout(() => { S.nlDueTab = "gstapi"; navHome("compliance"); }, 0); }
   const sig = firmSignals(), groups = nl ? nlGroups(firmGroups(sig)) : firmGroups(sig), ids = groups.flatMap((g) => g.items.map((i) => i.id));

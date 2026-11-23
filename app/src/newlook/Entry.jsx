@@ -61,6 +61,7 @@ function LedgerIn({ value, onChange, list, label, hint, bank, id }) {
     {value && list && !list.some((l) => A.ledKey(l.name) === A.ledKey(value)) && <small className="nle-warn" data-nle-unknown="">Not a ledger in this client’s Tally</small>}</label>;
 }
 
+const confirmShown = () => { const b = document.getElementById("confirmBox"); return !!b && b.style.display !== "none" && getComputedStyle(b).display !== "none"; };
 export default function Entry() {
   const ne = S.nlEntry || {}, [type, setType] = useState(ne.type || "Journal"), [cid, setCid] = useState(ne.cid || S.coId || "");
   const co = cid ? S.companies[cid] : null, L = useLedgers(co);
@@ -70,7 +71,10 @@ export default function Entry() {
   const typed = !!(f.narr || f.a || f.b || f.amt || f.rows.some((r) => r.ledger || r.dr || r.cr));
   const leave = () => { if (!typed || draft) return close(); (typeof askConfirm === "function" ? askConfirm({ title: "Discard this entry?", ok: "Discard", body: "<p class='note'>What you typed is not kept.</p>" }) : Promise.resolve(true)).then((y) => { if (y) close(); }); };
   useEffect(() => {
-    const k = (e) => { if (e.key === "Escape" && !document.querySelector(".confirm, [data-confirm]")) { e.preventDefault(); e.stopImmediatePropagation(); leave(); }
+    // a box asking over this window (askConfirm's #confirmBox: Discard this entry?, Post into a closed period?) or the
+    // search opened over it takes the keys first: its own Esc / Enter, never this window's (the review of 23-Nov-2026)
+    const k = (e) => { if (confirmShown() || S.nlSearch) return;
+      if (e.key === "Escape" && !document.querySelector(".confirm, [data-confirm]")) { e.preventDefault(); e.stopImmediatePropagation(); leave(); }
       else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); e.stopImmediatePropagation(); const b = box.current && box.current.querySelector("[data-nle-post]"); if (b && !b.disabled) b.click(); } };
     window.addEventListener("keydown", k, true);
     return () => window.removeEventListener("keydown", k, true);

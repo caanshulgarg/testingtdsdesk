@@ -24,6 +24,13 @@ a switch per person, off unless turned on. Offline, made-up data only:
      Settings for the firm's GST page (Due dates › GST portal links; #/settings/gstapi opens it); a group "Email and
      messages" holds Daily Check's sending switch and the firm's test email and WhatsApp (the same assistant_mail_set
      call, the owner only); Academy batches stay. Off, Settings keeps GST API and has no Email and messages.
+ 11. the review of 23-Nov-2026: a confirm box over the entry window shows on top and takes the keys (Discard this
+     entry?, Post into a closed period?); Statements' missing months and openings by the old page's rule (BankOverlap.join:
+     "Possibly…" when unsure, no null opening read as 0); a Tally whose owner Windows cannot tell is not "yours" when
+     the bridge tells another's; signed out, no empty Computers heading; the old look's guide not opened by the new
+     look's Tally page; #/settings/postlog opens every client's record (S.logAll); Integrations in search; Esc closes
+     search before the entry window; Due dates from the menu opens Due dates; staff who cannot read the sending setting
+     see "unknown".
  10. follow-ups: the GST API warnings Settings' Needs you held ("not linked for N clients", "ends soon") are on the firm
      Home's Needs you, each a link to Due dates › GST portal links (off: Home as before, Settings keeps them); on a phone,
      signed in, every page's title fits the top bar (no "Settin…"), the menu's own words (Home, Due dates); off: the top
@@ -56,8 +63,8 @@ SETUP = """() => {
       narr: (out ? "NEFT DR " : "NEFT CR ") + parties[i % 8].toUpperCase() + " UTR" + (100000 + i) + " BEING PAYMENT AGAINST INVOICE",
       dec: {name: parties[i % 8], mode: "NEFT", utr: "UTR" + (100000 + i)},
       ledger: i % 4 ? "" : parties[i % 8], state: i % 4 ? "attention" : "suggested", balOk: true, why: ["No ledger found for this party."]}; });
-  S.bank = {cid: c.id, loading: false, stmts: [{id: "s0", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-02-01", to: "2026-02-28", opening: 2400000, closing: 2500000, n: 120, fileName: "icici-feb-2026.xlsx", uploadedAt: "2026-03-03T10:00:00Z", counts: {sent: 118, ignored: 2}},
-    {id: "s1", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-04-01", to: "2026-04-28", opening: 2500000, closing: bal, totDr: 0, totCr: 0, n: 200, fileName: "icici-apr-2026.pdf", uploadedAt: "2026-05-02T09:30:00Z"}], cur: "s1", rows, rules: [], wrules: [],
+  S.bank = {cid: c.id, loading: false, stmts: [{id: "s0", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-02-01", to: "2026-02-28", printed: true, opening: 2400000, closing: 2500000, n: 120, fileName: "icici-feb-2026.xlsx", uploadedAt: "2026-03-03T10:00:00Z", counts: {sent: 118, ignored: 2}},
+    {id: "s1", acctId: "a1", bank: "ICICI", acct: "0214", from: "2026-04-01", to: "2026-04-28", printed: true, opening: 2500000, closing: bal, totDr: 0, totCr: 0, n: 200, fileName: "icici-apr-2026.pdf", uploadedAt: "2026-05-02T09:30:00Z"}], cur: "s1", rows, rules: [], wrules: [],
     ledgers: {list: parties.map(p => ({name: p, group: "Sundry Creditors"})).concat([{name: "ICICI Bank", group: "Bank Accounts"}, {name: "Cash", group: "Cash-in-Hand"}, {name: "Office Rent", group: "Indirect Expenses"}]), importedAt: new Date().toISOString(), live: true},
     newLed: [], keys: {}, books: {}, filter: "review", grouped: false, showSettings: false, q: "", limit: 300, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
   render(); return c.id; }"""
@@ -179,7 +186,8 @@ with sync_playwright() as p:
     pg.locator('[data-nl-banktab="stmts"]').click(); pg.wait_for_timeout(1200)
     names = pg.evaluate("() => [...document.querySelectorAll('#app [data-nl-stmt]')].map((e) => e.dataset.nlStmt)")
     ok(names == ["s0", "gap:s1", "s1"], "the statements by date, with the missing month between (%s)" % names)
-    ok("Statement missing for 01-Mar-2026" in pg.locator('#app [data-nl-stmt="gap:s1"]').inner_text(), "the missing month says which")
+    ok("No statement for 01-Mar-2026 to 31-Mar-2026" in pg.locator('#app [data-nl-stmt="gap:s1"]').inner_text(), "the missing month says which (the old page's words)")
+    ok("2 statements" in pg.locator("#app [data-nl-stmts] tfoot").inner_text(), "the count is of statements, not the missing month's row")
     ok("✓" in pg.locator('#app [data-nl-stmt="s1"]').inner_text(), "April opens at March's… February's closing: ✓")
     pills = pg.evaluate("() => [...document.querySelectorAll('#app [data-nl-stmts] [data-nl-pill]')].map((e) => e.dataset.nlPill)")
     ok(pills == ["Done", "Problem", "To review"], "one status word each (%s)" % pills)
@@ -260,6 +268,8 @@ with sync_playwright() as p:
     txt = pg.locator("[data-nl-this]").inner_text()
     ok("userb" not in txt and "Secret Other Co" not in txt, "never another user's name or company")
     ok(pg.locator("[data-nl-port] th, [data-nl-this] thead [data-ltf]").count() >= 3, "the ports table has a filter in its headings")
+    ok("Computers that send" not in pg.locator("[data-nl-this]").inner_text(), "signed out: no empty Computers heading")
+    ok(not pg.evaluate("!!(S.tsm && S.tsm.open)"), "the old look's guide is not opened by the new look's Tally page (S.tsm)")
     shot(pg, "desktop-14-tally")
     pg.locator('[data-nl-tallytab="settings"]').click(); pg.wait_for_timeout(1200)
     ok(pg.locator("[data-nl-tally-settings]").count() == 1 and "Post automatically" in pg.locator("[data-nl-tally-settings]").inner_text(), "Settings tab: Post automatically (moved from Settings)")
@@ -277,6 +287,7 @@ with sync_playwright() as p:
     ok(pg.locator("[data-set-newlook]").is_checked(), "Look: the switch, on")
     go(pg, "goSettings('postlog')", 1500)
     ok(pg.evaluate("S.homeTab") == "tally" and pg.evaluate("S.tallyTab") == "sent", "an old address (#/settings/postlog) opens Tally › Sent to Tally")
+    ok(pg.evaluate("S.logAll") is True, "… with every client's record, as the old link did (S.logAll)")
     ctx.close()
 
     print("9. the owner's decisions: GST portal links to the GST page, Email and messages")
@@ -340,6 +351,17 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.homeTab") == "compliance" and pg.evaluate("S.nlDueTab") == "gstapi" and pg.locator('[data-pane="gstapi-all"]').count() == 1, "the warning opens Due dates › GST portal links")
     pg.evaluate("() => { GSTAPI.sess = {}; GSTAPI.live = () => false; GSTAPI.accessLeft = () => null; render(); }"); go(pg, "navHome('today')", 1000)
     ok(pg.locator("[data-nl-home-needs]").count() == 0, "nothing to say: no Needs you line")
+    # the Tally computer offline (the rule Settings' Needs you had: this person's own bridge's computer, heard with Tally
+    # within the week, not now, the computers read within 3 minutes); another person's computer: nothing
+    DEV = "{id: 'dev-x', name: 'Test PC', info: {beat: {at: new Date(Date.now() - 3600e3).toISOString(), tally: true}}}"
+    pg.evaluate("() => { window.__own = window.FCOwn; TLight.st.devs = [%s]; TLight.st.at = Date.now(); render(); }" % DEV); go(pg, "navHome('today')", 1000)
+    ok(pg.locator("[data-nl-home-needs]").count() == 0, "another person's computer offline: nothing on Home")
+    pg.evaluate("() => { window.FCOwn = Object.assign({}, window.__own, {bridge: () => ({dev: TLight.st.devs[0], id: 'b1'})}); TLight.st.at = Date.now(); render(); }"); go(pg, "navHome('today')", 1000)
+    txt = pg.locator("[data-nl-home-needs]").inner_text() if pg.locator("[data-nl-home-needs]").count() else ""
+    ok("Your computer with Tally is offline since " in txt and "Test PC" not in txt, "their own Tally computer offline: Home › Needs you says so (%r)" % txt)
+    shot(pg, "desktop-20-home-needs-tally")
+    if pg.locator('[data-nl-needs-go="tally"]').count(): pg.locator('[data-nl-needs-go="tally"]').click(); pg.wait_for_timeout(1500)
+    ok(pg.evaluate("S.homeTab") == "tally", "the warning opens the Tally page")
     ctx.close()
     ctx, pg = page(br, 390, 844, nl=True, phone=True)
     pg.evaluate(CLOUD, "owner"); pg.evaluate(GSTS)
@@ -351,13 +373,96 @@ with sync_playwright() as p:
     go(pg, "goSettings(null)", 1200); shot(pg, "phone-12-settings-signed-in")
     ctx.close()
 
+    print("11. the review of 23-Nov-2026")
+    ctx, pg = page(br, nl=True)
+    # the real Bridge.post (its closed-period check, ClosedP.gate, is inside it); the bridge's own requests are counted
+    sent = []
+    pg.on("request", lambda r: sent.append(r.url) if "127.0.0.1" in r.url or "localhost:9" in r.url else None)
+    pg.evaluate("""() => { window.postToProblem = () => ""; window.tallyPostSign = () => ({on: true}); window.canPostTally = () => true;
+      window.linkGuid = async () => ({guid: "g1"}); }""")
+    TOP = """() => { const y = document.querySelector('#confirmBox [data-cbx=yes]'); const box = document.getElementById('confirmBox');
+      if (!y || !box || box.style.display === 'none' || getComputedStyle(box).display === 'none') return null;
+      const b = y.getBoundingClientRect(), el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+      return {title: (document.getElementById('cbxT') || {}).textContent || '', top: !!(el && el.closest('#confirmBox'))}; }"""
+    go(pg, "S.nlEntry = {type: 'Payment', cid: S.coId}; render();", 1500)
+    pg.fill('[data-nle-narr]', "something typed"); pg.wait_for_timeout(200)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
+    c = pg.evaluate(TOP)
+    ok(c and c["top"] and "Discard" in c["title"], "Esc with typing: 'Discard this entry?' shows on top of the entry window (%s)" % c)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
+    ok(pg.evaluate(TOP) is None and pg.locator("[data-nl-entry]").count() == 1, "Esc again answers the box (No): the box closes, the entry stays")
+    # a closed period: the box shows on top, and Esc (not a hidden Enter) is what it takes
+    pg.evaluate("() => { ClosedP.why = () => ['books closed up to 31-Mar-2026']; ClosedP.booksOf = async () => null; }")
+    pg.fill('[data-nle-date]', "2026-03-15"); pg.fill('[data-nle-in="a"]', "ICICI Bank"); pg.fill('[data-nle-in="b"]', "Office Rent"); pg.fill('[data-nle-amt]', "25000"); pg.wait_for_timeout(300)
+    pg.locator('[data-nle-post]').click(); pg.wait_for_timeout(2000)
+    c = pg.evaluate(TOP)
+    ok(c and c["top"] and "closed period" in c["title"].lower(), "Post into a closed period?: the box shows on top (%s)" % c)
+    shot(pg, "desktop-21-entry-closed-period")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(1200)
+    et = pg.locator("[data-nl-entry]").inner_text() if pg.locator("[data-nl-entry]").count() else ""
+    ok(pg.evaluate(TOP) is None and "closed period" in et and not [u for u in sent if "/post" in u or "import" in u.lower()], "Esc: held back, not posted (%r)" % et[-160:])
+    # search over the entry window: Esc closes the search first
+    go(pg, "S.nlSearch = {q: '', i: 0}; render();", 600)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
+    ok(pg.locator("[data-nl-palette]").count() == 0 and pg.locator("[data-nl-entry]").count() == 1 and pg.evaluate(TOP) is None, "search over the entry window: Esc closes the search, the entry stays")
+    go(pg, "S.nlEntry = null; render();", 400)
+    # Statements: the old page's rules (BankOverlap.join)
+    go(pg, """S.bank.stmts = [{id: 's0', acctId: 'a1', bank: 'ICICI', acct: '0214', from: '2026-02-01', to: '2026-02-27', opening: 100, closing: 200, n: 10, counts: {sent: 10}},
+      {id: 's1', acctId: 'a1', bank: 'ICICI', acct: '0214', from: '2026-03-04', to: '2026-03-31', opening: null, closing: 300, n: 200}]; S.bank.cur = 's1'; S.nlBankTab = 'stmts'; render();""", 1200)
+    gap = pg.locator('#app [data-nl-stmt="gap:s1"]')
+    gt = gap.inner_text() if gap.count() else ""
+    ok("Possibly no statement for 28-Feb-2026 to 03-Mar-2026" in gt and "Problem" not in gt, "27-Feb then 04-Mar, periods not printed: 'Possibly no statement…', not a Problem (%r)" % gt)
+    s1 = pg.locator('#app [data-nl-stmt="s1"]').inner_text()
+    ok("Opens at" not in s1 and "Problem" not in s1, "an opening not known: not read as ₹0, no Problem (%r)" % s1)
+    go(pg, """S.bank.stmts = [{id: 's0', acctId: 'a1', bank: 'ICICI', acct: '0214', from: '2026-02-01', to: '2026-02-20', opening: 100, closing: 200, n: 10},
+      {id: 's1', acctId: 'a1', bank: 'ICICI', acct: '0214', from: '2026-02-15', to: '2026-03-31', opening: 999, closing: 300, n: 20}]; render();""", 1000)
+    names = pg.evaluate("() => [...document.querySelectorAll('#app [data-nl-stmt]')].map((e) => e.dataset.nlStmt)")
+    ok(names == ["s0", "s1"] and "Opens at" not in pg.locator('#app [data-nl-stmt="s1"]').inner_text(), "two statements that overlap: no missing month, no chain (%s)" % names)
+    # search: the firm's Integrations page; Due dates from the menu opens Due dates
+    pg.keyboard.press("Control+k"); pg.wait_for_timeout(300); pg.keyboard.type("integrations"); pg.wait_for_timeout(300)
+    ok("Integrations" in pg.locator("[data-nl-palette]").inner_text(), "search finds the Integrations page")
+    pg.keyboard.press("Enter"); pg.wait_for_timeout(1200)
+    ok(pg.evaluate("S.homeTab") == "integrations", "Enter opens Integrations")
+    go(pg, "S.nlDueTab = 'gstapi'; navHome('today');", 600)
+    pg.locator('#side .side-link[data-side="Due dates"]').click(); pg.wait_for_timeout(1200)
+    ok(pg.evaluate("S.homeTab") == "compliance" and pg.evaluate("S.nlDueTab") != "gstapi", "Due dates from the menu opens Due dates, not the last tab")
+    ctx.close()
+    # a Tally whose owner Windows cannot tell, while the bridge tells another Tally's owner: not "yours"
+    ctx, pg = page(br, nl=True)
+    pg.evaluate("""() => { const now = new Date().toISOString();
+      Bridge.setCfg({url: 'http://127.0.0.1:9105', key: 'k-made-up', bridgeId: 'b1', follow: true});
+      TLight.st.devs = [{id: 'd1', name: 'OFFICE-SERVER', info: {computer: 'OFFICE-SERVER', bridges: {b1: {user: 'OFFICE-SERVER\\\\usera', computer: 'OFFICE-SERVER', bridgePort: 9105, tallyPort: 9034, version: '2.5.18', at: now, open: []}},
+        beat: {at: now, windowsUser: 'OFFICE-SERVER\\\\usera', computer: 'OFFICE-SERVER', bridgePort: 9105, tallyPort: 9034, ports: [{port: 9034, ok: true}, {port: 9050, ok: true, owner: 'unknown'}, {port: 9000, skipped: true}]}}, main_bridge: 'b1'}];
+      navHome('tally'); }""")
+    pg.wait_for_timeout(2500)
+    who = pg.evaluate("() => Object.fromEntries([...document.querySelectorAll('[data-nl-port]')].map((r) => [r.dataset.nlPort, r.querySelector('[data-nl-port-who]').dataset.nlPortWho]))")
+    ok(who.get("9034") == "you" and who.get("9050") not in (None, "you"), "a Tally of an owner Windows cannot tell is not 'In use by you' (%s)" % who)
+    ctx.close()
+    # staff who cannot read the sending setting: "unknown", never "Test mode"
+    ctx, pg = page(br, nl=True)
+    pg.evaluate(CLOUD, "staff")
+    pg.evaluate("""() => { const a = Cloud.api; Cloud.api = async (path, o) => { if (path.split('?')[0] === 'assistant_mail') return []; return a(path, o); }; }""")
+    go(pg, "goSettings('mail')", 1500)
+    t = pg.locator("[data-nl-mail]").inner_text() if pg.locator("[data-nl-mail]").count() else ""
+    ok("Test mode" not in t and "not known" in t.lower(), "staff who cannot read it: not known, never 'Test mode' (%r)" % t)
+    ctx.close()
+
     print("8. a phone")
     ctx, pg = page(br, 390, 844, nl=True, phone=True)
     ok(pg.evaluate("document.scrollingElement.scrollWidth - innerWidth") <= 1, "Bank: no sideways scroll")
     ok(pg.locator("[data-nl-new]").is_visible() and pg.locator("[data-nl-search-open]").is_visible(), "+ New and search in the top bar")
+    lay = pg.evaluate("""() => { const h = document.querySelector('header.top').getBoundingClientRect().bottom;
+      const els = [...document.querySelectorAll('#app .sbar-band, #app nav.nl-banktabs')].filter((e) => e.offsetParent !== null);
+      const top = Math.min(...els.map((e) => e.getBoundingClientRect().top)); const nl = document.querySelector('#app [data-bank-noledger]');
+      const nav = document.querySelector('#app nav.nl-banktabs'), sb = document.querySelector('#app .sbar-band');
+      return {gap: Math.round(top - h), tabsFirst: !!(nav && sb && nav.getBoundingClientRect().top < sb.getBoundingClientRect().top), sbPad: sb ? parseFloat(getComputedStyle(sb).paddingTop) : 0, cut: nl ? (nl.scrollWidth > nl.clientWidth + 1 || nl.getBoundingClientRect().right > innerWidth + 1) : null}; }""")
+    ok(lay["gap"] <= 28 and lay["tabsFirst"] and lay["sbPad"] <= 6, "phone Bank: the Bank tabs first, then the row of states, no empty band above it (%s)" % lay)
+    ok(lay["cut"] is False, "phone Bank: the foot bar's words are not cut (%s)" % lay)
     shot(pg, "phone-01-bank-lines")
     pg.locator('[data-nl-banktab="stmts"]').click(); pg.wait_for_timeout(1000)
     ok(pg.evaluate("document.scrollingElement.scrollWidth - innerWidth") <= 1, "Statements: no sideways scroll")
+    dash = pg.evaluate("""() => { const tds = [...document.querySelectorAll('#app tr.nl-gap > td')]; return tds.slice(1, -1).filter((t) => getComputedStyle(t).borderTopStyle === 'dashed').length; }""")
+    ok(dash == 0, "phone Statements: the missing month's card is dashed around, not each of its fields (%d)" % dash)
     shot(pg, "phone-02-bank-statements")
     pg.locator("[data-nl-new]").click(); pg.wait_for_timeout(300); shot(pg, "phone-03-new-menu")
     pg.locator('[data-nl-record="Receipt"]').click(); pg.wait_for_timeout(1000); shot(pg, "phone-04-new-receipt")
