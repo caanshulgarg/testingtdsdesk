@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FinComNav } from "./nav.js";
 import { useDismiss } from "./parts/dismiss.js";
+import { newLook, nlTree } from "./newlook/flag.js";
 // Arc UI (arc-ui, 09-Oct-2026): the sidebar in Arc's look (styles/arc-shell.css): a light surface, Lucide icons as
 // Arc's components use, quiet section labels, the open client as a card, and on a computer a button that folds the
 // sidebar to its icons (remembered on this computer).
@@ -47,7 +48,8 @@ const FOLD = "fincom:sideFolded";
 const meetOn = () => { try { return typeof Cloud === "object" && Cloud.on() && ["owner", "staff"].includes(String((Cloud.st && Cloud.st.role) || "")); } catch (e) { return false; } };
 // the person's choice, kept in this browser (t70: never folded on its own: "only icons make the system unreadable"; folded
 // is a rail with each item's words under its icon, styles/arc-shell.css)
-const readFold = () => { try { return localStorage.getItem(FOLD) === "1"; } catch (e) { return false; } };
+// (the new look: folded to icons on a screen under 1400 px until the person chooses)
+const readFold = () => { try { const v = localStorage.getItem(FOLD); return v === null && newLook() ? innerWidth < 1400 : v === "1"; } catch (e) { return false; } };
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 
 // the menu's items, in order: [group label or null, items]. Each item: icon, label, on, go, and optionally count, title,
@@ -90,6 +92,7 @@ function tree() {
         count: S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0 },
       { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales") },
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
+      { icon: "txn", label: "Payroll", on: bt === "payroll", go: () => goClient("books:payroll"), title: "Salary: any sheet, or typed in" },
     ]],
     ["Returns", [
       { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns and the challan register" },
@@ -101,6 +104,8 @@ function tree() {
       // 29-Oct-2026 (the owner: "From Tally is not visible anywhere"): the Tally page's redesign dropped Connect Tally's
       // step 6, the last way in, so From Tally (Day Book, ledger masters, trial balance) is in the sidebar again
       { icon: "fromtally", label: "From Tally", on: bt === "import", go: () => goClient("books:import"), title: "Bring in a Day Book, the ledger masters or a trial balance exported from Tally" },
+      // FinCom Books (next-books-p1): one set of books for every client, read from fb_* (screens/fbooks)
+      { icon: "books", label: "FinCom Books", on: bt === "fb", go: () => goClient("books:fb"), title: "Trial balance, ledgers and day book from FinCom Books" },
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
       { icon: "reports", label: "MIS", on: bt === "mis", go: () => goClient("books:mis"), title: "Management reports from the books" },
       // ROUND 105: the person's own MIS (templates, charts, describe in words, save and share, Excel and PDF)
@@ -242,7 +247,7 @@ export default function Side() {
 
   const co = CO(), open = co || (S.coId && S.companies[S.coId]);
   const home = S.view === "home" || !open;
-  const groups = tree();
+  const groups = nlTree() || tree();
   const all = groups.flatMap(([, items]) => items), barOn = all.some((x) => x.bar && x.on);
   // stability batch 1: the firm's menu and a client's are two different trees; each is drawn whole (keyed by which one),
   // so going from one to the other replaces the menu in one go instead of sliding the shared items (Help, the separator)

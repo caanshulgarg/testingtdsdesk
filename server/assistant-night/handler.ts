@@ -10,7 +10,7 @@
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
 import { load } from "../gst-run/data.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf } from "./nightinput.js";
+import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf, monthEndsIST, daysOfBooks } from "./nightinput.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { journals } from "../_shared/dailyjournals.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
@@ -116,7 +116,20 @@ export function handler(deps: Deps) {
     const jobRows = jobIds.length ? await rest("/rest/v1/tally_post_jobs?select=id,status,results&id=in.(" + jobIds.join(",") + ")").catch(() => []) : [];
     const jobs = Object.fromEntries((Array.isArray(jobRows) ? jobRows : []).map((j: any) => [j.id, j]));
     await rpc("entry_settle", { p_firm: firm, p_client: cid, p_failed: draftsOf(draftRecs, jobs, prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at }))).filter((d: any) => d.state === "failed").map((d: any) => d.dedupe) }).catch(() => null);
-    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    // next-payroll (review B1): the pay heads of Tally's payroll ("Basic", "HRA": tally_ledgers.for_payroll) with Tally's pay
+    // head type, so a payroll voucher entered in Tally counts as salary booked and the employer's contributions never do (a
+    // cloud without migration 74's columns: none, as before)
+    const phRows = await rest("/rest/v1/tally_ledgers?select=name,pay_type&for_payroll=eq.true&merged_into=is.null&deleted_at=is.null&book_id=eq." + enc(String(book.book_id)) + "&limit=2000").catch(() => []);
+    const payHeads = (Array.isArray(phRows) ? phRows : []).filter((l: any) => l && l.name).map((l: any) => ({ name: String(l.name), type: String(l.pay_type || "") }));
+    // (sixth, seventh reviews) when the month-end days of the lookback (in India's time) and the drafts' own days were last
+    // read from Tally (tally_days.at), each from the client's book that holds it (a split year's March in last year's
+    // book): a Tally Payroll part not in the books may be in Tally until its day was read after it was sent
+    const ends = Array.from(new Set(monthEndsIST(now(), 15).concat(draftRecs.map((r: any) => String((((r.data || {}).vouchers || [])[0] || {}).date || "").slice(0, 10)).filter((x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x))))).slice(0, 60);
+    const cBooks = await rest("/rest/v1/tally_books?select=book_id,from_date&firm_id=eq." + enc(firm) + "&client_id=eq." + enc(cid)).catch(() => []);
+    const bIds = (Array.isArray(cBooks) ? cBooks : []).map((x: any) => String(x.book_id)).filter(Boolean);
+    const dayRows = bIds.length ? await rest("/rest/v1/tally_days?select=book_id,day,at&book_id=in.(" + bIds.map(enc).join(",") + ")&day=in.(" + ends.join(",") + ")").catch(() => []) : [];
+    rows.days = daysOfBooks(Array.isArray(cBooks) ? cBooks : [], Array.isArray(dayRows) ? dayRows : []);
+    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, payHeads, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }

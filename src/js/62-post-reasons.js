@@ -85,7 +85,7 @@ const POST_REASONS = [
     reason: "No answer from Tally: it may or may not be in Tally",
     fix: "Look in Tally's Day Book for the bill's date before anything else. If it is there: mark posted with its Tally id. If not: press Not in Tally – post again (the FinCom Bridge looks in Tally first)."},
   {id: "incomplete", kind: "review", again: false,
-    re: /replied 'created'|cannot be found in|not found yet in|reply needs a look|^Tally's reply: |<RESPONSE>|Tally did not confirm|Tally took it; not read back|not yet read back|accepted it.*being checked/i,
+    re: /replied 'created'|cannot be found in|not found yet in|reply needs a look|^Tally's reply: |<RESPONSE>|Tally did not confirm|Tally took it; not read back|not yet read back|not confirmed by Tally yet|accepted it.*being checked/i,
     seen: "Tally replied 'created', but the entry cannot be found … · Tally's reply: … · Tally did not confirm it · not yet read back",
     reason: "Tally's reply was incomplete: it said it took the entry, but FinCom could not find it in Tally",
     fix: "Look in Tally's Day Book for the bill's date. If it is there: mark posted with its Tally id. If not: press Not in Tally – post again (the FinCom Bridge looks in Tally first)."},

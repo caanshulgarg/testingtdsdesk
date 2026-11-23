@@ -43,6 +43,10 @@ import { DupWords, OverlapPanel, RepMark } from "../parts/bank/Overlap.jsx";
 // a new Tally ledger suggested for a line with none, made from a review (next-bank-newled: src/js/96-bank-newled.js)
 import "../../../src/js/96-bank-newled.js";
 import { NewLedHint, NewLedBulk, NewLedReview } from "../parts/bank/NewLedgers.jsx";
+// the new look (newlook/flag.js): the five status words on each line
+import { newLook } from "../newlook/flag.js";
+import { NL_BST } from "../newlook/words.js";
+export const bstOf = (r) => (!newLook() ? BST[r.state] : r.state === "ready" && r.postError ? ["bad", "Problem"] : NL_BST[r.state]) || ["no", r.state];
 
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to do: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To do its ledger; it then waits here.",
@@ -135,7 +139,7 @@ function bankCols(b, rows, nSel) {
     { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
     { k: "bal", role: "amount", label: "Balance", cls: "n bal", sum: false, filter: <HeadFilter k="bal" label="Balance" />, v: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? null : num(r.balance)),
       cell: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? "" : INR.format(r2(num(r.balance)))) },
-    { k: "st", role: "status", label: "Status", cls: "bs-st", filter: <HeadFilter k="st" label="Status" />, v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "st", role: "status", label: "Status", cls: "bs-st", filter: <HeadFilter k="st" label="Status" />, v: (r) => bstOf(r)[1], cell: (r) => { const w = bstOf(r); return <span className={"tag " + w[0]} title={newLook() ? w[1] : undefined}>{newLook() ? w[1].split(" · ")[0] : w[1]}</span>; } },
     { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
     // the voucher type the line goes to Tally as (set by the ledger: Contra for a bank or cash ledger); changeable while open
     { k: "vt", label: "Type", cls: "vt", filter: <HeadFilter k="vt" label="Type" />, v: (r) => vtypeOf(r), cell: (r) => ["attention", "suggested", "ready"].includes(r.state)
@@ -392,7 +396,7 @@ function saveNow() {
   toast(typeof Cloud === "object" && Cloud.on() ? "Saved on this computer; sending to the firm account." : "Saved on this computer.");
 }
 
-function BankPage() {
+export function BankPage() {
   const b = B(), co = CO();
   if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" page="table" />; }
   if (b.loading) return <Loading what="bank statements" page="table" />;

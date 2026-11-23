@@ -313,5 +313,27 @@ for n_, by in ((113, BB), (114, None)):
     ok(c == "0" and t is None and "port 9001" not in msg(n_) and msg(n_), "11. the beat %s: no words from it: %r" % ("of another bridge" if by else "naming no bridge", msg(n_)))
 close_all()
 
+print("== 12. (next-fix-post-resume) a posting paused part-way and put back by tally-ingest: only its own bridge takes it")
+# tally-ingest's resumePaused (the owner's "yes to both", 23-Nov-2026) puts a posting FinCom stopped part-way back to waiting
+# with taken_by kept, in words that are not "Put back for the same FinCom Bridge" (no 30 s more). The hand-out (203's text,
+# as applied) gives a posting once taken only to the bridge that took it, on its own key: bridge B, another computer key with
+# the same company open (the linked GUID), never gets it, at once or later; bridge A takes it at once
+close_all(); beat_cos([[CO, GUID]])
+info_b = st.beat("made-up-b", BB, [CO]); info_b["bridges"][BB]["cos"] = [[CO, GUID]]; st.setbeat(DB, info_b)
+job(121)
+db.sql("update tally_post_jobs set status = 'waiting', taken_by = %s, target_bridge = %s, taken_at = now() - interval '5 minutes', first_taken_at = now() - interval '5 minutes', attempts = 1, seq = 5, "
+       "message = 'Carrying on: FinCom Bridge sends the rest of this posting now; what it already sent to Tally is never sent again.', updated_at = now() where id = %s" % (q(BA), q(BA), q(J(121))))
+tb = take(DB, BB)
+ok(tb is None and status(121) == "waiting", "12. bridge B on another key, the company open there too: not handed it (%s, %s)" % (tb, status(121)))
+ok(count(DB, BB) == "0", "12. not counted for bridge B either (%s)" % count(DB, BB))
+ta = take()
+ok(ta is not None and ta["id"] == J(121) and one("select taken_by from tally_post_jobs where id = %s" % q(J(121))) == BA, "12. bridge A, which took it first: handed it at once (%s)" % ta)
+# (the check's control: bridge B, as it beats here, does take a posting of its own key for that company)
+close_all(); job(122, dev=DB)
+tb = take(DB, BB)
+ok(tb is not None and tb["id"] == J(122), "12. (control) bridge B takes a posting of its own key for the company (%s)" % tb)
+st.setbeat(DB, st.beat("made-up-b", BB, [], ago=30))
+close_all()
+
 print("\nALL PASSED: %d" % len(fails) if not fails else "\nFAILED: %d\n  %s" % (len(fails), "\n  ".join(fails)))
 sys.exit(1 if fails else 0)
