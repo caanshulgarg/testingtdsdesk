@@ -106,20 +106,5 @@ const PreFile = {
     S.prefile = {open: true, busy: true, kind}; render();
     setTimeout(() => { try { S.prefile.res = kind === "tds" ? this.tds(a, b, c) : this.gst(a, b); } catch (e){ S.prefile.err = (e && e.message) || String(e); } S.prefile.busy = false; render(); }, 30);
   },
-  close(){ S.prefile = null; render(); },
   title(res){ return res.kind === "tds" ? TDS.formShort(res.form, res.fy) + " " + res.q + " " + res.fy : "GST " + GSTR.label(res.ym) + (res.reg ? " (" + res.reg + ")" : ""); },
-  excel(res){
-    const head = [["Check before filing: " + this.title(res) + " · " + res.client], ["Run " + new Date(res.at).toLocaleString("en-GB") + ". FinCom's own checks, no AI."], [],
-      ["Check", "Result", "Items", "Amount", "Note"]].concat(res.lines.map(l => [l.title, l.status === "ok" ? "ok" : l.status === "fix" ? "fix this" : l.status === "na" ? "does not apply" : "could not check", l.count || 0, l.amount || 0, l.note || ""]));
-    const items = [["Check", "Date", "Voucher", "Party or ledger", "Section or type", "Amount", "Note"]].concat(res.lines.flatMap(l => (l.findings || []).flatMap(f => (f.rows || []).map(x =>
-      [l.title, x.date ? fmtDate(tallyDate(x.date)) : "", x.no || "", x.party || "", x.type || "", r2(num(x.amount)), x.note || ""]))));
-    return FC.excel("check-before-filing-" + this.title(res), [["Checklist", head], ["Entries", items]]);
-  },
-  openEntry(x){
-    const d8 = String(x.date || "").slice(0, 8);
-    S.prefile = null;
-    const lk = LK.st();
-    Object.assign(lk, {kind: "find", q: String(x.no || x.party || ""), typ: "", from: d8 || lk.from, to: d8 || lk.to, heard: "", led: ""});
-    FC.go("lookup"); LK.run("auto");
-  },
 };

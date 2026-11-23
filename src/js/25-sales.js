@@ -6,23 +6,7 @@ const GST_STATES = {"01":"Jammu and Kashmir","02":"Himachal Pradesh","03":"Punja
   "19":"West Bengal","20":"Jharkhand","21":"Odisha","22":"Chhattisgarh","23":"Madhya Pradesh","24":"Gujarat","26":"Dadra and Nagar Haveli and Daman and Diu","27":"Maharashtra",
   "29":"Karnataka","30":"Goa","31":"Lakshadweep","32":"Kerala","33":"Tamil Nadu","34":"Puducherry","35":"Andaman and Nicobar Islands","36":"Telangana","37":"Andhra Pradesh",
   "38":"Ladakh","97":"Other Territory","96":"Other Country"};
-// the states in code order (01 … 38, then 96, 97): an object's number-like keys ("10") come before "01" in JavaScript
-function gstStateList(){ return Object.keys(GST_STATES).sort((a, b) => num(a) - num(b)).map(c => [c, GST_STATES[c]]); }
 const SALES_RATES = [0, 0.25, 3, 5, 12, 18, 28, 40];
-// From 22-09-2025 (GST rate rationalisation) most goods and services moved from 12% to 5% and from 28% to 18%;
-// 12% and 28% remain only for a few items. Kept in the list, with a warning on later invoices (review item 10).
-const GST_RATE_CHANGE = "2025-09-22";
-function salesRateWarnings(x){
-  const out = [];
-  if (!x || !x.date || x.date < GST_RATE_CHANGE) return out;
-  (x.items || []).forEach((it, i) => {
-    const r = num(it.gstRate);
-    if ((r === 12 || r === 28) && (String(it.desc || "").trim() || num(it.rate)))
-      out.push("Item " + (i + 1) + (it.hsn ? " (HSN/SAC " + it.hsn + ")" : "") + ": " + r + "% applies after 22-09-2025 only to a few items; most moved to " + (r === 12 ? "5%" : "18%") + ". Check the rate for this HSN/SAC.");
-  });
-  return out;
-}
-const SALES_UNITS = ["Nos", "Pcs", "Kg", "Gm", "Ltr", "Mtr", "Sq Ft", "Box", "Set", "Hrs", "Days", "Month", "Job"];
 function stateOfGstin(g){ return /^\d{2}[A-Z]/.test(String(g || "")) ? String(g).slice(0, 2) : ""; }
 function stateCodeFrom(text){
   const t = String(text || "").trim();
@@ -206,9 +190,6 @@ function salesLedgerFor(rate, inter){
   const m = ledInKept.m, named = "n" in m ? m.n : (m.n = (B().ledgers.list || []).find(l => /^sales(\s*(a\/c|account))?$/i.test(l.name)));
   return named ? named.name : "";
 }
-// output tax ledgers (optionally rate-wise, e.g. "Output CGST 9%" or "Output IGST 18"); v: the invoice, for the state of
-// the client's own registration it is issued from (next-fix-igst-pick, 16-Nov-2026: taxLedgerPick, below)
-function taxLedgerFor(kind, rate, v){ return taxLedgerPick(kind, rate, v).ledger; }
 /* ---------- the output GST ledger by the registration an invoice is issued from ---------- */
 // A client registered in several states keeps an output IGST (CGST, SGST) ledger for each, tagged by the state ("IGST
 // Output - Maharashtra", "Output SGST MH", "Output IGST (27)") or by the GSTIN on its Tally master, and often a plain one
@@ -630,10 +611,6 @@ function salesLearnVt(){
   }
   if (was !== !!s.vtAsk) (s.list || []).forEach(v => mapInvoice(v));
 }
-// the person's answer when the books use several sales types: kept for the client
-function salesVtAnswer(t){ const s = SL(); if (!s || !t) return; s.cfg.voucherType = t; s.cfg.vtBy = "asked"; s.cfg.vtFrom = "books"; delete s.cfg.vtNotice; s.vtAsk = null; saveSales({cfg: true}); s.list.forEach(v => mapInvoice(v)); render(); }
-// the notice of a type learnt from the books, shown until the person closes it or presses Change
-function salesVtNoticeDone(open){ const s = SL(); if (!s) return; if (s.cfg.vtNotice) s.cfg.vtNotice.seen = new Date().toISOString(); if (open) s.showSettings = true; saveSales({cfg: true}); render(); }
 function normInvNo(s){ return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^0+/, ""); }
 function ledgerProblems(v, lines){
   const p = [];

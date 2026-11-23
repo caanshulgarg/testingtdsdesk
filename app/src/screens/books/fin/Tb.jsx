@@ -6,6 +6,7 @@
 // The "Loan given" tick (round 4, 03-Oct-2026, item 26; was on the Accounts page's Mapping): a ledger under Loans &
 // Advances (Asset) can be marked so the MIS cash flow puts it under investing: co.choices["flow:<ledger>"] = loan_given,
 // confirmed by the person who ticks it; unticked, it is forgotten. The column shows only when such a ledger is there.
+import "../../../../../src/js/99-screen-parts.js";
 import { useEffect, useRef, useState } from "react";
 import Button from "../../../parts/Button.jsx";
 import Tag from "../../../parts/Tag.jsx";

@@ -1514,15 +1514,6 @@ async function setAutoNumbering(){
   } catch (e){ toast("Could not reach Tally: " + e.message); }
   render();
 }
-/* ---------- settings ---------- */
-// the Tally Bridge settings (app/src/screens/Tally.jsx): an address, key or following typed; a Tally company linked to a
-// client; one Tally chosen (a port) or back to automatic
-function bridgeSet(k, v){ Bridge.setCfg({[k]: typeof v === "string" ? v.trim() : v}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } render(); }
-function bridgePin(port){
-  port = num(port); Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
-  if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
-  Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
-}
 async function saveBridgeSetup(){
   let t = null;
   try { t = await blockText(BRIDGE_SETUP_ID); } catch (e){ t = null; }

@@ -5,6 +5,7 @@
 // next-itc-simple (the owner, 24-Oct-2026: "in 3B if we want to see the hyperlink detail it should pop up a window rather
 // than showing it below"): every figure opens a window (Pop: ✕ or Esc closes it) with the rows behind it; table 4 as the
 // Final credit for 3B tab shows it (ItcFigure.jsx), with "Open in 2B reconciliation"; 6.1 how each head is paid.
+import "../../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { r3bTables, r3bBills, R3B_CLICK } from "./portal.js";

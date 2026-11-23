@@ -8,6 +8,7 @@
 //   AddChallan: a challan entered by hand (here and on a return's Challans tab), or changed.
 //   UseBalance: "Use…", the one way a challan's balance goes to a return (TDSReg.useBalance), here and in a return.
 //   TracesCheck: TRACES' consumed amount against FinCom's (a return's After filing).
+import "../../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 import { useDismiss } from "../../parts/dismiss.js";
 import ListTable from "../../parts/ListTable.jsx";

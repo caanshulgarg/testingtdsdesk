@@ -8,6 +8,7 @@
 //   and TDS ledgers pages' Please check; the bell has the count only (AlertHub, src/js/63). Not on Sync activity.
 //   No Clear: the line goes by itself the moment each ledger is settled (it arrives in FinCom's list, under Tally's other
 //   capitals or spaces too; Tally renamed it; a person confirmed it on the ledgers page).
+import "../../../src/js/99-screen-parts.js";
 export default function UnknownLedgers({ cid, where, byBook }) {
   const g = unknownGroup(cid, byBook);
   if (!g) return null;

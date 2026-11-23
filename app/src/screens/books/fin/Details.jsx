@@ -3,6 +3,7 @@
 // date and UDIN. The auditor comes from the firm's settings unless typed here. Each box is kept as it is left
 // (FinSt.inputsSet: b.fs.inputs, per client, synced). Also the format (from the entity type unless chosen) and the stock
 // when Tally does not keep it (FS's settings, as the Accounts page had them).
+import "../../../../../src/js/99-screen-parts.js";
 import DetailDrawer from "../../../parts/DetailDrawer.jsx";
 import CommitBox from "../../../parts/CommitBox.jsx";
 import Button from "../../../parts/Button.jsx";

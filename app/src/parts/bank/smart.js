@@ -12,6 +12,7 @@
 // Post to Tally / Create Tally file (src/js/24, src/js/22).
 
 // a chip: [key, words on it, what in the narration makes a line one, decodeNarr's modes that count too, a word for a rule]
+import "../../../../src/js/99-screen-parts.js";
 export const CHIPS = [
   ["UPI", "UPI", /\bUPI\b/, ["UPI"], "UPI"],
   ["IMPS", "IMPS", /\bIMPS\b|\bMMT\b/, ["IMPS"], "IMPS"],

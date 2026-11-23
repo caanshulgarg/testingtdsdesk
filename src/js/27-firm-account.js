@@ -736,8 +736,6 @@ function startCloudSync2(){
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });
 
-/* ---------- plan, balance and charging ---------- */
-const MODULE_ICON = {bills: "\u{1F9FE}", bank: "\u{1F3E6}", sales: "\u{1F4C4}", claude: "\u2728", vision: "\u{1F441}", tally: "\u{1F4D2}", cloud: "\u2601", clients: "\u{1F465}"};
 Cloud.rpc = async function(name, args){ return this.api("rpc/" + name, {method: "POST", body: args || {}}); };
 Cloud.fn = async function(name, body, retry){
   if (!retry) await this.fresh().catch(() => {});
@@ -788,10 +786,6 @@ async function loadAccount(quiet){
   } catch (e){ if (!quiet) toast("Could not read the account: " + e.message); return null; }
 }
 function accountBalance(){ return S.account && S.account.firm ? num(S.account.firm.balance) : null; }
-function moduleIncluded(code){
-  const inc = S.account && S.account.firm && S.account.firm.plan && S.account.firm.plan.includes;
-  return !!(inc && inc[code]);
-}
 // charge for work done here; returns true when the work may go ahead
 async function charge(code, qty, ref, note){
   if (!Cloud.on() || !S.account) return true;           // not signed in: nothing is charged
@@ -1205,30 +1199,10 @@ function billStep(dir){
   const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + dir))];
   if (next && next.id !== S.selected){ S.selected = next.id; render(); }
 }
-// an approved bill, not yet in Tally, back to To review (staying on the page it was sent back from)
-function billBack(id){ const e = D().entries[id]; if (e){ const keep = S.tab; undoApproval(e); S.tab = keep; render(); } }
-// a ledger Tally does not have, in the bills waiting to be posted: use the Tally ledger chosen instead
-function billFixPick(old, role, to){
-  if (!to){ toast("Choose the Tally ledger first."); return; }
-  const n = replaceLedgerInWaiting(S.coId, old, to, role);
-  toast("\u201c" + to + "\u201d used in " + n + " bill" + (n === 1 ? "" : "s") + " and saved for future bills.");
-  refreshStats(S.coId); render();
-}
 // the bank's buttons (data-act="bank…" in the old bank screen), for a React screen
 function bankAct(act){ return bankClick({dataset: {act}}); }
-// open a kind of document (bills, bank, sales) at a step; the step the client is on when none is given
-function goDocType(type, step){
-  step = step || curStep();
-  if (type === "bank" && (!S.bank || S.bank.cid !== S.coId)) loadBank(S.coId).then(() => { if (S.pendingBankFilter && S.bank){ S.bank.filter = S.pendingBankFilter; S.pendingBankFilter = null; } render(); });
-  goStep(step === "post" && type === "sales" ? "review" : step, type);
-}
 // Transactions (app/src/screens/Txn.jsx): a kind of register, an entry opened where it is worked on, its document
 function txnTabGo(k){ S.txnTab = k; render(); }
-function txnGo(kind, id){
-  if (kind === "bill"){ const e = D().entries[id]; if (e){ S.tab = "invoices"; S.filter = e.status === "duplicate" ? "duplicate" : e.status; S.reviewTable = e.status === "draft"; S.selected = id; S.drawerOpen = e.status === "draft"; render(); window.scrollTo(0, 0); } return; }
-  if (kind === "sale"){ S.tab = "sales"; if (SL()) SL().openId = id; render(); window.scrollTo(0, 0); return; }
-  S.tab = "bank"; if (S.bank){ S.bank.filter = "all"; S.bank.sticky.add(id); } render(); window.scrollTo(0, 0);
-}
 function txnOpenDoc(key, path, name){
   toast("Opening the document…");
   FileStore.get(S.coId, key, path || "", name || "").then(f => {
@@ -1239,10 +1213,6 @@ function txnOpenDoc(key, path, name){
 // a filter kept in S[id] (S.r1F, S.b2F, …): a box typed in (typed: the page follows a moment later) or a choice
 function setFilter(id, key, val, typed){ S[id] = Object.assign({}, S[id], {[key]: val}); if (typed){ FinComReact.redraw(); later(id + "q", render, 250); } else render(); }
 function clearFilter(id){ S[id] = {}; render(); }
-// 2B reconciliation (app/src/screens/gst/TwoB.jsx): its tab, span, filters, and what the user settles about a document
-// 27Q: a non-resident deductee's details for the file; 27EQ: a TCS ledger's collection code
-function tdsNrSet(party, k, v){ const b = S.books; b.nrInfo = Object.assign({}, b.nrInfo); b.nrInfo[party] = Object.assign({}, b.nrInfo[party], {[k]: typeof v === "string" ? v.trim() : v}); saveBooks(); render(); }
-function tdsTcsCode(ledger, code){ const b = S.books; b.tcsCodes = Object.assign({}, b.tcsCodes, {[ledger]: code}); saveBooks(); render(); }
 // (a new tolerance re-matches every month: one that moves the credit of a filed 3B is asked first, with a reason)
 function r2SetTol(v){
   const tol = Math.max(0, num(v)), reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
@@ -1267,30 +1237,14 @@ function r2Link(key, id){ if (id && r2Locked([key], [id], r2Do.link(key, [id])))
 function setAndShow(key, val, typed){ S[key] = val; if (typed){ FinComReact.redraw(); later(key, render, 250); } else render(); }
 // a TDS return's pages (app/src/screens/TdsReturn.jsx): its tabs, filters, sorting, the rows opened, challans
 function tdsTabGo(id){ S.tdsTab = id; S.tdsFix = ""; render(); }
-function tdsFilter(tab, key, val, typed){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: Object.assign({}, (S.tdsFl || {})[tab], {[key]: val})}); if (typed){ FinComReact.redraw(); later("tdsf", render, 250); } else render(); }
 function tdsFilterClear(tab){ S.tdsFl = Object.assign({}, S.tdsFl, {[tab]: {}}); render(); }
 function tdsSortBy(tab, k){ const cur = (S.tdsSort || {})[tab] || {}; S.tdsSort = Object.assign({}, S.tdsSort, {[tab]: {k, d: cur.k === k ? -(cur.d || 1) : 1}}); render(); }
-// one row opened under a table (a challan's deductions, a deductee's, an employee's months); a second click closes it
-function tdsToggle(which, key){ S[which] = S[which] === key ? "" : key; render(); }
 // tds-challans (10-Oct-2026): a challan is never used beyond its amount; the tagging goes through TDSCH.tag (src/js/65).
 // (tdsAlloc, one row to a challan, called by nothing since the React screens: taken out with next-fix-mis-freeze for
 // legacy.js's budget)
 // many deductions at once (Entries: the ticked ones): to a challan (off their challans: tdsTakeOff, src/js/86; the old
 // tdsUntagMany here, called by nothing since the React screens, taken out with next-fix-tds-party for legacy.js's budget)
 function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }
-// a challan taken out (tds-layout): a soft delete with its reason, the one dialog; TDSReg.canDelete says when it cannot be
-// (read from Tally, or anything allocated to it); Undo brings it back
-async function challanDelete(id){
-  const c = TDS.challans().find(z => z.id === id), no = TDSReg.canDelete(c);
-  if (no){ toast(no); return false; }
-  const ok = await askConfirm({title: "Delete challan " + TDSCH.label(c) + "?", ok: "Delete", danger: true,
-    body: "It leaves the register; the register keeps it, with your reason, under Deleted.<br><label>Why <input type=\"text\" id=\"chDelWhy\" style=\"width:100%\"></label>",
-    read: () => (document.getElementById("chDelWhy") || {}).value || "", validate: (v) => String(v || "").trim().length < 3 ? "Say why the challan is deleted." : ""});
-  if (!ok || !ok.ok) return false;
-  const r = TDSReg.deleteHand(id, ok.data);
-  if (r.ok) toast("Challan " + TDSCH.label(c) + " deleted.", {actions: [{label: "Undo", run: () => { TDSReg.restore(id); render(); }}]}); else toast(r.why);
-  render(); return r.ok;
-}
 // a TDS payment voucher in Tally becomes a challan, once its BSR code and serial are given, or its CIN (tds-challans:
 // the CIN's own date of deposit then; the voucher's section when it pays one section only)
 function challanFromBooks(vid, bsr, ser){
@@ -1311,14 +1265,6 @@ function challanFromBooks(vid, bsr, ser){
   const pl = typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.suggested) : [];
   saveBooks(); toast("Challan added from the books." + (pl.length ? " What it pays is suggested on " + pl[0].form + " " + pl[0].q + " " + pl[0].fy + ": confirm it on Challans." : "")); render(); return true;
 }
-function certAdd(c){
-  const party = String(c.party || "").trim();
-  if (!party){ toast("Name the deductee as it appears in Tally."); return false; }
-  S.books.certs = (S.books.certs || []).concat([{id: uid("ct"), party, pan: String(c.pan || "").toUpperCase().trim(), section: String(c.section || "").toUpperCase().trim(),
-    certNo: String(c.certNo || "").trim(), rate: num(c.rate), from: c.from || "", to: c.to || "", limit: num(c.limit)}]);
-  saveBooks(); toast("Certificate added."); render(); return true;
-}
-function certDelete(id){ S.books.certs = (S.books.certs || []).filter(c => c.id !== id); saveBooks(); render(); }
 // a table printed, or saved as PDF, with the client's name above it
 function printTable(id, title){
   const co = CO(), el = document.getElementById(id);
@@ -1355,7 +1301,6 @@ function tdsPick(fy, q, form){
 function gstOpen(ym, part, reg, sub){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; Smart.keep("gst", {ym}); if (S.books) S.books.reco = null; }
   S.gstSeen = (S.gstReg || "") + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly");
   S.gstPart = part; S.gstView = "return"; S.gstSub = sub || ""; render(); window.scrollTo(0, 0); }
-function gstViewGo(v){ S.gstView = v; render(); }
 function gstSubGo(sub){ S.gstSub = sub; render(); }
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
@@ -1376,34 +1321,7 @@ function revTds(id, on){
 // backup downloaded; a drop key switched off; the platform page's buttons (they read its boxes by id) and a firm's plan
 // the firm account's admin service not yet updated (Phase 2 waits for the database): it does not know the new actions
 function adminNotYet(e){ return /unknown action/i.test(String((e && e.message) || "")); }
-function acctPerson(what, email){
-  // a reset link by email: they choose the new password; "makepw" is the fallback where email is not set up
-  if (what === "reset") Cloud.fn("admin", {action: "send_reset", email, redirect: appUrl()}).then(r => { S.newPerson = null; toast(r.note || "Reset link sent."); render(); },
-    e => toast(adminNotYet(e) ? "Reset links by email start once the firm account\u2019s update is done. For now, use \u201cMake a password\u201d." : e.message));
-  else if (what === "makepw") Cloud.fn("admin", {action: "reset_password", email}).then(r => { S.newPerson = {email: r.email, password: r.password}; toast("New password made."); render(); }, e => toast(e.message));
-  else if (what === "unlock") Cloud.fn("admin", {action: "unlock", email}).then(r => toast(r.note || "Unlocked."),
-    e => toast(adminNotYet(e) ? "The lockout starts once the firm account\u2019s update is done: nobody is locked out until then." : e.message));
-  else if (what === "mfa") askConfirm({title: "Reset two-step sign-in for " + email + "?", ok: "Reset", body: '<p class="note">Their authenticator entry is removed. At the next sign-in they set it up again with their phone. Do this only when you are sure it is them asking.</p>'})
-    .then(a => { if (a) Cloud.fn("admin", {action: "reset_two_step", email}).then(() => toast("Two-step sign-in reset for " + email + "."), e => toast(e.message)); });
-  else Cloud.fn("admin", {action: "set_person", email, active: what === "on"}).then(() => { toast(what === "on" ? "Switched on." : "Switched off."); loadAccount(); }, e => toast(e.message));
-}
-function acctBackup(id){
-  // (the firm's whole backup: the server may take long to start its answer; the answer itself is waited for while it comes)
-  Cloud.api("rpc/backup_data", {method: "POST", body: {p_id: num(id)}, timeout: 180000}).then(d => {
-    saveFile("tds-desk-backup-" + new Date().toISOString().slice(0, 10) + ".json", new Blob([JSON.stringify(d, null, 1)], {type: "application/json"}));
-    toast("Downloaded. Keep it somewhere outside this system.");
-  }, e => toast(e.message));
-}
-function acctDropOff(id){
-  askConfirm({title: "Switch this key off?", ok: "Switch it off", body: '<p class="note">Anything using this key will no longer be able to send files in.</p>'}).then(a => {
-    if (!a) return;
-    Cloud.rpc("revoke_drop_key", {p_id: id}).then(() => Cloud.rpc("my_drop_keys")).then(k => { S.dropKeys = [].concat(k || []); render(); }, e => toast(e.message));
-  });
-}
 function cloudForm(k, v){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: v}); if (k === "email") Cloud.setCfg({email: v.trim()}); }
-function cloudAuto(on){ Cloud.setCfg({auto: on}); startCloudSync(); render(); }
-function docsKeep(on){ S.firm.cloudDocs = on; Store.saveFirm(); toast(on ? "Documents will be kept in the firm account." : "Documents stay on this computer only."); render(); }
-function docYearsSet(v){ S.firm.docYears = num(v); Store.saveFirm(); render(); }
 function reactOwned(el){ return !!(el && el.closest && el.closest(".react-host") && !el.closest("[data-legacy]")); }
 document.addEventListener("click", ev => {
   if (reactOwned(ev.target)) return;
@@ -2179,22 +2097,6 @@ function coCommit(path, v){
   }
   Store.saveCompany(co); refreshStats(co.id); render();
 }
-// per payment type: the TDS ledger (kind "tds") or the default expense ledger (kind "exp")
-function coSetRuleLedger(kind, ruleId, v){ const co = CO(); const m = kind === "tds" ? co.tdsLedgers : co.expenseLedgers; if (!((co.id + kind + ruleId) in SETUP_PREV)) SETUP_PREV[co.id + kind + ruleId] = m[ruleId] || ""; m[ruleId] = v; later("c" + co.id, () => Store.saveCompany(co), 600); }
-// a TDS ledger of another section, or an income ledger as the expense default, is refused when the box is left
-function coCommitRuleLedger(kind, ruleId){
-  const co = CO(); if (!co) return;
-  const m = kind === "tds" ? co.tdsLedgers : co.expenseLedgers, val = String(m[ruleId] || "").trim(), pk = co.id + kind + ruleId, prev = pk in SETUP_PREV ? SETUP_PREV[pk] : val;
-  delete SETUP_PREV[pk];
-  if (!val) return;
-  const r = ruleOf(ruleId), listed = Ledgers.cid() === co.id && hasLedgerList();
-  let msg = "";
-  if (kind === "tds"){ const c = tdsLedgerCheck(co.id, val, Ledgers.sec(r.old)); if (!c.ok && (listed || c.sec)) msg = c.msg; else if (c.ok) m[ruleId] = c.name; }
-  else if (listed){ const ex = exactLedger(val); if (ex && Ledgers.cls(co.id, ex) === "income") msg = "\u201c" + ex + "\u201d is an income ledger, not for purchase bills"; }
-  if (msg){ m[ruleId] = prev; toast(msg + ". Not taken: " + (prev ? "\u201c" + prev + "\u201d kept." : "left empty.")); }
-  Store.saveCompany(co); render();
-}
-function coSetBlockRule(catId, v){ const co = CO(); co.gstBlock = co.gstBlock || {}; co.gstBlock[catId] = v; Store.saveCompany(co); render(); }
 // the firm's own name, shown in the top bar and on reports
 // First sign-in of an owner with no firm name yet (review item 32): the name (from sign-up where given), address and
 // logo are asked for once; "Later" puts it off until the next sign-in
@@ -2213,37 +2115,11 @@ function firmSetupDue(){
   return !!(S.firm && !S.firm.firmName && !fn && !later && typeof Cloud === "object" && Cloud.on() && S.account && ((S.account.me || {}).role === "owner"));
 }
 function firmSetupLater(){ S.firmSetupLater = true; lsSet("tdsdesk:firmSetupLater", fmtDate(new Date())); render(); }
-function firmSetupSave(d){
-  const name = String(d.name || "").trim();
-  if (!name){ toast("The firm\u2019s name is needed."); return false; }
-  S.firm.firmName = name.slice(0, 120); firmNameToAccount(S.firm.firmName);
-  S.firm.firmAddress = String(d.address || "").trim().slice(0, 400);
-  if (d.logo !== undefined) S.firm.firmLogo = d.logo || "";
-  Store.saveFirm(); toast("Saved."); render();
-  return true;
-}
-// a logo picked from the computer, kept small (a data URL of at most about 150 KB)
-function firmLogoRead(file){
-  return new Promise((ok, no) => {
-    if (!file || !/^image\//.test(file.type)){ no(new Error("Choose a picture (PNG or JPG).")); return; }
-    const img = new Image(), url = URL.createObjectURL(file);
-    img.onload = () => {
-      const k = Math.min(1, 320 / Math.max(img.width, img.height)), c = document.createElement("canvas");
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      const out = c.toDataURL("image/png");
-      out.length > 200000 ? no(new Error("The logo is too large; use a smaller picture.")) : ok(out);
-    };
-    img.onerror = () => no(new Error("That picture could not be read."));
-    img.src = url;
-  });
-}
 // the firm's name goes to the firm account (firms.name, owners only: migration-21) as well as the firm record
 function firmNameToAccount(v){
   const n = String(v || "").trim(); if (!n || typeof Cloud !== "object" || !Cloud.on() || !S.account || ((S.account.me || {}).role !== "owner")) return;
   Cloud.rpc("firm_name_set", {p_name: n}).then(() => { if (S.account.firm) S.account.firm.name = n; }, e => { if (!/firm_name_set|PGRST202|schema cache/i.test(String(e && e.message || e))) toast("The firm's name could not be saved to the firm account: " + ((e && e.message) || e)); });
 }
-function firmSetName(v){ S.firm.firmName = v; later("firm", () => { if (typeof Drafts === "object" && Drafts.hold("firm")) return; Store.saveFirm(); firmNameToAccount(v); }, 600); const el = document.getElementById("firmLine"); if (el) el.textContent = v; }
 function setPath(o, path, v){ const k = path.split("."); if (k.length === 2){ if (!o[k[0]] || typeof o[k[0]] !== "object") o[k[0]] = {}; o[k[0]][k[1]] = v; } else o[k[0]] = v; }
 
 document.addEventListener("change", ev => {
@@ -2429,23 +2305,3 @@ function loadSignupInfo(){
     .then(r => r.json()).then(j => { S.signupInfo = j || {open: false}; render(); }, () => { S.signupAsked = false; });
 }
 window.addEventListener("beforeunload", () => { if (S.coId) lsSet("tdsdesk:last", S.coId); });
-
-// an owner clears a client's wrong GSTIN or PAN, with a reason (review of 02-Oct-2026): on the server through
-// client_clear_ids (migration-25; a sync alone can never empty them), then here
-async function coClearIds(what){
-  const co = CO(), label = what.map(w => w === "gstin" ? "GSTIN " + (co.gstin || "") : "PAN " + (co.pan || "")).join(" and ");
-  const ok = await askConfirm({title: "Clear the " + label + "?", ok: "Clear it", danger: true,
-    body: "<p>" + esc(co.name) + " will have no " + what.map(w => w.toUpperCase()).join(" or ") + " in FinCom until one is typed again. Returns and checks that need it will say so.</p>" +
-      '<label class="f" style="margin-top:12px"><span>Reason (kept with the change)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason"></label>',
-    read: () => ({reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
-    validate: v => v.reason ? "" : "Give the reason."});
-  if (!ok) return;
-  const reason = (ok.data && ok.data.reason) || "";
-  if (Cloud.on() && Cloud.st.state !== "off"){
-    try { await Cloud.rpc("client_clear_ids", {p_client: co.id, p_what: what, p_reason: reason}); }
-    catch (e){ const m = String((e && e.message) || e); toast(/client_clear_ids|does not exist|schema cache/i.test(m) ? "FinCom's cloud is not ready for this yet (migration-25)." : m); return; }
-  }
-  what.forEach(w => { co[w] = ""; });
-  co.idsCleared = (co.idsCleared || []).concat([{what, reason, at: new Date().toISOString(), by: (Cloud.st && Cloud.st.email) || ""}]).slice(-20);
-  Store.saveCompany(co); toast("Cleared. Type the right " + what.map(w => w.toUpperCase()).join(" and ") + " when you have it."); render();
-}
