@@ -51,7 +51,7 @@ try:
         print("== #10 the other screens' files only once signed in")
         del seen[:]
         pg.goto("http://localhost:%d/" % PORT)
-        pg.wait_for_function("() => document.documentElement.getAttribute('data-boot') === 'signin' && typeof render === 'function'", timeout=60000)
+        pg.wait_for_selector('[data-act="cloudSignIn"]', timeout=60000)
         # (the first page counts as drawn after 10 s at most, main.jsx firstPage)
         pg.wait_for_timeout(15000)
         ok(not screens(), "10. the sign-in page: no other screen's file fetched in 15 s (%s)" % screens()[:4])
@@ -62,7 +62,7 @@ try:
         pg.evaluate("() => localStorage.removeItem('tdsdesk-test:cloudsess')")
         print("== #8 a newer build: its first files fetched before Reload")
         pg.goto("about:blank"); pg.goto("http://localhost:%d/" % PORT)
-        pg.wait_for_function("() => typeof render === 'function'", timeout=60000); pg.wait_for_timeout(2000)
+        pg.wait_for_selector('[data-act="cloudSignIn"]', timeout=60000); pg.wait_for_timeout(2000)
         pg.evaluate("() => { window.__same = 1; }")
         NEW["id"] = "mwzznew001-abcdef"; del seen[:]
         pg.wait_for_timeout(6000)
