@@ -5004,17 +5004,10 @@ Deno.serve(sentry.wrap(async (req) => {
           at: typeof (dev as any).post_settings_at === "string" ? (dev as any).post_settings_at : null };
         // migration 54: only the postings this bridge may take (for it, or naming none when it is the main bridge); none when changes only
         const may = mayPost(dev, me.id, (me.entry as any).user);
-        // next-speed (the speed plan, #3): the last posting's time and the recorder's check (asked below, as before) begin now,
-        // beside the postings' count: neither reads or changes the postings (sideReads, awaited below)
-        const sideReads = Promise.all([
-          db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1),
-          recorderGaps(dev, firm, me.id, beatChanges(b))]);
-        sideReads.catch(() => {});     // (its error is met where it is awaited; never an unhandled one while the count is asked)
         if (co || !may) await rescuePosts(dev);
         // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
         // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
-        // (next-speed: the postings and the checks counted side by side, both only read)
-        const posts = co ? 0 : await Promise.all([postsFor(dev, me.id, may && isMain(dev, me.id)), may ? checksFor(dev, me.id, isMain(dev, me.id)) : Promise.resolve([])]).then(([n, ck]) => n + (may ? ck.length : 0));
+        const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
         // migration 139: the newest version only while idle with Tally, at its time, in its computer's slot
         if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prevInfo, beat, ug, posts, (ctl.out as any).release);
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
@@ -5035,9 +5028,10 @@ Deno.serve(sentry.wrap(async (req) => {
           const x = v as any;
           if (x && Date.parse(String(x.at)) > Date.now() - 600000) stock[k] = { from: String(x.from || ""), to: String(x.to || ""), at: String(x.at), again: x.again === true };
         }
-        // reliability audit C4: the last posting's time and the recorder's check (below) are asked side by side (next-speed:
-        // begun above, beside the postings' count)
-        const [{ data: lastJob }, recorder] = await sideReads;
+        // reliability audit C4: the last posting's time and the recorder's check (below) are asked side by side
+        const [{ data: lastJob }, recorder] = await Promise.all([
+          db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1),
+          recorderGaps(dev, firm, me.id, beatChanges(b))]);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
         // phase 2 (migration 44): a PC without the add-on - the change numbers compared with the recorder's lines. Round 19: read
@@ -5092,8 +5086,10 @@ Deno.serve(sentry.wrap(async (req) => {
         const periodStopped = !!beat.paused || !!beat.readStopped || !!(info as any).readStop;
         // review 245 R15 (L5): at most one list of days every 5 s a computer (an empty list while stopped is never held)
         // next-fast-entries (periodpace.js): a bridge whose beat says its fast read is on (FastEntries) is handed up to 30 days
-        // by day too; every other bridge as before (3 by day, 30 at night). next-speed (the speed plan, #1): by day also a
-        // bridge whose Tally has been left alone for a minute or more (lightIdle: idle, quiet 60 s), as at night
+        // by day too; every other bridge as before (3 by day, 30 at night). next-speed (the speed plan, #1): by day a bridge whose
+        // Tally has been left alone a minute or more (lightIdle quiet) is handed more only when its beat says it takes a wide
+        // list by day (periodpace.js wideByDay: today only FastEntries; a default bridge reads at most 3 by day, so more
+        // would be stamped handed out and never read)
         const pace = periodPace(periodNight, b, quiet.quietMs);
         const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bRead, periodStopped, pace.max, pace.night, fastOn(b), { dev, bridge: me.id, shared: gate.shared }, quiet.idle) : null;
         await ledgerProgressFromBeat(firm, dev, b);

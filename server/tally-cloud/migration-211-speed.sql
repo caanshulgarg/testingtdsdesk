@@ -21,9 +21,10 @@ set local lock_timeout = '3s';
 do $names$
 declare d text;
 begin
-  select pg_get_functiondef(p.oid) into d from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-   where n.nspname = 'public' and p.proname = 'tally_book_for' and p.oid = 'public.tally_book_for(uuid,text)'::regprocedure;
-  if d is null then raise exception 'migration 211: public.tally_book_for(uuid, text) is not there. Nothing was changed.'; end if;
+  if to_regprocedure('public.tally_book_for(uuid,text)') is null then
+    raise exception 'migration 211: public.tally_book_for(uuid, text) is not there. Nothing was changed.';
+  end if;
+  d := pg_get_functiondef(to_regprocedure('public.tally_book_for(uuid,text)'));
   if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'tally_book_for') <> 1
      or position('insert into tally_books (book_id, firm_id, client_id, company)' in d) = 0
      or position('on conflict (book_id) do update set client_id = excluded.client_id' in d) = 0 then

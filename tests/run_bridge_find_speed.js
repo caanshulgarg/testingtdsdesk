@@ -7,6 +7,7 @@
 //      (1.2 s) is still found, asked again with 2.5 s (only the ports that did not answer in time);
 //   3. a bridge without sameSession (older than 2.5.3) and another login's: the whole range is looked at as before, the
 //      proven one picked, the other login's never;
+//   5. two own bridges of one login: the lowest port among those asked when the first own answer came;
 //   4. pairing (pair, the code typed) right after a look: only the ports that answered that look are asked with the code;
 //      the bridge paired; one that started after the look (nothing usable among those ports) is found by a whole look.
 const crypto = require("crypto"), {load, HTML} = require("./harness");
@@ -86,6 +87,12 @@ const timed = async (f) => { const t = Date.now(); const r = await f(); return [
   j = await B.pair(CODE).catch(e => ({err: e.message}));
   ok(j && j.key === "m".repeat(24) && B.cfg().url === "http://127.0.0.1:9188", "4. a bridge started after the look is found by a whole look (" + B.cfg().url + ")");
 
+  console.log("== 5. two own bridges of one login answering: the lowest port, as when every port was asked in order");
+  NET = {9101: {id: "go-aa0000000008", key: KEY, same: true, ms: 40}, 9103: {id: "go-aa0000000009", key: KEY, same: true, ms: 10}};
+  fresh({url: "http://127.0.0.1:9150"});
+  f = await B.find();
+  ok(f && f.port === 9101, "5. the lower port picked though the other answered first (" + (f && f.port) + ")");
+  ok(new Set(pings).size < 60, "5. the look still stops early (" + new Set(pings).size + " ports)");
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("ERROR " + (e && e.stack || e)); process.exit(1); });

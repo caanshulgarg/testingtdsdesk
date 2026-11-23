@@ -8,9 +8,9 @@ Checks:
   2. a revoked key is refused at once, on its very next call;
   3. the beat's time and its requests one after another, before and after (printed; the reads side by side, its
      last_seen written as before);
-  4. the older entries' pace (#1): by day a bridge whose Tally has been left alone a minute or more (the typing gate quiet:
-     lightIdle) is handed up to 30 days, the pace said to the database still "day" (p_night false); typing 20 s ago, or a
-     beat that says nothing of its typing gate: 3 as before; at night 30 as before.
+  4. the older entries' pace (#1, review B1): never more days handed out (stamped in tally_period_next_paced) than the
+     bridge reads of the list (bridge-go/daypull.go: 3 by day, 30 at night or with FastEntries): a default bridge with
+     Tally left alone still 3 by day; FastEntries 30; at night 30 as before.
 Needs Deno (DENO). Made-up computer and books only. SPEED_INGEST_JSON=file writes the timings."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -111,26 +111,34 @@ try:
     res["beat_ms"] = sorted(round(x * 1000) for x in times); res["beat_trips"] = trips; res["beat_requests"] = len(sp)
     print("  beat: %s ms; requests one after another %s; requests %d" % (res["beat_ms"], trips, len(sp)))
 
-    print("== 4. the older entries' pace by day")
+    print("== 4. the older entries' pace by day: never more days handed out than the bridge reads")
+    # what a bridge reads of a list (bridge-go/daypull.go applyPeriodDays): at most 3 by day, 30 (pullNightDays) when the
+    # answer says night or its FastEntries is on
+    def accepts(b, r): return 30 if (r.get("periodNight") is True or ((b.get("periodPull") or {}).get("fast") or {}).get("on") is True) else 3
     def pace(b):
         time.sleep(5.3); n = len(FS.ARGS.get("tally_period_next_paced") or []); c, r = call(b)
         a = (FS.ARGS.get("tally_period_next_paced") or [{}])[-1] if len(FS.ARGS.get("tally_period_next_paced") or []) > n else {}
         return c, a, r
-    c, a, r = pace(beat(key_sec=300))
-    ok(c == 200 and a.get("p_max") == 30 and a.get("p_night") is False, "4. Tally left alone 5 minutes: up to 30 days, said 'day' (%s)" % {k: a.get(k) for k in ("p_max", "p_night")})
-    c, a, r = pace(beat(key_sec=60))
-    ok(a.get("p_max") == 30 and a.get("p_night") is False, "4. left alone a minute: 30 (%s)" % a.get("p_max"))
-    c, a, r = pace(beat(key_sec=20))
-    ok(a.get("p_max") == 3, "4. a key 20 s ago: 3 as before (%s)" % a.get("p_max"))
-    c, a, r = pace(plain)
-    ok(a.get("p_max") == 3, "4. a beat that says nothing of its typing gate: 3 as before (%s)" % a.get("p_max"))
+    def handed(tag, b, want):
+        c, a, r = pace(b)
+        days = r.get("periodDays") or []
+        ok(c == 200 and (not a or a.get("p_max") == want), "4. %s: %s days asked of the database (%s)" % (tag, want, a.get("p_max")))
+        ok(not a or a.get("p_max") <= accepts(b, r), "4. %s: no day stamped handed out that the bridge will not read (asked %s, it reads %s)" % (tag, a.get("p_max"), accepts(b, r)))
+        ok(len(days) <= accepts(b, r), "4. %s: the list fits what the bridge reads (%d of %d)" % (tag, len(days), accepts(b, r)))
+        return a
+    a = handed("a default bridge, Tally left alone 5 minutes", beat(key_sec=300), 3)
+    ok(a.get("p_night") is False, "4. said 'day'")
+    handed("a default bridge, left alone a minute", beat(key_sec=60), 3)
+    handed("a key 20 s ago", beat(key_sec=20), 3)
+    handed("a beat that says nothing of its typing gate", plain, 3)
+    handed("Tally busy", beat(key_sec=300, tallyState="busy"), 3)
+    fastb = beat(key_sec=300); fastb["periodPull"] = dict(fastb["periodPull"], fast={"on": True})
+    handed("FastEntries on (takes a wide list by day), left alone", fastb, 30)
     c, a, r = pace(beat(key_sec=300, paused=True))
     ok(not a or a.get("p_max") == 3, "4. reading paused: never 30 (%s)" % a.get("p_max"))
-    c, a, r = pace(beat(key_sec=300, tallyState="busy"))
-    ok(a.get("p_max") == 3, "4. Tally busy: 3 (%s)" % a.get("p_max"))
     dev().update(period_night_from=(h0 - 1) % 24, period_night_to=(h0 + 2) % 24)
-    c, a, r = pace(beat(key_sec=5))
-    ok(a.get("p_max") == 30 and a.get("p_night") is True, "4. at night: 30, said 'night', as before (%s)" % {k: a.get(k) for k in ("p_max", "p_night")})
+    a = handed("at night", beat(key_sec=5), 30)
+    ok(a.get("p_night") is True, "4. at night said 'night', as before")
 finally:
     fn.terminate()
     try: fn.wait(10)

@@ -5,7 +5,7 @@
 //      a server that does not take the filter: the rest by offset, nothing read twice;
 //   2. any other list (no GUID order, or not one book's entries) by offset, as before;
 //   3. GUIDs asked 40 to a request (the gateway's address limit), 4 requests at a time (one after another before); the
-//      answers in the chunks' order.
+//      answers in the chunks' order; a chunk that fails: no further chunk asked.
 const {load, HTML} = require("./harness");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const {ctx, x} = load(HTML, ["TCloud"]);
@@ -56,6 +56,10 @@ ctx.Cloud = {api: async (path) => {
     ok(most === 4, "3. 4 at a time (" + most + ")");
     ok(got.length === 300 && got.every((r, i) => r.guid === want[i]), "3. the answers in the chunks' order");
     console.log("  info 8 requests of 15 ms: " + (Date.now() - t0) + " ms (one after another: about 120 ms)");
+    let n = 0, e3 = null;
+    await T.byChunks(ROWS.slice(0, 2000).map(r => r.guid), async (c) => { const k = ++n; await new Promise(r => setTimeout(r, 5)); if (k === 2) throw Error("made-up refusal"); return []; }).catch(e => { e3 = e; });
+    await new Promise(r => setTimeout(r, 100));
+    ok(e3 && n <= 5, "3. a chunk that fails: its error is the answer, no further chunk asked (" + n + " of 50 asked)");
   }
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);

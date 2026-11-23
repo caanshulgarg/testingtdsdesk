@@ -88,21 +88,22 @@ const Bridge = {
   },
   RANGE_AT_ONCE: 16,
   // next-speed-2 (the speed plan, #6): the ports in rounds of RANGE_AT_ONCE, 700 ms a port; this login's own bridge (proved
-  // with the key, sameSession true) ends the look at once (the other ports are not asked). A port that did not answer in
+  // with the key, sameSession true) ends the look: no further port is asked, the ones already asked are waited for (250 ms
+  // at most: a port holding the line does not hold the look), and the lowest port among them wins (two own bridges of one login: the same pick as when every port was asked in order). A port that did not answer in
   // time is asked once more, all of them together, with 2.5 s (a busy bridge; was one round of 1.5 s a port). What
   // answered, by port; the ports that answered are kept a minute for pairing (find)
   FAST_MS: 700, SLOW_MS: 2500,
   async scan(ports, key, code){
     const found = [], slow = [], own = b => !code && b && b.proven && b.sameSession === true;
     const pass = (ps, ms, at) => new Promise(done => {
-      let i = 0, live = 0, over = false;
+      let i = 0, live = 0, over = false, stop = false;
       const end = () => { if (!over){ over = true; done(); } };
       const next = () => {
         if (over) return;
-        if (i >= ps.length){ if (!live) end(); return; }
+        if (stop || i >= ps.length){ if (!live) end(); return; }
         const p = ps[i++]; live++;
         Promise.resolve().then(() => this.probe(p, ms, key, code, () => slow.push(p))).catch(() => null)
-          .then(b => { live--; if (b && !over){ found.push(b); if (own(b)) return end(); } next(); });
+          .then(b => { live--; if (b && !over){ found.push(b); if (own(b) && !stop){ stop = true; setTimeout(end, 250); } } next(); });
       };
       for (let k = 0; k < Math.min(at, ps.length); k++) next();
       if (!ps.length) end();

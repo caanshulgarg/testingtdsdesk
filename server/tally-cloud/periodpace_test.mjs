@@ -13,15 +13,10 @@ assert.deepEqual(periodPace(false, null), { max: 3, night: false });
 // with FastEntries: 30 by day too; the pace said to the database stays "day"
 assert.deepEqual(periodPace(false, fast()), { max: 30, night: false });
 assert.deepEqual(periodPace(true, fast()), { max: 30, night: true });
-// next-speed (the speed plan, #1): by day a bridge whose Tally has been left alone for a minute (the beat's typing gate quiet,
-// lightIdle in index.ts: quiet 60 s or more) is handed up to 30 too, as at night; the pace said to the database stays "day".
-// Less than a minute, or not known (an older beat): 3 as before
-assert.deepEqual(periodPace(false, slow, 60000), { max: WIDE_MAX, night: false });
-assert.deepEqual(periodPace(false, slow, 3600000), { max: 30, night: false });
-assert.deepEqual(periodPace(false, slow, Infinity), { max: 30, night: false });
-assert.deepEqual(periodPace(false, slow, 59999), { max: DAY_MAX, night: false });
-assert.deepEqual(periodPace(false, slow, 0), { max: 3, night: false });
-for (const q of [undefined, null, NaN, -1, "120000"]) assert.deepEqual(periodPace(false, slow, q), { max: 3, night: false }, String(q));
+// next-speed (the speed plan, #1, review B1): a default bridge reads at most 3 by day (bridge-go/daypull.go), so Tally left
+// alone does not widen its list by day; with FastEntries (it takes a wide list by day) 30 as before; at night 30
+for (const q of [60000, 3600000, Infinity, 59999, 0, undefined, null, NaN, -1, "120000"]) assert.deepEqual(periodPace(false, slow, q), { max: DAY_MAX, night: false }, String(q));
+assert.deepEqual(periodPace(false, fast(), 3600000), { max: WIDE_MAX, night: false });
 assert.deepEqual(periodPace(true, slow, 0), { max: 30, night: true });
 for (const on of ["true", 1, "yes", {}, null]) assert.equal(fastOn({ periodPull: { fast: { on } } }), false, String(on));
 assert.equal(fastOn({ periodPull: { fast: true } }), false);

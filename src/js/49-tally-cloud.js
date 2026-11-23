@@ -101,7 +101,8 @@ const TCloud = {
     await this.capped4(ch.map((c, k) => async () => { out[k] = await f(c); }));
     return out;
   },
-  async capped4(jobs){ let i = 0; await Promise.all(Array.from({length: Math.min(4, jobs.length)}, async () => { while (i < jobs.length) await jobs[i++](); })); },
+  // (a chunk that fails: no further chunk is asked, the error is the answer)
+  async capped4(jobs){ let i = 0, bad = false; await Promise.all(Array.from({length: Math.min(4, jobs.length)}, async () => { while (i < jobs.length && !bad){ try { await jobs[i++](); } catch (e){ bad = true; throw e; } } })); },
   // the client's books in the cloud (one per Tally company; the latest first)
   async status(cid, force){
     const s = this.st[cid] = this.st[cid] || {};
