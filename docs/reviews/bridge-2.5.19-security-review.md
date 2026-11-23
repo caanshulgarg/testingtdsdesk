@@ -140,3 +140,12 @@ Range of the fixes: edad89a1c..315b08c78
 - R3: with no lease kept by the cloud, the re-sent entries still to send are looked for again before every part after
   the first (TestR2519NoLeaseLooksBeforeEachPart).
 - R4: the held words name the Post page's real buttons (TestR2519HeldWordsArePaths).
+
+## Coordinator addendum (23-Nov-2026): the release-check range
+
+The bridge sources built as 2.5.19: this branch as reviewed and re-reviewed up to 1e449d9f0 (the reviews above), with
+origin/next-fast-bankpost merged (ff7609b6a, the faster bank posting, reviewed separately and ready, the owner's approval
+of 23-Nov-2026), its review's small fix (every post-pace.json counter read as 0 or more, test-first), origin/staging-next
+merged (nothing under bridge-go/ changed by it; the post-shapes manifest regenerated: only the builders' hash, the 10
+shapes byte-identical), the version 2.5.19 and one test's wait (TestR2515BurstAs2514). Release-check range for this note:
+Range: b64a6d398..db067ba46
