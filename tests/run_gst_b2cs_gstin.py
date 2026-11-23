@@ -9,7 +9,7 @@ The rule of next-gst-b2cs-summary (GSTR.b2cSumWhy: "entry", "ledger", "range") n
      state, IGST with none: missing (as for any unregistered B2C sale);
   3. its number is not checked (length, characters, used twice); table 13 still counts the range;
   4. credit notes, SEZ and reverse charge stay out of it;
-  5. the switches are offered for such entries: "This is a summary of many B2C sales" on a B2B row of What to fix, and
+  5. the switches are offered for such entries: "Mark as a summary of many B2C sales" on a B2B row of What to fix, and
      the party ledger's "Consolidated B2C" on a registered party with a range-numbered sale;
   6. two Sales entries with the same number to two parties: flagged "used twice", unless one is a B2C summary.
 Review of 445f8f6dd: (M1) a credit or debit note to a party whose ledger is set as Consolidated B2C, or marked on What
@@ -158,7 +158,7 @@ try:
         ok(pg.evaluate(ROW, n)["bnote"] == "entry", "clicked: the note adjusts B2C summaries")
         pg.evaluate("(id) => GSTR.b2cSumEntry(id, null)", n); pg.evaluate(DROP, [n]); pg.wait_for_timeout(300)
         pg.evaluate("(w) => { const g = Array.from(document.querySelectorAll('#app [data-fix-group]')).find(x => x.dataset.fixGroup === w); if (g && !g.querySelector('[data-fix-row]')) g.querySelector('[data-fix-toggle]').click(); }", NUMCHK[0]); pg.wait_for_timeout(300)
-        ok(pg.evaluate("(id) => !!document.querySelector('#app [data-fix-row][data-id=\"' + id + '\"] [data-b2cs-mark]')", e), "What to fix: the B2B row offers 'This is a summary of many B2C sales'")
+        ok(pg.evaluate("(id) => !!document.querySelector('#app [data-fix-row][data-id=\"' + id + '\"] [data-b2cs-mark]')", e), "What to fix: the B2B row offers 'Mark as a summary of many B2C sales'")
         ok(not pg.evaluate("(id) => !!document.querySelector('#app [data-fix-row][data-id=\"' + id + '\"] [data-b2cs-ledger-mark]')", e), "L4: not 'All sales to this party are summaries' (the number is no range, the entry not marked)")
         n0 = pg.evaluate(COUNTS, [YM, REG])["r1"]
         said = []

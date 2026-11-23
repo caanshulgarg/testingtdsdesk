@@ -63,6 +63,19 @@ try:
         ok(c and c[0] == "bad" and "Errors 1" in c[1], "the grid: Apr-2025 GSTR-1 shows Errors 1 (red), not Ready (%s)" % c)
         pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07AAJFQ3158R1ZH'; }", "LFE/25-26/001")
 
+        # next-fix-false-errors (the owner, 23-Nov-2026): a government office registered only to deduct GST TDS (section 51)
+        # has a GSTIN built on its TAN (4 letters, 5 digits, a letter), "D" as its 14th character; the portal takes it as a
+        # B2B buyer. Made-up TAN-form GSTINs: a right check digit is valid; a wrong one, or no "D", is not
+        ok(pg.evaluate("gstinValid('07DELZ99999Z1DG') && gstinValid('29blrz88888z1dy')"), "a government buyer's GSTIN built on its TAN, right check digit: valid")
+        ok(not pg.evaluate("gstinValid('07DELZ99999Z1DH') || gstinValid('07DELZ99999Z1ZG') || gstinValid('07DEL299999Z1DG')"), "(guard) its check digit wrong, no D, or not a TAN's form: not valid")
+        pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07DELZ99999Z1DG'; }", "LFE/25-26/001")
+        ch = pg.evaluate(CHECKS, ["202504", "07"])
+        ok("Buyer GSTINs that are not valid" not in ch, "a sale to a government buyer with a TAN-based GSTIN: not flagged (%s)" % [k for k in ch if "GSTIN" in k])
+        pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07DELZ99999Z1DH'; }", "LFE/25-26/001")
+        ch = pg.evaluate(CHECKS, ["202504", "07"])
+        ok(ch.get("Buyer GSTINs that are not valid", {}).get("eg") == ["07DELZ99999Z1DH"], "(guard) the same with a wrong check digit: flagged (%s)" % ch.get("Buyer GSTINs that are not valid"))
+        pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07AAJFQ3158R1ZH'; }", "LFE/25-26/001")
+
         # G-A1: a supplier's GSTIN
         pg.evaluate("() => { const v = S.books.vouchers.find(v => GSTR.inward('202505', '07').some(r => r.id === v.id && r.gstin)); window.__sup = [v, v.gstin]; v.gstin = String(GSTR.inward('202505', '07').find(r => r.id === v.id).gstin).slice(0, 14) + '0'; }")
         ch = pg.evaluate(CHECKS, ["202505", "07"])
