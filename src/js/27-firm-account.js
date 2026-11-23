@@ -392,6 +392,16 @@ function clientKeepChoices(data, mine, theirs){
   });
   return data;
 }
+// Optional vouchers, off in every client (owner, 23-Nov-2026; migration 213 turned the server's copies off, stamped
+// createOptionalAt): an "on" held here is taken over the server's "off" only when ticked here later than that stamp,
+// never from an old copy (another tab, a copy from before) that still holds the old default
+function clientOptKeep(data, mine, theirs){
+  if (!plainObj(data) || !plainObj(theirs) || data.createOptional !== true || theirs.createOptional === true) return data;
+  if (String((mine && mine.createOptionalAt) || "") > String(theirs.createOptionalAt || "")) return data;
+  data = Object.assign({}, data, {createOptional: false});
+  if (theirs.createOptionalAt) data.createOptionalAt = theirs.createOptionalAt; else delete data.createOptionalAt;
+  return data;
+}
 const ClientBase = {
   async get(id){ try { const v = await BankDB.get("cbase:" + id); return v === undefined || v === null ? NOBASE : v; } catch (e){ return NOBASE; } },
   async set(id, data){ this.seeded.add(id); try { await BankDB.set("cbase:" + id, clone(data)); } catch (e){} },
@@ -429,7 +439,7 @@ async function cloudPushClient(r, sendBatch){
       return "gone";
     }
     const theirs = plainObj(cur.data) ? cur.data : {};
-    const data = Object.keys(theirs).length ? clientKeepChoices(merge3(await ClientBase.get(r.id), r.data, theirs), r.data, theirs) : r.data;
+    const data = Object.keys(theirs).length ? clientOptKeep(clientKeepChoices(merge3(await ClientBase.get(r.id), r.data, theirs), r.data, theirs), r.data, theirs) : r.data;
     if (sameVal(data, theirs)){ await ClientBase.set(r.id, theirs); return sameVal(data, r.data) ? r.hash : takeClientHere(r.id, theirs); }
     const out = await Cloud.api(q + "&updated_at=eq." + encodeURIComponent(cur.updated_at), {method: "PATCH", headers: {Prefer: "return=representation"}, body: row(data)});
     if (!out || !out.length) continue;                            // changed on the server in between: read and merge again
@@ -573,7 +583,7 @@ async function cloudApplyNow(rows){
         // a change made here and not yet sent is kept, laid over the server's copy (merge3); it is sent at the next save
         const here0 = S.companies[r.id], here = here0 && typeof cloudClientView === "function" ? cloudClientView(here0) : here0;
         const pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
-        const data = pending && plainObj(r.data) ? clientKeepChoices(merge3(await ClientBase.get(r.id), here, r.data), here, r.data) : r.data;
+        const data = pending && plainObj(r.data) ? clientOptKeep(clientKeepChoices(merge3(await ClientBase.get(r.id), here, r.data), here, r.data), here, r.data) : r.data;
         S.companies[r.id] = fixCompany(clone(data));
         // this computer's own counts (STATS_HERE) stay as they were here
         const st0 = here0 && here0.stats, st1 = S.companies[r.id].stats;
@@ -2041,7 +2051,7 @@ function saveNewCompany(v){
   const twin = similarClients(name, "", Object.values(S.companies)).find(x => x.why === "same");
   if (twin && !v.dupOk){ toast(twin.client.name + " already exists. Open it from Clients, or add again to keep both."); return false; }
   const src = v.copyFrom ? S.companies[v.copyFrom] : null;
-  const co = newCompany(Object.assign(src ? {voucherType:src.voucherType, createOptional:src.createOptional, billwise:src.billwise, gst:src.gst, roundOff:src.roundOff, tdsLedgers:src.tdsLedgers, expenseLedgers:src.expenseLedgers} : {},
+  const co = newCompany(Object.assign(src ? {voucherType:src.voucherType, billwise:src.billwise, gst:src.gst, roundOff:src.roundOff, tdsLedgers:src.tdsLedgers, expenseLedgers:src.expenseLedgers} : {},
     {name, gstin, tallyName:String(v.tallyCompany || "").trim() || name, turnover10cr:!!v.turnover10cr}));
   S.companies[co.id] = co; S.data[co.id] = {parties:{}, entries:{}, loaded:true};
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
@@ -2144,6 +2154,8 @@ function coCommit(path, v){
   const co = CO(); if (!co) return;
   // the voucher type chosen in Client setup is the client's: a "Post as" chosen on a purchase sheet over the old one goes
   if (path === "voucherType") delete co.postAs;
+  // Optional vouchers ticked or unticked on purpose: when, so an old copy still on is told apart (clientOptKeep)
+  if (path === "createOptional") co.createOptionalAt = new Date().toISOString();
   if (v !== undefined) setPath(co, path, /^(gstin|pan|tan|tds26q\.(personPan|gstin))$/.test(path) ? String(v).toUpperCase().trim() : v);
   if (path === "gstin"){
     const g = String(co.gstin || "").toUpperCase().trim();

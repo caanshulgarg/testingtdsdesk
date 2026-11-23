@@ -7,7 +7,7 @@ const {load} = require("./harness");
 const src = f => fs.readFileSync(path.join(__dirname, "..", "src", "js", f), "utf8");
 const html = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cm-")), "index.html");
 fs.writeFileSync(html, '<script id="app-main">\n' + src("01-documents-in-the-firm-account.js") + "\n" + src("26-sales-from-a-marketplace.js") + "\n" + src("27-firm-account.js") + "\n</script>");
-const {ctx, x} = load(html, ["clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "clientKeepChoices", "ClientBase", "takeClientHere",
+const {ctx, x} = load(html, ["clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "clientKeepChoices", "clientOptKeep", "ClientBase", "takeClientHere",
   "cloudPushClient", "SAFE_ID", "ID_KEYS", "cleanIds", "cloudRowOk", "cloudApply", "cloudApplyNow", "cloudSnapshot"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -19,6 +19,7 @@ const stamp = () => "2026-10-02T06:" + String(10 + (++tick)).padStart(2, "0") + 
 const kv = {};
 ctx.BankDB = {get: async k => kv[k] === undefined ? undefined : clone(kv[k]), set: async (k, v) => { kv[k] = clone(v); }};
 ctx.Live = {applying: false};
+ctx.setTimeout = setTimeout;   // the retry's wait (cloudPushClient, speed round 2)
 ctx.Store = {saveCompany(){}, put(){}, saveFirm(){}};
 ctx.fixCompany = c => c;
 ctx.refreshStats = () => {};
@@ -106,6 +107,33 @@ const push = async id => x.cloudPushClient({kind: "client", id, data: clone(ctx.
   ok(ctx.S.companies.c1.expenseLedgers && ctx.S.companies.c1.expenseLedgers.rent_building === "Rent", "the unsent change survives a pull");
   ok(ctx.S.companies.c1.voucherType === "Journal", "and the pulled change is taken");
   ok(marks["client|c1|c1"] !== x.fpHash(JSON.stringify(ctx.S.companies.c1)), "and it is still marked to be sent");
+
+  // 9. owner, 23-Nov-2026: Optional vouchers off in every client (migration 213 sets createOptional false on the server,
+  // stamped createOptionalAt). A copy here that still says on, unchanged since, never turns it on again: not when a save
+  // goes from a tab whose base is already the server's new copy, not when a pull meets an unsent change here
+  const MIG = "2026-11-23T10:00:00.000Z";
+  server.o1 = {data: {id: "o1", name: "ZZ Optional Traders", createOptional: false, createOptionalAt: MIG, roundOff: "Round Off"}, updated_at: stamp()};
+  await ctx.BankDB.set("cbase:o1", server.o1.data);                                   // another tab took the server's copy as the base
+  ctx.S.companies.o1 = {id: "o1", name: "ZZ Optional Traders", createOptional: true, roundOff: "Round Off (mine)"};   // this tab's old copy
+  await push("o1");
+  ok(server.o1.data.createOptional === false, "a stale copy's Optional = on is not written back over the server's off: " + server.o1.data.createOptional);
+  ok(server.o1.data.roundOff === "Round Off (mine)", "and the tab's own change still goes");
+  ok(ctx.S.companies.o1.createOptional === false, "and this tab now has it off too");
+  // no base, an old copy on: the server's off stands
+  delete kv["cbase:o1"]; ctx.S.companies.o1 = Object.assign(clone(server.o1.data), {createOptional: true}); delete ctx.S.companies.o1.createOptionalAt;
+  await push("o1");
+  ok(server.o1.data.createOptional === false, "no base: an old copy's on does not win either");
+  // ticked on deliberately here after the change (a newer stamp): saved
+  ctx.S.companies.o1 = Object.assign(clone(server.o1.data), {createOptional: true, createOptionalAt: "2026-11-24T09:00:00.000Z"});
+  await push("o1");
+  ok(server.o1.data.createOptional === true && server.o1.data.createOptionalAt === "2026-11-24T09:00:00.000Z", "ticked on deliberately in Client setup (newer stamp): saved as on");
+  // a pull meeting an unsent change here that still holds the old on: the server's off is taken
+  server.o1.data = Object.assign(clone(server.o1.data), {createOptional: false, createOptionalAt: "2026-11-25T09:00:00.000Z"}); server.o1.updated_at = stamp();
+  ctx.S.companies.o1 = Object.assign(clone(server.o1.data), {createOptional: true, createOptionalAt: "2026-11-24T09:00:00.000Z"});
+  await ctx.BankDB.set("cbase:o1", Object.assign(clone(server.o1.data), {createOptionalAt: "2026-11-25T09:00:00.000Z"}));
+  marks["client|o1|o1"] = "an older mark";
+  await x.cloudApply([{kind: "client", id: "o1", client_id: "o1", data: clone(server.o1.data), deleted: false}]);
+  ok(ctx.S.companies.o1.createOptional === false, "a pull: the server's newer off is taken over an older on held here");
 
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);

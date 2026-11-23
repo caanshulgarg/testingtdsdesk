@@ -241,7 +241,7 @@ const Store = {
     const co = newCompany({
       name: settings.companyName || "My first client", tallyName: settings.companyName || "",
       turnover10cr: settings.buyerTurnoverAbove10Cr, voucherType: settings.voucherType,
-      createOptional: settings.createOptional, billwise: settings.billwise, gst: settings.gst,
+      billwise: settings.billwise, gst: settings.gst,
       roundOff: settings.roundOff, tdsLedgers: settings.tdsLedgers, expenseLedgers: settings.expenseLedgers
     });
     S.companies[co.id] = co;
