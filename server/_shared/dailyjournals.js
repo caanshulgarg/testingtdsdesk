@@ -611,18 +611,43 @@ export function journals(inp) {
     (r.picks || []).forEach((p) => { if (!byKey.has(p.kind + "|" + p.key)) { byKey.set(p.kind + "|" + p.key, p); findings.push(p); } });
     findings.push(r.finding); if (r.entry) entries.push(r.entry);
   };
-  const months = []; for (let i = LOOKBACK; i >= 1; i--) months.push(ymAdd(cur, -i));
+  const months = payrollMonths(today);
   // the set-off: each month's own journal, so one month's journal in the books is not taken for another's
   const gst = (inp.gst || []).filter((m) => months.includes(m.ym));
   const others = gst.filter((m) => m.journal).map((m) => ({ ym: m.ym, lines: m.journal.lines.map((l) => P(l.dr) ? { ledger: l.l, dr: l.dr } : { ledger: l.l, cr: l.cr }) }));
   gst.forEach((m) => put(setoffOne(m, inp, others)));
   // the payroll: each month of the sheet, after it ends, not before the books begin
-  const sheet = new Map();
-  (inp.salary || []).forEach((r) => { const m = sheetMonth(r); if (m && months.includes(m) && (!inp.booksFrom || m >= ymOf(inp.booksFrom))) { if (!sheet.has(m)) sheet.set(m, []); sheet.get(m).push(r); } });
+  const sheet = sheetMonths(inp, months);
   Array.from(sheet.keys()).sort().forEach((m) => put(payrollOne(m, sheet.get(m), inp)));
   recurringAll(inp).forEach(put);
   // a ledger a person picked earlier stays answered (its finding is kept as they left it)
   return { findings, entries };
+}
+// the months the night looks at (the last LOOKBACK that have ended), and the salary kept for each (not before the books)
+export function payrollMonths(today) { const cur = ymOf(today), out = []; for (let i = LOOKBACK; i >= 1; i--) out.push(ymAdd(cur, -i)); return out; }
+function sheetMonths(inp, months) {
+  const sheet = new Map();
+  (inp.salary || []).forEach((r) => { const m = sheetMonth(r); if (m && months.includes(m) && (!inp.booksFrom || m >= ymOf(inp.booksFrom))) { if (!sheet.has(m)) sheet.set(m, []); sheet.get(m).push(r); } });
+  return sheet;
+}
+// "Make the journal now" (the Payroll page; the owner, 23-Nov-2026): ONE month, by the night's own rules and builder, so
+// the entry is the very one the night would make. kind: made (finding + entry), you (finding: Needs you, words), none,
+// notyet (a month not begun), old (before the months the night looks at, or before the books). The running month may be
+// made too (the owner): running true, with a plain note that the month is not over (the night makes it only after)
+export function payrollNow(ym, inp) {
+  const today = inp.today || "", cur = ymOf(today), label = monYear(ym);
+  if (!/^\d{6}$/.test(String(ym || ""))) return { kind: "none", words: "Say the month." };
+  if (ym > cur) return { kind: "notyet", words: label + " hasn’t begun yet." };
+  const running = ym === cur, months = payrollMonths(today).concat(running ? [cur] : []);
+  if (!months.includes(ym)) return { kind: "old", words: "Daily Check makes payroll entries for the last " + LOOKBACK + " months only." };
+  if (inp.booksFrom && ym < ymOf(inp.booksFrom)) return { kind: "old", words: "The books in FinCom’s cloud begin after " + label + "." };
+  const rows = sheetMonths(inp, months).get(ym);
+  if (!rows || !rows.length) return { kind: "none", words: "No salary is kept with the books for " + label + "." };
+  const r = payrollOne(ym, rows, inp);
+  if (!r) return { kind: "none", words: label + "’s salary is already in the books, or its entry is on its way to Tally." };
+  const note = running ? label + " isn’t over yet. This is made from the salary kept now." : "";
+  if (r.entry) return Object.assign({ kind: "made", finding: r.finding, picks: r.picks || [], entry: r.entry }, running ? { running, words: note } : {});
+  return Object.assign({ kind: "you", finding: r.finding, picks: r.picks || [], words: String((r.finding.facts || {}).title || "Daily Check needs you for " + label + ".") }, running ? { running } : {});
 }
 // the people's ledger choices, from what earlier nights found (ledger_pick answered)
 // (review N2) the hand journals the owner said are not a month's set-off: "<reg>:<ym>:<voucher id>"

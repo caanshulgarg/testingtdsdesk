@@ -17,6 +17,10 @@ made-up books and sheets (tests/payroll_sheets.mjs), FinCom's AI mocked (window.
      New look: the sheet upload stays on the page while typing, Cancel goes back, the typed rows are kept while switching;
      "Not kept yet" until Keep with the books; the month kept is listed when the page is opened again ("Kept with the
      books"), opened to see it and changed by hand from the rows kept; when Daily Check makes its journal is said
+ 12. Make the journal now (the owner, 23-Nov-2026): a month kept and over: the button (the cloud's assistant-night
+     payroll_now faked); made: said, opened on Daily Check › Entries; made already (by the night or the button): said and
+     opened, no button; the running month: offered, with a plain note that it is not over; Tally Payroll: "Make the Tally
+     Payroll entry now", then Approve on this page
 Screenshots (deviceScaleFactor 2, desktop 1440 and phone 390) into SHOTS (default scratchpad/shots-payroll). UI_PORT (8476)."""
 import os, sys, json, subprocess, threading, functools, http.server, tempfile
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -146,7 +150,7 @@ def run(br, w, kind):
     pg.click("[data-preview=tally] [data-more^=emp-] .pr-more-btn"); pg.click("[data-preview=tally] [data-more^=xml-] .pr-more-btn"); settle(pg, 200)
     x = pg.inner_text("[data-xml]")
     ok('OBJVIEW="PaySlip Voucher View"' in x and "<EMPLOYEENAME>Mehta, Sunil</EMPLOYEENAME>" in x and "REMOTEID" not in x and "Create only" in pg.inner_text("[data-preview=tally]"), kind + " 6. the XML on opening, the bridge's shape, no REMOTEID")
-    ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in pg.inner_text("[data-install]") and pg.locator("[data-install] [data-bridge-download]").count() == 1, kind + " 6. no 2.5.18 bridge here: the install line with its download, no Approve")
+    ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in pg.inner_text("[data-install]") and pg.locator("[data-install] [data-bridge-download]").count() == 1 and pg.locator("[data-install] [data-bridge-download]").get_attribute("href").startswith("assets/bridge-go/FinComBridge-Setup-" + LATEST_V + ".exe") and ("Download FinCom Bridge " + LATEST_V) in pg.inner_text("[data-install]"), kind + " 6. no 2.5.18 bridge here: the install line with the " + LATEST_V + " download (latest.json), no Approve")
     ok("employer’s PF and ESI are not in this voucher" in pg.inner_text("[data-employer-note]"), kind + " 6. the page says the employer's PF and ESI are booked separately")
     shot(pg, "6-tally-payroll-preview", kind)
     # (review 3) the salary payable ledger and the voucher type picked on the page, kept on the client
@@ -166,6 +170,7 @@ def run(br, w, kind):
     if w < 600: ok(noside(pg), kind + " 7. no sideways scroll")
     ctx.close()
 LATEST = open(os.path.join(HERE, "..", "assets-test", "bridge-go", "latest.json"), "rb").read()
+LATEST_V = json.loads(LATEST)["setup"]["version"]   # the setup download offered: the newest latest.json names (2.5.18 or later)
 MOCK = """(v) => { window.__ap = {rpc: [], posts: [], order: [], entry: null};
   const LED = Object.keys(S.books.under || {});
   Cloud.on = () => true;
@@ -238,7 +243,7 @@ def approve_flow(br, w, kind):
     pg.evaluate("() => { S.books.payroll.employees.push({guid: 'e9', name: 'Mehta, Sunil', parent: 'Staff', category: 'Primary Cost Category', group: false, pan: '', joined: '', left: '', designation: '', gone: false}); Bridge.st = Object.assign({}, Bridge.st, {version: '2.5.17'}); return true; }")
     remount(pg)
     ins = pg.inner_text("[data-install]") if pg.locator("[data-install]").count() else ""
-    ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in ins and "2.5.17" in ins and pg.locator("[data-install] [data-bridge-download]").get_attribute("href").startswith("assets/bridge-go/FinComBridge-Setup-2.5.18.exe") and pg.locator("[data-approve]").count() == 0, kind + " 8. bridge 2.5.17: the install line, the 2.5.18 download, no Approve")
+    ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in ins and "2.5.17" in ins and pg.locator("[data-install] [data-bridge-download]").get_attribute("href").startswith("assets/bridge-go/FinComBridge-Setup-" + LATEST_V + ".exe") and ("Download FinCom Bridge " + LATEST_V) in ins and pg.locator("[data-approve]").count() == 0, kind + " 8. bridge 2.5.17: the install line, the " + LATEST_V + " download (latest.json), no Approve")
     if w > 600: shot(pg, "9-tally-bridge-too-old", kind)
     ok(len(A()["posts"]) == 1, kind + " 8. nothing more posted")
     if w < 600: ok(noside(pg), kind + " 8. no sideways scroll")
@@ -294,6 +299,92 @@ def hand_flow(br, w, kind, nl):
     ok(pg.locator("[data-step=manual]").count() == 0, kind + " 11. a sheet uploaded while typing: the sheet is read")
     if w < 600: ok(noside(pg), kind + " 11. no sideways scroll")
     ctx.close()
+NOWMOCK = """() => { window.__now = {calls: [], entries: {}};
+  const nowYm = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7).replace("-", "");
+  const ymOf = (path) => (String(path).match(/payroll%3A(\\d{6})/) || [])[1] || "";
+  Cloud.on = () => true;
+  Cloud.api = async (path) => { path = String(path); if (path.startsWith("night_entries")) { const e = window.__now.entries[ymOf(path)]; return e ? [e] : []; } if (path.startsWith("rpc/")) return {ok: true}; return []; };
+  Cloud.fn = async (name, body) => { window.__now.calls.push([name, body]);
+    const had = window.__now.entries[body.ym];
+    if (had) return {ok: true, kind: "already", id: had.id, state: had.state};
+    if (body.ym > nowYm()) return {ok: true, kind: "notyet", words: "That month hasn’t begun yet."};
+    const running = body.ym === nowYm();
+    const rs = S.books.salary.filter((r) => r.month === body.ym), g = rs.reduce((s, r) => s + r.gross, 0), nt = rs.reduce((s, r) => s + r.net, 0);
+    const tally = (S.companies.c1.payrollMethod || {}).value === 'tally';
+    const e = window.__now.entries[body.ym] = {id: '00000000-0000-4000-8000-0000000008' + String(Object.keys(window.__now.entries).length).padStart(2, '0'), client_id: 'c1', source: 'payroll', dedupe: 'payroll:' + body.ym, work_ref: '', state: 'ready', updated_at: new Date().toISOString(), why: 'Payroll', reason: 'Payroll', evidence: [], checks: [],
+      voucher: tally ? {type: 'Payroll', kind: 'tallyPayroll', date: body.ym + '28', no: '', party: 'Salary Payable', period: body.ym, book: '', lines: [], n: rs.length, gross: g, net: nt, ded: {tds: rs.reduce((s, r) => s + r.tds, 0), pt: 0, pf: 0, esi: 0, other: 0}, narration: 'Salary'}
+        : {type: 'Journal', kind: 'payroll', date: body.ym + '28', lines: []}};
+    return Object.assign({ok: true, kind: "made", id: e.id, state: "ready"}, running ? {running: true, words: "This month isn’t over yet. This is made from the salary kept now."} : {}); };
+  return true; }"""
+def now_flow(br, w, kind, nl):
+    ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
+    if nl: ctx.add_init_script(NL_ON)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
+    pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
+    pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    pg.evaluate(NOWMOCK); pg.evaluate("() => { render(); return true; }"); settle(pg, 300)
+    N = lambda: pg.evaluate("() => window.__now")
+    f = lambda i, k, v: pg.fill("[data-entry-row='%d'] input[aria-label='%s row %d']" % (i, k, i + 1), v)
+    def typed(month=None):
+        pg.click("[data-manual]"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+        if month: pg.fill("[data-step=manual] input[type=month]", month); settle(pg, 150)
+        f(0, "Employee", "Ravi Kumar"); f(0, "Basic", "25,000"); f(0, "HRA", "10,000"); f(0, "TDS", "1,500"); settle(pg, 200)
+        pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 400)
+    pg.click("[data-pick=journal]"); settle(pg, 250)
+    typed()
+    mk = pg.locator("[data-make-now]")
+    ok(mk.count() == 1 and "Make the journal now" in mk.inner_text(), kind + " 12. kept and over: Make the journal now")
+    shot(pg, "14-make-now", kind)
+    if mk.count(): mk.click(); pg.wait_for_selector("[data-now-said]", timeout=10000); settle(pg, 400)
+    c = N()["calls"]
+    ok(len(c) == 1 and c[0][0] == "assistant-night" and c[0][1] == {"action": "payroll_now", "client_id": "c1", "ym": "202610"}, kind + " 12. one call: assistant-night payroll_now, this client, Oct 2026")
+    said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
+    ok("Made" in said and "Daily Check › Entries" in said and pg.locator("[data-make-now]").count() == 0 and pg.locator("[data-now-open]").count() == 1, kind + " 12. made: said, Open it, no button again")
+    shot(pg, "15-made-now", kind)
+    # the page opened again: made already (the night or the button): said, no button
+    pg.evaluate("() => { S.booksTab = 'ledgers'; render(); return true; }"); settle(pg, 300)
+    pg.evaluate("() => { S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    if pg.locator("[data-kept-open='202610']").count(): pg.click("[data-kept-open='202610']"); settle(pg, 500)
+    said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
+    ok("already" in said.lower() and pg.locator("[data-make-now]").count() == 0 and len(N()["calls"]) == 1, kind + " 12. opened again: made already, said; no button, no call")
+    if pg.locator("[data-now-open]").count(): pg.click("[data-now-open]"); settle(pg, 500)
+    pg.wait_for_timeout(600)
+    ok(pg.evaluate("() => S.view === 'home' && S.homeTab === 'daily'") and (pg.locator("[data-tab=entries][aria-selected=true]").count() == 1 or pg.locator("[data-daily]").count() >= 1), kind + " 12. Open it: Daily Check, its Entries")
+    ctx.close()
+    # the running month, and Tally Payroll
+    ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
+    if nl: ctx.add_init_script(NL_ON)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
+    pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
+    pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    pg.evaluate(NOWMOCK); pg.evaluate("() => { render(); return true; }"); settle(pg, 300)
+    N = lambda: pg.evaluate("() => window.__now")
+    pg.click("[data-pick=journal]"); settle(pg, 250)
+    nxt = pg.evaluate("() => { const d = new Date(Date.now() + 5.5 * 3600e3); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); }")
+    typed(nxt)
+    mk = pg.locator("[data-make-now]"); card = pg.inner_text("[data-make-now-card]") if pg.locator("[data-make-now-card]").count() else ""
+    ok(mk.count() == 1 and "isn’t over yet" in card and "ends" in (pg.inner_text("[data-next]") if pg.locator("[data-next]").count() else "") and pg.locator("[data-make-now-card] .pr-warn, [data-make-now-card] .bad").count() == 0, kind + " 12. the running month: offered, with a plain note that it isn't over (no warning)")
+    shot(pg, "16-running-month", kind)
+    if mk.count(): mk.click(); pg.wait_for_selector("[data-now-said]", timeout=10000); settle(pg, 400)
+    said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
+    ok("Made" in said and "isn’t over yet" in said and N()["calls"][-1][1]["ym"] == nxt.replace("-", ""), kind + " 12. the running month made, said not over")
+    pg.click("[data-pick=tally]"); settle(pg, 300)
+    pg.click("[data-manual]"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    pg.fill("[data-step=manual] input[type=month]", "2026-10"); settle(pg, 200)
+    if pg.input_value("input[aria-label='Employee row 1']") != "Ravi Kumar":
+        f(0, "Employee", "Ravi Kumar"); f(0, "Basic", "25,000"); f(0, "HRA", "10,000"); f(0, "TDS", "1,500"); settle(pg, 200)
+    pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 400)
+    mk = pg.locator("[data-make-now]")
+    ok(mk.count() == 1 and "Make the Tally Payroll entry now" in mk.inner_text(), kind + " 12. Tally Payroll: Make the Tally Payroll entry now")
+    if mk.count(): mk.click(); pg.wait_for_selector("[data-now-said]", timeout=10000); settle(pg, 800)
+    said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
+    ok("Made" in said and "Approve" in said and pg.locator("[data-no-entry]").count() == 0, kind + " 12. Tally Payroll made: Approve it on this page (the entry read again)")
+    shot(pg, "17-tally-made-now", kind)
+    ok(pg.evaluate("() => window.__pr.posts") == 0, kind + " 12. nothing posted to Tally by making it")
+    if w < 600: ok(noside(pg), kind + " 12. no sideways scroll")
+    ctx.close()
 with sync_playwright() as p:
     br = p.chromium.launch()
     if not os.environ.get("ONLY8"): run(br, 1440, "desktop")
@@ -301,9 +392,13 @@ with sync_playwright() as p:
     if not os.environ.get("ONLY11"):
         approve_flow(br, 1440, "desktop")
         approve_flow(br, 390, "phone")
-    hand_flow(br, 1440, "hand-classic", False)
-    hand_flow(br, 1440, "hand-newlook", True)
-    hand_flow(br, 390, "hand-phone", True)
+    if not os.environ.get("ONLY12"):
+        hand_flow(br, 1440, "hand-classic", False)
+        hand_flow(br, 1440, "hand-newlook", True)
+        hand_flow(br, 390, "hand-phone", True)
+    now_flow(br, 1440, "now-classic", False)
+    now_flow(br, 1440, "now-newlook", True)
+    now_flow(br, 390, "now-phone", True)
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
 print("FAILED: %d" % len(fails) if fails else "all passed")

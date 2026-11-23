@@ -79,3 +79,92 @@ Deno.test("reminders: refused by the guard (no firm address), the day's limit, R
   const d = stand({ due: [] });
   eq((await remind(handler({ env: env(), fetch: d.fetch }))).j.reminders, 0, "none due: nothing");
 });
+
+// "Make the journal now" (the Payroll page; the owner, 23-Nov-2026): action payroll_now, called by a signed-in person of the
+// client's firm (their own token, never the timer's key), for one month that has ended. The books are read as the night
+// reads them (deps.inputFor stands in for the cloud's books here); the night's own entry is kept, once; tonight's run untouched
+const USER = "user-token", ME = "aaaaaaaa-0000-4000-8000-000000000009";
+function payStand(o: { member?: any; client?: any; entries?: any[]; findings?: any[]; mfa?: boolean }) {
+  const calls: any = { paths: [], posts: [] };
+  const db: any = { night_entries: o.entries || [], night_findings: o.findings || [], daily_log: [], night_runs: [] };
+  const fetch = async (url: string | URL | Request, init: RequestInit = {}) => {
+    const u = String(url), m = (init.method || "GET").toUpperCase(), body = init.body ? JSON.parse(String(init.body)) : null, auth = (init.headers as any || {}).Authorization;
+    calls.paths.push(m + " " + u.replace("https://stand.example", ""));
+    if (u.endsWith("/auth/v1/user")) return auth === "Bearer " + USER ? new Response(JSON.stringify({ id: ME })) : new Response("{}", { status: 401 });
+    if (u.endsWith("/rest/v1/rpc/mfa_ok")) return auth === "Bearer " + USER ? new Response(JSON.stringify(o.mfa !== false)) : new Response("{}", { status: 401 });
+    if (auth !== "Bearer service") return new Response(JSON.stringify({ message: "permission denied" }), { status: 401 });
+    if (u.includes("/rest/v1/members")) return new Response(JSON.stringify(o.member === undefined ? [{ firm_id: F, role: "owner", active: true }] : o.member));
+    if (u.includes("/rest/v1/clients")) return new Response(JSON.stringify(o.client === undefined ? (u.includes("firm_id=in.(") && u.includes(F) && u.includes("id=eq.c1") ? [{ id: "c1", firm_id: F, deleted: false }] : []) : o.client));
+    const t = (u.match(/\/rest\/v1\/([a-z_]+)/) || [])[1];
+    if (t && db[t]) {
+      if (m === "GET") return new Response(JSON.stringify(db[t].filter((r: any) => !u.includes("dedupe=eq.") || u.includes("dedupe=eq." + encodeURIComponent(r.dedupe)))));
+      if (m === "POST") { const rows = [].concat(body).map((r: any, i: number) => Object.assign({ id: t + (db[t].length + i + 1) }, r)); db[t].push(...rows); calls.posts.push(t); return new Response(JSON.stringify(rows)); }
+      if (m === "PATCH") return new Response("[]");
+    }
+    return new Response("[]");
+  };
+  return { fetch: fetch as typeof globalThis.fetch, calls, db };
+}
+const NOW = () => new Date("2026-11-23T10:00:00Z");
+const ready = { kind: "made", finding: { kind: "payroll_due", key: "payroll:202610", state: "resolved", facts: { ym: "202610", short: "Payroll Oct 2026" }, evidence: [], candidates: [] },
+  picks: [], entry: { finding_key: "payroll_due|payroll:202610", source: "payroll", dedupe: "payroll:202610", work_ref: "dc-x", voucher: { type: "Journal", kind: "payroll", date: "20261031", lines: [] }, reason: "Payroll", why: "Payroll Oct 2026", evidence: [], checks: [], ready: true } };
+const payNow = (h: (r: Request) => Promise<Response>, body: any, headers: Record<string, string> = { Authorization: "Bearer " + USER }) =>
+  h(new Request("https://fn.example", { method: "POST", headers, body: JSON.stringify(Object.assign({ action: "payroll_now" }, body)) })).then(async (r) => ({ status: r.status, j: await r.json() }));
+const mk = (s: any, made: any = ready) => handler({ env: env(), fetch: s.fetch, now: NOW, inputFor: async () => ({ inp: { today: "20261123" }, made }) } as any);
+
+Deno.test("payroll now: only a signed-in person of the client's firm", async () => {
+  const s = payStand({});
+  eq((await payNow(mk(s), { client_id: "c1", ym: "202610" }, {})).status, 401, "no token");
+  eq((await payNow(mk(s), { client_id: "c1", ym: "202610" }, { Authorization: "Bearer anon" })).status, 401, "the anon key");
+  eq((await payNow(mk(payStand({ member: [] })), { client_id: "c1", ym: "202610" })).status, 403, "not in a firm");
+  eq((await payNow(mk(payStand({ member: [{ firm_id: F, role: "viewer", active: true }] })), { client_id: "c1", ym: "202610" })).status, 403, "a viewer");
+  eq((await payNow(mk(s), { client_id: "c-other", ym: "202610" })).status, 404, "another firm's client");
+  eq((await payNow(mk(s), { client_id: "c1", ym: "2026-10" })).status, 400, "a month not YYYYMM");
+  eq((await payNow(mk(payStand({ mfa: false })), { client_id: "c1", ym: "202610" })).status, 403, "the two-step sign-in not finished");
+  eq((await payNow(mk(payStand({ member: [{ firm_id: F, role: "owner", active: false }] })), { client_id: "c1", ym: "202610" })).status, 403, "switched off in the firm");
+  eq(s.calls.posts.length, 0, "nothing written");
+});
+Deno.test("payroll now: a person of two firms: the firm the client is in, only as owner or staff there", async () => {
+  const OTHER = "22222222-2222-4222-8222-222222222222";
+  const s = payStand({ member: [{ firm_id: OTHER, role: "owner", active: true }, { firm_id: F, role: "staff", active: true }] });
+  const r = await payNow(mk(s), { client_id: "c1", ym: "202610" });
+  eq([r.status, r.j.kind, s.db.night_entries.length, s.db.night_entries[0].firm_id], [200, "made", 1, F], "made in the client's own firm");
+  const v = payStand({ member: [{ firm_id: OTHER, role: "owner", active: true }, { firm_id: F, role: "viewer", active: true }] });
+  eq((await payNow(mk(v), { client_id: "c1", ym: "202610" })).status, 404, "a viewer in the client's firm: not found among the firms they write in");
+});
+Deno.test("payroll now: books not in the cloud, Daily Check off: said in plain words", async () => {
+  const h = (skipped: string) => handler({ env: env(), fetch: payStand({}).fetch, now: NOW, inputFor: async () => ({ skipped }) } as any);
+  const b = await payNow(h("books"), { client_id: "c1", ym: "202610" });
+  eq([b.j.kind, /not in FinCom/.test(b.j.words)], ["none", true], "no books in the cloud: " + b.j.words);
+  const g = await payNow(h("paused"), { client_id: "c1", ym: "202610" });
+  eq([g.j.kind, /switched off/.test(g.j.words)], ["none", true], "switched off: " + g.j.words);
+});
+Deno.test("payroll now: the running month: made, with the plain note", async () => {
+  const s = payStand({});
+  const r = await payNow(mk(s, Object.assign({}, ready, { running: true, words: "Nov 2026 isn’t over yet. This is made from the salary kept now." })), { client_id: "c1", ym: "202611" });
+  eq([r.j.kind, r.j.running, r.j.words], ["made", true, "Nov 2026 isn’t over yet. This is made from the salary kept now."], "made, said not over");
+});
+Deno.test("payroll now: made once, the night's own entry; tonight's run untouched", async () => {
+  const s = payStand({});
+  const r = await payNow(mk(s), { client_id: "c1", ym: "202610" });
+  eq([r.status, r.j.ok, r.j.kind], [200, true, "made"], "made");
+  eq(s.db.night_entries.length, 1, "one entry");
+  eq(s.db.night_entries[0].voucher, ready.entry.voucher, "the night's voucher");
+  eq(s.calls.paths.some((p: string) => /night_runs|night_apply|night_fail/.test(p)), false, "no night_runs, night_apply or night_fail");
+  const again = await payNow(mk(s), { client_id: "c1", ym: "202610" });
+  eq([again.j.kind, s.db.night_entries.length], ["already", 1], "pressed again: already there, never twice");
+});
+Deno.test("payroll now: an entry already made is said before the books are read", async () => {
+  const s = payStand({ entries: [{ id: "e1", firm_id: F, client_id: "c1", dedupe: "payroll:202610", state: "approved" }] });
+  let read = 0;
+  const h = handler({ env: env(), fetch: s.fetch, now: NOW, inputFor: async () => { read++; return { inp: {}, made: ready }; } } as any);
+  const r = await payNow(h, { client_id: "c1", ym: "202610" });
+  eq([r.j.kind, r.j.id, r.j.state, read], ["already", "e1", "approved", 0], "already: its id and state, the books not read");
+});
+Deno.test("payroll now: the month not over, Needs you, nothing to make: said in plain words", async () => {
+  const notyet = await payNow(mk(payStand({}), { kind: "notyet", words: "Nov 2026 isn’t over yet." }), { client_id: "c1", ym: "202611" });
+  eq([notyet.status, notyet.j.kind, notyet.j.words], [200, "notyet", "Nov 2026 isn’t over yet."], "not over");
+  const s = payStand({});
+  const you = await payNow(mk(s, { kind: "you", picks: [], words: "Payroll Oct 2026: salary booked ₹90,000, the sheet says ₹80,000.", finding: { kind: "payroll_due", key: "payroll:202610", state: "you", facts: { ym: "202610" }, evidence: [], candidates: [] } }), { client_id: "c1", ym: "202610" });
+  eq([you.j.kind, s.db.night_entries.length, s.db.night_findings.length], ["you", 0, 1], "Needs you: the finding kept, no entry");
+});
