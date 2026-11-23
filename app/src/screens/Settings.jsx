@@ -320,11 +320,29 @@ function EntityType({ co }) {
       {Object.entries(FS.ENTITY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>;
 }
 
+function OtherRegLedgers({ co }) {
+  const others = (String(co.otherGstins || "").toUpperCase().match(/\b\d{2}[A-Z0-9]{13}\b/g) || []).filter((g) => g !== String(co.gstin || "").toUpperCase());
+  const all = [String(co.gstin || "").toUpperCase()].filter(Boolean).concat(others), st = (g) => (typeof GST_STATES === "object" && GST_STATES[g.slice(0, 2)]) || g.slice(0, 2);
+  // (the owner's approval of 23-Nov-2026) each GSTIN's registration name in Tally goes on every entry (src/js/01 vchGstReg)
+  return <div data-gst-by-reg="" style={{ marginTop: 6 }}>
+    <p className="note" style={{ margin: 0 }}>Each entry sent to Tally names its GST registration. Give each name as in Tally (Company › GST Registration Details).</p>
+    <div className="grid">{all.map((g) => <CoText key={g} label={g + ": name in Tally"} path={"gstRegName." + g.slice(0, 2)} placeholder={st(g) + " Registration"} />)}</div>
+    {others.length > 0 && <p className="note" style={{ margin: "6px 0 0" }}>Input GST ledgers of each other GSTIN, set once; a bill to a GSTIN without them waits. FinCom cannot read which GSTIN a ledger is for in Tally: check each is that GSTIN’s.</p>}
+    {others.map((g) => <div key={g} className="grid" data-reg={g.slice(0, 2)}>{["cgst", "sgst", "igst", "cess"].map((h) => <CoText key={h} label={g + ": input " + h.toUpperCase()} path={"gstByReg." + g.slice(0, 2) + "." + h} />)}</div>)}</div>;
+}
+
 function Company() {
   const co = CO(), owner = S.account && S.account.me ? S.account.me.role === "owner" : true;
   return <Card title="The client" note="As on the client’s GST registration. The PAN is filled in from the GSTIN when left empty.">
     <div className="grid"><CoText label="Client name" path="name" /><CoText label="GSTIN" path="gstin" /><CoText label="PAN" path="pan" /><EntityType co={co} />
       <CoText label="Other GSTINs (registrations in other states)" path="otherGstins" placeholder="e.g. 29…, 33…" /></div>
+    {/* (the owner, 23-Nov-2026) one Tally company with the GST ledgers of each registration: a bill to the client's other
+        GSTIN then goes on without the per-bill "the GST ledgers are that GSTIN's" (compute, src/js/01) */}
+    <div data-multi-gstin="" style={{ marginTop: 8 }}><CoCheck path="multiGstin" on={!!co.multiGstin}>This Tally company has more than one GSTIN</CoCheck>
+      <p className="note" style={{ margin: "2px 0 0" }}>Bills to its other GSTINs go to that GSTIN’s own GST ledgers without asking each time.</p>
+      {/* (review of ad4be74c3) each other GSTIN's input ledgers, picked once (gstLedgerFor, src/js/01); a bill to a GSTIN
+          without them is held */}
+      {co.multiGstin && <OtherRegLedgers co={co} />}</div>
     {/* review of 02-Oct-2026: a GSTIN or PAN cannot be emptied by a sync (the server keeps it); an owner clears a wrong one
         here, with a reason that is kept */}
     {owner && (co.gstin || co.pan) && <div className="row" data-clear-ids="" style={{ gap: 8, marginTop: 8 }}>

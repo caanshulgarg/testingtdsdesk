@@ -2308,7 +2308,7 @@ const FSX = (() => {
       put("31(a)", ["Date", "Lender", "Amount"], cl.entries.filter(e => /^269SS/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
       put("31(c)", ["Date", "To", "Amount"], cl.entries.filter(e => /^269T/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
       put("31(ba)", ["Date", "From", "Amount"], cst.entries.map(e => [dt(e.date), e.party, e.amount]));
-      put("21(b)(ii)(A)", ["Party", "Amount", "Detail"], td.entries.filter(e => /^not deducted/.test(e.note)).map(e => [e.party, e.amount, e.note]));
+      // 21(b)(ii)(A) stays Audit.form3cd's (the owner, 23-Nov-2026): the part not covered once, a short deduction's 30% too
       put("34(c)", ["Deductee", "Interest", "Detail"], td.entries.filter(e => /^interest/.test(e.note)).map(e => [e.party, e.amount, e.note]));
       if (ms.status !== "na") put("22", ["Supplier", "Bill", "Outstanding", "Days"], ms.entries.map(e => [e.party, e.no, e.amount, e.note]), "The interest itself is not in the books; work it out on these bills at three times the bank rate.");
       const c26 = clauses.find(z => z.no === "26"); if (c26 && ms.status !== "na") c26.rows = c26.rows.filter(r => r[2] !== "43B(h) MSME").concat(ms.entries.map(e => [e.party, e.amount, "43B(h) MSME"]));

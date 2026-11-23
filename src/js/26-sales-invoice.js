@@ -98,6 +98,13 @@ function salesWhy(){
   return {text: parts.join("; ") + (set ? ": set it here" : ": see To review"), btn: set ? "Set it here" : "Open To review",
     act: () => { if (set) s.showSettings = true; else s.filter = "review"; render(); }, choices: Array.from(ch.values()), unknown};
 }
+// a credit note's number from its invoice's: "<number>-CN<n>", at most 16 of letters, digits, - and / (GSTR-1's note
+// number): the invoice's end kept, cut at a / or - when it must be cut
+function cnNumber(base, n){
+  const suf = "-CN" + n, keep = 16 - suf.length, b = String(base).replace(/[^A-Za-z0-9\/-]/g, "");
+  let t = b.slice(-keep); if (t.length < b.length && !/[\/-]/.test(b[b.length - keep - 1])) t = t.replace(/^[^\/-]*/, "") || b.slice(-keep);
+  return t.replace(/^[\/-]+/, "") + suf;
+}
 // "Edit type" on an invoice held for a person (a sheet's negative amount, or "Purchase Return" on Sales): they say what
 // it is; its amounts are taken positive, a credit note's number marked as a sheet's is, and it is held no more
 function salesSetKind(id, k){
@@ -106,7 +113,10 @@ function salesSetKind(id, k){
   ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { x[f] = Math.abs(num(x[f])); });
   (x.items || []).forEach(it => ["taxable", "igst", "cgst", "sgst", "tax"].forEach(f => { if (it[f] != null && it[f] !== "") it[f] = Math.abs(num(it[f])); }));
   x.noteKind = k === "invoice" ? "" : k;
-  if (k === "credit" && !/^cn|\(CN\)$/i.test(x.number)) x.number += " (CN)";
+  // (decided after the review of ad4be74c3) a credit note's number GSTR-1 takes: <number>-CN<n>, never one already here
+  // (only when an invoice of that number is here: a number of its own is kept)
+  if (k === "credit" && !/^cn|\(CN\)$|-CN\d+$/i.test(x.number) && SL().list.some(w => w !== v && !w.hold && (w.x.noteKind || "") !== "credit" && w.x.number === x.number)){ const b = String(x.number).replace(/[^A-Za-z0-9\/-]/g, ""), have = new Set(SL().list.map(w => String(w.x.number || "").toUpperCase()));
+    let n = 0, c; do c = cnNumber(b, ++n); while (have.has(c.toUpperCase())); x.cnOf = x.number; x.number = c; }
   delete v.hold; mapInvoice(v); saveSales(); render();
 }
 // "Post one by one to find the cause": each invoice Tally refused in a batch is sent again on its own, through the same
