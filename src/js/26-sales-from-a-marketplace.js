@@ -281,7 +281,7 @@ async function salesCheckTally(list){
     // (an invoice posted before as a duplicate on a person's say-so: a voucher of its number and amount may be the one
     // that attempt made, or the one it duplicated; never taken for it by itself: the person is asked again)
     const hit = v.dupOverrideLog ? null : same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
-    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
+    if (hit){ if (v.status !== "intally") v.matchedAt = new Date().toISOString(); v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
     else if (had) mapInvoice(v);
   });
@@ -336,7 +336,7 @@ async function salesQueuedSync(){
     // (next-sales-followups) the same rule as a direct post: Tally's reply or a read back is posted, an answer not
     // confirmed is not; one Tally already had is In Tally; an IRN cancelled keeps its mark while it may be in Tally
     let maybeIn = false;
-    if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
+    if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.matchedAt = new Date().toISOString(); v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
     else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     // (the bridge's "already" refusal: said on the invoice, as a direct post says it)

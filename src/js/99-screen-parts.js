@@ -250,7 +250,7 @@ function salesVtNoticeDone(open){ const s = SL(); if (!s) return; if (s.cfg.vtNo
 // "It is this invoice": the Tally voucher of this number (another amount) is this invoice: In Tally, never posted
 function salesNearAnswer(id){
   const s = SL(), v = inv(id), m = v && v.dupBlock; if (!m || m.src === "fincom" || !["review", "ready"].includes(v.status)) return;
-  delete v.dupBlock; v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = m;
+  delete v.dupBlock; v.status = "intally"; v.matchedAt = new Date().toISOString(); v.postNote = "Already in Tally"; v.tallyMatch = m;
   auditEvent("sales_tally_same", "Invoice " + (v.x.number || v.id) + ": the Tally voucher " + [m.type, m.number, m.date, m.amount].join(" ") + " is this invoice", s.cid);
   saveSales(); render();
 }

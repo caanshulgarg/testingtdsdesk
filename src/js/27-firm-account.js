@@ -360,7 +360,7 @@ function merge3(base, mine, theirs){
 // that line of the copy both had; with no such copy, this computer's line), and a line posted on one side only (sent or
 // in Tally, not as the copy both had) keeps that side's posting, so a voucher already in Tally is never offered again.
 // The list of lines stays this computer's (a part is a slice by position: no line is added to it from the other copy).
-const BANK_POST_KEYS = ["state", "sentAt", "postedVia", "postError", "postJob", "postJobNew", "postedOptional", "postVerified", "postByReply", "checking", "tally"];
+const BANK_POST_KEYS = ["state", "sentAt", "postedVia", "postError", "postJob", "postJobNew", "postedOptional", "postVerified", "postByReply", "checking", "tally", "matchedAt"];
 function bankRowsMerge(base, mine, theirs){
   const by = d => new Map(((d && d.rows) || []).filter(x => x && x.id != null).map(x => [String(x.id), x]));
   const bb = base === NOBASE ? null : by(base), tt = by(theirs), posted = x => !!x && (x.state === "sent" || x.state === "intally");

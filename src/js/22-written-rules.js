@@ -608,7 +608,8 @@ function matchTallyBook(acc, rows, force){
   let learnedFromTally = false;
   const book = acc && b.books[acc.id];
   if (!book) return 0;
-  const used = new Set();
+  const used = new Set(), was = new Map(), now = new Date().toISOString();
+  rows.forEach(r => { if (r.state === "intally") was.set(r.id, r.tallyKey); });
   if (force){
     // a fresh copy of the Tally ledger: match everything again (an entry deleted in Tally becomes open again)
     rows.forEach(r => { if (r.state === "intally"){ r.state = r.prevState && r.prevState !== "intally" ? r.prevState : (r.ledger ? "ready" : "attention"); delete r.tallyIdx; delete r.tallyKey; delete r.tallyHow; delete r.tallyRef; } });
@@ -623,6 +624,8 @@ function matchTallyBook(acc, rows, force){
     used.add(i); n++;
     const t = book.entries[i];
     r.prevState = r.state; r.state = "intally"; r.tallyIdx = i; r.tallyKey = bankTallyKey(t); r.tallyHow = how;
+    // when FinCom found it (Bank lists it 24 hours from then); matched again to the same entry, the first time is kept
+    if (!r.matchedAt || was.get(r.id) !== r.tallyKey) r.matchedAt = now;
     r.tallyRef = [t.vt, t.vn, t.party].filter(Boolean).join(" \u00b7 ");
     if (t.party && !/as per details|^\(|^opening|^closing/i.test(t.party) && b.hist){ b.hist.rows[r.fp] = histEntry(r, t.party, "tally"); b.histVer++; learnedFromTally = true; }
   };
@@ -673,7 +676,7 @@ function sameParty(a, b){
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
 // the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
-  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""}, postCleared(r.id));
+  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", matchedAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""}, postCleared(r.id));
   delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }

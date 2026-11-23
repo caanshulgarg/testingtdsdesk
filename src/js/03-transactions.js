@@ -22,11 +22,14 @@ function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true
 // the owner (23-Nov-2026): an entry Tally confirmed more than 24 hours ago leaves Purchase, Bank and Sales (their lists,
 // tabs and counts) and is listed in Transactions only; with no time kept (older data) it counts as older. A view only:
 // nothing kept changes, and every check, return and report still reads them all. Not Tally's confirmation (a Tally
-// file, a mark made by a person, gone from Tally, held, to review): always listed
-function postedOld(at){ return !(Date.parse(at || "") > Date.now() - 864e5); }
-function billOld(e){ return billInTally(e) && !(e.tally && e.tally.byOwner) && postedOld((e.tally && e.tally.at) || e.exportedAt); }
-function bankOld(r){ return bankMatched(r) && postedOld((r.tally && r.tally.at) || r.sentAt); }
-function salesOld(v){ return (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && postedOld(v.postedAt); }
+// file, gone from Tally, held, to review): always listed. The time: the posting's; a person's mark (posted), when it was
+// marked; one found already in Tally, when FinCom found it (matchedAt, 23-Nov-2026: older matches have none)
+// (POSTED_KEEP_MS: 24 hours; the tests of older made-up postings, whose lists are what they check, widen it)
+let POSTED_KEEP_MS = 864e5;
+function postedOld(at){ return !(Date.parse(at || "") > Date.now() - POSTED_KEEP_MS); }
+function billOld(e){ const t = e.tally || {}; return billInTally(e) && postedOld((t.byOwner && t.byOwnerAt) || t.at || e.exportedAt); }
+function bankOld(r){ return bankMatched(r) && postedOld(r.state === "intally" ? r.matchedAt : (r.tally && r.tally.at) || r.sentAt); }
+function salesOld(v){ return (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && postedOld(v.status === "intally" ? v.matchedAt : v.postedAt); }
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
   if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];

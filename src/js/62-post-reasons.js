@@ -620,8 +620,9 @@ function postRowRemoveBlock(x){
 // the rows of a tab as the person sees them: {shown, hidden, removed} (search applied by the page)
 function postTabRows(cid, tab){
   const all = postEntryRows(cid) || [];
-  // Posted: an entry Tally confirmed (1, 2; not 3, a person's mark) more than 24 hours ago is in Transactions only (postedOld)
-  const old = x => x.st.tab === "posted" && x.st.code < 3 && postedOld(x.st.posted);
+  // Posted: an entry posted (1, 2; 3, marked posted by a person: from the mark) more than 24 hours ago is in Transactions
+  // only (postedOld)
+  const old = x => x.st.tab === "posted" && x.st.code <= 3 && postedOld((x.st.code === 3 && (x.st.markedAt || (x.e && x.e.tally && x.e.tally.byOwnerAt))) || x.st.posted);
   const mine = all.filter(x => x.st.tab === tab && !old(x));
   const gone = x => !!PostFlags.removedNow(x);
   return {shown: mine.filter(x => !PostFlags.isHidden(x.key) && !gone(x)), hidden: mine.filter(x => PostFlags.isHidden(x.key) && !gone(x)), removed: mine.filter(gone), old: tab === "posted" ? all.filter(old).length : 0};

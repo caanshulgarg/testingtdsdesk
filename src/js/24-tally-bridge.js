@@ -720,7 +720,7 @@ async function reconcileBank(opts){
     b.postedTags = b.postedTags || {};
     rows.forEach(r => {
       if (pairOf.has(r.id)){
-        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; const t = T[pairOf.get(r.id)]; r.tallyHow = t.tag && t.tag === fpHash(r.fp || r.id) ? "posted by FinCom earlier" : "found in Tally when reconciling"; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
+        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; r.matchedAt = new Date().toISOString(); const t = T[pairOf.get(r.id)]; r.tallyHow = t.tag && t.tag === fpHash(r.fp || r.id) ? "posted by FinCom earlier" : "found in Tally when reconciling"; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
         if (r.state === "intally" || r.state === "sent") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + now;
       }
     });
@@ -1105,7 +1105,7 @@ async function postBankToTally(ids){
   b.rows.forEach(r => {
     if (r.state !== "ready" || (ids && !ids.includes(r.id))) return;
     const tag = fpHash(r.fp || r.id);
-    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
+    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.matchedAt = new Date().toISOString(); r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
   });
   // guard 2: look in Tally itself around the dates being posted, for our own entries and for ones typed in by hand
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
