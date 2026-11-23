@@ -218,6 +218,10 @@ try:
        "5. more than 10 minutes behind: fb_status says late (%s minutes); the filing warning warns ('%s')" % (stb["behind_minutes"], fw["words"][:90]))
     db.sql("alter table fb_vouchers drop constraint test_break")
     run()
+    ok(db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (BK, B["vouchers"][-5]["guid"])) != "BREAK THE MIRROR",
+       "5. ... a failed entry waits for its retry time (3 minutes), not tried again at once")
+    db.sql("update fb_mirror_errors set retry_at = now() - interval '1 second' where resolved_at is null")
+    run()
     ok(db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (BK, B["vouchers"][-5]["guid"])) == "BREAK THE MIRROR"
        and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK) == "0" and stat()["late"] is False,
        "5. the catch-up applies it once it can and clears the error; no longer behind")
@@ -228,6 +232,7 @@ try:
       update tally_lines set ledger = 'Staff Welfare Expenses' where book_id = '%s' and ledger = 'Staff Welfare Exp';
       update tally_ledgers set merged_into = 'Staff Welfare Expenses' where book_id = '%s' and name = 'Staff Welfare Exp';""" % (TB1, F1, TB1, TB1))
     db.sql("alter table fb_lines drop constraint rv_once")
+    db.sql("update fb_mirror_errors set retry_at = now() - interval '1 second' where resolved_at is null")
     ok(n_sw >= 2 and int(db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % BK)) >= 1
        and int(db.one("select count(*) from fb_mirror_dirty where book_id = '%s' and kind = 'v'" % BK)) == n_sw,
        "5. B1: a rename in the copy (no new AlterID) the catch-up cannot apply yet: logged, and its %d entries stay noted" % n_sw)
@@ -497,7 +502,7 @@ try:
     r = json.loads(db.one("set role service_role; select fb_tieout('%s', 'asked')" % BK))
     ok(r.get("updating") is True and db.one("select coalesce(in_step::text, '') || coalesce(last_tieout_id::text, '') from fb_books where book_id = '%s'" % BK) == before,
        "12. round 3 (1): an asked tie-out while the book is still behind answers 'Updating' and stores no result (%s)" % r.get("words"))
-    db.sql("alter table fb_vouchers drop constraint test_break2"); run()
+    db.sql("alter table fb_vouchers drop constraint test_break2; update fb_mirror_errors set retry_at = now() - interval '1 second' where resolved_at is null"); run()
     # the copy's write never waits for the catch-up: the book's mirror lock held by a run
     a = bg("begin; select pg_advisory_xact_lock(hashtextextended('fb_mirror:%s', 0)); select pg_sleep(4); commit;" % BK); time.sleep(0.7)
     t = time.time(); b = bg("set statement_timeout = '1s'; begin; " + vsql("RR-3") + " commit;"); b.stdout.read(); b.wait(); dt = time.time() - t; a.stdout.read(); a.wait()
@@ -529,6 +534,31 @@ try:
     ok(fbh("RR-4") and ak == "system", "12. a write after the catch-up in the same transaction is logged as itself, not as the mirror (%s)" % ak)
     e = err(lambda: db.sql("do $$ begin perform fb_mirror_catchup('%s', 10); perform fb_tieout('%s'); if coalesce(current_setting('fincom.fb_actor', true), '') <> '' then raise exception 'leaked %%', current_setting('fincom.fb_actor', true); end if; end $$;" % (BK, BK)))
     ok(e == "", "12. the catch-up and the tie-out put the actor label back (%s)" % e.strip()[-80:])
+    # round 4: a poison entry (fails every time) in the book the runner visits first: the other book still gets its share,
+    # the poison is tried once and then waits for its retry time; masters are not re-mirrored for it
+    first, second = sorted([BK, BK4])
+    tbf, tbs = (TB1, TB4) if first == BK else (TB4, TB1)
+    gl1 = [r["guid"] for r in db.rows("select guid from tally_vouchers where book_id = '%s' and day >= '2025-04-01' and not cancelled and not optional and vno not like 'J/ODD%%' order by guid" % tbf)][:20]
+    gl2 = [r["guid"] for r in db.rows("select guid from tally_vouchers where book_id = '%s' and day >= '2025-04-01' and not cancelled and not optional and vno not like 'J/ODD%%' order by guid" % tbs)][:12]
+    db.sql("alter table fb_vouchers add constraint rv_poison check (narration not like 'POISON%')")
+    ingest("update tally_vouchers set narration = case when guid = '%s' then 'POISON (made up)' else 'R4 ok (made up)' end, alter_id = alter_id + 1 where book_id = '%s' and guid in (%s);"
+           "update tally_vouchers set narration = 'R4 ok (made up)', alter_id = alter_id + 1 where book_id = '%s' and guid in (%s);" % (gl1[7], tbf, ",".join("'%s'" % g for g in gl1), tbs, ",".join("'%s'" % g for g in gl2)), catch=False)
+    m0 = db.one("select count(*) from fb_audit_log where entity = 'fb_ledgers'")
+    t = time.time(); run(); dt = time.time() - t
+    okf = db.one("select count(*) from fb_vouchers where book_id = '%s' and narration = 'R4 ok (made up)'" % first); oks = db.one("select count(*) from fb_vouchers where book_id = '%s' and narration = 'R4 ok (made up)'" % second)
+    pe = db.rows("select tries, retry_at > now() as later from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'v:%s' and resolved_at is null" % (first, gl1[7]))
+    ok(okf == "19" and oks == "12" and len(pe) == 1 and pe[0]["tries"] == "1" and pe[0]["later"] == "t" and dt < 30,
+       "12. round 4: one run with a poison entry in the first book: the first book's 19 good and the second book's 12 are mirrored; the poison was tried once and waits (%s, %s, %s, %.1f s; %s)" % (okf, oks, pe, dt,
+       db.rows("select v.source_ref, v.narration, v.status, (select count(*) from fb_mirror_dirty d where d.key = v.source_ref) noted from fb_vouchers v where v.book_id = '%s' and v.source_ref in (%s) and v.narration <> 'R4 ok (made up)'" % (first, ",".join("'%s'" % g for g in gl1)))))
+    run()
+    ok(db.one("select tries from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'v:%s' and resolved_at is null" % (first, gl1[7])) == "1"
+       and db.one("select count(*) from fb_audit_log where entity = 'fb_ledgers'") == m0, "12. round 4: the next run skips it until its retry time, and does not re-mirror the masters for it")
+    st4 = json.loads(one(OWN, "select fb_status('%s')" % ("c1" if first == BK else "c4")))["books"][0]
+    ok(st4["counts"]["waiting"] == 1 and st4["behind_since"], "12. round 4: the poison stays noted, so the book counts as behind (late after 10 minutes)")
+    db.sql("alter table fb_vouchers drop constraint rv_poison; update fb_mirror_errors set retry_at = now() - interval '1 second' where resolved_at is null")
+    run()
+    ok(db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (first, gl1[7])) == "POISON (made up)" and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0",
+       "12. round 4: once it can be mirrored, the retry mirrors it and clears the error")
     # the timer's runner commits book by book
     db.sql("call fb_mirror_catchup_run(5000)")
     ok(True, "12. fb_mirror_catchup_run runs (a procedure: one transaction per book and chunk)")

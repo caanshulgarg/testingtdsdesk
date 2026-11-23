@@ -355,7 +355,8 @@ create table if not exists public.fb_source_figures (
   as_on date not null, figures jsonb not null, read_by text not null default '', at timestamptz not null default now());
 create table if not exists public.fb_mirror_errors (
   id bigint generated always as identity primary key, book_id uuid, at timestamptz not null default now(), kind text not null, key text not null default '',
-  error text not null, resolved_at timestamptz);
+  error text not null, resolved_at timestamptz,
+  tries int not null default 1, retry_at timestamptz);   -- an entry the catch-up cannot mirror: tried again at retry_at (3, 6, 12 ... minutes, at most an hour)
 -- the mirror's work list: what the copy changed and FinCom Books has not mirrored yet (first_at: since when; seq: bumped
 -- each time it is noted again, so the catch-up never drops a note made while it was mirroring that entry)
 create table if not exists public.fb_mirror_dirty (
@@ -1018,13 +1019,15 @@ begin
   end;
 end $f$;
 
--- an entry the catch-up could not mirror (found by AlterID or by the sweep): logged once, and noted so that it is tried
--- again and counts as behind
-create or replace function public.fb_mirror_failed(p_book uuid, p_guid text, p_err text) returns void language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
+-- an entry the catch-up could not mirror: logged once (tries counted), kept noted so that it counts as behind, and left
+-- alone until its retry time (3 minutes, then doubling, at most an hour), so one bad entry never holds up a run
+create or replace function public.fb_mirror_failed(p_book uuid, p_kind text, p_key text, p_err text) returns void language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
 begin
-  insert into fb_mirror_dirty (book_id, kind, key) values (p_book, 'v', p_guid) on conflict do nothing;
-  if not exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.kind = 'catchup' and e.key = 'v:' || p_guid and e.resolved_at is null) then
-    insert into fb_mirror_errors (book_id, kind, key, error) values (p_book, 'catchup', 'v:' || p_guid, left(p_err, 500));
+  insert into fb_mirror_dirty (book_id, kind, key) values (p_book, p_kind, p_key) on conflict do nothing;
+  update fb_mirror_errors e set tries = e.tries + 1, error = left(p_err, 500), retry_at = now() + least(power(2, e.tries) * interval '3 minutes', interval '1 hour')
+   where e.book_id = p_book and e.kind = 'catchup' and e.key = p_kind || ':' || p_key and e.resolved_at is null;
+  if not found then
+    insert into fb_mirror_errors (book_id, kind, key, error, retry_at) values (p_book, 'catchup', p_kind || ':' || p_key, left(p_err, 500), now() + interval '3 minutes');
   end if;
 end $f$;
 
@@ -1042,7 +1045,7 @@ $f$;
 create or replace function public.fb_mirror_catchup(p_book uuid, p_max int default 2000) returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
 declare b record; st record; g record; n int := 0; res text; cnt jsonb := '{}'::jsonb; left_n int; act text := coalesce(current_setting('fincom.fb_actor', true), '');
   lim int := greatest(1, least(p_max, 20000)); od boolean := false; last_g text; got int := 0; avail int; swept boolean; failed int := 0;
-  dk text[] := '{}'; dkey text[] := '{}'; dseq bigint[] := '{}'; covers bigint[]; nk text[]; nkey text[]; nseq bigint[]; rs text[]; gl text[]; i int;
+  dk text[] := '{}'; dkey text[] := '{}'; dseq bigint[] := '{}'; covers bigint[]; nk text[]; nkey text[]; nseq bigint[]; rs text[]; gl text[]; i int; okn int := 0;
 begin
   select k.book_id, k.source_book_id, k.mirror_from, k.mirror_on, k.state into b from fb_books k where k.book_id = p_book;
   if b.book_id is null or not b.mirror_on then return jsonb_build_object('skipped', true); end if;
@@ -1050,22 +1053,19 @@ begin
   perform set_config('fincom.fb_actor', 'system:mirror', true);
   insert into fb_mirror_state (book_id, missed_seen) values (p_book, (select case when q.is_called then q.last_value else 0 end from fb_missed_seq q)) on conflict do nothing;
   select * into st from fb_mirror_state s where s.book_id = p_book;
-  if exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.resolved_at is null) then
-    perform fb_mirror_masters(p_book); od := true;
-  end if;
   -- 1. the notes, one chunk in one subtransaction
   select array_agg(z.kind order by z.o), array_agg(z.key order by z.o), array_agg(z.seq order by z.o) into nk, nkey, nseq
     from (select d.kind, d.key, d.seq, row_number() over (order by d.kind <> 'g', d.kind <> 'l', d.first_at, d.key) as o
-            from fb_mirror_dirty d where d.book_id = p_book order by 4 limit lim) z;
+            from fb_mirror_dirty d where d.book_id = p_book
+             and not exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.kind = 'catchup' and e.key = d.kind || ':' || d.key and e.resolved_at is null and e.retry_at > now())
+           order by 4 limit lim) z;
   if nkey is not null then
     rs := fb_mirror_list(p_book, nk, nkey);
     for i in 1 .. array_length(nkey, 1) loop
       if rs[i] like 'failed: %' then
-        failed := failed + 1;
-        if not exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.kind = 'catchup' and e.key = nk[i] || ':' || nkey[i] and e.resolved_at is null) then
-          insert into fb_mirror_errors (book_id, kind, key, error) values (p_book, 'catchup', nk[i] || ':' || nkey[i], substr(rs[i], 9));
-        end if;
+        failed := failed + 1; perform fb_mirror_failed(p_book, nk[i], nkey[i], substr(rs[i], 9));
       else
+        okn := okn + 1;
         if nk[i] = 'v' then
           n := n + 1; cnt := jsonb_set(cnt, array[rs[i]], to_jsonb(coalesce((cnt ->> rs[i])::int, 0) + 1));
           if rs[i] = 'before' then od := true; end if;
@@ -1084,16 +1084,18 @@ begin
     select array_agg(z.guid) into gl from (
       select v.guid from tally_vouchers v left join fb_vouchers f on f.book_id = p_book and f.source_ref = v.guid
        where v.book_id = b.source_book_id and v.day >= b.mirror_from and v.deleted_at is null and (f.id is null or f.source_alter is distinct from v.alter_id or f.source_gone)
+         and not exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.kind = 'catchup' and e.key = 'v:' || v.guid and e.resolved_at is null and e.retry_at > now())
       union all
       select f.source_ref from fb_vouchers f left join tally_vouchers v on v.book_id = b.source_book_id and v.guid = f.source_ref
        where f.book_id = p_book and f.source_ref is not null and not f.source_gone and (v.guid is null or v.deleted_at is not null)
+         and not exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.kind = 'catchup' and e.key = 'v:' || f.source_ref and e.resolved_at is null and e.retry_at > now())
       limit lim - n) z;
     if gl is not null then
       rs := fb_mirror_list(p_book, array_fill('v'::text, array[array_length(gl, 1)]), gl);
       for i in 1 .. array_length(gl, 1) loop
         n := n + 1;
-        if rs[i] like 'failed: %' then failed := failed + 1; perform fb_mirror_failed(p_book, gl[i], substr(rs[i], 9));
-        else cnt := jsonb_set(cnt, array[rs[i]], to_jsonb(coalesce((cnt ->> rs[i])::int, 0) + 1)); end if;
+        if rs[i] like 'failed: %' then failed := failed + 1; perform fb_mirror_failed(p_book, 'v', gl[i], substr(rs[i], 9));
+        else okn := okn + 1; cnt := jsonb_set(cnt, array[rs[i]], to_jsonb(coalesce((cnt ->> rs[i])::int, 0) + 1)); end if;
       end loop;
     end if;
   end if;
@@ -1101,6 +1103,8 @@ begin
   if st.sweep_after is null then
     select array_agg(e.id order by e.id) into covers from fb_mirror_errors e where e.book_id = p_book and e.kind = 'missed' and e.resolved_at is null;
     if covers is not null then
+      -- a change may have been missed: the masters are compared too (once per sweep, not every run)
+      perform fb_mirror_masters(p_book); perform fb_mirror_openings(p_book);
       update fb_mirror_state set sweep_after = '', sweep_covers = covers, sweep_started = now() where book_id = p_book;
       st.sweep_after := ''; st.sweep_covers := covers;
     end if;
@@ -1111,13 +1115,17 @@ begin
     select array_agg(z.guid order by z.guid) into gl from (select v.guid from tally_vouchers v where v.book_id = b.source_book_id and v.day >= b.mirror_from and v.guid > st.sweep_after order by v.guid limit avail) z;
     got := coalesce(array_length(gl, 1), 0);
     if got > 0 then
-      rs := fb_mirror_list(p_book, array_fill('v'::text, array[got]), gl);
-      for i in 1 .. got loop
-        n := n + 1;
-        if rs[i] like 'failed: %' then failed := failed + 1; perform fb_mirror_failed(p_book, gl[i], substr(rs[i], 9));
-        else cnt := jsonb_set(cnt, array['swept_' || rs[i]], to_jsonb(coalesce((cnt ->> ('swept_' || rs[i]))::int, 0) + 1)); end if;
-      end loop;
       last_g := gl[got];
+      -- (an entry waiting for its retry time is passed over here; it stays noted and is tried at that time)
+      gl := array(select x from unnest(gl) x where not exists (select 1 from fb_mirror_errors e where e.book_id = p_book and e.kind = 'catchup' and e.key = 'v:' || x and e.resolved_at is null and e.retry_at > now()) order by x);
+      if coalesce(array_length(gl, 1), 0) > 0 then
+        rs := fb_mirror_list(p_book, array_fill('v'::text, array[array_length(gl, 1)]), gl);
+        for i in 1 .. array_length(gl, 1) loop
+          n := n + 1;
+          if rs[i] like 'failed: %' then failed := failed + 1; perform fb_mirror_failed(p_book, 'v', gl[i], substr(rs[i], 9));
+          else okn := okn + 1; cnt := jsonb_set(cnt, array['swept_' || rs[i]], to_jsonb(coalesce((cnt ->> ('swept_' || rs[i]))::int, 0) + 1)); end if;
+        end loop;
+      end if;
     end if;
     swept := got < avail;
     if swept then
@@ -1139,7 +1147,8 @@ begin
   end if;
   if failed = 0 then update fb_mirror_state set mirrored_at = now() where book_id = p_book; end if;
   perform set_config('fincom.fb_actor', act, true);
-  return jsonb_build_object('done', n, 'left', left_n, 'failed', failed, 'by', cnt, 'sweep', case when st.sweep_after is not null then (case when swept then 'done' else 'going' end) end);
+  -- done: entries actually mirrored (a failed one is not progress)
+  return jsonb_build_object('done', okn, 'tried', n, 'left', left_n, 'failed', failed, 'by', cnt, 'sweep', case when st.sweep_after is not null then (case when swept then 'done' else 'going' end) end);
 end $f$;
 -- (service role, tests) every enrolled book in ONE transaction, in book_id order; the timer uses fb_mirror_catchup_run
 create or replace function public.fb_mirror_catchup_all(p_max int default 5000) returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
@@ -1158,28 +1167,35 @@ begin
   end loop;
   return out;
 end $f$;
--- the timer's runner (every 3 minutes): one short transaction per book and chunk of 500 (COMMIT after each), so a run
--- holds one book's locks at a time and a note is deleted moments after it is read. A procedure (CALL) for the timer
+-- the timer's runner (every 3 minutes): one short transaction per book and chunk (COMMIT after each), round-robin across
+-- the books, so a run holds one book's locks at a time, a note is deleted moments after it is read, and one book (or one
+-- bad entry) never takes the whole run. A procedure (CALL) for the timer
 -- only: not SECURITY DEFINER and with no SET clause, as COMMIT needs; names are qualified
 create or replace procedure public.fb_mirror_catchup_run(p_max int default 5000) language plpgsql as $p$
-declare b record; budget int := p_max; r jsonb; d int;
+declare act uuid[]; nxt uuid[]; id uuid; budget int := p_max; r jsonb; d int; share int;
 begin
   perform public.fb_mirror_triage();
   commit;
-  for b in select k.book_id from public.fb_books k where k.mirror_on order by k.state = 'setting_up' desc, k.book_id loop
-    loop
+  select array_agg(k.book_id order by k.state = 'setting_up' desc, k.book_id) into act from public.fb_books k where k.mirror_on;
+  -- round-robin: each pass gives every book still busy an equal share of what is left of the run (50 to 500 entries);
+  -- a book drops out when a chunk mirrors nothing or it is up to date; every call costs at least 1, so a run always ends
+  while budget > 0 and coalesce(array_length(act, 1), 0) > 0 loop
+    share := greatest(50, least(500, budget / array_length(act, 1)));
+    nxt := '{}';
+    foreach id in array act loop
       exit when budget <= 0;
       begin
-        r := public.fb_mirror_catchup(b.book_id, least(budget, 500));
+        r := public.fb_mirror_catchup(id, share);
         d := coalesce((r ->> 'done')::int, 0);
       exception when others then
-        insert into public.fb_mirror_errors (book_id, kind, key, error) values (b.book_id, 'catchup', 'run', left(sqlerrm, 500));
+        insert into public.fb_mirror_errors (book_id, kind, key, error) values (id, 'catchup', 'run', left(sqlerrm, 500));
         r := null; d := 0;
       end;
       commit;
-      budget := budget - d;
-      exit when d = 0 or (coalesce((r ->> 'left')::int, 0) = 0 and coalesce(r ->> 'sweep', 'done') = 'done');
+      budget := budget - greatest(d, 1);
+      if d > 0 and not (coalesce((r ->> 'left')::int, 0) = 0 and coalesce(r ->> 'sweep', 'done') = 'done') then nxt := nxt || id; end if;
     end loop;
+    act := nxt;
   end loop;
 end $p$;
 

@@ -147,3 +147,15 @@ commit-time code would invite someone to switch it back on. New: `fb_mirror_stat
 (`fincom.fb_open`) and the edit log's actor and reason (`fincom.fb_actor`, `fincom.fb_reason`) are session settings.
 Nothing reaches them from outside today (no write path through PostgREST), but before own-books writes exist they must move
 to a transaction-local table keyed by txid, written only by the posting functions, so that no caller can set them.
+
+### Round 4 of the review (23-Nov-2026)
+
+| Finding | Fix | Test |
+|---|---|---|
+| A poison entry (fails every time) counted as progress, so the runner looped on its book and later books got nothing | `done` counts only entries actually mirrored; the runner goes round-robin across the books, each pass giving every busy book an equal share (50 to 500 entries) and dropping a book when a chunk mirrors nothing; every call costs at least 1, so a run always ends | 12 (round 4); `poison.py`: one run 0.4 s, book 1 39 of 39, book 3 30 of 30 (before: 0 of 30) |
+| The failed entry was tried again in every chunk | it waits for `fb_mirror_errors.retry_at` (3 minutes, then doubling, at most an hour; `tries` counted); it stays noted, so the book counts as behind and turns "Not in step" after 10 minutes | 12 (round 4) |
+| The masters were re-mirrored every chunk while any error was open | the masters are compared once when a sweep starts (a change may have been missed), not for a failing entry | 12 (round 4) |
+
+**Note:** `fb_audit_log.seq` can have gaps. A chunk that fails is rolled back and retried in halves; the sequence values
+its edit-log rows took are not given back (`poison.py`: 669 values for 410 rows). This is expected: the chain links each
+row to the one before it by hash, not by consecutive numbers, and it verifies.
