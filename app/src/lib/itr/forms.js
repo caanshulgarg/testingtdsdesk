@@ -137,14 +137,15 @@ function lossSchedules(X, o) {
   put(o, "ScheduleCYLA/LossRemAftSetOff", { BalHPlossCurYrAftSetoff: R(hpL - hpSet), BalBusLossAftSetoff: R(busL - busSet), BalOthSrcLossNoRaceHorseAftSetoff: 0 });
   const brow = (from, bf, ud, after) => ({ IncBFLA: Object.assign({ IncOfCurYrUndHeadFromCYLA: R(from) }, bf != null ? { BFlossPrevYrUndSameHeadSetoff: R(bf) } : {}, ud != null ? { BFUnabsorbedDeprSetoff: R(ud) } : {}, { IncOfCurYrAfterSetOffBFLosses: R(after) }) });
   if (ind) put(o, "ScheduleBFLA/Salary", { IncBFLA: { IncOfCurYrUndHeadFromCYLA: R(A.sal), IncOfCurYrAfterSetOffBFLosses: R(F.sal) } });
-  put(o, "ScheduleBFLA/HP", brow(A.hp, 0, so.ud.hp, F.hp));
+  const bc = so.bfCg || {};
+  put(o, "ScheduleBFLA/HP", brow(A.hp, so.bfHp, so.ud.hp, F.hp));
   put(o, "ScheduleBFLA/BusProfExclSpecProf", brow(A.pgbp, so.bf, so.ud.pgbp, F.pgbp));
   put(o, "ScheduleBFLA/OthSrcExclRaceHorse", brow(A.os, null, so.ud.os, F.os));
-  put(o, "ScheduleBFLA/STCG20Per", brow(A.c111A, 0, so.ud.c111A, F.c111A));
-  put(o, "ScheduleBFLA/STCGAppRate", brow(A.cOth, 0, so.ud.cOth, F.cOth));
-  put(o, "ScheduleBFLA/LTCG12_5Per", brow(A.c112A + A.c112, 0, N(so.ud.c112A) + N(so.ud.c112), F.c112A + F.c112));
+  put(o, "ScheduleBFLA/STCG20Per", brow(A.c111A, bc.c111A, so.ud.c111A, F.c111A));
+  put(o, "ScheduleBFLA/STCGAppRate", brow(A.cOth, bc.cOth, so.ud.cOth, F.cOth));
+  put(o, "ScheduleBFLA/LTCG12_5Per", brow(A.c112A + A.c112, N(bc.c112A) + N(bc.c112), N(so.ud.c112A) + N(so.ud.c112), F.c112A + F.c112));
   const udSet = Object.values(so.ud).reduce((a, v) => a + N(v), 0);
-  put(o, "ScheduleBFLA/TotalBFLossSetOff", { TotBFLossSetoff: R(so.bf), TotUnabsorbedDeprSetoff: R(udSet), TotAllUs35cl4Setoff: 0 });
+  put(o, "ScheduleBFLA/TotalBFLossSetOff", { TotBFLossSetoff: R(N(so.bf) + N(so.bfHp) + Object.values(bc).reduce((a, v) => a + N(v), 0)), TotUnabsorbedDeprSetoff: R(udSet), TotAllUs35cl4Setoff: 0 });
   put(o, "ScheduleBFLA/IncomeOfCurrYrAftCYLABFLA", R(S.gti));
   // Schedule CFL: this year's losses carried forward (CurrentAYloss, "2025-26 current year losses"; ITR-5 / ITR-6 also
   // CurrentYearLossCF, after what is given to unit holders, none here) and the totals. LossCFCurrentAssmntYear is the
@@ -157,7 +158,7 @@ function lossSchedules(X, o) {
     put(o, "ScheduleCFL/CurrentAYloss", lsd(C.hp, cy, C.stcl, C.ltcl));
     if (X.form !== "ITR-3") put(o, "ScheduleCFL/CurrentYearLossCF", lsd(C.hp, cy, C.stcl, C.ltcl));
     put(o, "ScheduleCFL/TotalOfBFLossesEarlierYrs", lsd(0, 0, 0, 0));
-    put(o, "ScheduleCFL/AdjTotBFLossInBFLA", lsd(0, R(so.bf), 0, 0));
+    put(o, "ScheduleCFL/AdjTotBFLossInBFLA", lsd(N(S.key.bfHp), R(so.bf), N(S.key.bfStcl), N(S.key.bfLtcl)));
     put(o, "ScheduleCFL/TotalLossCFSummary", lsd(C.hp, cy, C.stcl, C.ltcl));
   }
   // Schedule UD: this year's row (CurBalCFNY: the year's depreciation not absorbed), and the totals (column 5 is the
@@ -233,7 +234,8 @@ export function coverage(X, map) {
     if (miss.length) add("cf_unmapped", "Losses carried forward not in the JSON", "This year's " + miss.join(", ") + ": Schedules CFL and UD do not carry it.");
     if (bfLeft && !((M.losses || {}).business || []).length) add("cfl_prior", "Schedule CFL, earlier years", "Earlier years' losses are carried forward: their rows in Schedule CFL are not filled by FinCom yet.");
   }
-  if (((M.losses || {}).business || []).length) add("cfl_prior", "Schedule CFL, earlier years", "Business losses of earlier years: their rows in Schedule CFL (year, date of filing) are not filled by FinCom yet.");
+  const Lx = M.losses || {}, prior = ["business", "hp", "stcl", "ltcl"].filter((k) => (Lx[k] || []).some((x) => N(x.amt)));
+  if (prior.length) add("cfl_prior", "Schedule CFL, earlier years", "Losses of earlier years (" + prior.map((k) => ({ business: "business", hp: "house property", stcl: "short-term capital", ltcl: "long-term capital" })[k]).join(", ") + ") are set off in the computation, but their rows in Schedule CFL (year, date of filing) are not filled by FinCom yet.");
   if (f !== "ITR-4" && M.business && N(M.business.itDep) && !((M.business.itBlocks || []).length)) add("dep", "Schedules DPM / DOA (depreciation by block)", "Depreciation under section 32 of " + R(M.business.itDep) + " has no block detail: fill Statements › Fixed assets.");
   if (f !== "ITR-4" && M.business && (M.business.itBlocks || []).length && R((M.business.itBlocks || []).filter((b) => BLOCK_PATH[b.key]).reduce((a, b) => a + N(b.dep), 0)) !== R(M.business.itDep)) add("dep_sum", "Schedules DPM / DOA add up", "The blocks' depreciation does not add up to the depreciation claimed.");
   if (M.audit && f !== "ITR-4" && !(P.auditor && P.auditor.firm && P.auditor.reportDate && P.auditor.ack)) add("audit_info", "Audit report details", "A tax audit applies: give the auditor's firm, PAN, the date of the report and its acknowledgement number on Data.");
@@ -455,7 +457,7 @@ function partBTI(X, o, base, kind) {
   put(o, base + "/TotalTI", ti0);
   put(o, base + "/CurrentYearLoss", R(lineOf(S, "cyla_bp")));
   put(o, base + "/BalanceAfterSetoffLosses", R(ti0 - lineOf(S, "cyla_bp")));
-  put(o, base + "/BroughtFwdLossesSetoff", R(lineOf(S, "bfla_bp") + lineOf(S, "bfla_ud")));
+  put(o, base + "/BroughtFwdLossesSetoff", R(lineOf(S, "bfla_bp") + lineOf(S, "bfla_hp") + lineOf(S, "bfla_cg") + lineOf(S, "bfla_ud")));
   put(o, base + "/GrossTotalIncome", R(S.gti));
   // the total of this year's losses in Schedule CFL (validation rule 934)
   const Cc = S.carry || {}; put(o, base + "/LossesOfCurrentYearCarriedFwd", R((Cc.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0) + N(Cc.hp) + N(Cc.stcl) + N(Cc.ltcl)));

@@ -152,8 +152,9 @@ business loss forward (80).
 | OS (other sources outside the books) | Entered on Schedules | Interest not in the books, dividends (the AIS's shown), a buy-back's money |
 
 Both computations work every head from the same rows (tax.js through heads.js; check.js with its own code), and must agree
-on 22 figures (the 17 before, and the salary, house property and capital gains heads, and the short- and long-term
-capital losses carried forward).
+on 25 figures (the 17 before, the salary, house property and capital gains heads, the short- and long-term capital
+losses carried forward, and the house property and capital losses of earlier years set off). Agreement is not proof: the
+review of 1dc8f9d8e found four rules both shared; tests/run_itr_law.mjs holds hand-worked figures for each.
 
 **AOP / BOI and other ITR-5 persons:** not covered yet (Needs you). Firm or LLP is asked in the return (Client setup has
 "Firm or LLP" as one choice); never read from the name. 234C: one instalment by 15 March only for 44AD / 44ADA (44AE alone
@@ -329,13 +330,17 @@ To confirm:
     validation rule 905 (CBDT, V1.0) reads "Total Income is greater than Rs. 1 crore then Schedule AL is required". FinCom
     requires AL above Rs 1 crore and fills it whenever it is entered (so the firm can give it from 50 lakh as its own
     practice). Confirm.
-14. **The proviso to 112(1)(a) with set-off.** FinCom works the excess per property on its gain after the 54-series
-    exemption (12.5% without indexation less 20% with indexation, CII 376 / the year of purchase) and takes it off the 112
-    tax, at most the 112 tax charged. Where a loss or the unused basic exemption absorbs part of the gain, the excess is
-    not cut in proportion. Run one such return through Winman and the utility and confirm.
-15. **The order of set-off within capital gains (sections 70(2), 70(3)).** The long-term loss first (112, then 112A), then
-    the short-term loss against normal-rate gains, 111A, 112, 112A. For a person on a slab rate below 20%, setting the
-    short-term loss against 111A first would save more: FinCom does not choose by the slab. Confirm, or say the order.
+14. **The proviso to 112(1)(a)** (settled by the CA review of 1dc8f9d8e): the two taxes are compared on the gain actually
+    chargeable, after the set-offs and the basic exemption: per property, the lower of 12.5% of its chargeable gain and
+    20% of its chargeable indexed gain (tax.js tax112). What came off the 112 income is put on the covered property first,
+    up to its indexed gain, then on the other 112 gains. Schedule CG's TaxSec1121a / TaxSec1121aiiB / ExcessAmtSec1121a
+    carry these chargeable figures. **To confirm:** the utility's own per-row figures for a return with a set-off may
+    differ; run one through it.
+15. **The order of set-off** (settled by the review): across heads, the normal-rate heads first (a house property loss
+    against salary first; a business loss and unabsorbed depreciation never against salary), then 111A (20%), 112, 112A.
+    Within capital gains: the long-term loss first (112, then 112A), the short-term loss against normal-rate gains, 111A,
+    112, 112A. **To confirm:** for a person on a slab rate below 20%, a short-term loss against 111A before normal-rate
+    gains would save more; FinCom does not choose by the slab.
 16. **234C proviso (a).** Applied only when the advance tax paid after an instalment date (up to 31 March) covers the extra
     tax from the capital gains that accrued after it; the proviso for dividends is not applied yet.
 17. **ITR-3's Schedule AL is "other than those included in Part A-BS"**: FinCom asks when an AL figure equals the
@@ -346,8 +351,22 @@ To confirm:
 19. **Cost inflation index 376 for FY 2025-26** (363 for 2024-25): confirm against the notification.
 20. **Form 16 and the AIS's salary / sale codes** (TDS-192; SFT-17 sales; SFT-12 sales and TDS-194IA) are read from the
     published layouts: confirm on the first real files.
-21. **Gratuity of a government employee**: the utility (rule 181) caps 10(10) at Rs 25 lakh though 10(10)(i) exempts it
-    in full; FinCom follows the utility. Professional tax above Rs 2,500 (Article 276) is said, not cut.
+21. **Gratuity of a government employee** (settled by the review): wholly exempt under 10(10)(i); above Rs 25 lakh a note
+    says the utility may cap it, so the CA compares the utility's figure. Professional tax above Rs 2,500 (Article 276) is
+    said, not cut.
+23. **From the review of 1dc8f9d8e, built:** 54EC Rs 50 lakh in all in the year and for land or building only; 54 for a
+    residential house sold (marked on the sale); 54 / 54B / 54F for individuals and HUFs only; 54F = gain x cost of the
+    new house (up to Rs 10 crore) / net consideration; 54 = the lower of the gain and the cost (up to Rs 10 crore).
+    Basic + DA asked (never the whole 17(1)) for HRA, 16(ii) and 80CCD(2); the kind of employer asked (never "Others" by
+    default); Form 16's 115BAC opt-out compared with the return's regime; the sale date within the year and the purchase
+    before it (a sale without a date blocks); a buy-back's money in other sources (2(22)(f)) with the 194 TDS shown; the
+    self-occupied interest cap by each house's own loan date; pre-construction interest a fifth; the proviso to 55(2)(b);
+    194IA TDS (1% of the higher of the consideration and the stamp duty value) against 26AS; earlier years' house property
+    (71B) and capital (74) losses entered and set off within eight years (their Schedule CFL rows still block the JSON);
+    Ind AS: preference share capital a financial liability unless said to be irredeemable (Ind AS 32), asked.
+24. **To confirm:** a listed share bought back through the exchange is treated as STT-paid (its loss in the 20% / 112A
+    columns); 54F needs the new house's cost (asked when only an amount is given); the 54EC limit is given to the sales
+    in the order they are entered.
 22. **An unlisted company with no AL-1 asset**: asked with a note (`al6_none`), the JSON then carries no AL-1. Confirm.
 
 ## 8. Tests
@@ -361,6 +380,7 @@ All on made-up data (`tests/fixtures/itr/`, `tests/itr_demo.mjs`):
 | `node tests/run_itr_schema.mjs` | Pinned schema files; every form and scenario passes ajv and the page's validator alike; planted faults rejected by both; non-amount fields asked, never filled; the JSON's figures are the computation's; the review's loss cases (PBT -1 lakh / -5 lakh with depreciation of 4 lakh) carried in Schedules UD and CFL for ITR-3, 5 and 6; a carry-forward the map does not hold blocks |
 | `node tests/run_itr_verify.mjs` | Every check Matched on agreeing sides, and each planted fault found with its exact amount; Missing / Needs you; consistency checks labelled; 43B on this year's charge (the 30 lakh leave provision), employer / employees' PF ledgers by their usual names, admin charges and EDLI, PF by wage month and the old balance asked (the review's 2 lakh arrears), one payment per challan, earlier years' 43B (43B(h) bill by bill); payment dates answered item by item changing the computation; the gate |
 | `python3 tests/run_itr_ui.py` | The page, desktop and phone: Data, a file brought in, a wrong PAN refused, re-import, the sheet with its ledgers, PDF, Excel, the checks, a difference opened, accepting only with a note, the JSON offered only when settled, the download passing ajv; fits the width. `ITR_SHOTS=<dir>` saves the design screenshots |
+| `node tests/run_itr_law.mjs` | The CA review's points, each figure worked by hand from the Act and checked in both computations on its own: set-off order across heads (3,73,750; special tax 25,000), the proviso to 112(1)(a) on the chargeable gain (53,425; 84,625; 1,83,425), 54EC / 54 / 54F who and how much (50 lakh in all; 7.5 crore), basic + DA, the employer's kind, government gratuity, sale dates, buy-back dividend, 55(2)(b), the self-occupied cap by loan date, pre-construction interest, 71B / 74 losses of earlier years, the Form 16 regime and 194IA checks |
 | `node tests/run_itr_schedules.mjs` | The schedules by hand: salary in both regimes (HRA by rule 2A, one standard deduction, gratuity cap), house property (annual value, 30%, the self-occupied cap, co-owners, arrears, three self-occupied), capital gains (CII, holding periods, 55(2)(ac), 50C at 110%, indexation and the proviso's 2,93,630, no proviso for a non-resident or a company, set-off within the head and carry forward, buy-back, 54EC cap, the 234C accrual); whole ITR-3 / ITR-4 / ITR-5 / ITR-6 returns through both computations and ajv (Schedules S, HP, CG, 112A, SI, CFL, AL, FA, SH, AL-1, Ind AS); the checks (Form 16, AIS salary / rent / sales, AL, SH, Ind AS); 300 random returns with salary, houses and sales: both computations agree |
 | `python3 tests/run_itr_schedules_ui.py` | The Schedules step, desktop and phone: the Form 16 on Data, each head's figure, a sale opened, an AIS sale taken, an employer taken from Form 16, a house added, FA's lists from the schema, the Computation and the Checks group; ITR-6's SH, AL-1 and OCI. `ITR_SHOTS=<dir>` saves the screenshots |
 | `run_every_screen.py`, `run_legacy_room.py` | The five steps open on real (fixture) books with no error; legacy.js and the first file within their budgets |

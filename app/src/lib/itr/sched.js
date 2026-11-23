@@ -200,7 +200,7 @@ export function cgSchedule(X, o) {
   if (stBuy.length) put(o, ST + "/CapitalLossBuyBackShares", fit(X, ST + "/CapitalLossBuyBackShares", { TotalCapitalLossBuyBackShares: -P0(-sumOf(stBuy, (x) => x.net)), CapitalLossBuyBackSharesDtls: [{ Rate: stBuy.some((x) => x.stt) ? "STL20" : "STLAR", Amount: -P0(-sumOf(stBuy, (x) => x.net)) }] }));
   put(o, ST + "/TotalSTCG", R(sumOf(st, (x) => x.net)));
   // long-term
-  const ltLand = lt.filter((x) => x.kind === "land"), lt112A = lt.filter((x) => x.bucket === "s112A"), ltBuy = lt.filter((x) => x.kind === "buyback"), ltOth = lt.filter((x) => x.kind !== "land" && x.bucket !== "s112A" && x.kind !== "buyback");
+  const ltLand = lt.filter((x) => x.kind === "land"), lt112A = lt.filter((x) => x.bucket === "s112A" && x.kind !== "buyback"), ltBuy = lt.filter((x) => x.kind === "buyback"), ltOth = lt.filter((x) => x.kind !== "land" && x.bucket !== "s112A" && x.kind !== "buyback");
   if (ltLand.length) {
     put(o, LT + "/SaleofLandBuild/SaleofLandBuildDtls", ltLand.map((x) => landRow(X, LT + "/SaleofLandBuild/SaleofLandBuildDtls/[]", x, true)));
     put(o, LT + "/SaleofLandBuild/TotalLTCGImmblPrprty", R(sumOf(ltLand, (x) => x.net)));
@@ -311,14 +311,17 @@ export function bsIndAs(X, o, P) {
   const cs = (codes) => R(all.filter((x) => codes.includes(x.code)).reduce((a, x) => a + N(x.amt), 0));
   const tr = (key, re) => R(b[key].trace.filter((x) => re.test(x.code)).reduce((a, x) => a + N(x.amt), 0));
   const oth = (d, v) => (R(v) ? [{ OthersDesc: d, OthersAmount: R(v) }] : undefined);
-  const sh = cs(["3A", "3B"]), sp = cs(["4B"]), ores = cs(["4C", "4D"]), pl = R(t.equity - sh - sp - ores);
-  const resTot = R(sp + ores), eq = R(t.equity);
+  // preference shares (3B): under Ind AS 32 a redeemable preference share is a financial liability (non-current
+  // borrowings, "liability component"); kept in equity only when the owner says it is irredeemable (P.prefEquity)
+  const pref = cs(["3B"]), prefL = P.prefEquity === true ? 0 : pref;
+  const sh0 = cs(["3A", "3B"]), sh = R(sh0 - prefL), sp = cs(["4B"]), ores = cs(["4C", "4D"]), pl = R(t.equity - sh0 - sp - ores);
+  const resTot = R(sp + ores), eq = R(t.equity - prefL);
   put(o, B + "/EquityAndLiablities/Equity", { EquityShareCapital: { Authorised: P.authorised != null ? R(P.authorised) : undefined, IssuedSubsPaidUp: sh, SubscribedNotFullyPaid: 0, TotShareCapital: sh },
     OtherEquityReserv: { OtherResrvDtls: [["Securities premium", sp], ["General and other reserves", ores]].filter(([, v]) => R(v) > 0).map(([d, v]) => ({ OthersDesc: d, OthersAmount: R(v) })), OthersTotal: Math.max(0, resTot), TotalOtherResrv: Math.max(0, resTot), RetainedEarngs: pl, TotResrNRetEar: R(resTot + pl), TotalEquity: eq } });
   const tlB = cs(["30A"]), tlO = cs(["30B"]), dtl = cs(["31A"]), oltl = cs(["32A"]), ltpE = cs(["5A", "5C"]), ltpO = cs(["5D"]);
-  const ncl = R(tlB + tlO + oltl + ltpE + ltpO + dtl);
+  const ncl = R(tlB + tlO + prefL + oltl + ltpE + ltpO + dtl);
   const NC = B + "/EquityAndLiablities/Liabilities/NonCurrLiabilities";
-  put(o, NC, { FinancialLiabilities: { TermLoans: { RupeeLoans: { FromBanks: tlB, FromOthers: tlO, Total: R(tlB + tlO) }, TotalTermLoans: R(tlB + tlO) }, TotalLTBorrowings: R(tlB + tlO), OtherFinancialLiab: oltl },
+  put(o, NC, { FinancialLiabilities: { TermLoans: { RupeeLoans: { FromBanks: tlB, FromOthers: tlO, Total: R(tlB + tlO) }, TotalTermLoans: R(tlB + tlO) }, LiabilityComp: prefL, TotalLTBorrowings: R(tlB + tlO + prefL), OtherFinancialLiab: oltl },
     Provisions: { ProvEmpBenefits: ltpE, OthersProvisions: oth("Other long-term provisions", ltpO), OthersTotal: ltpO, TotalProvisions: R(ltpE + ltpO) }, DefrdTaxCurrLiabilites: dtl, TotalNonCurrLiab: ncl });
   const stB = cs(["33A"]), stO = cs(["33B", "33C"]), tp = cs(["6A", "6B"]), ai = cs(["7G"]), adv = cs(["7H", "7E"]), op = cs(["7A", "7B", "7C", "7F"]), spE = cs(["5B", "5E"]), itp = cs(["7D"]), spO = cs(["5F", "5G"]);
   const borr = R(stB + stO), othFin = R(ai + op), fin = R(borr + tp + othFin), cl = R(fin + adv + spE + spO + itp);

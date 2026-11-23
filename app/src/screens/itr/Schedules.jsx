@@ -67,6 +67,7 @@ export default function Schedules({ X, refresh, schema }) {
       note="An unlisted company: its land and buildings, shares and securities, loans given and taken, vehicles and jewellery at the year end. Checked against the balance sheet." />}
     {f === "ITR-6" && (st.profile || {}).indAs === true && <Oci X={X} set={set} />}
     <Other X={X} set={set} />
+    {f !== "ITR-4" && <Losses X={X} set={set} />}
     {M.form === "ITR-4" && <p className="itr-note">ITR-4 takes one house and long-term gains under 112A up to Rs 1.25 lakh; anything more needs ITR-3.</p>}
   </div>;
 }
@@ -76,16 +77,16 @@ function Salary({ X, set, open, tog }) {
   const rows = X.state.salaries || [], sh = X.model.salaryHead, f16 = (X.imports.f16 || []).filter((x) => x.data && !rows.some((r) => r.tan && r.tan === x.data.tan));
   const upd = (i, p) => set({ salaries: rows.map((r, j) => (j === i ? Object.assign({}, r, p) : r)) });
   return <Card k="salary" title="Salary (Schedule S)" chip={sh ? money(sh.income) : null} note={sh ? "Gross " + money(sh.gross) + " · exempt " + money(sh.exempt) + " · standard deduction " + money(sh.std) + (sh.ptax ? " · professional tax " + money(sh.ptax) : "") : "From Form 16 (bring it in on Data), or give the employer."}
-    action={<button className="linkbtn" data-itr-add-salary="" onClick={() => set({ salaries: rows.concat([{ id: newId(), employer: "", nature: "OTH", exempt: [] }]) })}>Add an employer</button>}>
+    action={<button className="linkbtn" data-itr-add-salary="" onClick={() => set({ salaries: rows.concat([{ id: newId(), employer: "", nature: "", exempt: [] }]) })}>Add an employer</button>}>
     {f16.map((x) => <p key={x.id} className="itr-note" data-itr-f16-offer={x.data.tan}>{"Form 16 of " + (x.data.employer || x.data.tan) + ": salary " + money(x.data.s171 + x.data.s172 + x.data.s173) + ", TDS " + money(x.data.tds) + " "}
       <button className="linkbtn" data-itr-take-f16={x.data.tan} onClick={() => set({ salaries: rows.concat([Object.assign({ id: newId() }, salaryFromForm16(x.data))]) })}>Take it</button></p>)}
     {rows.map((r, i) => { const c = sh && sh.rows[i];
       return <Item key={r.id || i} k={"salary-" + i} title={r.employer || "Employer " + (i + 1)} sub={r.src === "Form 16" ? "from Form 16" : ""} figure={c ? money(c.net) : ""} open={open === "s" + i} onOpen={() => tog("s" + i)} onRemove={() => set({ salaries: rows.filter((_, j) => j !== i) })}>
         <div className="itr-grid">
           <Txt label="Employer" k="employer" v={r.employer} on={(v) => upd(i, { employer: v })} /><Txt label="TAN" k="tan" up v={r.tan} on={(v) => upd(i, { tan: v })} />
-          <Sel label="Kind of employer" k="nature" v={r.nature || "OTH"} opts={NATURE} on={(v) => upd(i, { nature: v })} />
+          <Sel label="Kind of employer" k="nature" v={r.nature || ""} opts={[["", "Choose"]].concat(NATURE)} on={(v) => upd(i, { nature: v })} />
           <Num label="Salary, 17(1)" k="s171" v={r.s171} on={(v) => upd(i, { s171: v })} /><Num label="Perquisites, 17(2)" k="s172" v={r.s172} on={(v) => upd(i, { s172: v })} /><Num label="Profits in lieu, 17(3)" k="s173" v={r.s173} on={(v) => upd(i, { s173: v })} />
-          <Num label="Basic + DA (for HRA, 80CCD(2))" k="basicDa" v={r.basicDa} on={(v) => upd(i, { basicDa: v })} /><Num label="Professional tax paid" k="ptax" v={r.ptax} on={(v) => upd(i, { ptax: v })} />
+          <Num label="Basic + DA (needed for HRA, 80CCD(2))" k="basicDa" v={r.basicDa} on={(v) => upd(i, { basicDa: v })} /><Num label="Professional tax paid" k="ptax" v={r.ptax} on={(v) => upd(i, { ptax: v })} />
           {(r.nature === "CGOV" || r.nature === "SGOV") && <Num label="Entertainment allowance" k="ent" v={r.ent} on={(v) => upd(i, { ent: v })} />}
           <Addr a={r.addr} k="saddr" on={(v) => upd(i, { addr: v })} />
         </div>
@@ -119,6 +120,7 @@ function Houses({ X, set, open, tog }) {
             {X.model.business && <><Num label="Of the rent, credited in the books' P&L" k="inbooks" v={r.inBooks} on={(v) => upd(i, { inBooks: v })} /><Num label="Its expenses debited in the P&L" k="inbooksexp" v={r.inBooksExp} on={(v) => upd(i, { inBooksExp: v })} /></>}</>}
           <Addr a={r.addr} k="haddr" on={(v) => upd(i, { addr: v })} />
           {r.kind === "S" && <label className="itr-field itr-tick"><input type="checkbox" checked={!!r.oldLoan} onChange={(e) => upd(i, { oldLoan: e.target.checked })} /><span>Loan before 1-04-1999 or for repairs (Rs 30,000)</span></label>}
+          {(r.loans || []).length > 0 && <Num label="Interest before the house was ready (total; a fifth each year for 5 years)" k="preconst" v={r.preConst} on={(v) => upd(i, { preConst: v })} />}
         </div>
         <Sub k="loans" title="Loans for the house (interest, 24(b))" rows={r.loans} blank={{ from: "B", bank: "", account: "", date: "", total: "", outstanding: "", interest: "" }} on={(v) => upd(i, { loans: v })} render={(l, p) => <>
           <Sel label="From" v={l.from || "B"} opts={[["B", "Bank"], ["I", "Other than a bank"]]} on={(v) => p({ from: v })} /><Txt label="Lender" v={l.bank} on={(v) => p({ bank: v })} /><Txt label="Loan account" v={l.account} on={(v) => p({ account: v })} />
@@ -138,7 +140,7 @@ function Gains({ X, set, open, tog }) {
   const keyOf = (x) => [x.code, x.src || x.desc, x.amount, x.date].join("|"), taken = new Set(rows.map((r) => r.aisKey).filter(Boolean));
   const offers = ais.filter((x) => !taken.has(keyOf(x)));
   const upd = (i, p) => set({ cgRows: rows.map((r, j) => (j === i ? Object.assign({}, r, p) : r)) });
-  const head = g ? "111A " + money(g.s111A) + " · normal rates " + money(g.stApp) + " · 112A " + money(g.s112A) + " · 112 " + money(g.s112) + (g.relief112 ? " · ignored under the proviso to 112(1)(a) " + money(g.relief112) : "") + (C.stcl || C.ltcl ? " · loss carried forward " + money((C.stcl || 0) + (C.ltcl || 0)) : "") : "";
+  const head = g ? "111A " + money(g.s111A) + " · normal rates " + money(g.stApp) + " · 112A " + money(g.s112A) + " · 112 " + money(g.s112) + (X.comp.tax && X.comp.tax.relief112 ? " · ignored under the proviso to 112(1)(a) " + money(X.comp.tax.relief112) : "") + (C.stcl || C.ltcl ? " · loss carried forward " + money((C.stcl || 0) + (C.ltcl || 0)) : "") : "";
   return <Card k="cg" title="Capital gains (Schedule CG)" chip={g ? money(g.total) : null} note={head || "Each sale in the year: shares and funds, land or building, other assets. The AIS's sales are offered below."}
     action={<button className="linkbtn" data-itr-add-sale="" onClick={() => set({ cgRows: rows.concat([{ id: newId(), kind: "eq", exempt: [], improve: [] }]) })}>Add a sale</button>}>
     {offers.map((x, i) => <p key={i} className="itr-note" data-itr-ais-offer={i}>{"AIS: " + (x.desc || x.code) + (x.src ? ", " + x.src : "") + " " + money(x.amount) + " "}
@@ -148,11 +150,13 @@ function Gains({ X, set, open, tog }) {
         <div className="itr-grid">
           <Sel label="What was sold" k="cgkind" v={r.kind || "eq"} opts={CG_KINDS} on={(v) => upd(i, { kind: v })} /><Txt label="Description" k="desc" v={r.desc} on={(v) => upd(i, { desc: v })} />
           <Day label="Bought on" k="acq" v={r.acq} on={(v) => upd(i, { acq: v })} /><Day label="Sold on" k="sale" v={r.sale} on={(v) => upd(i, { sale: v })} />
-          {r.kind !== "buyback" && <Num label="Sale value" k="value" v={r.value} on={(v) => upd(i, { value: v })} />}
+          <Num label={r.kind === "buyback" ? "Amount received (taxed as dividend, 2(22)(f))" : "Sale value"} k="value" v={r.value} on={(v) => upd(i, { value: v })} />
           {(land || r.kind === "unlisted") && <Num label={land ? "Stamp duty value (50C)" : "Fair market value, rule 11UAA (50CA)"} k="sdv" v={r.sdv} on={(v) => upd(i, { sdv: v })} />}
           <Num label="Cost of acquisition" k="cost" v={r.cost} on={(v) => upd(i, { cost: v })} /><Num label="Expenses on transfer" k="exp" v={r.expenses} on={(v) => upd(i, { expenses: v })} />
           {r.kind === "eq" && (r.acq || "") < "20180201" && <Num label="FMV on 31-01-2018 (total)" k="fmv2018" v={r.fmv2018} on={(v) => upd(i, { fmv2018: v })} />}
           {r.kind !== "eq" && r.acq && r.acq < "20010401" && <Num label="FMV on 1-04-2001 (if taken as cost)" k="fmv2001" v={r.fmv2001} on={(v) => upd(i, { fmv2001: v })} />}
+          {land && r.acq && r.acq < "20010401" && <Num label="Stamp duty value on 1-04-2001 (the FMV is capped at it)" k="sdv2001" v={r.sdv2001} on={(v) => upd(i, { sdv2001: v })} />}
+          {land && <label className="itr-field itr-tick"><input type="checkbox" data-itr-in="residential" checked={!!r.residential} onChange={(e) => upd(i, { residential: e.target.checked })} /><span>A residential house (section 54)</span></label>}
           {r.kind === "eq" && <><Txt label="ISIN" up k="isin" v={r.isin} on={(v) => upd(i, { isin: v })} /><Num label="Number of shares / units" k="qty" v={r.qty} on={(v) => upd(i, { qty: v })} />
             <label className="itr-field itr-tick"><input type="checkbox" checked={r.stt !== false} onChange={(e) => upd(i, { stt: e.target.checked })} /><span>STT paid</span></label></>}
           {r.kind === "buyback" && <label className="itr-field itr-tick"><input type="checkbox" checked={r.listed !== false} onChange={(e) => upd(i, { listed: e.target.checked })} /><span>Listed shares</span></label>}
@@ -162,11 +166,33 @@ function Gains({ X, set, open, tog }) {
         {(land || r.kind === "other" || r.kind === "unlisted") && <Sub k="improve" title="Cost of improvement (from 2001-02)" rows={r.improve} blank={{ fy: "2015", amt: "" }} on={(v) => upd(i, { improve: v })} render={(m, p) => <>
           <Sel label="Year" v={m.fy} opts={FYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ fy: v })} /><Num label="Amount" v={m.amt} on={(v) => p({ amt: v })} /></>} />}
         <Sub k="cgexempt" title="Exemption (54-series)" rows={r.exempt} blank={{ sec: land ? "54" : "54F", amt: "" }} on={(v) => upd(i, { exempt: v })} render={(e, p) => <>
-          <Sel label="Section" v={e.sec} opts={CGEX.map((x) => [x, x])} on={(v) => p({ sec: v })} /><Num label="Amount" v={e.amt} on={(v) => p({ amt: v })} /><Day label="Invested / bought on" v={e.date} on={(v) => p({ date: v })} /><Num label="Cost of the new asset" v={e.cost} on={(v) => p({ cost: v })} /></>} />
+          <Sel label="Section" v={e.sec} opts={CGEX.map((x) => [x, x])} on={(v) => p({ sec: v })} />{e.sec === "54EC" || !["54", "54B", "54F"].includes(e.sec) ? <Num label={e.sec === "54EC" ? "Amount invested in the bonds" : "Amount"} v={e.amt} on={(v) => p({ amt: v })} /> : null}<Day label="Invested / bought on" v={e.date} on={(v) => p({ date: v })} />{["54", "54B", "54F"].includes(e.sec) && <Num label="Cost of the new house / land" v={e.cost} on={(v) => p({ cost: v })} />}</>} />
         {land && <Sub k="buyers" title="Buyers" rows={r.buyers} blank={{ name: "", pan: "", share: 100 }} on={(v) => upd(i, { buyers: v })} render={(b, p) => <><Txt label="Buyer" v={b.name} on={(v) => p({ name: v })} /><Txt label="PAN" up v={b.pan} on={(v) => p({ pan: v })} /><Num label="Share %" v={b.share} on={(v) => p({ share: v })} /></>} />}
         {c && <p className="itr-note" data-itr-cg-line={i}>{"Full value " + money(c.fullValue) + (c.fullValue !== c.value ? " (" + (land ? "50C" : "50CA") + ")" : "") + " · cost " + money(c.costUsed) + (c.costUsed !== c.cost ? " (55(2)(ac))" : "") + (c.imp ? " · improvement " + money(c.imp) : "") + " · gain " + money(c.gain) + (c.exemptAmt ? " · exempt " + money(c.exemptAmt) : "")
-          + (c.idxGain != null ? " · with indexation " + money(c.idxGain) + (c.excess ? ", tax above 20% ignored " + money(c.excess) : "") : "")}</p>}
+          + (c.idxGain != null ? " · with indexation " + money(c.idxGain) + proviso(X, c.id) : "")}</p>}
       </Item>; })}
+  </Card>;
+}
+
+// the proviso to 112(1)(a) for one property, on what of it is chargeable (tax.js tax112)
+function proviso(X, id) {
+  const r = ((X.comp.tax && X.comp.tax.p112 && X.comp.tax.p112.rows) || []).find((y) => y.id === id);
+  return r ? " · tax 12.5% " + money(r.taxA) + ", 20% with indexation " + money(r.taxB) + (r.excess ? ", " + money(r.excess) + " ignored" : "") : "";
+}
+
+// ---------------- Losses of earlier years (CFL) ----------------
+const LKIND = [["business", "Business loss (72)"], ["hp", "House property loss (71B)"], ["stcl", "Short-term capital loss (74)"], ["ltcl", "Long-term capital loss (74)"]];
+const LAYS = ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"];
+function Losses({ X, set }) {
+  const L = X.state.losses || {}, rows = [];
+  LKIND.forEach(([k]) => (L[k] || []).forEach((x) => rows.push({ kind: k, ay: x.ay, amt: x.amt })));
+  const save = (rs, ud) => { const o = { unabsorbedDep: ud === undefined ? L.unabsorbedDep : ud }; LKIND.forEach(([k]) => { o[k] = rs.filter((x) => x.kind === k).map((x) => ({ ay: x.ay, amt: x.amt })); }); set({ losses: o }); };
+  const C = X.comp, used = (C.key || {});
+  const note = "Only losses carried forward in a return filed by its due date (section 80), within eight years. Used this year: house property " + money(used.bfHp || 0) + ", capital " + money((used.bfStcl || 0) + (used.bfLtcl || 0)) + ".";
+  return <Card k="losses" title="Losses of earlier years" note={note}>
+    <Sub k="bfloss" title="Loss carried forward" rows={rows} blank={{ kind: "hp", ay: "2025", amt: "" }} on={(rs) => save(rs)} render={(x, p) => <>
+      <Sel label="Kind" v={x.kind} opts={LKIND} on={(v) => p({ kind: v })} /><Sel label="Of the year (AY)" v={x.ay} opts={LAYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ ay: v })} /><Num label="Amount left" v={x.amt} on={(v) => p({ amt: v })} /></>} />
+    {X.model.business && <div className="itr-grid"><Num label="Unabsorbed depreciation brought forward (32(2))" k="bfud" v={L.unabsorbedDep} on={(v) => save(rows, v)} /></div>}
   </Card>;
 }
 

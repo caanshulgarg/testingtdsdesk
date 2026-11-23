@@ -204,7 +204,8 @@ function rowGain(r, ctx, warn, needs, ec) {
       else needs.push({ key: "cg_sdv2001_" + r.id, text: who + ": give the stamp duty value on 1-04-2001: the FMV of that date is taken at most at it (proviso to 55(2)(b))." });
     }
   }
-  const stt = kind === "eq" && r.stt !== false;
+  // STT paid: listed equity / equity fund units, and listed shares bought back (tendered through the exchange)
+  const stt = (kind === "eq" && r.stt !== false) || (kind === "buyback" && r.listed !== false);
   let costUsed = cost;
   if (stt && lt && acq && acq < CG_LAW.gf && r.fmv2018 != null && r.fmv2018 !== "" && N(r.fmv2018) > 0) costUsed = Math.max(cost, Math.min(R(r.fmv2018), fullValue));
   const imps = Array.isArray(r.improve) ? r.improve : r.improveCost ? [{ fy: String(fyOf(acq || "20200401")), amt: r.improveCost }] : [];

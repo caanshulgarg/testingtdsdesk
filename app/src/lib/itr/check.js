@@ -307,7 +307,7 @@ function gainsAgain(rows, ent, resident, upto) {
         // proviso to 55(2)(b): for land or building, not above the stamp duty value of 1-04-2001
         if (kind === "land" && r.sdv2001 != null && r.sdv2001 !== "" && rup(r.sdv2001) < cost) cost = rup(r.sdv2001);
       }
-      const stt = kind === "eq" && r.stt !== false;
+      const stt = (kind === "eq" && r.stt !== false) || (kind === "buyback" && r.listed !== false);
       let used = cost;
       if (stt && lng && acq && acq < "20180201" && n(r.fmv2018) > 0) { const f = rup(r.fmv2018), cap = f < full ? f : full; used = cost > cap ? cost : cap; }
       let imps = Array.isArray(r.improve) ? r.improve : r.improveCost ? [{ fy: String(fyStartOf(acq || "20200401")), amt: r.improveCost }] : [];

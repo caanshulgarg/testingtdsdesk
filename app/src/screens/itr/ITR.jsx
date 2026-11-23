@@ -213,6 +213,7 @@ function ReturnCard({ X, refresh }) {
       {ent === "C" && st.regime === "normal" && <div className="itr-grid"><label className="itr-field"><span>Book profit under 115JB (with the Explanation 1 adjustments)</span><input inputMode="numeric" data-itr-bp="" value={st.bookProfit ?? ""} onChange={(e) => set({ bookProfit: e.target.value === "" ? "" : +e.target.value, bookProfitOk: false })} /></label>
         <label className="itr-field itr-tick"><input type="checkbox" data-itr-bp-ok="" checked={!!st.bookProfitOk} onChange={(e) => set({ bookProfitOk: e.target.checked })} /><span>The book profit is confirmed</span></label></div>}
       {ent === "C" && <Yn label="Follows Ind AS" k="indAs" X={X} set={set} />}
+      {ent === "C" && (X.state.profile || {}).indAs === true && <Yn label="Preference shares are irredeemable (equity under Ind AS 32)" k="prefEquity" X={X} set={set} />}
       {ent === "C" && <Yn label="Listed company" k="listed" X={X} set={set} />}
       {ent !== "P" || X.form !== "ITR-4" ? <Yn label="Every loan and advance given is for the business" k="loansForBusiness" X={X} set={set} /> : null}
       {st.audit && <Auditor X={X} set={set} />}

@@ -284,7 +284,11 @@ function schedules(c, M, S, im, ais, as26, bk) {
   // a buy-back from 1-10-2024: the money received is dividend (2(22)(f)), taxed under other sources; only the cost is a
   // capital loss (46A): the dividend must be in Schedule OS (validation rule 549)
   const bb = g ? g.rows.filter((x) => x.kind === "buyback") : [];
-  if (bb.length) out.push(needs("cg_buyback", "sch", "Shares bought back: the money is dividend", bb.length + " buy-back" + (bb.length === 1 ? "" : "s") + " in Schedule CG: the cost (" + R(sumBy(bb, (x) => x.cost)) + ") is a capital loss, and the whole amount received is dividend under section 2(22)(f), taxed under other sources.", "Make sure the amount received is in the dividend on Data (other sources), then confirm with a note."));
+  if (bb.length) {
+    const t194 = ((M.paid || {}).tds || []).filter((x) => /^194$/.test(String(x.sec || "").replace(/[()\s-]/g, "")));
+    out.push(needs("cg_buyback", "sch", "Shares bought back: the money is dividend", bb.length + " buy-back" + (bb.length === 1 ? "" : "s") + " in Schedule CG: the cost (" + R(sumBy(bb, (x) => x.cost)) + ") is a capital loss (46A), and the amount received, " + R((M.os || {}).buyback) + ", is taken as dividend under section 2(22)(f) in other sources. The company deducts TDS on it under section 194 (10%): 26AS shows " + R(sumBy(t194, (x) => x.amt)) + " under 194 in all.",
+      "Check the amount received against the company's letter and its 194 TDS in 26AS (other dividends are under 194 too), then confirm with a note.", t194.map((x) => ({ label: (x.name || "") + " (" + (x.tan || "") + ", 194)", b: R(x.gross) }))));
+  }
   // Schedule AL (ITR-3: other than the business's assets in Part A-BS)
   if (M.al && M.form === "ITR-3") {
     const a = M.al, tb = bk && bk.sched ? bk.sched.bs : null, cash = tb ? R(tb.cash.cy) : null, bank = tb ? R(tb.bank.cy) : null;
@@ -317,6 +321,11 @@ function schedules(c, M, S, im, ais, as26, bk) {
   const lrs = as26 ? as26.tcs.filter((x) => /1G/i.test(String(x.sec || ""))) : [];
   if (lrs.length && !faRows) out.push(needs("fa_lrs", "sch", "Money sent abroad (TCS 206C(1G))", lrs.length + " remittances with TCS in 26AS. A resident holding any asset abroad at any time in calendar year 2025 fills Schedule FA (Black Money Act, section 43: penalty).", "Say on Schedules whether any foreign asset was held; answer with a note.", lrs.map((x) => ({ label: x.name + " (" + x.tan + ")", b: R(x.amount) }))));
   if (faRows && M.resident === false) out.push(needs("fa_nr", "sch", "Schedule FA for a non-resident", "Schedule FA is for residents (ordinarily resident) only.", "Remove the rows, or correct the residential status.", [], true));
+  if (M.form === "ITR-6" && (P.indAs === true || M.indAs === true) && bk && bk.sched) {
+    const pref = R(Object.values(bk.sched.bs).flatMap((l) => l.trace).filter((x) => x.code === "3B").reduce((s2, x) => s2 + N(x.amt), 0));
+    if (pref && P.prefEquity !== true && P.prefEquity !== false) out.push(needs("indas_pref", "sch", "Preference shares under Ind AS", "Preference share capital of " + pref + " is shown as a financial liability (Ind AS 32: a redeemable preference share is a liability), not as equity.",
+      "Say on Data whether the shares are redeemable (a liability) or irredeemable with discretionary dividends (equity); or confirm with a note.", [{ label: "Preference share capital (3B)", b: pref }]));
+  }
   if (M.form === "ITR-6" && (P.indAs === true || M.indAs === true)) out.push(needs("indas_map", "sch", "Ind AS statements from the books", "Part A-BS / P&L Ind AS are placed from the books' codes (Schedule III Division I lines into the Division II heads); other comprehensive income is as entered.",
     "Compare with the audited Ind AS statements and confirm with a note. The MAT book profit must carry the 115JB(2A) adjustments (Data)."));
   return out;

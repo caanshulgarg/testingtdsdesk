@@ -74,10 +74,13 @@ def run3(br, phone):
     ok("9,57,600" in text(pg, "[data-itr-head=salary]"), tag + ": salary 9,57,600 (old regime: HRA, standard deduction, professional tax)")
     ok("1,06,400" in text(pg, "[data-itr-head=hp]"), tag + ": house property -1,06,400 (the self-occupied interest at Rs 2 lakh)")
     ok("2,93,630" in text(pg, "[data-itr-sched=cg]"), tag + ": the plot's tax above 20% with indexation ignored, 2,93,630")
+    ok(pg.query_selector("[data-itr-sched=losses]") is not None, tag + ": losses of earlier years can be entered (71B, 74)")
     shot(pg, "sch-1-schedules-" + tag, full=True)
     pg.click("[data-itr-item=sale-2] .itr-file-main"); pg.wait_for_timeout(200)
     t = text(pg, "[data-itr-item=sale-2]")
     ok("with indexation 6,56,849" in t and "34,00,000" in t, tag + ": the plot opened: gain 34,00,000, with indexation 6,56,849")
+    ok("20% with indexation 1,31,370" in t and "2,93,630 ignored" in t, tag + ": the proviso per property: 12.5% 4,25,000 against 20% with indexation 1,31,370, 2,93,630 ignored")
+    ok(pg.query_selector("[data-itr-item=sale-2] [data-itr-in=residential]") is not None, tag + ": a land sale can be marked a residential house (section 54)")
     shot(pg, "sch-2-sale-open-" + tag, full=True)
     pg.click("[data-itr-item=sale-2] .itr-file-main"); pg.wait_for_timeout(150)
     # the AIS's securities line offered and taken
@@ -94,6 +97,9 @@ def run3(br, phone):
     ok(pg.query_selector("[data-itr-take-f16=DELD99999D]") is not None, tag + ": the Form 16 is offered once the employer is not in Schedule S")
     pg.click("[data-itr-take-f16=DELD99999D]"); settle(pg, 300)
     ok("from Form 16" in text(pg, "[data-itr-item=salary-0]"), tag + ": the employer taken from the Form 16")
+    if pg.query_selector("[data-itr-item=salary-0] [data-itr-in=nature]") is None: pg.click("[data-itr-item=salary-0] .itr-file-main"); pg.wait_for_timeout(150)
+    ok(pg.eval_on_selector("[data-itr-item=salary-0] [data-itr-in=nature]", "e => e.value") == "", tag + ": the kind of employer is not assumed from Form 16 (asked)")
+    pg.select_option("[data-itr-item=salary-0] [data-itr-in=nature]", "OTH"); settle(pg, 300)
     # a house added and opened
     pg.click("[data-itr-add-house]"); settle(pg, 300)
     pg.click("[data-itr-item=house-2] .itr-file-main"); pg.wait_for_timeout(150)
