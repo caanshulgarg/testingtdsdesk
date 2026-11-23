@@ -1,26 +1,29 @@
 // The bill's own document beside its fields (review item 12): the image or PDF uploaded, or the copy kept in the
 // firm account (FileStore.get: this computer first, then the firm's documents), so it opens on any computer.
-// Zoom for both; page flip for a PDF (the browser's PDF viewer, opened at the page asked for).
-import { useEffect, useState } from "react";
+// Zoom for both; page flip for a PDF, drawn by FinCom itself (BillPdf: Safari left the browser's PDF viewer in a frame blank).
+import { lazy, Suspense, useEffect, useState } from "react";
 import Loading from "./Loading.jsx";
 import Button from "./Button.jsx";
+const BillPdf = lazy(() => import("./BillPdf.jsx"));
 
 export default function BillDoc({ e }) {
   const cid = S.coId, prev = S.previews[e.id];
-  const [doc, setDoc] = useState(null);          // {url, pdf} from the stored file
+  const [doc, setDoc] = useState(null);          // {url, pdf, file} from the stored file
   const [state, setState] = useState("");        // "" | "loading" | "none"
   const [zoom, setZoom] = useState(100);
   const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(0);         // the PDF's pages, once drawn
+  const [bad, setBad] = useState(false);         // a PDF that could not be drawn
   useEffect(() => {
     let url = "", gone = false;
-    setDoc(null); setZoom(100); setPage(1);
+    setDoc(null); setZoom(100); setPage(1); setPages(0); setBad(false);
     if (e.fileName === "Manual entry") { setState("none"); return; }
     setState("loading");
     FileStore.get(cid, e.id, e.docPath || "", e.fileName || "").then((f) => {
       if (gone) return;
       if (!f) { setState("none"); return; }
       url = blobUrl(f);   // never as a page of FinCom's origin (blobUrl, src/js/01)
-      setDoc({ url, pdf: /pdf/i.test(f.type) || /\.pdf$/i.test(f.name || e.fileName || "") });
+      setDoc({ url, file: f, pdf: /pdf/i.test(f.type) || /\.pdf$/i.test(f.name || e.fileName || "") });
       setState("");
     }).catch(() => { if (!gone) setState("none"); });
     return () => { gone = true; if (url) URL.revokeObjectURL(url); };
@@ -38,19 +41,20 @@ export default function BillDoc({ e }) {
     <span className="note" style={{ minWidth: 40, textAlign: "center" }}>{zoom}%</span>
     <Button className="btn small" aria-label="Zoom in" disabled={!url} onClick={() => z(25)}>+</Button>
     {isPdf && <>
-      <Button className="btn small" aria-label="Previous page" disabled={!url || page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Page</Button>
-      <span className="note">page {page}</span>
-      <Button className="btn small" aria-label="Next page" disabled={!url} onClick={() => setPage((p) => p + 1)}>Page ›</Button>
+      <Button className="btn small" aria-label="Previous page" disabled={!url || page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
+      <span className="note">page {page}{pages ? " of " + pages : ""}</span>
+      <Button className="btn small" aria-label="Next page" disabled={!url || (pages > 0 && page >= pages)} onClick={() => setPage((p) => pages ? Math.min(pages, p + 1) : p + 1)}>›</Button>
     </>}
-    {url && <a className="linkbtn" href={url} target="_blank" rel="noopener">Open in a new tab</a>}
+    {url && <a className="linkbtn" href={url} target="_blank" rel="noopener" title="Open in a new tab">Open ↗</a>}
   </div>;
   let area;
   if (!url) area = state === "loading" ? <div className="billdoc-wait"><Loading what="the bill" lines={4} /></div>
     : <div className="billdoc-wait"><p className="note" style={{ margin: 0 }}>{e.docPath
       ? "The bill's document could not be opened from the firm account. Check you are signed in, then open the bill again."
       : "No copy of this bill is kept in the firm account (it was read before documents were kept, or the firm keeps documents off). Upload it again to keep it."}</p></div>;
-  // an iframe, not <object>: the page's security policy has object-src 'none' and frame-src 'self' blob:
-  else if (pdf) area = <iframe key={page + ":" + zoom} src={url + "#page=" + page + "&zoom=" + zoom} title="The bill" />;
+  else if (pdf && bad) area = <div className="billdoc-wait"><p className="note" style={{ margin: 0 }}>This PDF could not be shown here. Use “Open ↗” above to see it in a new tab.</p></div>;
+  else if (pdf) area = <Suspense fallback={<div className="billdoc-wait"><Loading what="the bill" lines={4} /></div>}>
+    <BillPdf file={doc.file} page={page} zoom={zoom} onPages={setPages} onFail={() => setBad(true)} /></Suspense>;
   else area = <div className="billdoc-img"><img className="preview" src={url} alt="The bill" style={{ maxHeight: "none", maxWidth: "none", width: zoom + "%", border: 0 }} /></div>;
   return (
     <div className="prevbox billdoc" data-bill-doc={url ? (pdf ? "pdf" : "image") : state || "none"}>
