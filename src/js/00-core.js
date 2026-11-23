@@ -118,6 +118,7 @@ const S = {
 function ledNm(n){ return namesBreaks(n); }
 // ledEnt, ledClean, ledKey, LED_IDX, ledIdx, ledLook, ledUnder, ledGroupPath: server/_shared/gst3b.js (shared with the gst-run function)
 function newCompany(f){
+  // Optional vouchers: off for every new client (owner, 23-Nov-2026); on only when ticked in Client setup
   f = f || {};
   const gstin = String(f.gstin || "").toUpperCase().trim();
   return {
@@ -125,7 +126,7 @@ function newCompany(f){
     pan: String(f.pan || (GSTIN_RE.test(gstin) ? gstin.slice(2, 12) : "")).toUpperCase().trim(),
     tallyName: String(f.tallyName || f.name || "").trim(),
     turnover10cr: !!f.turnover10cr, voucherType: f.voucherType || "Journal",
-    createOptional: f.createOptional !== false, billwise: f.billwise !== false,
+    createOptional: f.createOptional === true, billwise: f.billwise !== false,
     gst: Object.assign({}, GST_DEFAULTS, f.gst || {}), roundOff: f.roundOff || "Round Off",
     tdsLedgers: Object.assign({}, TDS_LEDGER_DEFAULTS, f.tdsLedgers || {}),
     expenseLedgers: Object.assign({}, EXPENSE_DEFAULTS, f.expenseLedgers || {}),
