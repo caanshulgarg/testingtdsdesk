@@ -90,12 +90,17 @@ export function partners40b(partners, pgbpBeforeRem) {
 // tax112); 112A above its Rs 1.25 lakh exemption; then what saves nothing: the rest of 112, 112A's exempt part (the
 // final review of b8126ecbc). h: the income by key; k: the keys of 111A, 112, 112A in h; pool: the 112 rows (heads.js);
 // longOnly: a long-term loss (74(1)(b)): never against 111A. Returns what is left of amt; rec gets what each key took
-export function takeSpecial(h, amt, k, pool, rec, longOnly) {
+// order "B": 112A above its exemption first, then the 112 income still taxed, then 111A: where 87A (old regime) rebates
+// the tax on 111A and 112 but not on 112A, leaving 111A taxed can cost less. Order "C": 111A only down to keepA (the
+// 111A income whose tax the rebate still absorbs), then 112, 112A above, then the rest of 111A. compute() tries them
+export function takeSpecial(h, amt, k, pool, rec, longOnly, usefulOnly, order, keepA) {
   const gross = pool ? sum(pool, (x) => pos(x.gain)) : 0, useful = pool ? sum(pool, (x) => (x.elig ? Math.min(pos(x.idx), pos(x.gain)) : pos(x.gain))) : 0;
   const take = (key, cap) => { const u = Math.min(amt, Math.max(0, cap)); if (u <= 0) return; h[key] -= u; amt -= u; if (rec) rec[key] = (rec[key] || 0) + u; };
-  if (!longOnly) take(k.a, h[k.a]);
-  take(k.c, pool ? Math.min(h[k.c], useful - (gross - h[k.c])) : h[k.c]);
-  take(k.b, h[k.b] - L.SPECIAL.s112AExempt);
+  const live112 = () => (pool ? Math.min(h[k.c], useful - (gross - h[k.c])) : h[k.c]);
+  if (order === "B") { take(k.b, h[k.b] - L.SPECIAL.s112AExempt); take(k.c, live112()); if (!longOnly) take(k.a, h[k.a]); }
+  else if (order === "C") { if (!longOnly) take(k.a, h[k.a] - N(keepA)); take(k.c, live112()); take(k.b, h[k.b] - L.SPECIAL.s112AExempt); if (!longOnly) take(k.a, h[k.a]); }
+  else { if (!longOnly) take(k.a, h[k.a]); take(k.c, live112()); take(k.b, h[k.b] - L.SPECIAL.s112AExempt); }
+  if (usefulOnly) return amt;
   take(k.c, h[k.c]);
   take(k.b, h[k.b]);
   return amt;
@@ -105,16 +110,38 @@ const HK = { a: "c111A", c: "c112", b: "c112A" };
 // ---------------- the heads, the set-off, the total income ----------------
 // a short-term capital loss can go against the other short-term gains or the 12.5% gains first (heads.js bucketsOf):
 // which saves more depends on the slab, so both are worked and the lower tax liability kept (S.cgAlt: the second order)
+// the same choice for a loss of another head (business loss, a house property loss, unabsorbed depreciation): against
+// the normal-rate income first, the special-rate income first, or the normal-rate income down to a slab limit first
+// (inp._lo: that limit for each; 0 = normal first, Infinity = special first). Each loss's limit is tried in turn and the
+// lowest liability kept; the rebate of 87A (only against the normal tax in the new regime; not against 112A in the old)
+// is why the special-rate income first can cost less. Ties keep the earlier choice (normal first, order A)
+export const LOSS_LIMITS = [0, 250000, 300000, 400000, 500000, 800000, 1000000, 1200000, 1600000, 2000000, 2400000, Infinity];
 export function compute(inp) {
   inp = inp || {};
+  if (inp._lo) return computeOne(inp);
   const alt = inp.cg && inp.cg.alt;
-  if (!alt) return computeOne(inp);
-  const a = computeOne(Object.assign({}, inp, { cg: Object.assign({}, inp.cg, { alt: null }) }));
-  const b = computeOne(Object.assign({}, inp, { cg: Object.assign({}, inp.cg, { s111A: alt.s111A, s112A: alt.s112A, s112: alt.s112, other: alt.stApp, cfStcl: alt.cfStcl, cfLtcl: alt.cfLtcl, at: alt.at, alt: null }) }));
-  const pickB = b.liability < a.liability;
-  const S = pickB ? b : a;
-  S.cgAlt = pickB; S.cgOther = pickB ? a.liability : b.liability;
-  return S;
+  const run = (B, lo) => { const S = computeOne(Object.assign({}, inp, { _lo: lo, cg: B ? Object.assign({}, inp.cg, { s111A: alt.s111A, s112A: alt.s112A, s112: alt.s112, other: alt.stApp, cfStcl: alt.cfStcl, cfLtcl: alt.cfLtcl, at: alt.at, alt: null }) : inp.cg ? Object.assign({}, inp.cg, { alt: null }) : inp.cg })); S.cgAlt = B; return S; };
+  let best = null, other = null;
+  for (const B of alt ? [false, true] : [false]) {
+    const lo0 = { bus: 0, hp: 0, ud: 0, busO: "A", hpO: "A", udO: "A", exO: "A" }, first = run(B, lo0);
+    let cur = first;
+    const kinds = ["bus", "hp", "ud"].filter((k) => Object.keys(first.setoff[k]).length);
+    // every combination of the special-rate orders (each loss's and the basic exemption's), and for each the slab limit
+    // of each loss tried in turn
+    // order "C" (keep the 111A income the old regime's rebate absorbs) only where the rebate could apply
+    const flags = kinds.map((k) => k + "O").concat(first.special > 0 ? ["exO"] : []);
+    const opts = inp.entity === "P" && inp.regime !== "new" && inp.resident !== false && first.ti <= L.REBATE.old.upto + 1000000 ? ["A", "B", "C"] : ["A", "B"];
+    const keepA = R(L.REBATE.old.max / L.SPECIAL.s111A);
+    for (let m = 0; m < Math.pow(opts.length, flags.length); m++) {
+      let lo = Object.assign({}, lo0, { keepA }); let q = m; flags.forEach((f) => { lo[f] = opts[q % opts.length]; q = Math.floor(q / opts.length); });
+      let best0 = m === 0 ? first : run(B, lo);
+      for (const k of kinds) for (const T of LOSS_LIMITS) { if (T === lo[k]) continue; const l2 = Object.assign({}, lo, { [k]: T }), t = run(B, l2); if (t.liability < best0.liability) { best0 = t; lo = l2; } }
+      if (best0.liability < cur.liability) cur = best0;
+    }
+    if (!best || cur.liability < best.liability) { if (best) other = best; best = cur; } else other = cur;
+  }
+  best.cgOther = other ? other.liability : null;
+  return best;
 }
 function computeOne(inp) {
   const S = { lines: [], needs: [], warn: [], entity: inp.entity, form: inp.form, regime: inp.regime };
@@ -167,20 +194,29 @@ function computeOne(inp) {
   const c111A = R(N(cg.s111A)), c112A = R(N(cg.s112A)), c112 = R(N(cg.s112)), cOth = R(N(cg.other));
   if (c111A || c112A || c112 || cOth) line("cg", "Capital gains", c111A + c112A + c112 + cOth, { sec: "oh", src: "Sections 45-55A, 111A, 112, 112A (Schedule CG)" });
 
-  // 3. Set-off of the year's losses (sections 70, 71). The heads are taken in the order that saves the most tax: the
-  // normal-rate heads first, then 111A (20%), then 112 (12.5%, or less under the proviso to 112(1)(a)), then 112A
-  // (12.5%, the first Rs 1.25 lakh nil).
+  // 3. Set-off of the year's losses (sections 70, 71). A loss takes the normal-rate income down to the limit lo (inp._lo:
+  // compute() tries each and keeps the lowest liability), then the special-rate income cheapest first (takeSpecial), then
+  // the rest of the normal-rate income.
   // Business loss: against any head but salary (71(2A)). House property loss: up to Rs 2 lakh (71(3A); none in the new
   // regime, 115BAC(2)); salary and the other normal-rate heads first, business income last among them so a business
   // loss brought forward (72, business income only) still finds it
   let h = { sal, hp, pgbp, os, cOth, c112, c111A, c112A };
+  const lo = inp._lo || { bus: 0, hp: 0, ud: 0 };
+  const applyLoss = (amt, keys, T, rec, order) => {
+    const normal = pos(h.sal) + pos(h.hp) + pos(h.pgbp) + pos(h.os) + pos(h.cOth);
+    const fromNormal = (cap) => { for (const k of keys) { if (amt <= 0 || cap <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], amt, cap); h[k] -= u; amt -= u; cap -= u; rec[k] = (rec[k] || 0) + u; } } };
+    // normal down to the limit; the special-rate income still taxed; the rest of the normal; then what saves nothing
+    fromNormal(Math.max(0, normal - T));
+    amt = takeSpecial(h, amt, HK, cg.pool112, rec, false, true, order, lo.keepA);
+    fromNormal(Infinity);
+    return takeSpecial(h, amt, HK, cg.pool112, rec, false, false, order, lo.keepA);
+  };
   // each set-off by head, for Schedules CYLA and BFLA (forms.js)
   const setoff = { bus: {}, hp: {}, bf: 0, ud: {}, bfHp: 0, bfCg: {} };
   let cyBizLoss = 0, cyUnabDep = 0;
   if (h.pgbp < 0) {
     let loss = -h.pgbp; h.pgbp = 0;
-    for (const k of ["hp", "os", "cOth"]) { if (loss <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], loss); h[k] -= u; loss -= u; setoff.bus[k] = u; } }
-    loss = takeSpecial(h, loss, HK, cg.pool112, setoff.bus);
+    loss = applyLoss(loss, ["hp", "os", "cOth"], lo.bus, setoff.bus, lo.busO);
     if (loss > 0) { cyUnabDep = Math.min(loss, itDep); cyBizLoss = loss - cyUnabDep; }
     line("cyla_bp", "Business loss of the year set off against other heads (sections 70, 71)", -pgbp - loss, { sec: "sl", src: L.LOSS.src });
   }
@@ -188,8 +224,7 @@ function computeOne(inp) {
   if (h.hp < 0) {
     let loss = -h.hp; h.hp = 0;
     const cap = inp.regime === "new" ? 0 : 200000; let room = Math.min(loss, cap); const used0 = room;
-    for (const k of ["sal", "os", "cOth", "pgbp"]) { if (room <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], room); h[k] -= u; room -= u; setoff.hp[k] = u; } }
-    room = takeSpecial(h, room, HK, cg.pool112, setoff.hp);
+    room = applyLoss(room, ["sal", "os", "cOth", "pgbp"], lo.hp, setoff.hp, lo.hpO);
     cfHp = loss - (used0 - room);
   }
   // 4. Brought-forward losses, each within eight assessment years: 72 business loss against business income; 71B house
@@ -212,14 +247,17 @@ function computeOne(inp) {
     });
     return { used: R(used), left }; };
   const barOn = ((ent === "P" || ent === "H") && inp.regime === "new") || (co && inp.regime === "115BAA");
-  if (barOn && (bf.business || []).concat(bf.hp || []).some((x) => pos(x.amt) && (x.barred == null || x.barred === ""))) S.needs.push({ key: "bf_115bac", text: "Losses of earlier years: say what part of each business or house property loss came from deductions the " + (co ? "115BAA" : "new") + " regime does not allow (24(b) interest on a self-occupied house, 10AA, additional depreciation 32(1)(iia), 35AD); that part is not set off (" + (co ? "115BAA(2)(ii)" : "115BAC(2)(ii)") + "). Enter 0 if none." });
+  if (barOn && (bf.business || []).concat(bf.hp || [], bf.ud || []).some((x) => pos(x.amt) && (x.barred == null || x.barred === ""))) S.needs.push({ key: "bf_115bac", text: "Losses of earlier years: say what part of each business or house property loss came from deductions the " + (co ? "115BAA" : "new") + " regime does not allow (24(b) interest on a self-occupied house, 10AA, additional depreciation 32(1)(iia), 35AD), and of unabsorbed depreciation what was additional depreciation; that part is not set off (" + (co ? "115BAA(2)(ii)" : "115BAC(2)(ii)") + "). Enter 0 if none." });
   const bfB = bfOf(bf.business, ["pgbp"]), bfH = bfOf(bf.hp, ["hp"]);
   const bfS = bfOf(bf.stcl, ["cOth"], setoff.bfCg, "all"), bfL = bfOf(bf.ltcl, [], setoff.bfCg, "lt");
   const bfUsed = bfB.used, bfLeft = bfB.left;
   setoff.bfHp = bfH.used;
-  let ud = N(bf.unabsorbedDep), udUsed = 0;
-  for (const k of ["pgbp", "hp", "os", "cOth"]) { if (ud <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], ud); h[k] -= u; ud -= u; udUsed += u; setoff.ud[k] = u; } }
-  if (ud > 0) { const u0 = ud; ud = takeSpecial(h, ud, HK, cg.pool112, setoff.ud); udUsed += u0 - ud; }
+  // unabsorbed depreciation: year by year (Schedule UD; 32(2): no time limit, and section 80 does not apply), less in
+  // the new regime the part from additional depreciation (32(1)(iia), 115BAC(2)(ii)); or one amount as entered
+  const udRows = (bf.ud || []).filter((x) => pos(x.amt));
+  const udGross = udRows.length ? R(sum(udRows, (x) => pos(x.amt))) : R(N(bf.unabsorbedDep));
+  let ud = udRows.length ? R(sum(udRows, (x) => pos(x.amt) - (barOn ? Math.min(pos(x.amt), pos(x.barred)) : 0))) : N(bf.unabsorbedDep), udUsed = 0;
+  if (ud > 0) { const u0 = ud; ud = applyLoss(ud, ["pgbp", "hp", "os", "cOth"], lo.ud, setoff.ud, lo.udO); udUsed += u0 - ud; }
   setoff.bf = bfUsed;
   if (bfUsed) line("bfla_bp", "Brought-forward business loss set off (section 72)", bfUsed, { sec: "sl", sign: -1, src: L.LOSS.src });
   if (bfH.used) line("bfla_hp", "Brought-forward house property loss set off (section 71B)", bfH.used, { sec: "sl", sign: -1, src: "Section 71B: eight assessment years, against income from house property only" });
@@ -229,7 +267,7 @@ function computeOne(inp) {
   // section 80: a belated return carries no business loss of the year forward (unabsorbed depreciation still goes)
   // capital losses left after the set-off within the head (74), none from a belated return (80)
   const stcl = late ? 0 : R(N(cg.cfStcl)), ltcl = late ? 0 : R(N(cg.cfLtcl));
-  S.carry = { bfHp: bfH.left.filter((x) => !x.lapsed), bfStcl: bfS.left.filter((x) => !x.lapsed), bfLtcl: bfL.left.filter((x) => !x.lapsed), business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), cyUd: R(cyUnabDep), bfUd: R(N(bf.unabsorbedDep)), bfUdLeft: R(ud), udUsed: R(udUsed), cyBus: R(cyBizLoss), hp: cfHp, stcl, ltcl, lostS80: late ? cyBizLoss : 0, lostCg: late ? R(N(cg.cfStcl) + N(cg.cfLtcl)) : 0 };
+  S.carry = { bfHp: bfH.left.filter((x) => !x.lapsed), bfStcl: bfS.left.filter((x) => !x.lapsed), bfLtcl: bfL.left.filter((x) => !x.lapsed), business: bfLeft.filter((x) => !x.lapsed).concat(cyBizLoss && !late ? [{ ay: L.AY_START, amt: cyBizLoss }] : []), unabsorbedDep: R(ud + cyUnabDep), cyUd: R(cyUnabDep), bfUd: udGross, bfUdNet: R(udRows.length ? sum(udRows, (x) => pos(x.amt) - (barOn ? Math.min(pos(x.amt), pos(x.barred)) : 0)) : N(bf.unabsorbedDep)), bfUdLeft: R(ud), udUsed: R(udUsed), cyBus: R(cyBizLoss), hp: cfHp, stcl, ltcl, lostS80: late ? cyBizLoss : 0, lostCg: late ? R(N(cg.cfStcl) + N(cg.cfLtcl)) : 0 };
   if (late && (N(cg.cfStcl) || N(cg.cfLtcl))) S.warn.push({ key: "s80cg", text: "The return is after the due date: this year's capital loss of " + R(N(cg.cfStcl) + N(cg.cfLtcl)) + " cannot be carried forward (section 80)." });
   if (cyBizLoss && inp.filingDate && inp.filingDate > dueDate(inp)) S.warn.push({ key: "s80", text: "The return is after the due date: this year's business loss of " + cyBizLoss + " cannot be carried forward (section 80). Unabsorbed depreciation still is." });
   if (bfLeft.some((x) => x.lapsed)) S.warn.push({ key: "lapsed", text: "A brought-forward business loss older than eight years has lapsed and is not set off." });
@@ -389,7 +427,7 @@ function baseTax(inp, p) {
     let left = Math.max(0, ex - p.normal);
     const sp = { s111A: p.s111A, s112A: p.s112A, s112: p.s112, relief: p.relief, pool: p.pool };
     // the unused exemption where it saves most (takeSpecial): 111A, the 112 income still taxed, 112A above 1.25 lakh, the rest
-    if (inp.resident !== false) left = takeSpecial(sp, left, { a: "s111A", c: "s112", b: "s112A" }, p.pool, null);
+    if (inp.resident !== false) left = takeSpecial(sp, left, { a: "s111A", c: "s112", b: "s112A" }, p.pool, null, false, false, inp._lo && inp._lo.exO, inp._lo && inp._lo.keepA);
     const parts = specialParts(sp);
     return { normalTax: slabTax(p.normal, slabs), specialTax: parts.t111A + parts.t112 + parts.t112A, parts, relief112: parts.relief112, p112: parts.p112, rateName: inp.regime === "new" ? "new regime slab rates (115BAC)" : "old regime slab rates", src: inp.regime === "new" ? L.SRC_SLABS.new : L.SRC_SLABS.old };
   }

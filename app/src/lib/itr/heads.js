@@ -130,7 +130,7 @@ export const CG_KINDS = [["eq", "Listed equity share / equity fund unit (STT pai
 export const fyOf = (d) => { const y = +String(d).slice(0, 4), m = +String(d).slice(4, 6); return m >= 4 ? y : y - 1; };
 function addMonths(d, k) {
   let y = +String(d).slice(0, 4), m = +String(d).slice(4, 6) + k; const day = +String(d).slice(6, 8);
-  y += Math.floor((m - 1) / 12); m = ((m - 1) % 12) + 1;
+  y += Math.floor((m - 1) / 12); m = ((((m - 1) % 12) + 12) % 12) + 1;
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return String(y) + String(m).padStart(2, "0") + String(Math.min(day, last)).padStart(2, "0");
 }

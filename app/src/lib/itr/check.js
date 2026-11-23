@@ -86,13 +86,18 @@ function business(inp) {
 // least: 111A (20%); the 112 income on which tax is still charged (a property the proviso to 112(1)(a) covers, up to its
 // indexed gain, and the other 112 gains at 12.5%); 112A above 1,25,000; then the 112 and 112A income that bore no tax
 // anyway. v: {a: 111A, b: 112A, c: 112}; pool: the 112 sales [{g, i, el}]; noShort: a long-term loss (never 111A)
-function absorbSpecial(v, amt, pool, noShort) {
+// ord "B": 112A above 1,25,000 first, then 112, then 111A; "C": 111A only down to keep (the 111A income whose tax the
+// old regime's rebate of 87A still covers), then 112, 112A above 1,25,000, then the rest of 111A. live: stop before the
+// income that bore no tax
+function absorbSpecial(v, amt, pool, noShort, live0, ord, keep) {
   let tot = 0, live = 0;
   if (pool) for (const p of pool) if (p.g > 0) { tot += p.g; live += p.el ? Math.min(p.i > 0 ? p.i : 0, p.g) : p.g; }
   const grab = (k, cap) => { if (cap <= 0 || amt <= 0) return; const u = amt < cap ? amt : cap; v[k] -= u; amt -= u; };
-  if (!noShort) grab("a", v.a);
-  grab("c", pool ? Math.min(v.c, live - (tot - v.c)) : v.c);
-  grab("b", v.b - 125000);
+  const still = () => (pool ? Math.min(v.c, live - (tot - v.c)) : v.c);
+  if (ord === "B") { grab("b", v.b - 125000); grab("c", still()); if (!noShort) grab("a", v.a); }
+  else if (ord === "C") { if (!noShort) grab("a", v.a - (keep || 0)); grab("c", still()); grab("b", v.b - 125000); if (!noShort) grab("a", v.a); }
+  else { if (!noShort) grab("a", v.a); grab("c", still()); grab("b", v.b - 125000); }
+  if (live0) return amt;
   grab("c", v.c);
   grab("b", v.b);
   return amt;
@@ -113,7 +118,8 @@ function taxParts(inp, ti, normal, s111A, s112A, s112, rel) {
     let a = s111A, b = s112A, c = s112;
     if (inp.resident !== false) {
       // the provisos to 111A(1), 112(1), 112A(2): the shortfall against the special-rate income, cheapest first
-      const v = { a, b, c }; unused = absorbSpecial(v, unused, rel && rel.pool, false); a = v.a; b = v.b; c = v.c;
+      const lo = inp._lo || {};
+      const v = { a, b, c }; unused = absorbSpecial(v, unused, rel && rel.pool, false, false, lo.exO, lo.keepA); a = v.a; b = v.b; c = v.c;
     }
     t111A = rup(a * 0.2); t112 = t112Of(c, rel);
     st = t111A + t112 + rup(b > 125000 ? (b - 125000) * 0.125 : 0);
@@ -434,11 +440,34 @@ function tax112Again(pool, c) {
 
 // a short-term capital loss may go first against the other short-term gains or against the long-term gains; the slab
 // decides which costs less, so both are worked and the lower liability kept
+// the same for a loss of another head (business loss, house property loss, unabsorbed depreciation): against the
+// normal-rate income down to a slab limit, then the special-rate income in one of its orders (absorbSpecial), then the
+// rest; and the order the unused basic exemption takes the special-rate income. Every order is tried with each loss's
+// limits in turn and the lowest liability kept (the earlier one on a tie). Limits and orders as in tax.js, typed here again
+const LIMITS = [0, 250000, 300000, 400000, 500000, 800000, 1000000, 1200000, 1600000, 2000000, 2400000, Infinity];
 export function check(inp) {
   inp = inp || {};
-  if (!inp.cgRows || inp._order) return checkOne(inp, inp._order || "A");
-  const x = checkOne(inp, "A"), y = checkOne(inp, "B");
-  return y.liability < x.liability ? y : x;
+  if (inp._lo && (inp._order || !inp.cgRows)) return checkOne(inp, inp._order || "A");
+  if (inp._lo) { const x = checkOne(inp, "A"), y = checkOne(inp, "B"); return y.liability < x.liability ? y : x; }
+  let out = null;
+  for (const ord of inp.cgRows ? ["A", "B"] : ["A"]) {
+    const go = (lo) => checkOne(Object.assign({}, inp, { _lo: lo, _order: inp.cgRows ? ord : undefined }), ord);
+    const lo0 = { bus: 0, hp: 0, ud: 0, busO: "A", hpO: "A", udO: "A", exO: "A", keepA: 62500 }, first = go(lo0);
+    let cur = first;
+    const kinds = ["bus", "hp", "ud"].filter((k) => first.spent[k] > 0);
+    const flags = kinds.map((k) => k + "O"); if (first.spec > 0) flags.push("exO");
+    const opts = inp.entity === "P" && inp.regime !== "new" && inp.resident !== false && first.ti <= 1500000 ? ["A", "B", "C"] : ["A", "B"];
+    let m = 0; const total = Math.pow(opts.length, flags.length);
+    while (m < total) {
+      let lo = Object.assign({}, lo0); let q = m; for (const f of flags) { lo[f] = opts[q % opts.length]; q = Math.floor(q / opts.length); }
+      let here = m === 0 ? first : go(lo);
+      for (const k of kinds) for (const T of LIMITS) { if (T === lo[k]) continue; const l2 = Object.assign({}, lo); l2[k] = T; const t = go(l2); if (t.liability < here.liability) { here = t; lo = l2; } }
+      if (here.liability < cur.liability) cur = here;
+      m++;
+    }
+    if (!out || cur.liability < out.liability) out = cur;
+  }
+  return out;
 }
 function checkOne(inp, order) {
   const ent = inp.entity;
@@ -460,24 +489,33 @@ function checkOne(inp, order) {
   // (32(2), carried without limit, even in a belated return), the rest as business loss (72; none in a belated return, 80)
   const dueC = inp.tp ? "20261130" : (inp.audit || ent === "C") ? "20261031" : "20260831", lateC = !!inp.filingDate && inp.filingDate > dueC;
   let cfBus = 0, cfUd = 0, cfHp = 0;
+  let s = sal;
+  const LO = inp._lo || { bus: 0, hp: 0, ud: 0 }, spent = { bus: 0, hp: 0, ud: 0 };
+  // a loss of another head: the normal-rate income down to the limit T, the special-rate income still taxed, the rest
+  // of the normal-rate income, then the special-rate income that bore no tax. names: the heads this loss may take
+  const spend = (amt, names, T, ord) => {
+    const w = { s, hp, bp, os, o };
+    const fromN = (cap) => { for (const k of names) { if (amt <= 0 || cap <= 0) break; const u = Math.min(Math.max(w[k], 0), amt, cap); w[k] -= u; amt -= u; cap -= u; } };
+    fromN(Math.max(0, Math.max(w.s, 0) + Math.max(w.hp, 0) + Math.max(w.bp, 0) + Math.max(w.os, 0) + Math.max(w.o, 0) - T));
+    const v = { a, b, c };
+    amt = absorbSpecial(v, amt, cgx.pool, false, true, ord, LO.keepA);
+    fromN(Infinity);
+    amt = absorbSpecial(v, amt, cgx.pool, false, false, ord, LO.keepA);
+    s = w.s; hp = w.hp; bp = w.bp; os = w.os; o = w.o; a = v.a; b = v.b; c = v.c;
+    return amt;
+  };
   if (bp < 0) {
     let loss = -bp; bp = 0;
-    const take = (v) => { const u = Math.min(Math.max(v, 0), loss); loss -= u; return v - u; };
-    // 71(2A): never against salary; normal-rate heads, then the special-rate income cheapest first
-    hp = take(hp); os = take(os); o = take(o);
-    { const v = { a, b, c }; loss = absorbSpecial(v, loss, cgx.pool, false); a = v.a; b = v.b; c = v.c; }
+    // 71(2A): never against salary
+    const l0 = loss; loss = spend(loss, ["hp", "os", "o"], LO.bus, LO.busO); spent.bus = l0 - loss;
     cfUd = Math.min(loss, bz.dep); cfBus = lateC ? 0 : loss - cfUd;
   }
-  let s = sal;
   if (hp < 0) {
     const hl = -hp;
     let room = inp.regime === "new" ? 0 : Math.min(-hp, 200000); hp = 0;
     const room0 = room;
-    const take = (v) => { const u = Math.min(Math.max(v, 0), room); room -= u; return v - u; };
-    // 71(3A): salary and the normal-rate heads (business last: 72 can set a loss brought forward only against it), then
-    // 111A, 112, 112A
-    s = take(s); os = take(os); o = take(o); bp = take(bp);
-    { const v = { a, b, c }; room = absorbSpecial(v, room, cgx.pool, false); a = v.a; b = v.b; c = v.c; }
+    // 71(3A): salary and the normal-rate heads (business last: 72 can set a loss brought forward only against it)
+    room = spend(room, ["s", "os", "o", "bp"], LO.hp, LO.hpO); spent.hp = room0 - room;
     cfHp = hl - (room0 - room);
   }
   // brought forward
@@ -503,15 +541,12 @@ function checkOne(inp, order) {
     let left = Math.max(0, n(x.amt));
     const v = { a, b, c }, l2 = absorbSpecial(v, left, cgx.pool, true); bfLt += left - l2; a = v.a; b = v.b; c = v.c;
   }
-  let ud = n(L.unabsorbedDep);
-  // 32(2): any head but salary; the normal-rate heads, then the special-rate income cheapest first
-  for (const k of ["bp", "hp", "os", "o"]) {
-    if (ud <= 0) break;
-    const v = { bp, hp, os, o, c, a, b }[k]; if (v <= 0) continue;
-    const u = Math.min(v, ud); ud -= u;
-    if (k === "bp") bp -= u; else if (k === "hp") hp -= u; else if (k === "os") os -= u; else o -= u;
-  }
-  if (ud > 0) { const v = { a, b, c }; ud = absorbSpecial(v, ud, cgx.pool, false); a = v.a; b = v.b; c = v.c; }
+  // 32(2): unabsorbed depreciation of earlier years, year by year when given (no time limit), less what was additional
+  // depreciation under the new regime (115BAC(2)(ii))
+  let ud = 0;
+  if ((L.ud || []).some((x) => n(x.amt) > 0)) { for (const x of L.ud) if (n(x.amt) > 0) ud += usable(x); } else ud = n(L.unabsorbedDep);
+  // 32(2): any head but salary
+  if (ud > 0) { const u0 = ud; ud = spend(ud, ["bp", "hp", "os", "o"], LO.ud, LO.udO); spent.ud = u0 - ud; }
   const spec = a + b + c;
   const gti = rup(s + hp + bp + os + o + spec);
   // deductions (Chapter VI-A), each section's limit typed here again from the Act
@@ -622,7 +657,7 @@ function checkOne(inp, order) {
     }
   }
   const net = liability + i234a + i234b + i234c + f234f - tds - tcs - adv - sat;
-  return Object.assign(out, { sal, hp: hp0, cg: cgHead, cfStcl: lateC ? 0 : cgx.stl, cfLtcl: lateC ? 0 : cgx.ltl, cfBus: rup(cfBus), cfUd: rup(cfUd), cfHp: rup(cfHp), bfHp: rup(bfHp), bfStcl: rup(bfSt), bfLtcl: rup(bfLt), gti, ti, liability, i234a, i234b, i234c, f234f, payable: net > 0 ? ten(net) : 0, refund: net < 0 ? ten(-net) : 0 });
+  return Object.assign(out, { sal, hp: hp0, cg: cgHead, cfStcl: lateC ? 0 : cgx.stl, cfLtcl: lateC ? 0 : cgx.ltl, spent, spec, cfBus: rup(cfBus), cfUd: rup(cfUd), cfHp: rup(cfHp), bfHp: rup(bfHp), bfStcl: rup(bfSt), bfLtcl: rup(bfLt), gti, ti, liability, i234a, i234b, i234c, f234f, payable: net > 0 ? ten(net) : 0, refund: net < 0 ? ten(-net) : 0 });
 }
 
 // the two computations side by side: [] when they agree on every figure

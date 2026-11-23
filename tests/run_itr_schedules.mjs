@@ -215,6 +215,14 @@ R3 = await run("ITR-3", { regime: "new", losses: { business: [{ ay: "2024", amt:
 const row25 = (((R3.doc.ScheduleCFL || {}).LossCFCurrentAssmntYear2025) || {}).CarryFwdLossDetail || {};
 ok(row25.BrtFwdBusLoss === 300000 && row25.AdjustAccTax115BACAmt === 100000 && row25.BusLossOthThanSpecLossCF === 200000, "Schedule CFL: 3,00,000 brought forward, 1,00,000 adjusted (115BAC), 2,00,000 (" + JSON.stringify(row25) + ")");
 ok(R3.comp.setoff.bf <= 200000, "only the 2,00,000 is set off (" + R3.comp.setoff.bf + ")");
+// Schedule UD year by year: AY 2020-21 2,00,000 and AY 2023-24 3,00,000, both set off against the business income
+// (6,12,520 before tax in the books), the oldest first; nothing left
+R3 = await run("ITR-3", { regime: "old", form10iea: "ACK1", losses: { ud: [{ ay: "2023", amt: 300000 }, { ay: "2020", amt: 200000 }] } }, "unabsorbed depreciation of earlier years in Schedule UD");
+const UD = R3.doc.ITR3ScheduleUD || {}, udr = UD.ScheduleUD || [];
+ok(udr.length === 2 && udr[0].AssYr === "2020-21" && udr[0].AmtBFUD === 200000 && udr[0].AmtDeprSOCY === 200000 && udr[0].BalCFNY === 0 && udr[1].AssYr === "2023-24" && udr[1].AmtDeprSOCY === 300000, "Schedule UD: each year's row, set off oldest first (" + JSON.stringify(udr) + ")");
+eq(UD.TotBFUDepritAmt, 500000, "Schedule UD: brought forward 5,00,000");
+eq(UD.TotCurYrdepritSetoffInc, 500000, "Schedule UD: set off this year 5,00,000");
+ok(!R3.json.coverage.some((x) => x.key === "ud"), "Schedule UD's rows filled: it no longer blocks");
 R3 = await run("ITR-3", { regime: "new", houses: [let1], losses: { hp: [{ ay: "2023", amt: 150000 }] } }, "an earlier loss without its date of filing");
 ok(R3.json.coverage.some((x) => x.key === "cfl_prior"), "without the date of filing: asked (blocks)");
 
@@ -335,7 +343,7 @@ for (let i = 0; i < 400; i++) {
   const stR = Object.assign({}, D3.booksObj.itr["2026|state"], { regime: ["new", "old"][rnd(0, 1)], form10iea: "X", cgRows: cgr, houses: hs, salaries: sal, filingDate: ["20260720", "20261125", "20260301"][rnd(0, 2)], resident: rnd(0, 5) > 0 });
   const m = buildModel({ entity: "P", client: D3.client, imports: importsOf(files3), books: D3.books, state: stR });
   if (rnd(0, 2) === 0) m.business = Object.assign({}, m.business, { pbt: rnd(-3000000, 3000000) });
-  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000), inTime: !!rnd(0, 3), barred: rnd(0, 1) ? rnd(0, 200000) : undefined }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000), inTime: !!rnd(0, 3) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000), inTime: !!rnd(0, 3) }], business: rnd(0, 1) ? [{ ay: "2022", amt: rnd(0, 900000), inTime: !!rnd(0, 3), barred: rnd(0, 1) ? rnd(0, 300000) : undefined }] : [] };
+  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000), inTime: !!rnd(0, 3), barred: rnd(0, 1) ? rnd(0, 200000) : undefined }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000), inTime: !!rnd(0, 3) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000), inTime: !!rnd(0, 3) }], business: rnd(0, 1) ? [{ ay: "2022", amt: rnd(0, 900000), inTime: !!rnd(0, 3), barred: rnd(0, 1) ? rnd(0, 300000) : undefined }] : [], ud: rnd(0, 1) ? [{ ay: String(rnd(2005, 2025)), amt: rnd(0, 600000), barred: rnd(0, 1) ? rnd(0, 200000) : undefined }] : [] };
   const dd2 = differences(compute(m).key, check(m));
   if (!dd2.length) agree++; else if (!firstBad) firstBad = { i, dd: dd2.slice(0, 4), cgr, hs, sal, regime: stR.regime, losses: m.losses };
 }

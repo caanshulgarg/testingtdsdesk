@@ -348,8 +348,15 @@ To confirm:
     takeSpecial, check.js absorbSpecial); a seeded brute force over the long-term loss's split checks FinCom is never
     dearer. In the new regime (115BAA for a company) the part of an earlier business or house property loss that came
     from barred deductions is asked and not set off (115BAC(2)(ii)); Schedule CFL shows it in AdjustAccTax115BACAmt
-    (ITR-6: AmtAdjAccOptTaxUs115BAA_115BA). **To confirm:** a business loss is set against normal-rate income before
-    the special-rate income even where the slab rate is below 12.5%.
+    (ITR-6: AmtAdjAccOptTaxUs115BAA_115BA). A business loss, a house property loss and unabsorbed
+    depreciation (final check of fb123bc6a) each take the normal-rate income down to a slab limit (0 to 24 lakh, or
+    none), then the special-rate income in one of three orders (111A first; 112A above its exemption first; or 111A
+    kept at the Rs 62,500 whose tax the old regime's 87A rebate covers), then the rest; the basic exemption likewise in
+    one of those orders. Both computations try every order with each loss's limits and keep the lowest liability (ties:
+    the first tried). A seeded brute force splits each loss every way between normal and special-rate income (old-regime
+    rebate cases included) and checks FinCom is never dearer. Schedule UD's earlier-year rows are filled (AY, brought
+    forward, the 115BAC / 115BAA adjustment, set off this year oldest first, balance), so UD no longer blocks when the
+    years are given on the losses card.
 16. **234C proviso (a).** Applied only when the advance tax paid after an instalment date (up to 31 March) covers the extra
     tax from the capital gains that accrued after it; the proviso for dividends is not applied yet.
 17. **ITR-3's Schedule AL is "other than those included in Part A-BS"**: FinCom asks when an AL figure equals the

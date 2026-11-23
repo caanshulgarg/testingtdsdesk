@@ -227,6 +227,7 @@ T("54 windows", () => {
   const ctx = { entity: "P", resident: true, due: "20260831" };
   eq(capitalGains(house({ sec: "54", cost: 3000000, how: "bought", date: "20230101" }), ctx).rows[0].exemptAmt, 0, "54: a house bought more than a year before the sale: nil");
   eq(capitalGains(house({ sec: "54", cost: 3000000, how: "bought", date: "20240901" }), ctx).rows[0].exemptAmt, 3000000, "54: bought within a year before: 30 lakh");
+  eq(capitalGains(house({ sec: "54", cost: 3000000, how: "bought", date: "20240615" }), ctx).rows[0].exemptAmt, 0, "54: bought 1-07-2024 less two weeks (just over a year before the sale of 1-07-2025): nil");
   eq(capitalGains(house({ sec: "54", cost: 3000000, how: "built", date: "20280601" }), ctx).rows[0].exemptAmt, 3000000, "54: built within three years: allowed");
   eq(capitalGains(house({ sec: "54", cost: 3000000, how: "cgas", date: "20260915" }), ctx).rows[0].exemptAmt, 0, "54: deposited in the Capital Gains Account Scheme after the due date (139(1)): nil");
   eq(capitalGains(house({ sec: "54", cost: 3000000, how: "cgas", date: "20260801" }), ctx).rows[0].exemptAmt, 3000000, "54: deposited by the due date: allowed");
@@ -315,6 +316,64 @@ T("115BAC losses", () => {
   r = both(mk({ regime: "old", losses: { hp: [{ ay: "2023", amt: 120000, barred: 50000, filed: "20230725" }] } }, { houses: hs }));
   same(r, "bfHp", 93600, "old regime: the whole loss available, 93,600 set off");
   ok(needsOf(compute(mk({ regime: "new", losses: { hp: [{ ay: "2023", amt: 120000, filed: "20230725" }] } }, { houses: hs }))).some((n) => /115BAC/.test(n.text)), "new regime: asked what part came from barred deductions");
+});
+
+// ---------------- the final check of fb123bc6a ----------------
+console.log("A loss of another head: normal-rate income first, or the special-rate income first, whichever costs less");
+T("loss order", () => {
+  const stcg = (amt) => ({ id: "a", kind: "eq", acq: "20250101", sale: "20250901", value: 100000 + amt, cost: 100000 });
+  // 1. new regime, other income 10,00,000, 111A 3,00,000, business loss 2,00,000. Against 111A: normal 10,00,000 (tax
+  // 40,000, rebated under 87A: total income 11,00,000), 111A 1,00,000 at 20% = 20,000 + cess = 20,800. (Against the
+  // other income: normal 8,00,000 tax 20,000 rebated, 111A 60,000: 62,400.)
+  r = both(mk({ regime: "new", os: { other: 1000000 }, business: { pbt: -200000, adds: [], less: [] } }, { cgRows: [stcg(300000)] }));
+  same(r, "liability", 20800, "new regime, business loss against 111A: 20,800");
+  // 2. old regime, other income 4,50,000, 111A 2,00,000, business loss 1,00,000. Against 111A: normal 4,50,000 = 10,000;
+  // 111A 1,00,000 = 20,000; total income 5,50,000 (no rebate): 30,000 + cess = 31,200 (the other way 46,800)
+  r = both(mk({ regime: "old", os: { other: 450000 }, business: { pbt: -100000, adds: [], less: [] } }, { cgRows: [stcg(200000)] }));
+  same(r, "liability", 31200, "old regime, business loss against 111A: 31,200");
+  // 3. new regime, unabsorbed depreciation brought forward 2,00,000, other income 10,00,000, 111A 3,00,000: as in 1, 20,800
+  r = both(mk({ regime: "new", os: { other: 1000000 }, losses: { unabsorbedDep: 200000 } }, { cgRows: [stcg(300000)] }));
+  same(r, "liability", 20800, "new regime, unabsorbed depreciation against 111A: 20,800");
+});
+// brute force: a business loss, unabsorbed depreciation or (old regime) a house property loss split every way between
+// the normal-rate income and the 111A / 112A gains; FinCom must cost no more than the best split (2 rupees), rebate
+// (87A) cases included
+T("brute force, loss order", () => {
+  let seed = 9902611, worse = 0, n = 0, first = null;
+  const rnd = (a, b) => { seed = (seed * 1103515245 + 12345) % 2147483648; return a + Math.floor((seed / 2147483648) * (b - a + 1)); };
+  for (let i = 0; i < 300; i++) {
+    const kind = ["bus", "ud", "hp"][rnd(0, 2)], regime = kind === "hp" ? "old" : rnd(0, 1) ? "new" : "old";
+    const norm = rnd(0, 25) * 50000, a = rnd(0, 8) * 50000, b = rnd(0, 8) * 50000, loss = rnd(1, 8) * 50000;
+    const rows = []; if (a) rows.push({ id: "a", kind: "eq", acq: "20250101", sale: "20250901", value: 100000 + a, cost: 100000 }); if (b) rows.push({ id: "b", kind: "eq", acq: "20200101", sale: "20250801", value: 100000 + b, cost: 100000 });
+    if (!rows.length) continue;
+    const base = { regime };
+    if (kind === "hp") base.salary = { gross: norm + 50000, std: 50000, net: norm }; else base.os = { other: norm };
+    const M0 = mk(Object.assign({}, base, kind === "bus" ? { business: { pbt: -loss, adds: [], less: [] } } : kind === "ud" ? { losses: { unabsorbedDep: loss } } : {}), { cgRows: rows, houses: kind === "hp" ? [{ kind: "S", loans: [{ interest: loss }] }] : undefined });
+    const use = Math.min(kind === "hp" ? Math.min(loss, 200000) : loss, norm + a + b);
+    if (use < (kind === "hp" ? Math.min(loss, 200000) : loss)) continue;
+    n++;
+    const fin = compute(M0).liability;
+    let best = Infinity;
+    for (let x = 0; x <= 10; x++) for (let y = 0; y <= 10; y++) {
+      let toN = Math.min(norm, Math.round(use * x / 10)), toA = Math.min(a, Math.round((use - toN) * y / 10)), toB = Math.min(b, use - toN - toA);
+      if (toN + toA + toB < use) { const more = Math.min(a - toA, use - toN - toA - toB); toA += more; }
+      if (toN + toA + toB < use) continue;
+      const M = Object.assign({}, M0, { business: undefined, losses: {}, hp: undefined, houseRows: null, hpHead: null, cgRows: null, cg: { s111A: a - toA, s112A: b - toB, s112: 0, other: 0 } });
+      if (kind === "hp") M.salary = { gross: norm - toN + 50000, std: 50000, net: norm - toN }; else M.os = { other: norm - toN };
+      best = Math.min(best, compute(M).liability);
+    }
+    if (fin > best + 2) { worse++; if (!first) first = { i, kind, regime, norm, a, b, loss, fin, best }; }
+  }
+  ok(n > 100 && worse === 0, "brute force over the loss's split between normal and special-rate income: FinCom never dearer (" + n + " returns" + (first ? "; first worse: " + JSON.stringify(first) : "") + ")");
+});
+
+console.log("Schedule UD's earlier years: unabsorbed depreciation year by year (32(2), no time limit)");
+T("UD rows", () => {
+  // new regime: unabsorbed depreciation of AY 2022-23 2,00,000, of which 50,000 from additional depreciation
+  // (32(1)(iia), barred by 115BAC(2)(i)): 1,50,000 can be set off. Other income 10,00,000, 111A 3,00,000: against 111A
+  // (1,50,000 left, 30,000), the other income's tax rebated (total income 11,50,000): 30,000 + cess = 31,200
+  r = both(mk({ regime: "new", os: { other: 1000000 }, losses: { ud: [{ ay: "2022", amt: 200000, barred: 50000 }] } }, { cgRows: [{ id: "a", kind: "eq", acq: "20250101", sale: "20250901", value: 400000, cost: 100000 }] }));
+  same(r, "liability", 31200, "unabsorbed depreciation by year, less the barred part, against 111A: 31,200");
 });
 
 console.log(fails ? fails + " FAILED" : "all passed");

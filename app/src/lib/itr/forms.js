@@ -189,8 +189,17 @@ function lossSchedules(X, o) {
   // mapped: coverage() blocks the JSON when there is unabsorbed depreciation brought forward.
   if (N(C.cyUd) || N(C.bfUd)) {
     const adj = { "ITR-3": "TotAdjustAccTax115BACAmt", "ITR-5": "TotAdjustAccTax115BADAmt", "ITR-6": "TotAmtAdjOptTaxUs115BAA" }[X.form];
-    put(o, X.form === "ITR-3" ? "ITR3ScheduleUD" : "ITRScheduleUD", { CurrAssYr: "2026-27", CurBalCFNY: R(C.cyUd), CurAllowBalCFNY: 0, TotBFUDepritAmt: R(C.bfUd), [adj]: 0, TotCurYrdepritSetoffInc: R(C.udUsed),
-      TotDepritBalCFNY: R(N(C.bfUdLeft) + N(C.cyUd)), TotBFUAllowAmt: 0, TotCurYrAllowSetoffInc: 0, TotalBalCFNY: 0 });
+    const radj = { "ITR-3": "AdjustAccTax115BACAmt", "ITR-5": "AdjustAccTax115BADAmt", "ITR-6": "AmtAdjOptTaxUs115BAA" }[X.form];
+    const UDP = X.form === "ITR-3" ? "ITR3ScheduleUD" : "ITRScheduleUD";
+    // the earlier years' rows: what each year brought forward, the part adjusted under 115BAC / 115BAA, what was set off
+    // this year (the oldest first) and the balance
+    let left = R(C.udUsed), adjTot = 0;
+    const rowsUD = ((X.model.losses || {}).ud || []).filter((x) => N(x.amt) > 0).slice().sort((a, b) => String(a.ay).localeCompare(String(b.ay))).map((x) => {
+      const amt = R(x.amt), bar = barOn ? Math.min(amt, R(N(x.barred))) : 0, so = Math.min(left, amt - bar); left -= so; adjTot += bar;
+      const y = +String(x.ay).slice(0, 4);
+      return fit(X, UDP + "/ScheduleUD/[]", { AssYr: y + "-" + String(y + 1).slice(2), AmtBFUD: amt, [radj]: bar, AmtDeprSOCY: so, BalCFNY: amt - bar - so, AmtBFUAllow: 0, AmtAllowSOCY: 0, AllowBalCFNY: 0 }); });
+    put(o, UDP, Object.assign({ CurrAssYr: "2026-27", CurBalCFNY: R(C.cyUd), CurAllowBalCFNY: 0 }, rowsUD.length ? { ScheduleUD: rowsUD } : {}, { TotBFUDepritAmt: R(C.bfUd), [adj]: R(adjTot), TotCurYrdepritSetoffInc: R(C.udUsed),
+      TotDepritBalCFNY: R(N(C.bfUdLeft) + N(C.cyUd)), TotBFUAllowAmt: 0, TotCurYrAllowSetoffInc: 0, TotalBalCFNY: 0 }));
   }
 }
 // what the JSON carries forward (losses and unabsorbed depreciation of this year), read back from the map
@@ -241,7 +250,7 @@ export function coverage(X, map) {
   ["80C", "80D", "80DD", "80DDB", "80U", "80E", "80EE", "80EEA", "80EEB", "80G", "80GGA", "80GGC"].forEach((k) => { if (claimed(k)) add("via_" + k, "Schedule " + k + " (details)", "Section " + k + " is claimed: the schema's own Schedule " + k + " (each policy, donee or loan) is not filled by FinCom yet."); });
   if ((f === "ITR-5" || f === "ITR-6") && R(S.ded)) add("via_entity", "Schedule VIA and its details (firm / company)", "Deductions under Chapter VI-A of " + R(S.ded) + ": the firm's / company's Schedule VIA and its detail schedules are not filled by FinCom yet.");
   if (S.viaCapped) add("via_cap", "Chapter VI-A above the gross total income", "The deductions are limited to the gross total income: say which sections take the cut.");
-  if (N((M.losses || {}).unabsorbedDep)) add("ud", "Schedule UD, earlier years", "Unabsorbed depreciation brought forward: Schedule UD's rows year by year (and BFLA by year) are not filled by FinCom yet.");
+  if (N((M.losses || {}).unabsorbedDep) && !((M.losses || {}).ud || []).some((x) => N(x.amt) > 0)) add("ud", "Schedule UD, earlier years", "Unabsorbed depreciation brought forward: Schedule UD's rows year by year (and BFLA by year) are not filled by FinCom yet.");
   // anything carried forward that the map does not carry: this year's business loss, unabsorbed depreciation and house
   // property loss against what Schedules CFL and UD hold (the review of 5a6df2218: a loss carried and not in the JSON)
   const C = S.carry || {}, cyBus = R((C.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0));
