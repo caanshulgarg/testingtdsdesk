@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "s45e5fafa82e922ca";
+const GST3B_SRC = "s239feb9887ba88a1";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1892,7 +1892,7 @@ const GSTR = {
     const typed = typeof GSTSet === "object" ? (GSTSet.peek(reg).ecoGstin || {}) : {}, by = {};
     // (release review 23-Nov-2026) the operator's invoices posted to Tally too (ecoBooked): their entries are in tables
     // 4 to 10 but do not name the operator, so table 14 takes each once from the invoice in Sales
-    const booked = g.ecoBooked || this.ecoBooked(ym);
+    const booked = this.ecoBooked(ym);
     g.eco.concat(booked).forEach(r => { if (!this.ECO_NOT.includes(r.eco)) (by[r.eco] = by[r.eco] || []).push(r); });
     const z = (o) => Object.assign({n: 0, suppval: 0, igst: 0, cgst: 0, sgst: 0, cess: 0}, o);
     const add = (o, r) => { const sg = r.kind === "CDNR" ? -1 : 1; o.n++; o.suppval = r2(o.suppval + sg * num(r.taxable)); ["igst", "cgst", "sgst", "cess"].forEach(h => { o[h] = r2(o[h] + sg * num(r[h])); }); };
@@ -2083,7 +2083,7 @@ const GSTR = {
       .forEach(v => inSeries(v.no, /CREDIT NOTE/i.test(v.type) ? 5 : /DEBIT NOTE/i.test(v.type) ? 4 : 1, true));
     // the operator sales (table 14: eco14 below, the R1 portal screen); the old card's per-operator summary is gone (17-Oct-2026)
     const eco = rows.filter(r => r.eco);
-    return {rows, eco, ecoBooked: this.ecoBooked(ym), b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
+    return {rows, eco, b2b: part("B2B"), b2cl: part("B2CL"), b2c: part("B2C"), cdnr: part("CDNR").concat(part("DBNR")),
       exp: part("EXP"), nil: part("NIL"), rcm: rows.filter(r => r.rcm),
       b2cRates: byRate(part("B2C")), hsn: Object.values(hsnRows).sort((a, c) => c.taxable - a.taxable),
       series: Object.values(series), total: this.sum(rows)};
