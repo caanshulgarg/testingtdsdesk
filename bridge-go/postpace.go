@@ -29,12 +29,26 @@ func postTargetSec() float64 {
 	return float64(ms) / 1000
 }
 
+// fast bank posting (23-Nov-2026): the most one bank request may take on a Tally whose single voucher already takes
+// over 2 s (its fixed cost a request): PostSlowMaxMs, 8000 by default, held to 2000..10000
+func postSlowMaxSec() float64 {
+	ms := keepNum("PostSlowMaxMs", 8000)
+	if ms < paceHardMs {
+		ms = paceHardMs
+	}
+	if ms > 10000 {
+		ms = 10000
+	}
+	return float64(ms) / 1000
+}
+
 type postQueue struct {
 	masters, bills, bank []M
 	size                 map[bool]int // bank? -> the next part's size
 	fixed                bool
 	key                  string       // speed audit: the company's pace key ("" : none kept)
 	sent                 map[bool]int // bank? -> the last part's size sent in this job (0: none yet)
+	calm                 map[bool]int // fast bank posting: the bank part while someone is at the computer (0: no cap)
 }
 
 // speed audit (22-Nov-2026, the owner's approval): single imports of 9 and 42 bills took 14.5 s and 12.1 s at Tally,
@@ -55,7 +69,7 @@ func newPostQueue(masters, vouchers []M) *postQueue {
 }
 
 func newPostQueueFor(company, guid string, masters, vouchers []M) *postQueue {
-	q := &postQueue{masters: masters, size: map[bool]int{false: postBatchBills(), true: postBatchBank()}, fixed: cfgB("PostPaceOff"), sent: map[bool]int{}}
+	q := &postQueue{masters: masters, size: map[bool]int{false: postBatchBills(), true: postBatchBank()}, fixed: cfgB("PostPaceOff"), sent: map[bool]int{}, calm: map[bool]int{}}
 	if company != "" {
 		q.key = companyKey(company) + "|" + strings.ToLower(strings.TrimSpace(guid))
 	}
@@ -132,10 +146,102 @@ func (q *postQueue) paceSize(bank bool) int {
 			n = i + 1
 		}
 	}
-	if prev := q.sent[bank]; prev > 0 && n > 2*prev {
+	prev := q.sent[bank]
+	if prev > 0 && n > 2*prev {
 		n = 2 * prev
 	}
+	calm := clampBatch(minI(maxI(n, 1), c))
+	if !bank {
+		return calm
+	}
+	// fast bank posting: on a Tally whose time is mostly a fixed cost a request, bigger bank parts while nobody is at
+	// the computer (next: postQuiet); q.calm keeps the part by the time a voucher, for when someone is
+	q.calm[bank] = calm
+	if f := minI(paceFixedSize(rec, prev), postQuietBankMax()); f > n {
+		n = f
+		if prev > 0 && n > 2*prev {
+			n = 2 * prev
+		}
+	}
 	return clampBatch(minI(maxI(n, 1), c))
+}
+
+// fast bank posting, the owner's "tally should not freeze at all" (23-Nov-2026): the bigger bank parts go only while
+// nobody has pressed a key or moved the mouse for PostQuietSec (30 s by default, 5..600; the tray icon's report, as
+// the typing gate's) and the tray is reporting. Otherwise a part is what the time a voucher gives (one voucher on a
+// slow Tally: never longer than a single voucher takes) and still goes at once: postings first, nothing waits
+func postQuietSec() float64 {
+	v := keepNum("PostQuietSec", 30)
+	if v < 5 {
+		v = 5
+	}
+	if v > 600 {
+		v = 600
+	}
+	return float64(v)
+}
+
+var (
+	postIdleFn    = idleSec           // seconds since the last key or click (the tray's report as a service)
+	postUnknownFn = platPersonUnknown // the tray does not report for a session the owner works in
+	postQuietFn   = postQuiet         // the tests' hook
+)
+
+func postQuiet() bool { return !postUnknownFn() && postIdleFn() >= postQuietSec() }
+
+// the most bank lines a quiet part holds: PostQuietBankMax, 10 by default, never over PostBatchBank
+func postQuietBankMax() int { return maxI(1, minI(keepNum("PostQuietBankMax", 10), postBatchBank())) }
+
+// fast bank posting (23-Nov-2026, the owner: "please make bank entries fast"). A part's time at Tally is a fixed cost
+// a request (F) and a cost a voucher (m), fitted from the company's recent parts (n, ms) of different sizes. When the
+// fixed cost is most of it (F at least 2 m) the bank part is as big as the budget holds: the 1350 ms target, or 2 s
+// when one voucher alone is over the target; on a Tally whose single voucher already takes over 2 s (the 2-second rule
+// cannot be met at any size) PostSlowMaxMs (8 s). 0: no fixed-cost size (the per-voucher pace decides). Only one size
+// seen yet: a probe of twice the last part when even all of its time a voucher would keep it under PostSlowMaxMs (from
+// a part of one, a probe of 2 always: at worst twice its time, once).
+// The last part over PostSlowMaxMs: half of it at most. Nothing about what is sent changes: the same Import, more lines.
+func paceFixedSize(rec postPaceRec, prev int) int {
+	hs := rec.hist()
+	if len(hs) == 0 {
+		return 0
+	}
+	maxMs := postSlowMaxSec() * 1000
+	last := hs[len(hs)-1]
+	F, m, ok := rec.fit()
+	n := 0
+	switch {
+	case ok:
+		if F < 2*m || F <= 0 {
+			return 0 // the time is a voucher's own: bigger parts save nothing
+		}
+		budget := postTargetSec() * 1000
+		if one := F + m; one > paceHardMs {
+			budget = maxMs
+		} else if one > budget {
+			budget = paceHardMs
+		}
+		if m <= 1e-6 {
+			n = maxBatch
+		} else {
+			n = int(math.Floor((budget - F) / m))
+		}
+	default:
+		// one size seen: its time a voucher over 2 s (so one voucher alone may be too) and a part twice as big under
+		// PostSlowMaxMs even if every millisecond were the vouchers' own (from a part of one, a probe of 2 always)
+		ln, lms := int(last[0]), last[1]
+		if ln < 1 || lms/float64(ln) <= paceHardMs {
+			return 0
+		}
+		p := maxI(prev, ln)
+		if p > 1 && lms/float64(ln)*float64(2*p) > maxMs {
+			return 0 // (from one voucher, the probe of 2 always goes: at worst twice its time, once, and then fitted)
+		}
+		n = 2 * p
+	}
+	if last[1] > maxMs {
+		n = minI(n, maxI(1, int(last[0])/2))
+	}
+	return maxI(n, 0)
 }
 
 func (q *postQueue) left() bool { return len(q.masters)+len(q.bills)+len(q.bank) > 0 }
@@ -171,7 +277,11 @@ func (q *postQueue) next() importReq {
 		}
 		return importReq{kind: "voucher", report: "Vouchers", items: q.bills[:k]}
 	default:
-		return importReq{kind: "voucher", report: "Vouchers", bank: true, items: q.bank[:minI(q.size[true], len(q.bank))]}
+		k := q.size[true]
+		if c := q.calm[true]; c > 0 && c < k && !postQuietFn() {
+			k = c // someone at the computer: no bigger part than one by the time a voucher
+		}
+		return importReq{kind: "voucher", report: "Vouchers", bank: true, items: q.bank[:minI(k, len(q.bank))]}
 	}
 }
 
@@ -225,6 +335,7 @@ func (q *postQueue) done(r importReq, secs float64, err error) {
 			part = n // a whole part (not the last one, cut short by the queue's end): the size the next job may start at
 		}
 		postPaceNote(q.key, r.bank, secs*1000/float64(n), secs*1000/kb, part)
+		postPacePart(q.key, r.bank, n, secs*1000)
 	}
 	q.size[r.bank] = q.paceSize(r.bank)
 }
@@ -239,6 +350,49 @@ type postPaceRec struct {
 	KLast, KAvg float64 // ms a KB of the vouchers' XML
 	KN          int
 	Part        int // the company's last whole part in good time (0: none)
+	// fast bank posting: the company's last parts (vouchers, ms; paceHistMax at most) and the last fit of them
+	Hist  [paceHistMax][2]float64 // a fixed array (the record stays comparable); HN of it in use, oldest first
+	HN    int
+	FixMs float64 // ms a request (the fixed cost), from the last fit with two sizes or more
+	VchMs float64 // ms a voucher over it
+	FitOK bool
+}
+
+const paceHistMax = 8
+
+// the recent parts in use, oldest first
+func (p postPaceRec) hist() [][2]float64 { return p.Hist[:minI(maxI(p.HN, 0), paceHistMax)] }
+
+// a part added to the recent parts (the oldest dropped past paceHistMax)
+func (p *postPaceRec) addHist(n, ms float64) {
+	if p.HN >= paceHistMax {
+		copy(p.Hist[:], p.Hist[1:])
+		p.HN = paceHistMax - 1
+	}
+	p.Hist[p.HN] = [2]float64{n, ms}
+	p.HN++
+}
+
+// the fixed cost a request and the cost a voucher, by least squares over the recent parts; with one size only the
+// last fit of two sizes or more is kept (ok false when none)
+func (p postPaceRec) fit() (F, m float64, ok bool) {
+	var sn, st, snn, snt float64
+	k := float64(len(p.hist()))
+	for _, h := range p.hist() {
+		sn, st, snn, snt = sn+h[0], st+h[1], snn+h[0]*h[0], snt+h[0]*h[1]
+	}
+	if d := k*snn - sn*sn; k >= 2 && d > 1e-9 {
+		m = (k*snt - sn*st) / d
+		if m < 0 {
+			m = 0
+		}
+		F = st/k - m*sn/k
+		if F < 0 {
+			F = 0
+		}
+		return F, m, true
+	}
+	return p.FixMs, p.VchMs, p.FitOK
 }
 
 // the time to plan by: the larger of the last part's and the running average (a Tally slower now is believed at once)
@@ -289,13 +443,21 @@ func postPaceFreshLocked() {
 			continue
 		}
 		r := &postPaceRec{Last: num(e["last"]), Avg: num(e["avg"]), N: toInt(e["n"]), KLast: num(e["klast"]), KAvg: num(e["kavg"]), KN: toInt(e["kn"]), Part: toInt(e["part"])}
+		for _, h := range arr(e["hist"]) {
+			if a := arr(h); len(a) == 2 && toInt(a[0]) >= 1 && num(a[1]) > 0 {
+				r.addHist(float64(toInt(a[0])), num(a[1]))
+			}
+		}
+		if f, v := num(e["fix"]), num(e["vch"]); f > 0 && v >= 0 {
+			r.FixMs, r.VchMs, r.FitOK = f, v, true
+		}
 		if r.N <= 0 || r.Avg <= 0 {
 			r.N, r.Last, r.Avg = 0, 0, 0
 		}
 		if r.KN <= 0 || r.KAvg <= 0 {
 			r.KN, r.KLast, r.KAvg = 0, 0, 0
 		}
-		if r.N > 0 || r.Part > 0 {
+		if r.N > 0 || r.Part > 0 || r.HN > 0 {
 			postPace.m[k] = r
 		}
 	}
@@ -372,10 +534,59 @@ func postPaceNote(key string, bank bool, ms, msKB float64, part int) {
 	}
 }
 
+// fast bank posting: an answered part (vouchers, ms) kept in the company's recent parts, and the fit refreshed when
+// they hold two sizes or more
+func postPacePart(key string, bank bool, n int, ms float64) {
+	if n < 1 || ms <= 0 {
+		return
+	}
+	postPace.mu.Lock()
+	m := postPaceMapLocked(key)
+	k := postPaceKey(key, bank)
+	p := m[k]
+	if p == nil {
+		p = &postPaceRec{}
+		m[k] = p
+	}
+	p.addHist(float64(n), ms)
+	if hs := p.hist(); len(hs) >= 2 {
+		lo, hi := hs[0][0], hs[0][0]
+		for _, h := range hs {
+			lo, hi = math.Min(lo, h[0]), math.Max(hi, h[0])
+		}
+		if hi > lo {
+			p.FitOK = false
+			p.FixMs, p.VchMs, p.FitOK = p.fit()
+		}
+	}
+	var text string
+	if key != "" {
+		postPace.dirty = true
+		if time.Since(postPace.saveAt) >= 30*time.Second {
+			text = postPaceTextLocked()
+		}
+	}
+	postPace.mu.Unlock()
+	if text != "" {
+		_ = saveFile(postPaceFile(), text)
+	}
+}
+
 func postPaceTextLocked() string {
 	cos := M{}
 	for k, p := range postPace.m {
-		cos[k] = M{"last": round3(p.Last), "avg": round3(p.Avg), "n": p.N, "klast": round3(p.KLast), "kavg": round3(p.KAvg), "kn": p.KN, "part": p.Part}
+		e := M{"last": round3(p.Last), "avg": round3(p.Avg), "n": p.N, "klast": round3(p.KLast), "kavg": round3(p.KAvg), "kn": p.KN, "part": p.Part}
+		if p.HN > 0 {
+			var h []any
+			for _, x := range p.hist() {
+				h = append(h, []any{int(x[0]), round3(x[1])})
+			}
+			e["hist"] = h
+		}
+		if p.FitOK {
+			e["fix"], e["vch"] = round3(p.FixMs), round3(p.VchMs)
+		}
+		cos[k] = e
 	}
 	postPace.saveAt, postPace.dirty = time.Now(), false
 	return jsonText(M{"format": postPaceFormat, "version": BridgeVersion, "companies": cos})
