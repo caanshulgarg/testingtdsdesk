@@ -25,6 +25,16 @@ Object.assign(BookItems, {
   on(){ return !this.off && typeof BookSync === "object" && BookSync.on() && !BookSync.off; },
   ik(k, i){ return k + "\u0001" + i; },
   h(d, o){ return fpHash(stableStr(d === undefined ? null : d) + "|" + (o == null ? "" : o)); },
+  // next-db-load-2: what an item is synced by. A ledger's count in the map (n) and a guess's why are worked out by each
+  // copy from the entries IT holds (LedMaster.refresh): two copies holding different entries saved each other's count
+  // back and forth (staging: 4,450 saves in 4 hours). Neither is sent or taken alone; each copy shows its own
+  hs(k, i, d, o){
+    if (k !== "map" || i[0] !== "." || !d || typeof d !== "object" || Array.isArray(d)) return this.h(d, o);
+    const x = Object.assign({}, d); delete x.n; if (!x.ok && !x.byHand) delete x.why;
+    return this.h(x, o);
+  },
+  // the server's copy as last agreed (b): the item as it is, or (a record kept before hs) its whole hash
+  same(b, k, i, d, o){ return b === this.hs(k, i, d, o) || b === this.h(d, o); },
   missing(e){ return /client_book_items|save_book_items|PGRST202|PGRST205|schema cache|does not exist|404/i.test(String(e && e.message || e)); },
   // ---------- the work as items, and back
   // an object: an item for each of its keys (".name"); a list of things with ids: an item for each ("#id", in order);
@@ -143,15 +153,16 @@ Object.assign(BookItems, {
     // and cut into items for nothing (10 MB on a large client: a 0.5 s freeze, 2 s on an office PC, every 45 s).
     // Audit 22-Nov-2026 (tally-sync 6): the same for rows known already (this computer's own saves coming back live, up to
     // 400 a save), and only the parts the new rows touch are copied and cut (BookSync.localWork with their keys)
-    const hs = rows.map(r => r.deleted ? "gone" : this.h(r.data, r.ord)), bv0 = s.bv || 0, seq0 = s.seq;
-    const fresh = rows.filter((r, n) => s.base[this.ik(r.key, r.item)] !== hs[n]), keys = [...new Set(fresh.map(r => r.key))];
+    const hs = rows.map(r => r.deleted ? "gone" : this.hs(r.key, r.item, r.data, r.ord)), bv0 = s.bv || 0, seq0 = s.seq;
+    const known = (r, n) => { const b0 = s.base[this.ik(r.key, r.item)]; return b0 === hs[n] || (!r.deleted && this.same(b0, r.key, r.item, r.data, r.ord)); };
+    const fresh = rows.filter((r, n) => !known(r, n)), keys = [...new Set(fresh.map(r => r.key))];
     const work = fresh.length ? ((await BookSync.localWork(cid, keys)) || {}) : {}, mine = fresh.length ? this.split(work) : new Map(), use = [], notes = [];
     rows.forEach((r, n) => {
       const key = this.ik(r.key, r.item), hNew = hs[n];
       if (o.cursor) s.seq = Math.max(s.seq, num(r.seq));
-      if (s.base[key] === hNew) return;                                       // known already (this computer's own save, come back)
-      const loc = mine.get(key), hLoc = loc ? this.h(loc.d, loc.o) : "gone";
-      const changedHere = hLoc !== (s.base[key] || "gone");
+      if (known(r, n)) return;                                                // known already (this computer's own save, come back)
+      const loc = mine.get(key), hLoc = loc ? this.hs(loc.k, loc.i, loc.d, loc.o) : "gone";
+      const changedHere = loc ? !this.same(s.base[key], loc.k, loc.i, loc.d, loc.o) : (s.base[key] || "gone") !== "gone";
       s.base[key] = hNew; s.bv = (s.bv || 0) + 1;
       if (hLoc === hNew) return;
       // changed here too and not sent yet: the later change stays (it is sent next)
@@ -222,7 +233,7 @@ Object.assign(BookItems, {
     else work = await BookSync.localWork(cid);
     if (!work) return 0;
     const mine = this.split(work), send = [], present = new Set(Object.keys(work));
-    mine.forEach((x, key) => { const hh = this.h(x.d, x.o); if (s.base[key] !== hh) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
+    mine.forEach((x, key) => { const hh = this.hs(x.k, x.i, x.d, x.o); if (!this.same(s.base[key], x.k, x.i, x.d, x.o)) send.push([key, hh, {k: x.k, i: x.i, o: x.o, d: x.d}]); });
     // an item is removed on the server only when its part of the books is here and the item was taken out of it; a part
     // missing here (storage cleared, not loaded yet) is never sent as removed, and neither is most of a part at once
     // (review of 02-Oct-2026: never infer a removal from absence)
@@ -303,9 +314,9 @@ const Live = {
     let ws;
     try { ws = new WebSocket(this.url()); } catch (e){ this.later(); return; }
     this.ws = ws; this.st = "connecting";
-    ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); }, 25000); };
+    ws.onopen = () => { this.join(); clearInterval(this.hb); this.hb = setInterval(() => { this.send("phoenix", "heartbeat", {}); this.tokenTick(); this.unwant(); }, 25000); };
     ws.onmessage = ev => { let m = null; try { m = JSON.parse(ev.data); } catch (e){} if (m) this.got(m); };
-    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.tallyTopic = ""; this.recorderTopic = ""; this.recorderLive = false; this.copyTopic = ""; this.copyLive = false; this.sigTopic = ""; this.top(); if (!this.stopped) this.later(); };
+    ws.onclose = () => { clearInterval(this.hb); if (this.ws === ws) this.ws = null; this.st = "off"; this.jobsTopic = ""; this.jobsLive = false; this.booksTopic = ""; this.booksLive = false; this.postsTopic = ""; this.postsLive = false; this.tallyTopic = ""; this.recorderTopic = ""; this.recorderLive = false; this.copyTopic = ""; this.copyLive = false; this.syncTopic = ""; this.syncLive = false; this.recJoin = false; this.gone = new Set(); this.sigTopic = ""; this.top(); if (!this.stopped) this.later(); };
     ws.onerror = () => { try { ws.close(); } catch (e){} };
   },
   stop(){ this.stopped = true; clearTimeout(this.rt); clearInterval(this.hb); const w = this.ws; this.ws = null; this.st = "off"; try { if (w) w.close(); } catch (e){} },
@@ -320,7 +331,7 @@ const Live = {
     this.send(this.topic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // a new access token (refreshed every hour) is given to the open connection
-  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); if (this.postsTopic) this.send(this.postsTopic, "access_token", {access_token: t}); if (this.recorderTopic) this.send(this.recorderTopic, "access_token", {access_token: t}); if (this.copyTopic) this.send(this.copyTopic, "access_token", {access_token: t}); if (this.sigTopic) this.send(this.sigTopic, "access_token", {access_token: t}); } },
+  tokenTick(){ const t = (Cloud.sess() || {}).access_token; if (this.st === "live" && t && t !== this.token){ this.token = t; this.send(this.topic, "access_token", {access_token: t}); if (this.jobsTopic) this.send(this.jobsTopic, "access_token", {access_token: t}); if (this.booksTopic) this.send(this.booksTopic, "access_token", {access_token: t}); if (this.postsTopic) this.send(this.postsTopic, "access_token", {access_token: t}); if (this.recorderTopic) this.send(this.recorderTopic, "access_token", {access_token: t}); if (this.copyTopic) this.send(this.copyTopic, "access_token", {access_token: t}); if (this.syncTopic) this.send(this.syncTopic, "access_token", {access_token: t}); if (this.sigTopic) this.send(this.sigTopic, "access_token", {access_token: t}); } },
   // fast-sync: the server's jobs (a day book being read, the kept day books read again) on a channel of their own, joined
   // only when the database has tally_jobs (migration-13): the live sync above never depends on it
   async joinJobs(){
@@ -348,9 +359,11 @@ const Live = {
   // page's Sync activity. A channel of its own, joined only when the database has the table (else the page says it is
   // not available until migration 44 runs and reads nothing live)
   async joinRecorder(){
-    if (typeof TCloud !== "object" || !TCloud.on() || this.recorderTopic) return;
-    try { await Cloud.api("tally_recorder_lines?select=id&limit=1"); } catch (e){ return; }
-    const f = Cloud.st.firm; this.recorderTopic = "realtime:fincom-recorder-" + f; this.recorderRef = String(this.ref + 1);
+    if (typeof TCloud !== "object" || !TCloud.on() || this.recorderTopic || this.recJoin) return;
+    this.recJoin = true;
+    try { await Cloud.api("tally_recorder_lines?select=id&limit=1"); } catch (e){ return; } finally { this.recJoin = false; }
+    if (this.recorderTopic || !this.ws || !this.wanted("rec")) return;
+    const f = Cloud.st.firm; this.gone.delete("realtime:fincom-recorder-" + f); this.recorderTopic = "realtime:fincom-recorder-" + f; this.recorderRef = String(this.ref + 1);
     this.send(this.recorderTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: [{event: "*", schema: "public", table: "tally_recorder_lines", filter: "firm_id=eq." + f}], private: false}, access_token: this.token});
   },
   // next-realtime (migration 64): FinCom's copy of a client's books changed (tally_book_changes: one row per book, written
@@ -363,8 +376,33 @@ const Live = {
     try { await Cloud.api("tally_book_changes?select=book_id&limit=1"); } catch (e){ return; }
     if (this.copyTopic || !this.ws) return;
     const f = Cloud.st.firm; this.copyTopic = "realtime:fincom-copy-" + f; this.copyRef = String(this.ref + 1);
-    const pc = ["tally_book_changes", "tally_sync_cursor", "tally_month_locks", "tally_tieouts", "tally_alerts"].map(t => ({event: "*", schema: "public", table: t, filter: "firm_id=eq." + f}));
+    // (next-db-load-2: the gap, the month locks and the tie-outs on a channel of their own, joinSync)
+    const pc = ["tally_book_changes", "tally_alerts"].map(t => ({event: "*", schema: "public", table: t, filter: "firm_id=eq." + f}));
     this.send(this.copyTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
+  },
+  // next-db-load-2 (staging, 23-Nov-2026: tally_sync_cursor written 4,091 times in under 4 hours, each change sent to
+  // every open page, nearly all passed over): the gap, the month locks and the tie-outs (joinSync, to CopyLive) and the
+  // recorder's lines (joinRecorder) come live only while a screen showing them is drawn: Sync activity (Rec.actOf), the
+  // tie-out (Rec.tieOf). Each drawing says so (want); a channel not wanted for a minute is left (unwant, at the
+  // heartbeat). Elsewhere what they show is read on its own timer, as when Realtime is not there
+  wantAt: {}, gone: new Set(),
+  wanted(k){ return (this.wantAt[k] || 0) > Date.now() - 60000; },
+  want(k){
+    this.wantAt[k] = Date.now();
+    if (this.st !== "live") return;
+    if (k === "rec") this.joinRecorder(); else if (k === "sync") this.joinSync();
+  },
+  unwant(){
+    if (this.recorderTopic && !this.wanted("rec")){ this.leave(this.recorderTopic); this.recorderTopic = ""; this.recorderLive = false; }
+    if (this.syncTopic && !this.wanted("sync")){ this.leave(this.syncTopic); this.syncTopic = ""; this.syncLive = false; }
+  },
+  // a channel left: what still comes on it (its reply, its close) is passed over, never taken for the page's own
+  leave(topic){ this.gone.add(topic); this.send(topic, "phx_leave", {}); },
+  joinSync(){
+    if (typeof TCloud !== "object" || !TCloud.on() || this.syncTopic || !this.ws || !this.wanted("sync")) return;
+    const f = Cloud.st.firm; this.syncTopic = "realtime:fincom-sync-" + f; this.syncRef = String(this.ref + 1); this.gone.delete(this.syncTopic);
+    const pc = ["tally_sync_cursor", "tally_month_locks", "tally_tieouts"].map(t => ({event: "*", schema: "public", table: t, filter: "firm_id=eq." + f}));
+    this.send(this.syncTopic, "phx_join", {config: {broadcast: {self: false, ack: false}, presence: {key: ""}, postgres_changes: pc, private: false}, access_token: this.token});
   },
   // review of 02-Oct-2026 (item 7): a Tally computer's heartbeat with a new last read, a read going on, or Tally's state
   // changed, passed on at once by tally-ingest on the firm's broadcast channel (no table, no SQL): the Post page's
@@ -386,10 +424,17 @@ const Live = {
     this.bookT = setTimeout(() => { try { if (TCloud.st[cid]) TCloud.st[cid].at = 0; const f = LK.fr(); f.cat = 0; LK.cloudFresh(true, true); } catch (e){} }, 1500);   // the day's last pieces settle first
   },
   got(m){
+    if (m.topic && this.gone.has(m.topic)) return;
     // the console's signal (src/js/99): something about the firm changed; read it again
     if (this.sigTopic && m.topic === this.sigTopic){ if (m.event === "postgres_changes") this.signal(); return; }
     if (this.tallyTopic && m.topic === this.tallyTopic){
       if (m.event === "broadcast" && m.payload && m.payload.event === "beat" && typeof TLight === "object") TLight.beatIn(m.payload.payload);
+      return;
+    }
+    if (this.syncTopic && m.topic === this.syncTopic){
+      if (m.event === "phx_reply" && m.ref === this.syncRef) this.syncLive = !!(m.payload && m.payload.status === "ok");
+      else if (m.event === "system" && m.payload && m.payload.status === "error") this.syncLive = false;
+      else if (m.event === "postgres_changes"){ const d = m.payload && m.payload.data; if (d && typeof CopyLive === "object") CopyLive.in(d.table, d.record); }
       return;
     }
     if (this.copyTopic && m.topic === this.copyTopic){
@@ -421,7 +466,7 @@ const Live = {
       return;
     }
     if (m.event === "phx_reply" && m.ref === this.joinRef){
-      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); this.joinTally(); this.joinRecorder(); this.joinCopy(); if (this.joinSignals) this.joinSignals(); }
+      if (m.payload && m.payload.status === "ok"){ this.st = "live"; this.err = ""; this.wait = 1000; this.catchUp(); this.joinJobs(); this.joinBooks(); this.joinPosts(); this.joinTally(); if (this.wanted("rec")) this.joinRecorder(); if (this.wanted("sync")) this.joinSync(); this.joinCopy(); if (this.joinSignals) this.joinSignals(); }
       else { this.st = "error"; this.err = JSON.stringify((m.payload || {}).response || {}).slice(0, 200); }
       this.top(); return;
     }

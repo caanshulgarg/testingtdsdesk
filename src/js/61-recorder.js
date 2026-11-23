@@ -25,6 +25,7 @@ const Rec = {
   tie: {},                 // cid -> {rows: {month: row}, locks: {month: row}, no44, at, busy, err, msg: {month: {ok|err}}}
   tieOf(cid){
     const t = this.tie[cid] = this.tie[cid] || {rows: {}, locks: {}, msg: {}, at: 0, busy: false};
+    if (typeof Live === "object" && Live.want) Live.want("sync");     // next-db-load-2: the tie-out is on screen
     if (typeof TCloud === "object" && TCloud.on() && !t.busy && !t.no44 && Date.now() - t.at > 60000){ t.at = Date.now(); setTimeout(() => this.tieLoad(cid), 0); }
     return t;
   },
@@ -450,8 +451,9 @@ const Rec = {
   gaps: {},                // {byClient: {cid: [{book, company, gap}]}, at, busy, no44}
   gapsOf(){
     const g = this.gaps;
-    // speed round (27-Oct-2026): every 5 minutes while seen (a gap's change comes at once through CopyLive)
-    if (typeof TCloud === "object" && TCloud.on() && !g.busy && !g.no44 && Date.now() - (g.at || 0) > SLOW_MS && pollOk()){ g.at = Date.now(); setTimeout(() => this.gapsLoad(), 0); }
+    // speed round (27-Oct-2026): every 5 minutes while seen (a gap's change comes at once through CopyLive); next-db-load-2:
+    // each minute on a page that does not have the gap live (Live.joinSync: Sync activity and the tie-out only)
+    if (typeof TCloud === "object" && TCloud.on() && !g.busy && !g.no44 && Date.now() - (g.at || 0) > (Live.syncLive ? SLOW_MS : 60000) && pollOk()){ g.at = Date.now(); setTimeout(() => this.gapsLoad(), 0); }
     return g;
   },
   async gapsLoad(){

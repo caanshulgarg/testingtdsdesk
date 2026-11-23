@@ -53,6 +53,35 @@ JOB_ACCEPTED = [None]     # fn(args) -> tally_post_job_accepted's answer (None: 
 RPC_DELAY = {}            # function -> seconds it waits before it answers (a database that hangs on that call)
 LINK_GUID = {}            # migration 203: tally_post_link_guid's answer per (firm, client, company) (none: null)
 RESEND_OK = {}            # migration 200: tally_post_resend_ok's words for a posting (none: it may send; its SQL: run_post_never_twice.py)
+# next-db-load-2: migration 216's tally_held_light (its SQL: run_migration216.py). Off by default (a cloud without it: the
+# beat reads the lines as before); FAKE_HELD_LIGHT=1 (or HELD_LIGHT[0] = True) stands for a database with it
+import os as _os, hashlib as _hl, datetime as _dt
+HELD_LIGHT = [_os.environ.get("FAKE_HELD_LIGHT") == "1"]
+def _ts(v):
+    try: return _dt.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except Exception: return 0.0
+def _light(r, resolved=False):
+    b, pl = r.get("body"), r.get("payload")
+    body = {"vouchers": [0]} if isinstance(b, dict) and isinstance(b.get("vouchers"), list) and b["vouchers"] else None
+    payload = {"waitLedgers": pl["waitLedgers"]} if isinstance(pl, dict) and "waitLedgers" in pl else None
+    keys = ("id", "line_id", "state", "held_why", "received_at") if resolved else ("id", "line_id", "company", "company_guid", "event", "master_id", "vch_type", "vch_no", "vch_date", "book_id", "received_at", "bridge", "device_id", "object_guid", "held_why", "state")
+    return dict({k: r.get(k) for k in keys}, body=body, payload=payload)
+def held_light(a):
+    rows = T.get("tally_recorder_lines", [])
+    if not a.get("p_firm") or not a.get("p_device") or not re.match(r"^go-[0-9a-f]{6,32}$", str(a.get("p_bridge") or "")): return {"ok": False}
+    key = lambda r: (_ts(r.get("received_at")), r.get("id") or 0)
+    held = lambda r: r.get("state") in ("held", "fetching")
+    own = sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("device_id") == a["p_device"] and r.get("bridge") == a["p_bridge"] and held(r)], key=key)[:2000]
+    books, t30 = list(a.get("p_books") or [])[:100], time.time() - 30 * 86400
+    fol = sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("book_id") in books and held(r) and r.get("event") in ("created", "altered", "imported") and _ts(r.get("received_at")) > t30], key=key)[:400]
+    rids = {str(r.get("line_id")) + ":resolved" for r in own + fol if r.get("line_id")}
+    res = sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("line_id") in rids], key=lambda r: r.get("id") or 0)
+    bk = {r.get("book_id") for r in own + fol}
+    locks = sorted("%s|%s|%s" % (k.get("book_id"), k.get("month"), k.get("unlocked_at") or "") for k in T.get("tally_month_locks", []) if k.get("book_id") in bk)
+    o, f, z = [_light(r) for r in own], [_light(r) for r in fol], [_light(r, True) for r in res]
+    fp = _hl.md5(json.dumps([o, f, z, locks], sort_keys=True, default=str).encode()).hexdigest()
+    if fp == a.get("p_seen"): return {"ok": True, "same": True, "fp": fp}
+    return {"ok": True, "same": False, "fp": fp, "own": o, "follow": f, "resolved": z}
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_filings": ["firm_id", "gstin", "form", "period"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
@@ -195,6 +224,9 @@ def rpc(fn, a):
         return {"ok": True, "held": False, "purpose": a.get("p_purpose") or "", "lease": {"until": "2026-10-05T12:00:00Z", "ttl": a.get("p_ttl")}}
     if fn == "tally_lease_release": return {"ok": True, "released": True}
     if fn == "tally_bridge_own_key_move": return {"ok": True, "moved": True, "bridge": a.get("p_bridge"), "from": a.get("p_from"), "to": a.get("p_to")}   # migration 54 (final review M3; the SQL: run_migration54.py)
+    if fn == "tally_held_light":
+        if not HELD_LIGHT[0]: raise LookupError("PGRST202")
+        return held_light(a)
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
