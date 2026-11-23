@@ -83,7 +83,7 @@ function world(rows, o = {}) {
   const g = { tallyVia: () => "bridge", Bridge: { st: { version: "2.5.18" }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers[0].id); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
     TCloud: { on: () => true, has: () => false }, Cloud: { api: async (path) => (String(path).startsWith("night_findings") ? (o.findings || []) : []) } };
   const rpc = async (fn) => { log.push(fn); return { ok: true }; };
-  const env = Object.assign({ g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {} }, o.noPrior ? {} : { prior: [] }, o.readPart ? { readPart: o.readPart } : {});
+  const env = Object.assign({ g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {} }, o.noPrior ? {} : { prior: [] }, o.readMonth ? { readMonth: o.readMonth } : {});
   const run = async (e) => {
     Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E.GSTR, GSTF: E.GSTF, GSTSet: E.GSTSet, Books: E.Books, ledGroupPath: E.ledGroupPath });
     try { return await TPost.approveTallyPayroll(Object.assign({ id: "n1", client_id: "c1", state: "ready" }, e), Object.assign({}, env, run.extra || {})); }
@@ -91,6 +91,10 @@ function world(rows, o = {}) {
   };
   return { log, drafts, posts, env, b, run };
 }
+// Tally's copy as FinCom reads it for the month (readMonth): fn(cid, id) per part (the first n parts), read at readAt
+const FRESH = "2099-01-01T00:00:00Z", STALE = "2000-01-01T00:00:00Z";
+const monthOf = (fn, readAt = FRESH, n = 1) => async (cid, ym) => { const parts = {}; for (let i = 1; i <= n; i++) { const id = "dc-tp-" + ym + "-" + i, t = await fn(cid, id); if (t && (t.found || t.deleted)) parts[id] = t; } return { readAt, parts }; };
+const notIn = monthOf(async () => ({ found: false }));
 const asRecs = (drafts) => Object.values(drafts).map((d) => ({ item: "#" + d.id, data: d, updated_at: new Date().toISOString() }));
 
 console.log("the owner's decision: Night prepares every month (a Tally Payroll company)");
@@ -195,17 +199,21 @@ console.log("2, 3, 4, 6: the bridge asked, the payable and type, cost categories
   ok(c.vouchers.every((v) => TP.validatePayrollXml(TP.payrollVoucherXml(v)).length === 0) && /<CATEGORY>Head Office<\/CATEGORY>/.test(TP.payrollVoucherXml(c.vouchers[1])), "  each part the bridge's shape");
   // 6: the bridge's resend guard and "already in Tally": on its way / in Tally, never failed
   const rows6 = rowsOf(), e6 = night(rows6).entry;
-  let w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: false, alreadySent: true, sentJob: "job-77", message: "Already sent from this computer (job job-77): not sent again" }) });
-  let r6 = await w6.run(e6);
-  ok(r6.ok && r6.queued && /on its way to Tally \(sent before; not sent again\)/.test(r6.words) && !w6.log.includes("entry_release") && w6.drafts["dc-tp-202610-1"].job === "job-77", "6: alreadySent: on its way (its job kept), not failed, not released");
-  // (third review) "already in Tally" counts only when FinCom's record of the earlier, unanswered send is this very XML
+  // (third, fifth reviews) the posting computer's record ("already sent") and "already in Tally" count only when FinCom's
+  // record of the earlier send is this very XML
   const v6 = TPost.prepare({ co: rows6.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows6.ledgers.map((l) => l.name), books: {} }).vouchers[0], x6 = TP.payrollVoucherXml(v6);
   const lost = (xml) => ({ "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", kind: "tallyPayroll", part: 1, parts: 1, state: "posting", sent: { xml, at: "2026-11-22T10:00:00Z" }, results: { "dc-tp-202610-1": { ok: false, state: "sent" } }, vouchers: [{ xml }] } });
+  let w6 = world(rows6, { drafts: lost(x6), readMonth: notIn, answer: (v) => ({ id: v.id, ok: false, alreadySent: true, sentJob: "job-77", message: "Already sent from this computer (job job-77): not sent again" }) });
+  let r6 = await w6.run(e6);
+  ok(r6.ok && r6.queued && /on its way to Tally \(sent before; not sent again\)/.test(r6.words) && !w6.log.includes("entry_release") && w6.drafts["dc-tp-202610-1"].job === "job-77", "6: alreadySent for the very XML sent before: on its way (its job kept), not failed, not released");
+  w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: false, alreadySent: true, sentJob: "job-77", message: "Already sent from this computer (job job-77): not sent again" }) });
+  r6 = await w6.run(e6);
+  ok(!r6.ok && /sent part 1 before with other contents/.test(r6.why) && w6.log.includes("entry_release"), "  fifth review: alreadySent with no record of that XML: refused, released (never taken as on its way)");
   const has41 = async () => ({ found: true, no: "41", employees: TPost.readVoucherXml(x6).employees });
-  w6 = world(rows6, { drafts: lost(x6), readPart: async () => ({ found: false, deleted: false }), answer: (v) => ({ id: v.id, ok: false, message: "Already in Tally (voucher no. 41)" }) });
+  w6 = world(rows6, { drafts: lost(x6), readMonth: notIn, answer: (v) => ({ id: v.id, ok: false, message: "Already in Tally (voucher no. 41)" }) });
   r6 = await w6.run(e6);
   ok(r6.ok && /already in Tally \(not sent again\)/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  an unanswered send not in Tally's copy yet: sent again as the same XML; Tally says already there (no. 41): in Tally");
-  w6 = world(rows6, { drafts: lost(x6), readPart: has41 });
+  w6 = world(rows6, { drafts: lost(x6), readMonth: monthOf(has41) });
   r6 = await w6.run(e6);
   ok(r6.ok && !w6.posts.length && /already in Tally/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  fourth review: an unanswered send found in Tally's copy with the same figures: in Tally, not sent again");
   w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: true, existed: true, vchId: "42" }) });
@@ -278,8 +286,11 @@ console.log("re-review 1: the employer's contributions are not salary booked");
 
 console.log("re-review 2: the resend guard's answer with no job");
 {
+  // (fifth review) the very XML sent before from that computer (its send unanswered, not in a copy read after it)
   const rows = rowsOf(), e = night(rows).entry;
-  const w = world(rows, { answer: (v) => ({ id: v.id, ok: false, alreadySent: true, message: "Already sent from this computer: not sent again" }) });
+  const xs = TP.payrollVoucherXml(TPost.prepare({ co: rows.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows.ledgers.map((l) => l.name), books: {} }).vouchers[0]);
+  const w = world(rows, { readMonth: notIn, drafts: { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", part: 1, parts: 1, state: "posting", sent: { xml: xs, at: "2026-11-22T10:00:00Z" }, results: { "dc-tp-202610-1": { ok: false, state: "sent" } }, vouchers: [{ xml: xs }] } },
+    answer: (v) => ({ id: v.id, ok: false, alreadySent: true, message: "Already sent from this computer: not sent again" }) });
   const r = await w.run(e);
   const d = w.drafts["dc-tp-202610-1"], res = d.results["dc-tp-202610-1"];
   ok(r.ok && d.state === "posted" && res.ok && !res.tallyId && /Tally has not confirmed it yet/.test(r.words), "saved as posted without Tally's voucher id (not failed, not on its way to a job that is not there)");
@@ -376,9 +387,9 @@ console.log("third review: the page closed between parts, and the sheet changed 
     let closed = false; try { await w.run(t.entry); } catch (x) { closed = /closed/.test(String(x && x.message)); }
     ok(closed && ty.T.size === 1, "the page closed " + words + ": part 1 in Tally, part 2 never sent");
     const p1 = TPost.readVoucherXml(ty.T.get("dc-tp-202610-1"));
-    const x = inTally({ id: "dc-tp-202610-1", narration: "Salary", payable: "Salary Payable", net: p1.net, employees: p1.employees.map((e) => ({ name: e.name, heads: e.heads })) }, "tp1");
+    const x = inTally({ id: "dc-tp-202610-1", narration: (ty.T.get("dc-tp-202610-1").match(/<NARRATION>([^<|]*)/) || [])[1].trim(), payable: "Salary Payable", net: p1.net, employees: p1.employees.map((e) => ({ name: e.name, heads: e.heads })) }, "tp1");
     const rows2 = rowsOf({ sheet: sheet2, vouchers: [x.voucher] }), t2 = night(rows2, { draftRecs: asRecs(w.drafts) });
-    const w2 = world(rows2, { sheet: sheet2, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv, readPart: ty.read, answer: (v) => ty.answer({ id: v.id, xml: w2.posts[w2.posts.length - 1].vouchers[0].xml }) });
+    const w2 = world(rows2, { sheet: sheet2, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv, readMonth: monthOf(ty.read, FRESH, 3), answer: (v) => ty.answer({ id: v.id, xml: w2.posts[w2.posts.length - 1].vouchers[0].xml }) });
     const r = await w2.run(t2.entry);
     ok(t2.entry && !r.ok && r.stuck && ty.T.size === 1 && !w2.posts.length, "  the retry with a late joiner: refused, nothing sent (" + String(r.why || "it was posted").slice(0, 120) + "…)");
     ok(r.canAccept && /joined this part now: Aaa Late Joiner/.test(String(r.why)) && /in another part now: Made Up Person 099 \(now part 2\)/.test(String(r.why)), "  what changed, by name: who joined part 1 and who is in another part now" + (lostAnswer ? " (the lost answer settled from Tally's copy first)" : ""));
@@ -440,11 +451,11 @@ console.log("fourth review: sends never answered, settled from Tally itself");
   const sheetB = SHEET.map((r) => (r.name === "Asha Verma" ? emp(r.name, 16000, 6000, { pt: 200, pf: 1800, esi: 188, adv: 2000 }) : r)), rowsB = rowsOf({ sheet: sheetB }), eB = night(rowsB).entry;
   const draft = (sent) => ({ "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", kind: "tallyPayroll", part: 1, parts: 1, state: sent.unknown ? "failed" : "posting", sent, results: { "dc-tp-202610-1": { ok: false, state: sent.unknown ? "failed" : "sent", at: "2026-11-22T10:00:00Z" } }, vouchers: [{ xml: x1, date: "2026-10-31" }] } });
   // B: part 1 really in Tally with the old figures; the sheet changed since (Asha's basic)
-  let w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }), readPart: async () => ({ found: true, no: "7", employees: TPost.readVoucherXml(x1).employees }) });
+  let w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }), readMonth: monthOf(async () => ({ found: true, no: "7", employees: TPost.readVoucherXml(x1).employees })) });
   let r = await w.run(eB);
   ok(!r.ok && r.stuck && !w.posts.length && w.drafts["dc-tp-202610-1"].sent.answered === "ok" && /Asha Verma’s net/.test(r.why), "B: the unanswered send found in Tally (old figures): settled as in Tally, the change named, nothing sent: " + r.why.slice(0, 120));
   ok(!r.canAccept, "  (Asha's amount differs from the sheet: no accepting; correct Tally or the sheet)");
-  w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }), readPart: async () => ({ found: false, deleted: true }) });
+  w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }), readMonth: monthOf(async () => ({ found: false, deleted: true })) });
   r = await w.run(eB);
   ok(r.ok && w.posts.length === 1 && /Asha Verma/.test(w.posts[0].vouchers[0].xml) && /<AMOUNT>-16000\.00<\/AMOUNT>/.test(w.posts[0].vouchers[0].xml), "B after part 1 is deleted in Tally: settled as not posted, the part built now posted");
   w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }) });
@@ -453,31 +464,128 @@ console.log("fourth review: sends never answered, settled from Tally itself");
   r = await w.run(eB);
   ok(!r.ok && /on its way/i.test(r.why) && !w.posts.length, "  a posting of that part still running in the queue: waited for, never settled meanwhile");
   // C: Tally had it with no record of sending (sent unknown); then the voucher deleted in Tally
-  w = world(rows, { drafts: draft({ xml: null, at: "", unknown: true }), readPart: async () => ({ found: true, no: "8", employees: TPost.readVoucherXml(x1).employees }) });
+  w = world(rows, { drafts: draft({ xml: null, at: "", unknown: true }), readMonth: monthOf(async () => ({ found: true, no: "8", employees: TPost.readVoucherXml(x1).employees })) });
   r = await w.run(e);
   ok(r.ok && !w.posts.length && /already in Tally/.test(r.words), "C: in Tally with no record of sending: Tally's figures are the part built now: in Tally, nothing sent");
-  w = world(rows, { drafts: draft({ xml: null, at: "", unknown: true }), readPart: async () => ({ found: false, deleted: true }) });
+  w = world(rows, { drafts: draft({ xml: null, at: "", unknown: true }), readMonth: monthOf(async () => ({ found: false, deleted: true })) });
   r = await w.run(e);
   ok(r.ok && w.posts.length === 1 && w.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].ok, "C after the voucher is deleted in Tally: not posted, sent again, in Tally");
   // post as a journal this month, after settling: the night prepares the journal, Daily Check's approve settles first
   const rowsJ = rowsOf({ co: { payrollJournal: { [YM]: { by: "x" } } }, sheet: SHEET.map((r) => Object.assign({}, r, { ded: {}, otherDed: 0, net: r2(r.gross - r.tds - r.profTax - r.pf - r.esi) })), ledgers: { "TDS on Salary 192": "Duties & Taxes", "Professional Tax Payable": "Duties & Taxes", "PF Payable": "Duties & Taxes", "ESI Payable": "Duties & Taxes" } });
   const dj = draft({ xml: x1, at: new Date(Date.now() - 2 * 3600e3).toISOString() });
+  rowsJ.book.days_at = new Date().toISOString();
   const picks = [["profTax", "Professional Tax Payable"], ["pf", "PF Payable"], ["esi", "ESI Payable"]].map(([k, l]) => ({ kind: "ledger_pick", key: "led:" + k, state: "resolved", evidence: [{ t: "ledger", ledger: l }], undone: false }));
   let tj = night(rowsJ, { draftRecs: asRecs(dj), prior: picks });
-  ok(tj.entry && tj.entry.voucher.kind === "payroll", "journal this month: the night prepares the journal (the unanswered Tally Payroll part is not in the books)");
+  ok(tj.entry && tj.entry.voucher.kind === "payroll", "journal this month: the night prepares the journal (the unanswered Tally Payroll part is not in a copy read after it)");
   const gj = { Cloud: { api: async () => [] }, TCloud: {} }, Aj = { Drafts: { save: async (cid, d) => { dj[d.id] = JSON.parse(JSON.stringify(d)); return true; } } };
-  let st = await TPost.settleParts(rowsJ.co, tj.entry, Object.values(dj), {}, Aj, gj, { forJournal: true, readPart: async () => ({ found: false, deleted: false }) });
-  ok(st.waits.length === 1 && dj["dc-tp-202610-1"].sent.answered !== "gone", "  approving it 2 hours after the part was sent, not in Tally's copy yet: waits (a journal is not checked by FinCom's id)");
-  st = await TPost.settleParts(rowsJ.co, tj.entry, Object.values(dj), {}, Aj, gj, { forJournal: true, readPart: async () => ({ found: false, deleted: true }) });
-  ok(!st.waits.length && dj["dc-tp-202610-1"].state === "failed" && dj["dc-tp-202610-1"].sent.answered === "gone", "  the part deleted in Tally: settled as not posted");
+  let st = await TPost.settleParts(rowsJ.co, tj.entry || { dedupe: "payroll:" + YM, voucher: { period: YM } }, Object.values(dj), {}, Aj, gj, { forJournal: true, readMonth: monthOf(async () => ({ found: false }), STALE) });
+  ok(st.waits.length === 1 && /older than this send/.test(st.waits[0]) && dj["dc-tp-202610-1"].sent.answered !== "gone", "  fifth review: approving it with Tally's copy older than the send: waits (bridge 2.5.18 does not look in Tally)");
+  st = await TPost.settleParts(rowsJ.co, tj.entry || { dedupe: "payroll:" + YM, voucher: { period: YM } }, Object.values(dj), {}, Aj, gj, { forJournal: true, readMonth: monthOf(async () => ({ found: false, deleted: true })) });
+  ok(!st.waits.length && dj["dc-tp-202610-1"].state === "failed" && dj["dc-tp-202610-1"].sent.answered === "gone", "  a copy read after the send, the part not in it: settled as not posted");
   const okd = { "dc-tp-202610-1": Object.assign({}, dj["dc-tp-202610-1"], { state: "posted", sent: { xml: x1, answered: "ok" }, results: { "dc-tp-202610-1": { ok: true, state: "posted", tallyId: "7", at: new Date(Date.now() - 3 * 3600e3).toISOString() } } }) };
+  rowsJ.book.days_at = new Date(Date.now() - 30 * 3600e3).toISOString();
   tj = night(rowsJ, { draftRecs: asRecs(okd), prior: picks });
-  ok(!tj.entry, "  a part posted in Tally (its draft says so, within a day): no journal");
-  okd["dc-tp-202610-1"].results["dc-tp-202610-1"].at = new Date(Date.now() - 30 * 3600e3).toISOString();
+  ok(!tj.entry, "  fifth review: a part posted in Tally, Tally's copy older than it: no journal (however long ago)");
+  rowsJ.book.days_at = new Date().toISOString();
   tj = night(rowsJ, { draftRecs: asRecs(okd), prior: picks });
-  ok(tj.entry && tj.entry.ready, "  a day later, its FinCom id not in the books (deleted in Tally): the journal is prepared");
-  st = await TPost.settleParts(rowsJ.co, tj.entry, Object.values(okd), {}, { Drafts: { save: async (cid, d) => { okd[d.id] = JSON.parse(JSON.stringify(d)); return true; } } }, gj, { forJournal: true, readPart: async () => ({ found: false, deleted: true }) });
+  ok(tj.entry && tj.entry.ready, "  a copy read after it, its FinCom id not in the books (deleted in Tally): the journal is prepared");
+  st = await TPost.settleParts(rowsJ.co, tj.entry || { dedupe: "payroll:" + YM, voucher: { period: YM } }, Object.values(okd), {}, { Drafts: { save: async (cid, d) => { okd[d.id] = JSON.parse(JSON.stringify(d)); return true; } } }, gj, { forJournal: true, readMonth: monthOf(async () => ({ found: false, deleted: true })) });
   ok(okd["dc-tp-202610-1"].state === "failed", "  and Daily Check's Approve settles that part as not in Tally before the journal goes");
+  st = await TPost.settleParts(rowsJ.co, { dedupe: "payroll:" + YM, voucher: { period: YM } }, [], {}, { Drafts: { save: async () => true } }, gj, { forJournal: true, readMonth: monthOf(async () => ({ found: true, no: "12", employees: TPost.readVoucherXml(x1).employees })) });
+  ok(st.waits.length === 1 && /is in Tally \(voucher no\. 12\)/.test(st.waits[0]), "  fifth review: no drafts at all, part 1's FinCom id in Tally's copy: the journal is held back");
+}
+
+console.log("fifth review: a bridge as 2.5.18 is (its own record of what it sent, no look in Tally), a copy behind Tally");
+{
+  // bridge 2.5.18: each posting computer keeps the ids it sent (alreadySent); nothing looks in Tally, so Tally can hold the
+  // same id twice. Tally's copy in FinCom's cloud is read in only when synced
+  const fake = () => {
+    const f = { tally: [], rec: { X: new Map(), Y: new Map() }, via: "X", copy: { readAt: STALE, snap: new Map() } };
+    f.post = (v) => { const r = f.rec[f.via]; if (r.has(v.id)) return { id: v.id, ok: false, alreadySent: true, message: "Already sent from this computer: not sent again" }; r.set(v.id, v.xml); f.tally.push({ id: v.id, xml: v.xml }); return { id: v.id, ok: true, created: 1, vchId: String(f.tally.length) }; };
+    f.sync = () => { f.tally.forEach((t) => f.copy.snap.set(t.id, t.xml)); f.copy.readAt = FRESH; };
+    f.readMonth = async () => ({ readAt: f.copy.readAt, parts: Object.fromEntries(Array.from(f.copy.snap).map(([id, xml]) => [id, { found: true, no: "1", narr: (xml.match(/<NARRATION>([^<]*)/) || [])[1], employees: TPost.readVoucherXml(xml).employees }])) });
+    f.paid = () => f.tally.flatMap((t) => TPost.readVoucherXml(t.xml).employees.map((e) => e.name));
+    f.books = (sheet) => rowsOf({ sheet, vouchers: Array.from(f.copy.snap).map(([id, xml], i) => { const rv = TPost.readVoucherXml(xml); return inTally({ id, narration: (xml.match(/<NARRATION>([^<|]*)/) || [])[1].trim(), payable: rv.payable, net: rv.net, employees: rv.employees }, "g" + i).voucher; }) });
+    f.allocs = () => Array.from(f.copy.snap).flatMap(([id, xml], i) => { const rv = TPost.readVoucherXml(xml); return inTally({ id, narration: "x", payable: rv.payable, net: rv.net, employees: rv.employees }, "g" + i).allocs; });
+    f.pv = () => Object.fromEntries(Array.from(f.copy.snap).map(([id], i) => ["g" + i, { day: "20261031", type: "Payroll", no: String(i + 1) }]));
+    return f;
+  };
+  const wire = (w, f) => { w.env.g.TCloud = { on: () => true, has: () => true, book: () => ({ book: "b1" }), postThrough: () => ({ version: "2.5.18", computer: "PC-" + f.via, id: f.via }) };
+    w.env.g.Bridge.post = async (pl) => { w.posts.push(pl); return { ok: true, results: [f.post(pl.vouchers[0])] }; }; w.env.readMonth = f.readMonth; return w; };
+  const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
+  const once = (f, n) => { const p = f.paid(); return p.length === n && new Set(p).size === n; };
+  // L: part 1 reaches Tally through X, the page closes before its answer is saved; an employee's category moves; the copy
+  // has not caught up
+  {
+    const f = fake();
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-1" && d.state === "posted" }), f);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    const emps = sheet.map((r, i) => ({ name: r.name, category: i === 0 ? "Head Office" : "" }));
+    const w2 = wire(world(rows, { sheet, emps, drafts: JSON.parse(JSON.stringify(w.drafts)) }), f);
+    let r = await w2.run(t.entry);
+    ok(!r.ok && /Tally’s copy is older than this send/.test(r.why) && f.tally.length === 1, "L: the copy older than part 1's send: waits, nothing sent (2.5.18 would answer alreadySent and Tally would get parts 2 and 3 with someone twice)");
+    f.sync();
+    const rowsS = f.books(sheet), tS = night(rowsS, { draftRecs: asRecs(w2.drafts) });
+    const w3 = wire(world(rowsS, { sheet, emps, drafts: JSON.parse(JSON.stringify(w2.drafts)), allocs: f.allocs(), pv: f.pv() }), f);
+    r = await w3.run(tS.entry);
+    ok(!r.ok && r.stuck && r.canAccept && f.tally.length === 1, "  the copy read in: part 1 found as sent; the category move named, accepting offered");
+    w3.run.extra = { accept: true };
+    r = await w3.run(tS.entry);
+    ok(r.ok && once(f, 150), "  accepted: everyone paid exactly once (150)");
+  }
+  // L2: the same sheet, but the queue now hands the posting to computer Y (no record of part 1 there)
+  {
+    const f = fake();
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-1" && d.state === "posted" }), f);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    f.via = "Y";
+    const w2 = wire(world(rows, { sheet, drafts: JSON.parse(JSON.stringify(w.drafts)) }), f);
+    let r = await w2.run(t.entry);
+    ok(!r.ok && f.tally.length === 1 && !f.rec.Y.size, "L2: the same XML, the queue now on computer Y, the copy behind: nothing sent through Y (100 would be paid twice)");
+    f.sync();
+    const rowsS = f.books(sheet), tS = night(rowsS, { draftRecs: asRecs(w2.drafts) });
+    const w3 = wire(world(rowsS, { sheet, drafts: JSON.parse(JSON.stringify(w2.drafts)), allocs: f.allocs(), pv: f.pv() }), f);
+    r = await w3.run(tS.entry);
+    ok(r.ok && once(f, 150) && f.tally.length === 2, "  the copy read in: part 1 is in Tally; only part 2 posted; everyone paid once");
+  }
+  // L3: part 1 settled earlier as not in Tally (a copy read after it), then the sheet changed; computer X still has part
+  // 1's id on its record and answers alreadySent for the other XML: refused, nothing more sent
+  {
+    const f = fake();
+    const v1 = TPost.prepare({ co: rows.co, ym: YM, rows: sheet, pay: payOf(sheet), ledgers: rows.ledgers.map((l) => l.name), books: {} }).vouchers[0], xa = TP.payrollVoucherXml(v1);
+    f.rec.X.set("dc-tp-202610-1", xa); f.copy.readAt = FRESH;
+    const gone = { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", part: 1, parts: 2, state: "failed", sent: { xml: xa, at: "2026-11-22T10:00:00Z", via: "X", answered: "gone" }, results: { "dc-tp-202610-1": { ok: false, state: "failed", said: "not in Tally" } }, vouchers: [{ xml: xa }] } };
+    const emps = sheet.map((r, i) => ({ name: r.name, category: i === 0 ? "Head Office" : "" }));
+    const w = wire(world(rows, { sheet, emps, drafts: gone }), f);
+    const r = await w.run(t.entry);
+    ok(!r.ok && /sent part 1 before with other contents/.test(r.why) && f.tally.length === 0 && w.posts.length === 1 && w.log.includes("entry_release"), "L3: alreadySent for other contents than the record: refused, released, parts 2 and 3 never sent");
+  }
+  // drafts lost: part 1 in Tally (the copy read in), no draft at all: counted from its FinCom id; only part 2 posted
+  {
+    const f = fake();
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-2" && d.state === "posting" }), f);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    f.sync();
+    const rowsS = f.books(sheet), tS = night(rowsS);
+    ok(tS.entry && tS.entry.ready, "drafts lost: the night still prepares the month (part 1 of 2 in the books by its own narration)");
+    const w2 = wire(world(rowsS, { sheet, allocs: f.allocs(), pv: f.pv() }), f);
+    const r = await w2.run(tS.entry);
+    ok(r.ok && once(f, 150) && f.tally.length === 2 && w2.drafts["dc-tp-202610-1"] && w2.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].ok, "  Approve: part 1 counted as in Tally from its FinCom id (a draft made for it); only part 2 posted; everyone once");
+    const tD = night(f.books(sheet), { draftRecs: [] });
+    f.sync();
+    ok(!night(f.books(sheet)).entry && tD.entry, "  the night counts the month done from the two FinCom ids in the books (no drafts needed)");
+  }
+  // drafts lost, the books here not read since, Approve on another computer (Y: no record of part 1): Tally's copy in the
+  // cloud has part 1's FinCom id; only part 2 posted
+  {
+    const f = fake();
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-2" && d.state === "posting" }), f);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    f.sync(); f.via = "Y";
+    const w2 = wire(world(rows, { sheet }), f);
+    const r = await w2.run(t.entry);
+    ok(r.ok && once(f, 150) && f.tally.length === 2 && !f.rec.Y.has("dc-tp-202610-1"), "drafts lost, the books here behind: part 1 counted from FinCom's id in Tally's copy; never sent again through Y; everyone once");
+  }
 }
 
 console.log("the drafts the night reads carry the parts");

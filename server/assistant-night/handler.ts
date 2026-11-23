@@ -80,7 +80,7 @@ export function handler(deps: Deps) {
     if (!cl || cl.deleted) { await fail("skipped", "no such client"); return { ok: true, skipped: "client" }; }
     const co = Object.assign({}, cl.data || {}, { id: cl.id, deleted: !!cl.deleted });
     const bookId = await rpc("gst_calc_book", { p_firm: firm, p_client: cid, p_ym: ym }).catch(() => null);
-    const book = bookId ? ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at&book_id=eq." + enc(String(bookId)))) || [])[0] : null;
+    const book = bookId ? ((await rest("/rest/v1/tally_books?select=book_id,firm_id,client_id,company,from_date,open_as_on,ledgers_at,days_at&book_id=eq." + enc(String(bookId)))) || [])[0] : null;
     if (!book) { await fail("skipped", "no books in the cloud"); return { ok: true, skipped: "books" }; }
     const gstins: string[] = await rpc("gst_calc_gstins", { p_book: book.book_id, p_client: cid }).catch(() => []) || [];
     const fys = Array.from(new Set([fyOf(night), fyOf(new Date(now().getTime() - 400 * 86400_000).toISOString().slice(0, 10))]));

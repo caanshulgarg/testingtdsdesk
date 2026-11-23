@@ -339,7 +339,9 @@ export function payrollSettings(co, heads) {
     vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort(), typed: Array.from(typed).sort() };
 }
 export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
-const tpHolds = (inp, d) => { const t = Date.parse(String(d.at || "")); return live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !(isFinite(t) && Date.now() - t > 24 * 3600e3); };
+// (fifth review) a Tally Payroll part holds a journal back while it may be in Tally: its FinCom id in the books, or Tally's
+// copy (tally_books.days_at: inp.booksReadAt) not read at least 5 minutes after the part was sent / answered
+const tpHolds = (inp, d) => { const r = Date.parse(String(inp.booksReadAt || "")), t = Date.parse(String(d.at || "")); return live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !(isFinite(r) && isFinite(t) && r >= t + 5 * 60000); };
 const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
 // the salary booked for a month (review H2, N5; next-payroll review B1): any entry with a salary expense on the debit side
 // (salaryClass), a pay head of Tally's payroll (an earning: an expense ledger for payroll, "Basic", "HRA"), or any ledger
@@ -364,9 +366,9 @@ export function payrollOne(ym, rows, inp) {
   if (tp.method === "tally" && !(tp.journal || {})[ym]) return tallyOne(ym, rows, inp, { key, dedupe, vid, label, date, base, you });
   if (posted(inp, vid)) return null;
   { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
-  // (fourth review) a Tally Payroll part of this month (posted as Tally Payroll before the owner chose a journal) holds the
-  // journal back while it may be in Tally: its FinCom id in the books (then the salary is booked anyway), or sent within
-  // the last day; one a day old and not in the books (deleted in Tally) does not (Approve settles it from Tally first)
+  // (fourth, fifth reviews) a Tally Payroll part of this month (posted as Tally Payroll before the owner chose a journal)
+  // holds the journal back while it may be in Tally (tpHolds); one not in a copy read after it does not (Approve settles
+  // it from Tally first)
   if ((inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && (!/^dc-tp-/.test(String(d.vid || "")) || tpHolds(inp, d)))) return null;
   // 1. the sheet itself
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you("Payroll " + label + ": the sheet has surcharge or cess on TDS. Book it by hand.");
@@ -437,15 +439,17 @@ function tallyOne(ym, rows, inp, c) {
   const { key, dedupe, vid, label, date, base, you } = c, tp = inp.payroll || {}, T = "Tally Payroll " + label;
   if (posted(inp, vid) || (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && !/^dc-tp-/.test(String(d.vid || "")))) return null;   // booked as a journal through Daily Check
   // (third review) a part whose FinCom id is in the books is in Tally, whatever its draft says: never "Not confirmed"
-  const inBooks = new Set();
-  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)")); if (m) inBooks.add(m[1]); });
+  // (fifth review) and how many parts the month has, from those vouchers' own narration ("part 1 of 2") when the drafts
+  // are lost
+  const inBooks = new Set(); let tagParts = 0;
+  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(new RegExp("TDSDesk:(" + TP_ID(ym) + "-\\d+)(?!\\d)")); if (m) { inBooks.add(m[1]); tagParts = Math.max(tagParts, Number((String(v.narr || "").match(/part \d+ of (\d+)/) || [])[1]) || 1); } });
   const drafts = (inp.drafts || []).map((d) => (d && inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" }) : d));
   { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you); if (sc) return sc; }
   const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")));
   if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
   const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));
   inBooks.forEach((x) => done.add(x));
-  const parts = Math.max(0, ...mine.map((d) => Number(d.parts) || 0));
+  const parts = Math.max(tagParts, ...mine.map((d) => Number(d.parts) || 0));
   if (parts > 0 && Array.from({ length: parts }, (_, i) => TP_ID(ym) + "-" + (i + 1)).every((x) => done.has(x))) return null;
   // 1. the sheet
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you(T + ": the sheet has surcharge or cess on TDS. Book it by hand.");

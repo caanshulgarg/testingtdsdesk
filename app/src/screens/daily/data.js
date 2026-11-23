@@ -147,14 +147,14 @@ export async function approveJournal(e) {
     toast(r.ok ? r.words : r.why + (r.install ? " Download it on Payroll or the Tally page." : ""));
     return r.ok ? (r.queued ? "queued" : true) : false;
   }
-  // (fourth review) a month posted as a journal after Tally Payroll parts were sent: each such part settled from Tally first
-  // (deleted in Tally, or a day old and never seen: not posted); one that may still be in Tally holds the journal back
+  // (fourth, fifth reviews) a month posted as a journal after Tally Payroll parts were sent: each such part settled from
+  // Tally first (not in a copy of Tally read after its send: not posted); one that may still be in Tally, or any FinCom
+  // Tally Payroll id of the month in Tally's copy (a draft or not), holds the journal back
   if (e.source === "payroll") {
     const A0 = await import("../../lib/asstEntries.js"), ds = ((await A0.Drafts.load(cid, true)) || []).filter((d) => d && /^dc-tp-/.test(String(d.id || "")) && d.dedupe === e.dedupe && !d.removed && ((d.results || {})[d.id] || {}).state !== "failed");
-    if (ds.length) {
-      const T = await import("../../lib/payrollPost.js"), st = await T.settleParts(CO(cid), e, ds, {}, A0, undefined, { forJournal: true });
-      if (st.waits.length) { toast(st.waits[0]); return false; }
-    }
+    const T = await import("../../lib/payrollPost.js"), bk = typeof S === "object" && S.coId === cid ? S.books : null;
+    const st = await T.settleParts(CO(cid), e, ds, {}, A0, undefined, { forJournal: true, books: bk, pay: bk && bk.payroll });
+    if (st.waits.length) { toast(st.waits[0]); return false; }
   }
   const why = await recheck(e, { prior: lastPrior.filter((p) => p.cid === cid) });
   if (why) { toast(why); return false; }

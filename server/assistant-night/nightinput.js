@@ -134,6 +134,8 @@ export function nightInput(rows, b, x) {
     bookId: String((rows.book && rows.book.book_id) || ""),
     // next-payroll: how the client books salary (a Tally Payroll company's months are prepared as Tally payroll vouchers)
     payroll: payrollSettings(co, x.payHeads),
+    // when Tally's copy was last read in (tally_books.days_at): a Tally Payroll part not in a copy read after it may be in Tally
+    booksReadAt: String((rows.book && rows.book.days_at) || ""),
   };
   // (phase 2) a salary line is paid against the salary payable ledger only when that ledger is certain
   out.ledgersFor.salaryPayable = pickLedger("salaryPayable", out).ledger || "";

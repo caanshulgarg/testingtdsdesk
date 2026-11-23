@@ -37,6 +37,7 @@ export function inputOf(cid, o) {
     drafts: (o.drafts || []).filter((d) => d && /^dc-/.test(String(d.id || "")) && d.dedupe).map((d) => ({ dedupe: d.dedupe, state: d.state || "", removed: !!d.removed, vid: String(d.id), parts: Number(d.parts) || 0, at: String((((d.results || {})[d.id]) || {}).at || d.savedAt || d.at || "") })),
     picks: picksOf(o.prior || []), picksOut: picksOf(o.prior || [], true), excluded: excludedOf(o.prior || []), bookId: o.bookId || "",
     // next-payroll: how the client books salary, and Tally's pay heads (the cloud copy's payroll, S.books.payroll)
+    booksReadAt: (() => { try { const bk = typeof TCloud === "object" && TCloud.book ? TCloud.book(cid) : null; return String((bk && bk.daysAt) || ""); } catch (x) { return ""; } })(),
     payroll: payrollSettings(co, Object.entries(((b.payroll || {}).heads) || {}).map(([name, h]) => ({ name, type: (h && h.type) || "" }))),
   };
 }

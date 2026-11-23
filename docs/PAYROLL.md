@@ -303,6 +303,16 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   and Daily Check's Approve settles each part first (deleted in Tally, or a day old and never seen); a part in Tally holds
   the journal back. Changed parts name who joined and who is in another part now. With no pay head type, "company"
   marks an employer's head only with a share, PF, ESI or insurance word.
+- **Fifth review (23-Nov-2026)**: bridge 2.5.18 does not look for FinCom's id in Tally before posting; its only guard is
+  the posting computer's own record (alreadySent). So: a part not in Tally's copy counts as not posted only when the copy
+  was read in at least 5 minutes after the send (`tally_books.days_at`), else Approve waits ("Tally's copy is older than
+  this send"); the same rule holds a journal back (night and Approve), as does any of the month's FinCom Tally Payroll ids
+  in the copy, a draft or not. alreadySent counts as on its way only for the
+  byte-identical XML on record, else the part fails and nothing more is sent. Before claiming, every
+  `TDSDesk:dc-tp-<yyyymm>-<n>` in the copy (one read for the month; else the books and the payroll read here) is in
+  Tally with or without a draft (a draft is made for it); the night counts the month done from those ids and their
+  narration's "part i of n". A resend of an unanswered part goes only through the computer that sent it (the bridge's id, or the computer and
+  Windows user here); a computer FinCom cannot name waits.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: the `assistant-night` function (dailyjournals.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.
