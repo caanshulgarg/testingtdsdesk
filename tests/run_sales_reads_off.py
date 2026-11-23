@@ -34,7 +34,7 @@ NOCHECK = ("Not posted: FinCom could not check Tally for these invoice numbers (
            "and FinCom's cloud copy is not available). Nothing was sent; try again in a minute.")
 NOTE = "Checked against FinCom's copy of Tally, last updated "
 NOTE_END = ". Invoices entered in Tally after that were not checked."
-def nodayrow(day): return ("Not posted: FinCom's copy of Tally has no entries for " + day + ", so this invoice number could not be checked. "
+def nodayrow(day, short=False): return ("Not posted: FinCom's copy of Tally has " + ("only some of the entries" if short else "no entries") + " for " + day + ", so this invoice number could not be checked. "
                             "Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer.")
 READY = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
 GST = """() => { const mk = (b) => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; };
@@ -156,6 +156,8 @@ with sync_playwright() as p:
     print("7. invoice dates the cloud copy does not hold: those held (Ready, a red note), the others checked and posted")
     # (Optional vouchers are off by default since migration 213: switched on here, so the held part is seen after its note)
     A.evaluate("() => { CO().createOptional = true; window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+    # (a short day: the copy has some of its entries, said so; any other day not held: no entries)
+    SHORT = {"a day read short", "fewer entries in the copy than the day's count"}
     for label, held, dates, miss in [
         ("after the last day uploaded", {"to": "2026-11-10", "doneTo": "", "skipped": []}, ["2026-11-08", "2026-11-12", "2026-11-14"], ["2026-11-12", "2026-11-14"]),
         # a Day Book file set doneTo to its upload day (bridge-go keep.go); October never uploaded: still not held
@@ -176,10 +178,11 @@ with sync_playwright() as p:
         ok([x["st"] for x in st] == want, label + ": the held days' invoices Ready, the others posted (%s)" % [x["st"] for x in st])
         sent = A.evaluate("() => window.__sent")
         ok(len(sent) == 1 and len(sent[0]) == len(dates) - len(miss) and len(A.evaluate("() => window.__ccalls")) >= 1, label + ": the others checked on the copy and sent (%s)" % sent)
-        ok(all(x["err"] == nodayrow(fm[miss.index(d)]) for x, d in zip(st, dates) if d in miss), label + ": the held invoice's red note (%s)" % [x["err"] for x in st])
+        short = label in SHORT
+        ok(all(x["err"] == nodayrow(fm[miss.index(d)], short) for x, d in zip(st, dates) if d in miss), label + ": the held invoice's red note (%s)" % [x["err"] for x in st])
         ok(all(x["err"] == "" for x, d in zip(st, dates) if d not in miss), label + ": no red note on the posted ones")
         n = len(dates) - len(miss)
-        ok(t.startswith("%d posted to Tally (%d as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers), %d held: FinCom's copy has no entries for %s." % (n, n, len(miss), ", ".join(fm))),
+        ok(t.startswith("%d posted to Tally (%d as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers), %d held: FinCom's copy has %s for %s." % (n, n, len(miss), "only some of the entries" if short else "no entries", ", ".join(fm))),
            label + ": the counts said, the held part after the Optional note (%s)" % t)
     A.evaluate("() => { CO().createOptional = false; }")
     ok(any("tally_days?select=day,at,n,note" in q and "book_id=eq.bk-zz" in q for q in A.evaluate("() => window.__dcalls")), "the days read from FinCom's cloud (tally_days), not from Tally")

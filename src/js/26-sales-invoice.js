@@ -166,8 +166,10 @@ async function salesCheckSafe(list){
   if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) throw {code: "check_off", message: SALES_NO_COPY};
   let cm;
   try { cm = await salesCopyMissing(co.id, list); } catch (e){ throw {code: "check_off", message: SALES_NO_CHECK}; }
-  const miss = new Set(cm.miss), day = v => String(v.x.date || "").slice(0, 10), held = [];
-  const hold = v => { delete v.copyCheck; held.push(v); v.copyHeld = v.postError = "Not posted: FinCom's copy of Tally has no entries for " + fmtDate(day(v)) + ", so this invoice number could not be checked. Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer."; };
+  const miss = new Set(cm.miss), day = v => String(v.x.date || "").slice(0, 10), held = [], some = new Set();
+  // (a short day, by its note or by the count below: the copy has only some of its entries, said so; else none)
+  cm.miss.forEach(d => { if (/short read/i.test(String((cm.rows.get(d) || {}).note || ""))) some.add(d); });
+  const hold = v => { delete v.copyCheck; held.push(v); v.copyHeld = v.postError = "Not posted: FinCom's copy of Tally has " + (some.has(day(v)) ? "only some of the entries" : "no entries") + " for " + fmtDate(day(v)) + ", so this invoice number could not be checked. Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer."; };
   list.filter(v => miss.has(day(v))).forEach(hold);
   let go = list.filter(v => !miss.has(day(v)));
   // (the vouchers the cloud copy answered, each once, counted by day against the day's own count: fewer is a short read)
@@ -179,9 +181,10 @@ async function salesCheckSafe(list){
   got.forEach(x => { const d = String(x.date || "").replace(/-/g, "").slice(0, 8); per[d] = (per[d] || 0) + 1; });
   const short = d => { const r = cm.rows.get(d); return !!r && num(r.n) > (per[d.replace(/-/g, "")] || 0); };
   // (a voucher of the invoice found all the same stands: In Tally; any other invoice of a short day is held)
-  go.filter(v => short(day(v)) && v.status !== "intally").forEach(v => { miss.add(day(v)); hold(v); });
+  go.filter(v => short(day(v)) && v.status !== "intally").forEach(v => { miss.add(day(v)); some.add(day(v)); hold(v); });
   go = go.filter(v => !v.copyHeld);
-  const heldWords = held.length ? held.length + " held: FinCom's copy has no entries for " + [...new Set(held.map(day))].sort().map(fmtDate).join(", ") : "";
+  const hd = [...new Set(held.map(day))].sort(), nil = hd.filter(d => !some.has(d)), part = hd.filter(d => some.has(d));
+  const heldWords = held.length ? held.length + " held: FinCom's copy has " + [nil.length ? "no entries for " + nil.map(fmtDate).join(", ") : "", part.length ? "only some of the entries for " + part.map(fmtDate).join(", ") : ""].filter(Boolean).join("; ") : "";
   const at = salesCopyAt(co.id);
   if (!go.length || (at && Date.now() - Date.parse(at) <= SALES_COPY_OLD)){ go.forEach(v => { delete v.copyCheck; }); return {note: "", held: heldWords}; }
   const note = "Checked against FinCom's copy of Tally, last updated " + (at ? tallyHm(at) : "at a time not known") + ". Invoices entered in Tally after that were not checked.";
