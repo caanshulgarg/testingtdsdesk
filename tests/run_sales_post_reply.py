@@ -7,7 +7,12 @@ Made-up data only.
   2. an answer Tally took but nobody has confirmed (an old bridge's "checking"): not counted as posted, as before;
   3. "Post one by one": Tally's reply counts as posted too;
   4. an invoice found in Tally afterwards (the duplicate check): its old red note goes; an Optional voucher is said so;
-  5. the same number twice in a sheet: neither is posted.
+  5. the same number twice in a sheet: neither is posted;
+  6. (next-sales-followups) a queued posting's result that comes later: the same rule as a direct post (Tally's reply or
+     a read back counts, an answer nobody confirmed does not), and an Optional voucher said so;
+  7. the panel's "untick ... in Client setup" advice only on an invoice FinCom posted with the client's Optional tick on,
+     never on one found in Tally (entered by hand as Optional).
+An answer not confirmed says "Not confirmed by Tally yet" (never "In Tally": an old bridge's not-found answer is one).
 Run on the React build: TDSDESK_SITE=../app/dist-test SYNC_PORT=8957 python3 run_sales_post_reply.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -40,6 +45,8 @@ STUB = """() => { window.__toasts = []; const t0 = window.toast; window.toast = 
   window.tallyVia = () => "bridge"; window.__sent = [];
   Bridge.post = async (p) => { window.__sent.push(p.vouchers.map(v => v.id)); return {ok: true, company: "ZZ Test Reply Traders", results: window.__answer(p.vouchers)}; }; }"""
 STATE = "() => SL().list.map(v => ({n: v.x.number, st: v.status, err: v.postError || '', opt: !!v.postedOptional}))"
+UNCONF = "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again."
+NOTE = "() => { const n = document.querySelector('[data-sales-opt-note]'); return n ? n.innerText : null; }"
 
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -68,7 +75,12 @@ with sync_playwright() as p:
     A.evaluate("() => { window.__answer = vs => vs.map(v => ({id: v.id, ok: true, pendingCheck: true})); window.__toasts = []; }")
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(500)
     st = A.evaluate(STATE)
-    ok(st[0]["st"] == "ready" and "read back" in st[0]["err"], "not posted, said not read back (%s)" % st)
+    ok(st[0]["st"] == "ready" and st[0]["err"].startswith(UNCONF) and "In Tally, not yet" not in st[0]["err"], "not posted, said not confirmed by Tally yet (%s)" % st)
+    # an old bridge's real not-found answer (ok, verified false, a note): never said to be "In Tally"
+    A.evaluate("() => { window.__answer = vs => vs.map(v => ({id: v.id, ok: true, verified: false, verifyNote: 'not found when read back'})); window.__toasts = []; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(500)
+    st = A.evaluate(STATE)
+    ok(st[0]["st"] == "ready" and st[0]["err"] == UNCONF + " [not found when read back]", "an old bridge's not-found answer: not confirmed, its note kept (%s)" % st)
     A.evaluate("() => { window.__answer = vs => vs.map(v => ({id: v.id, ok: true, byReply: true, verified: false})); window.__toasts = []; }")
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(500)
     st = A.evaluate(STATE)
@@ -94,6 +106,8 @@ with sync_playwright() as p:
     # an invoice found in Tally before this fix kept the red note: not shown on an In Tally invoice
     A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.postError = 'Failed: not found in Tally when read back.'; SL().filter = 'done'; SL().openId = id; render(); }", vid); A.wait_for_timeout(500)
     ok("not found in Tally" not in A.inner_text("#app"), "an old red note on an In Tally invoice is not shown, on the row or the panel")
+    n = A.evaluate(NOTE)
+    ok(n and "Optional voucher" in n and "untick" not in n and "Client setup" not in n, "7. found in Tally as Optional (entered by hand): said so, no untick advice (%s)" % n)
     A.evaluate("() => { SL().openId = null; render(); }")
 
     print("5. the same number twice: neither copy is posted")
@@ -102,6 +116,32 @@ with sync_playwright() as p:
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(500)
     st = A.evaluate(STATE); sent = A.evaluate("() => window.__sent")
     ok([x["st"] for x in st] == ["review", "review", "posted"] and len(sent) == 1 and len(sent[0]) == 1, "both copies held To review, the other posted alone (%s, sent %s)" % ([x["st"] for x in st], sent))
+
+    print("6. a queued posting's result, marked when it comes: the same rule as a direct post")
+    A.evaluate("() => { SL().list = []; CO().createOptional = true; window.__rows = {}; CloudPost.row = async (id) => JSON.parse(JSON.stringify(window.__rows[id] || null)); }")
+    q1 = A.evaluate(ADD, ["ZT/61", "2026-11-02", G["k"]]); q2 = A.evaluate(ADD, ["ZT/62", "2026-11-02", G["k"]]); q3 = A.evaluate(ADD, ["ZT/63", "2026-11-02", G["k"]])
+    A.evaluate("""([a, b, c]) => { SL().list.forEach((v, i) => { v.postJob = 'jq' + i; v.postError = 'Waiting for Tally: it stays queued and posts by itself.'; });
+      window.__rows = {jq0: {id: 'jq0', status: 'done', company: 'ZZ Test Reply Traders', results: [{id: a, ok: true, pendingCheck: true}]},
+        jq1: {id: 'jq1', status: 'done', company: 'ZZ Test Reply Traders', results: [{id: b, ok: true, verified: false, verifyNote: 'not found when read back'}]},
+        jq2: {id: 'jq2', status: 'done', company: 'ZZ Test Reply Traders', results: [{id: c, ok: true, byReply: true, verified: false}]}}; }""", [q1, q2, q3])
+    A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(300)
+    st = A.evaluate(STATE)
+    ok(st[0]["st"] == "ready" and st[0]["err"].startswith(UNCONF), "a queued result nobody confirmed (still checking): not Posted, not confirmed (%s)" % st[0])
+    ok(st[1]["st"] == "ready" and st[1]["err"] == UNCONF + " [not found when read back]", "a queued result an old bridge did not find: not Posted (%s)" % st[1])
+    ok(st[2]["st"] == "posted" and st[2]["err"] == "" and st[2]["opt"], "a queued result with Tally's reply: Posted, as an Optional voucher (client set so) (%s)" % st[2])
+    ok(A.evaluate("() => SL().list.map(v => !!v.postJob)") == [False, False, False], "each queued result taken off its posting (not asked again)")
+
+    print("7. the untick advice: only on an invoice FinCom posted with the Optional tick on")
+    A.evaluate("(id) => { SL().filter = 'done'; SL().openId = id; render(); }", q3); A.wait_for_timeout(400)
+    n = A.evaluate(NOTE)
+    ok(n and "Optional voucher" in n and "untick" in n and "Client setup" in n, "posted by FinCom with the tick on: the untick advice shown (%s)" % n)
+    A.evaluate("() => { SL().openId = null; SL().list = []; CO().createOptional = false; window.__answer = vs => vs.map(v => ({id: v.id, ok: true, byReply: true, verified: false, optional: true})); }")
+    q4 = A.evaluate(ADD, ["ZT/71", "2026-11-03", G["k"]])
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(500)
+    A.evaluate("(id) => { SL().filter = 'done'; SL().openId = id; render(); }", q4); A.wait_for_timeout(400)
+    st = A.evaluate(STATE); n = A.evaluate(NOTE)
+    ok(st[0]["st"] == "posted" and st[0]["opt"] and n and "Optional voucher" in n and "untick" not in n, "posted with the tick off, Tally said Optional: said so, no untick advice (%s, %s)" % (st, n))
+    A.evaluate("() => { SL().openId = null; render(); }")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

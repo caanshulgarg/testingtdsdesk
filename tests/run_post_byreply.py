@@ -11,7 +11,9 @@ waiting. Checked:
     sentAt, by = who pressed Post), a second load changes nothing, a needsReview result is not marked, a bank line of the
     open statement is marked sent; one toast "N postings marked from Tally's reply";
 (d) Post (the button, postAllToTally for the bill, the legacy postBillsToTally()) sends none of the marked bills again;
-(e) bank: postBankToTally with a byReply ok result (CloudPost.run stubbed): the line is sent, with r.tally.vch, no postError.
+(e) bank: postBankToTally with a byReply ok result (CloudPost.run stubbed): the line is sent, with r.tally.vch, no postError;
+(i) next-sales-followups: a bill Tally took but nobody confirmed (an old bridge's not-found answer is one) says "Not
+    confirmed by Tally yet", never "In Tally", when posted and when the read-back after it does not find it.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_post_byreply.py"""
 import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -253,6 +255,20 @@ with sync_playwright() as p:
     E("() => { S.dupFind = null; }")
     g3 = E("(async () => { const n = await syncBankBookFromTally(true); const bk = B().books[curStmt().acctId]; return {n, file: bk && bk.file, len: bk && bk.entries.length}; })()")
     ok(g3["file"] == "kept" and g3["len"] == 1, "(g3) reading the bank book from Tally keeps the bank book it had (%s)" % g3)
+    # (i) next-sales-followups: an answer Tally has not confirmed is never said to be "In Tally"
+    UNC = "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again."
+    E("""() => { window.__tcI = window.tallyCall; window.tallyCall = async () => ({vouchers: []}); window.__bpI = Bridge.post; S.billPost = null;
+      window.__mk("u1", "Alpha Consultants", "U/1", 700); window.__mk("u2", "Alpha Consultants", "U/2", 800);
+      Bridge.post = async (p) => ({ok: true, company: p.company, results: p.vouchers.map(v => v.id === "u1" ? {id: v.id, ok: true, verified: false, verifyNote: "not found when read back"} : {id: v.id, ok: true, pendingCheck: true})}); }""")
+    E("() => postBillsToTally(['u1', 'u2'])"); pg.wait_for_timeout(1500)
+    ui = E("(() => { const d = D().entries, p = S.billPost || {}; return {e1: d.u1.postError || '', e2: d.u2.postError || '', x1: !!d.u1.exportedAt, x2: !!d.u2.exportedAt, msgs: (p.failed || []).map(f => f.msg)}; })()")
+    ok(not ui["x1"] and ui["e1"] == UNC + " [not found when read back]", "(i) an old bridge's not-found answer on a bill: not posted, \"Not confirmed by Tally yet\" (%s)" % ui["e1"])
+    ok(not ui["x2"] and ui["e2"].startswith("Not confirmed by Tally yet") and "In Tally, not yet" not in ui["e2"], "(i) a bill Tally is still checking: not posted, not said to be in Tally (%s)" % ui["e2"])
+    ok(ui["msgs"] and all(m.startswith("Not confirmed by Tally yet") for m in ui["msgs"]), "(i) the run's list says not confirmed (%s)" % ui["msgs"])
+    E("() => billsAfterCheck(S.coId, {results: [{id: 'u2', ok: true, verified: false}]}, 'GARG SHEKHAR & COMPANY')"); pg.wait_for_timeout(300)
+    e2 = E("D().entries.u2.postError || ''")
+    ok(e2 == UNC, "(i) the read-back after it did not find the bill: \"Not confirmed by Tally yet\" (%s)" % e2)
+    E("() => { Bridge.post = window.__bpI; window.tallyCall = window.__tcI; delete D().entries.u1; delete D().entries.u2; S.billPost = null; }")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

@@ -1417,8 +1417,8 @@ async function postBillsToTally(opts){
         // round 17a: Tally's reply (bridge 2.1.8, byReply) counts as posted, as a read back does (postTaken, src/js/59)
         else if (x && postTaken(x)){ ok++; if (postAltered(x)) altered++; else if (x.verified !== true && x.byReply === true) byReplyN++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
-          e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-          failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
+          e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "Not confirmed by Tally yet: FinCom checks it in Tally by itself in a moment." : billUnconf() + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+          failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "Not confirmed by Tally yet", unread: true}); }
         // held by a posting still going on in FinCom's cloud (waiting for Tally, or an earlier posting has it): the bill
         // stays as it is, with those words; that posting's result is marked on it when it comes (postReconcile)
         else if (x && x.held) e.postError = plainMsg(x.message);
@@ -1464,6 +1464,8 @@ function billAlready(cid, e, x, tname, now){
   billPosted(cid, e, Object.assign({}, x, {ok: true, verified: true, vchNumber: x.vchNumber || x.vchNo || "", vchDate: x.vchDate || x.date || ""}), tname, now);
   e.postNote = "Already in Tally"; e.postAlreadyMsg = plainMsg(x.message) || "";
 }
+// a bill Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
+function billUnconf(){ return "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again."; }
 // the bridge has read back the bills it put in Tally: the ones found count as posted now
 function billsAfterCheck(cid, chk, tname){
   const d = S.data[cid];
@@ -1475,7 +1477,7 @@ function billsAfterCheck(cid, chk, tname){
     if (!e || e.exportedAt || !e.postUnconfirmed) return;
     if (postAlready(x)){ billAlready(cid, e, x, tname, now); n++; }
     else if (postTaken(x)){ billPosted(cid, e, x, tname, now); n++; }
-    else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
+    else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? billUnconf() : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
     Store.saveEntry(cid, e);
   });
   if (S.billPost && S.billPost.done && n){ S.billPost.ok = (S.billPost.ok || 0) + n; S.billPost.unverified = Math.max(0, (S.billPost.unverified || 0) - n); S.billPost.failed = (S.billPost.failed || []).filter(f => !(f.unread && d.entries[f.id] && d.entries[f.id].exportedAt)); }
