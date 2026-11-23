@@ -5,7 +5,7 @@ package main
 // minutes. The owner then: "tally should not freeze at all". Bank lines on such a Tally now go in bigger parts (10 at
 // most, PostQuietBankMax) only while nobody has touched the keyboard or mouse for PostQuietSec (30 s); while someone
 // is active a part is never bigger than the old pace gives (one voucher on such a Tally), and nothing waits (postings
-// first). Each quiet request PostSlowMaxMs (8 s) at most; a Tally whose time grows with each voucher is paced as before.
+// first). Each quiet request PostSlowMaxMs (10 s) at most; a Tally whose time grows with each voucher is paced as before.
 // Made-up data.
 
 import (
@@ -136,10 +136,10 @@ func TestFastBankBillsUnchanged(t *testing.T) {
 	}
 }
 
-// the most a slow request may take: PostSlowMaxMs, 8000 by default, held to 2000..10000
+// the most a slow request may take: PostSlowMaxMs, 10000 by default, held to 2000..10000
 func TestFastBankSlowMaxHeld(t *testing.T) {
 	reviewPaceStart(t, "")
-	if v := postSlowMaxSec(); math.Abs(v-8) > 1e-9 {
+	if v := postSlowMaxSec(); math.Abs(v-10) > 1e-9 {
 		t.Fatalf("default %v", v)
 	}
 	setCfg("PostSlowMaxMs", 60000)
@@ -224,5 +224,149 @@ func TestFastBankQuietSignal(t *testing.T) {
 	unknown = true
 	if postQuiet() {
 		t.Fatal("the tray not reporting taken as quiet")
+	}
+}
+
+// --- the review of 3bb65c676 (B1, B2, M, small items), written before the fixes
+
+// B1: a fit with no positive slope (noise, an outlier) never sends fixed-cost parts: a Tally of 300 ms a voucher with
+// a history of (1, 900 ms), (2, 900 ms), and later one part of 16 s, keeps the old pace (4 in 1.2 s at most)
+func TestFastBankNoiseNotFixedCost(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	key := companyKey("ZZ NOISE CO") + "|g-noise"
+	postPacePart(key, true, 1, 900)
+	postPacePart(key, true, 2, 900)
+	postPaceNote(key, true, 300, 300, 4)
+	q := newPostQueueFor("ZZ NOISE CO", "g-noise", nil, fastBankVch("nz", 80))
+	i := 0
+	sizes, _ := fastBankRun(t, q, func(n int) float64 {
+		i++
+		if i == 3 {
+			return 16 // one outlier
+		}
+		return 0.3 * float64(n)
+	})
+	for _, n := range sizes {
+		if n > 4 {
+			t.Fatalf("a 300 ms a voucher Tally got a part of %d (%.1f s; sizes %v)", n, 0.3*float64(n), fastBankHead(sizes))
+		}
+	}
+}
+
+// B1: a part over its budget halves the next, whatever the budget (here 2 s on a Tally of 1.2 s + 0.1 s a voucher)
+func TestFastBankOverBudgetHalves(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	q := newPostQueueFor("ZZ OVER CO", "g-over", nil, fastBankVch("ov", 200))
+	spike := false
+	var prev int
+	for k := 0; k < 30 && q.left(); k++ {
+		r := q.next()
+		n := len(r.items)
+		if spike && n > maxI(1, prev/2) {
+			t.Fatalf("after a part over its budget (%d lines): a part of %d", prev, n)
+		}
+		s := 1.2 + 0.1*float64(n)
+		spike = k == 12
+		if spike {
+			s = 3.5 // over the 2 s budget
+		}
+		q.done(r, s, nil)
+		prev = n
+	}
+}
+
+// B2: one voucher of 7.9 s (a Tally whose time is all the vouchers'): never a probe of 2 (15.8 s), and the fit (no fixed
+// cost) is kept in the file, so a restart does not probe again
+func TestFastBankNoProbeOverMax(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	key := companyKey("ZZ SLOWVCH CO") + "|g-sv"
+	postPaceNote(key, true, 7900, 7900, 1)
+	q := newPostQueueFor("ZZ SLOWVCH CO", "g-sv", nil, fastBankVch("sv", 6))
+	sizes, _ := fastBankRun(t, q, func(n int) float64 { return 7.9 * float64(n) })
+	for _, n := range sizes {
+		if n != 1 {
+			t.Fatalf("a 7.9 s voucher: parts %v", sizes)
+		}
+	}
+	// a linear Tally of 2.5 s a voucher, fitted with no fixed cost: kept across a restart (never probed again)
+	key2 := companyKey("ZZ LINEAR2 CO") + "|g-l2"
+	postPacePart(key2, true, 1, 2500)
+	postPacePart(key2, true, 2, 5000)
+	postPaceNote(key2, true, 2500, 2500, 1)
+	postPaceFlush()
+	postPaceReset()
+	if r := postPaceGet(key2, true); !r.FitOK {
+		t.Fatalf("the no-fixed-cost fit was not kept: %+v", r)
+	}
+	q = newPostQueueFor("ZZ LINEAR2 CO", "g-l2", nil, fastBankVch("l2", 6))
+	sizes, _ = fastBankRun(t, q, func(n int) float64 { return 2.5 * float64(n) })
+	for _, n := range sizes {
+		if n != 1 {
+			t.Fatalf("a linear Tally after a restart: parts %v", sizes)
+		}
+	}
+}
+
+// M: after a part Tally did not answer, the fixed-cost size is off for the rest of the job (no 10/5/10 loop)
+func TestFastBankNoAnswerStaysSmall(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	q := newPostQueueFor("ZZ NOANS CO", "g-na", nil, fastBankVch("na", 300))
+	slow := func(n int) float64 { return 4.5 + 0.1*float64(n) }
+	most := 0
+	for k := 0; k < 12; k++ {
+		r := q.next()
+		most = maxI(most, len(r.items))
+		q.done(r, slow(len(r.items)), nil)
+	}
+	if most < 8 {
+		t.Fatalf("did not grow before the no-answer: %d", most)
+	}
+	r := q.next()
+	q.done(r, 60, fmt.Errorf("import: %w", errTimeout))
+	for k := 0; k < 15 && q.left(); k++ {
+		r = q.next()
+		if n := len(r.items); n > maxI(1, len(r.items)) || n > 5 {
+			t.Fatalf("after a no-answer: a part of %d", n)
+		}
+		q.done(r, slow(len(r.items)), nil)
+	}
+}
+
+// small: idle 99999 (GetLastInputInfo failed, or no report) is unknown, never quiet
+func TestFastBankIdleUnknownNotQuiet(t *testing.T) {
+	reviewPaceStart(t, "")
+	oi, ou := postIdleFn, postUnknownFn
+	t.Cleanup(func() { postIdleFn, postUnknownFn = oi, ou })
+	postUnknownFn = func() bool { return false }
+	postIdleFn = func() float64 { return 99999 }
+	if postQuiet() {
+		t.Fatal("idle 99999 taken as quiet")
+	}
+}
+
+// small: after a long quiet run, the first part once someone is active is one voucher (one voucher over 2 s)
+func TestFastBankActiveAfterQuietRun(t *testing.T) {
+	reviewPaceStart(t, "")
+	quiet := true
+	old := postQuietFn
+	postQuietFn = func() bool { return quiet }
+	t.Cleanup(func() { postQuietFn = old })
+	q := newPostQueueFor("ZZ QUIETRUN CO", "g-qr", nil, fastBankVch("qr", 300))
+	slow := func(n int) float64 { return 4.5 + 0.1*float64(n) }
+	for k := 0; k < 15; k++ {
+		r := q.next()
+		q.done(r, slow(len(r.items)), nil)
+	}
+	quiet = false
+	for k := 0; k < 3; k++ {
+		r := q.next()
+		if n := len(r.items); n != 1 {
+			t.Fatalf("someone active after a quiet run: a part of %d (%.1f s)", n, slow(n))
+		}
+		q.done(r, slow(len(r.items)), nil)
 	}
 }

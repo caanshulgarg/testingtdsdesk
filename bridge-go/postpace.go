@@ -30,9 +30,10 @@ func postTargetSec() float64 {
 }
 
 // fast bank posting (23-Nov-2026): the most one bank request may take on a Tally whose single voucher already takes
-// over 2 s (its fixed cost a request): PostSlowMaxMs, 8000 by default, held to 2000..10000
+// over 2 s (its fixed cost a request): PostSlowMaxMs, 10000 by default, held to 2000..10000 (review B2: a probe of 2
+// goes only when twice the last part's time fits under it; the parts themselves stay at PostQuietBankMax, 10)
 func postSlowMaxSec() float64 {
-	ms := keepNum("PostSlowMaxMs", 8000)
+	ms := keepNum("PostSlowMaxMs", 10000)
 	if ms < paceHardMs {
 		ms = paceHardMs
 	}
@@ -49,6 +50,7 @@ type postQueue struct {
 	key                  string       // speed audit: the company's pace key ("" : none kept)
 	sent                 map[bool]int // bank? -> the last part's size sent in this job (0: none yet)
 	calm                 map[bool]int // fast bank posting: the bank part while someone is at the computer (0: no cap)
+	noFast               bool         // review M: a bank part Tally did not answer: no fixed-cost size for the rest of the job
 }
 
 // speed audit (22-Nov-2026, the owner's approval): single imports of 9 and 42 bills took 14.5 s and 12.1 s at Tally,
@@ -156,7 +158,13 @@ func (q *postQueue) paceSize(bank bool) int {
 	}
 	// fast bank posting: on a Tally whose time is mostly a fixed cost a request, bigger bank parts while nobody is at
 	// the computer (next: postQuiet); q.calm keeps the part by the time a voucher, for when someone is
+	if one := rec.oneMs(); one > paceHardMs {
+		calm = 1 // review: one voucher alone over 2 s: someone active gets one voucher a part, whatever the pace says
+	}
 	q.calm[bank] = calm
+	if q.noFast {
+		return clampBatch(minI(maxI(n, 1), c))
+	}
 	if f := minI(paceFixedSize(rec, prev), postQuietBankMax()); f > n {
 		n = f
 		if prev > 0 && n > 2*prev {
@@ -187,7 +195,14 @@ var (
 	postQuietFn   = postQuiet         // the tests' hook
 )
 
-func postQuiet() bool { return !postUnknownFn() && postIdleFn() >= postQuietSec() }
+// review: an idle time of 99999 (GetLastInputInfo failed, or no report at all) is unknown, never quiet
+func postQuiet() bool {
+	if postUnknownFn() {
+		return false
+	}
+	idle := postIdleFn()
+	return idle >= postQuietSec() && idle < 99999
+}
 
 // the most bank lines a quiet part holds: PostQuietBankMax, 10 by default, never over PostBatchBank
 func postQuietBankMax() int { return maxI(1, minI(keepNum("PostQuietBankMax", 10), postBatchBank())) }
@@ -196,10 +211,11 @@ func postQuietBankMax() int { return maxI(1, minI(keepNum("PostQuietBankMax", 10
 // a request (F) and a cost a voucher (m), fitted from the company's recent parts (n, ms) of different sizes. When the
 // fixed cost is most of it (F at least 2 m) the bank part is as big as the budget holds: the 1350 ms target, or 2 s
 // when one voucher alone is over the target; on a Tally whose single voucher already takes over 2 s (the 2-second rule
-// cannot be met at any size) PostSlowMaxMs (8 s). 0: no fixed-cost size (the per-voucher pace decides). Only one size
-// seen yet: a probe of twice the last part when even all of its time a voucher would keep it under PostSlowMaxMs (from
-// a part of one, a probe of 2 always: at worst twice its time, once).
-// The last part over PostSlowMaxMs: half of it at most. Nothing about what is sent changes: the same Import, more lines.
+// cannot be met at any size) PostSlowMaxMs (10 s), never past what the best measured time a voucher fits in it. A
+// positive slope without a fixed cost of twice it: none (kept in the file). A slope of 0 or less (noise, or all of the
+// time fixed): unproven, sized by the measured time a voucher alone (doubling at most a part, halved after overruns). 0: no fixed-cost size (the per-voucher pace decides). Only
+// one size seen yet: a probe of 2 after a part of one voucher over 2 s, when twice its time is under PostSlowMaxMs.
+// The last part over its budget: half of it at most. Nothing about what is sent changes: the same Import, more lines.
 func paceFixedSize(rec postPaceRec, prev int) int {
 	hs := rec.hist()
 	if len(hs) == 0 {
@@ -208,37 +224,38 @@ func paceFixedSize(rec postPaceRec, prev int) int {
 	maxMs := postSlowMaxSec() * 1000
 	last := hs[len(hs)-1]
 	F, m, ok := rec.fit()
+	budget := maxMs
 	n := 0
-	switch {
-	case ok:
-		if F < 2*m || F <= 0 {
-			return 0 // the time is a voucher's own: bigger parts save nothing
+	if ok {
+		if m > 1e-6 && !fitSound(F, m) {
+			return 0 // the time grows with each voucher (no fixed cost to share): bigger parts save nothing (kept, B2)
 		}
-		budget := postTargetSec() * 1000
-		if one := F + m; one > paceHardMs {
+		budget = postTargetSec() * 1000
+		if one := rec.oneMs(); one > paceHardMs {
 			budget = maxMs
 		} else if one > budget {
 			budget = paceHardMs
 		}
-		if m <= 1e-6 {
-			n = maxBatch
-		} else {
+		n = maxBatch
+		if fitSound(F, m) {
 			n = int(math.Floor((budget - F) / m))
-		}
-	default:
-		// one size seen: its time a voucher over 2 s (so one voucher alone may be too) and a part twice as big under
-		// PostSlowMaxMs even if every millisecond were the vouchers' own (from a part of one, a probe of 2 always)
-		ln, lms := int(last[0]), last[1]
-		if ln < 1 || lms/float64(ln) <= paceHardMs {
+		} // else a time that did not grow with the size (noise, or all of it fixed): unproven, sized by the measured times
+		// review B1: never more than the best measured time a voucher fits in the budget
+		b := rec.bestPerVch()
+		if b <= 0 {
 			return 0
 		}
-		p := maxI(prev, ln)
-		if p > 1 && lms/float64(ln)*float64(2*p) > maxMs {
-			return 0 // (from one voucher, the probe of 2 always goes: at worst twice its time, once, and then fitted)
+		n = minI(n, int(math.Floor(budget/b)))
+	} else {
+		// one size seen: a probe of 2 only after a part of one voucher over 2 s, and only when twice its time is under
+		// PostSlowMaxMs (review B2)
+		if int(last[0]) != 1 || last[1] <= paceHardMs || 2*last[1] > maxMs {
+			return 0
 		}
-		n = 2 * p
+		n = 2
 	}
-	if last[1] > maxMs {
+	// review B1: a part over its budget (whatever the budget): the next half of it at most
+	if last[1] > budget {
 		n = minI(n, maxI(1, int(last[0])/2))
 	}
 	return maxI(n, 0)
@@ -321,6 +338,9 @@ func (q *postQueue) done(r importReq, secs float64, err error) {
 	if err != nil {
 		// review: a part Tally did not answer in time teaches nothing of its time (its seconds are the wait, not Tally's):
 		// never folded in; the next part is half of it, and the company's last part in good time no bigger
+		if r.bank {
+			q.noFast = true // review M: no 10/5/10 loop of no-answers
+		}
 		q.size[r.bank] = clampBatch(minI(q.paceSize(r.bank), maxI(1, n/2)))
 		postPaceNote(q.key, r.bank, 0, 0, q.size[r.bank])
 		return
@@ -373,8 +393,9 @@ func (p *postPaceRec) addHist(n, ms float64) {
 	p.HN++
 }
 
-// the fixed cost a request and the cost a voucher, by least squares over the recent parts; with one size only the
-// last fit of two sizes or more is kept (ok false when none)
+// the fixed cost a request and the cost a voucher, by least squares over the recent parts, as fitted (review B1: never
+// clamped; a slope of 0 or less, or no fixed cost, is no fixed-cost Tally: sound() says); with one size only the last
+// fit of two sizes or more is kept (ok false when none)
 func (p postPaceRec) fit() (F, m float64, ok bool) {
 	var sn, st, snn, snt float64
 	k := float64(len(p.hist()))
@@ -383,16 +404,40 @@ func (p postPaceRec) fit() (F, m float64, ok bool) {
 	}
 	if d := k*snn - sn*sn; k >= 2 && d > 1e-9 {
 		m = (k*snt - sn*st) / d
-		if m < 0 {
-			m = 0
-		}
 		F = st/k - m*sn/k
-		if F < 0 {
-			F = 0
-		}
 		return F, m, true
 	}
 	return p.FixMs, p.VchMs, p.FitOK
+}
+
+// a fit that says the time is mostly a fixed cost a request: a positive cost a voucher, and a fixed cost of at least
+// twice it
+func fitSound(F, m float64) bool { return m > 1e-6 && F > 0 && F >= 2*m }
+
+// review: the best measured ms a voucher over the recent parts (0: none); a part of n at it never under-predicts
+// on a Tally with a fixed cost, so no part is sized past what the measured times show
+func (p postPaceRec) bestPerVch() float64 {
+	b := 0.0
+	for _, h := range p.hist() {
+		if r := h[1] / h[0]; b == 0 || r < b {
+			b = r
+		}
+	}
+	return b
+}
+
+// what one voucher alone takes (ms; 0: not known): the sound fit's, else the quickest part of one seen
+func (p postPaceRec) oneMs() float64 {
+	if F, m, ok := p.fit(); ok && fitSound(F, m) {
+		return F + m
+	}
+	o := 0.0
+	for _, h := range p.hist() {
+		if h[0] == 1 && (o == 0 || h[1] < o) {
+			o = h[1]
+		}
+	}
+	return o
 }
 
 // the time to plan by: the larger of the last part's and the running average (a Tally slower now is believed at once)
@@ -448,8 +493,8 @@ func postPaceFreshLocked() {
 				r.addHist(float64(toInt(a[0])), num(a[1]))
 			}
 		}
-		if f, v := num(e["fix"]), num(e["vch"]); f > 0 && v >= 0 {
-			r.FixMs, r.VchMs, r.FitOK = f, v, true
+		if truthy(e["fit"]) {
+			r.FixMs, r.VchMs, r.FitOK = num(e["fix"]), num(e["vch"]), true // review B2: a no-fixed-cost fit kept too
 		}
 		if r.N <= 0 || r.Avg <= 0 {
 			r.N, r.Last, r.Avg = 0, 0, 0
@@ -584,7 +629,7 @@ func postPaceTextLocked() string {
 			e["hist"] = h
 		}
 		if p.FitOK {
-			e["fix"], e["vch"] = round3(p.FixMs), round3(p.VchMs)
+			e["fit"], e["fix"], e["vch"] = true, round3(p.FixMs), round3(p.VchMs)
 		}
 		cos[k] = e
 	}
