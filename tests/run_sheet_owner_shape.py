@@ -736,19 +736,20 @@ with sync_playwright() as p:
     ok(("Already in Tally as Sales UP ZZ/1 dated %s, ₹1,180.00. Post again anyway?" % E("fmtDate('2026-10-20')")) in pz, "… but its number and type are in Tally: it is still never posted without “Post duplicate anyway” (%s)" % pz)
 
     print("16. Tally refuses a batch with no reason: Refused by Tally; posted one by one, each one's own answer")
-    E("""() => { SL().list.forEach(v => { if (["ZZ/1", "MX/1"].includes(v.x.number)){ delete v.tallyMatch; v.notTally = []; v.status = "review"; v.userLedger = true; mapInvoice(v); v.status = "ready"; } });
+    E("""() => { SL().list.forEach(v => { if (["ZZ/1", "MX/1"].includes(v.x.number)){ delete v.tallyMatch; delete v.dupBlock; v.notTally = []; v.status = "review"; v.userLedger = true; mapInvoice(v); v.status = "ready"; } });
       SL().list = SL().list.filter(v => ["ZZ/1", "MX/1"].includes(v.x.number)); SL().cfg.notTally = {}; window.__enq.length = 0;
       window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, needsReview: true, accepted: false, created: 0, altered: 0, errors: 0, exceptions: vs.length, ignored: 0, batchN: vs.length, lineError: [], message: "Tally's reply: created 0 of " + vs.length + ", exceptions " + vs.length}));
       SL().filter = 'ready'; saveSales(); render(); }"""); W(500)
     ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
     E("() => { window.__vin = []; window.__vinAnswer = () => Array.from({length: 20000}, (x, i) => ({number: 'X' + i, type: 'Sales', date: '20261020', entries: []})); window.__toasts = []; }")
+    # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow"): the copy at its cap is a check not made, never a
+    # stop: the posting goes on, nothing said in the result
     post()
-    ok(len(E("window.__enq")) == 0 and any("Too many entries in Tally on" in t and "in one day" in t for t in E("window.__toasts")) and E("SL().list.map(v => v.status)") == ["ready", "ready"],
-       "the cloud copy at its cap even for one day: nothing is posted, and it is said (%s)" % E("window.__toasts")[-1:])
+    ok(len(E("window.__enq")) == 1 and not any("Too many entries" in t for t in E("window.__toasts")),
+       "the cloud copy at its cap even for one day: posted all the same, nothing said (%s)" % E("window.__toasts")[-1:])
     vin = E("window.__vin")
     ok(vin and vin[0].get("p_from") == "2026-10-19" and vin[0].get("p_to") == "2026-10-23", "the cloud copy is asked for the invoices' own dates only, a day either side (%s)" % (vin[:1],))
     E("() => { window.__vinAnswer = null; }")
-    post()
     rf = E("SL().list.map(v => [v.x.number, v.status, !!v.refused, (v.problems || [])[0] || ''])")
     ok(len(E("window.__enq")) == 1 and all(x[1] == "review" and x[2] and x[3].startswith("Refused by Tally: Tally created none of the 2 vouchers sent together and gave no reason") for x in rf),
        "“created 0 of 2”, exceptions, no line error: both Refused by Tally with a plain hint, not Ready (%s)" % rf)

@@ -1115,9 +1115,9 @@ async function postBankToTally(ids){
     let pre = null;
     b.busy = "Looking at " + acc.ledger + " in FinCom\u2019s copy of Tally before posting\u2026"; render();
     try { pre = await dupCopy(co, ledgerLinesUrl(tname, acc.ledger, from, to)); } catch (e){ pre = null; }
-    if (pre && !copyNotCovered(pre)) try {
-      const g = markedGone(pre, from, to);
-      if (g.ids.length){ g.sid = st.id; g.ledger = acc.ledger; g.company = tname; b.gone = g; }
+    // (only what the copy has is matched: a copy with nothing for these days leaves the bank book as it was, and a look
+    // before posting never marks a posted line as gone from Tally: the copy may simply not hold that day)
+    if (pre && !copyNotCovered(pre) && [].concat(pre.vouchers || []).length) try {
       await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
       toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
       saveBank({posted: true});
