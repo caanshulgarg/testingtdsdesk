@@ -717,7 +717,7 @@ console.log("seventh review: through FinCom's cloud queue (the bridge's releases
       else { if (x) q.honoured.add(x.at + "|" + x.id); q.rec.set(v.id, { xml: v.xml, job: j.id });
         if (q.lose || (q.loseIds && q.loseIds.has(v.id))) res = { id: v.id, ok: false, sent: true, state: "failed", message: "Tally did not answer" };
         else { q.tally.push({ id: v.id, xml: v.xml }); res = { id: v.id, ok: true, created: 1, vchId: String(q.tally.length) }; } }
-      j.results = (j.results || []).concat([res]); j.status = res.ok ? "done" : "failed";
+      j.results = (j.results || []).concat([res]); j.status = res.ok ? "done" : "failed"; j.taken_by = "go-x";
       return res;
     };
     q.post = async (pl, progress) => {
@@ -821,6 +821,24 @@ console.log("seventh review: through FinCom's cloud queue (the bridge's releases
     const w2 = wire(world(rows, { sheet, drafts: JSON.parse(JSON.stringify(w.drafts)) }), q);
     const r = await w2.run(t.entry);
     ok(!r.ok && /On its way/.test(String(r.why)) && !w2.posts.length && !w2.drafts["dc-tp-202610-1"].retiredBy, "the old posting being sent when it would be withdrawn: on its way; nothing retired or sent");
+  }
+  for (const how of ["unanswered", "no212", "no212b"]) {
+    // (tenth review) never retired: the posting a bridge took and never answered for (failed by the requeue alone); a
+    // cloud without migration 212 (no tally_post_withdraw, or its second step not run)
+    const q = cloud(); q.lose = true;
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-1" && d.state !== "posting" }), q);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    q.lose = false; q.sync();
+    const J1 = Array.from(q.jobs.keys())[0];
+    if (how === "unanswered") q.jobs.get(J1).results = [];
+    const rpc0 = q.rpc;
+    if (how === "no212") q.rpc = async (fn, a) => { if (fn === "tally_post_withdraw") throw new Error("PGRST202: Could not find the function public.tally_post_withdraw in the schema cache"); return rpc0(fn, a); };
+    if (how === "no212b") q.rpc = async (fn, a) => (fn === "tally_post_withdraw" ? { ok: false, error: "FinCom's cloud cannot withdraw an entry yet (migration 212's second step is not run)." } : rpc0(fn, a));
+    const w2 = wire(world(rows, { sheet, drafts: JSON.parse(JSON.stringify(w.drafts)) }), q);
+    const r = await w2.run(t.entry);
+    const want = how === "unanswered" ? /the Tally computer that took it has not reported; open FinCom Bridge there first/ : /FinCom’s cloud is not ready for this yet/;
+    ok(!r.ok && want.test(String(r.why)) && !w2.posts.length && !w2.drafts["dc-tp-202610-1"].retiredBy && !q.tally.length,
+      (how === "unanswered" ? "a posting its bridge took and never answered for" : how === "no212" ? "a cloud without tally_post_withdraw" : "a cloud without 212's second step") + ": waits, nothing retired or sent (" + String(r.why).slice(0, 90) + "…)");
   }
   {
     // the queue's refusal as a piece of its SQL: plain words

@@ -247,15 +247,21 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   await A.Drafts.save(co.id, d, "Tally Payroll: " + res.words);
   return res;
 }
+const NOT_READY = "FinCom’s cloud is not ready for this yet: the earlier posting of this part cannot be withdrawn there, so FinCom does not post it again. Try again after FinCom’s next update.";
 // (ninth review) a retired part's earlier posting withdrawn in the cloud's queue (tally_post_withdraw, migration 212):
-// never retried, requeued, handed out or queued again -> {job} | {busy} | {error} | {} (no posting, or a cloud without 212)
+// never retried, requeued, handed out or queued again -> {job} | {busy} | {wait} | {error} | {} (no posting in the cloud)
 async function withdrawOld(g, cid, d, company) {
   if (!(g.TCloud && typeof g.TCloud.rpc === "function" && g.Cloud && typeof g.Cloud.api === "function")) return {};
   const J = await partJob(g, cid, d.id, company, (((d.results || {})[d.id]) || {}).job || d.job);
   if (!J) return {};
+  // (tenth review) a posting a bridge took and never answered for this part (failed only by the queue's requeue): that
+  // computer may still send it when it comes back; never retired meanwhile
+  if (J.takenBy && !J.answered) return { wait: "Part " + (d.part || partNoOf(d.id)) + ": the Tally computer that took it has not reported; open FinCom Bridge there first, then Approve again." };
   let k = null;
   try { k = await g.TCloud.rpc("tally_post_withdraw", { p_job: J.id, p_id: d.id, p_why: "retired by Daily Check: not in Tally's copy of " + ((d.sent || {}).dayGone || "its day") + " read after the send" }); }
-  catch (err) { const m = errWords(err); if (/PGRST202|tally_post_withdraw|does not exist|schema cache/i.test(m)) return {}; return { error: m.slice(0, 160) }; }
+  catch (err) { const m = errWords(err); if (/PGRST202|tally_post_withdraw|does not exist|schema cache/i.test(m)) return { wait: NOT_READY }; return { error: m.slice(0, 160) }; }
+  // (tenth review) a cloud without migration 212 (or its second step): wait, never retire with no guard in the queue
+  if (k && k.ok === false && /cannot withdraw an entry yet/.test(String(k.error || ""))) return { wait: NOT_READY };
   if (k && k.busy) return { busy: true };
   if (!k || k.ok === false) return { error: String((k && k.error) || "no answer").slice(0, 160) };
   return { job: J.id };
@@ -268,11 +274,11 @@ export async function partJob(g, cid, id, company, known) {
     let ids = known ? [String(known)] : [];
     if (!ids.length) ids = Array.from(new Set(((await g.Cloud.api("tally_post_ids?select=job_id,created_at&client_id=eq." + encodeURIComponent(cid) + "&fincom_id=eq." + encodeURIComponent(id) + "&order=created_at.desc&limit=20")) || []).map((r) => String(r.job_id))));
     if (!ids.length) return null;
-    const js = ((await g.Cloud.api("tally_post_jobs?select=id,status,company,results,created_at&id=in.(" + ids.map(encodeURIComponent).join(",") + ")")) || []).filter((j) => j && (known || !company || j.company === company));
+    const js = ((await g.Cloud.api("tally_post_jobs?select=id,status,company,results,created_at,taken_by&id=in.(" + ids.map(encodeURIComponent).join(",") + ")")) || []).filter((j) => j && (known || !company || j.company === company));
     const said = (j) => [].concat(j.results || []).find((x) => x && x.id === id) || {};
     js.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
     const j = js.find((x) => !said(x).alreadySent) || js[0];
-    return j ? { id: String(j.id), status: String(j.status || "") } : null;
+    return j ? { id: String(j.id), status: String(j.status || ""), takenBy: String(j.taken_by || ""), answered: !![].concat(j.results || []).find((x) => x && x.id === id && !x.byOwner && !x.withdrawn) } : null;
   } catch (x) { return null; }
 }
 async function holdNext(co, e, v, A) {
@@ -577,9 +583,10 @@ export async function approveTallyPayroll(e, env = {}) {
       if (retired.includes(d) && !d.retiredBy) {
         // (ninth review) its earlier posting in the cloud's queue is withdrawn first (migration 212), so no Retry, requeue or
         // other page can send the old id again; a posting still being sent: on its way, nothing retired yet. A cloud
-        // without 212: the page's own refusal (59-post-owner.js retryChanged) stands alone
+        // without 212: wait (tenth review)
         const wd = await withdrawOld(g, co.id, d, company);
         if (wd.busy) return no("On its way to Tally (part " + nPart(d) + "): wait for it to finish.");
+        if (wd.wait) return no(wd.wait);
         if (wd.error) return no("FinCom could not withdraw the earlier posting of part " + nPart(d) + " in its cloud (" + wd.error + "). Nothing was sent.");
         d.retiredBy = { at: new Date().toISOString(), by: A.me ? A.me() : "", why: "not in Tally’s copy of " + (d.sent.dayGone || "its day") + " read after the send", withdrawn: wd.job || "" }; d.replacedBy = by; d.state = "failed";
         await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + " (" + d.id + ") retired, not in Tally; posted again as " + by.join(", ")); }

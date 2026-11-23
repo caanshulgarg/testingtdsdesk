@@ -2,7 +2,7 @@
 FinCom's cloud queue that is proven not in Tally (its day read after the send, its id not there) is RETIRED and its people
 posted under a fresh part id (dc-tp-<ym>-<next free n>), which neither the posting computer's record nor the cloud's list
 of ids has seen. The queue's SQL (migrations 32 -> 203, as run_migration203.py builds it) on a throwaway PostgreSQL
-(pg_stand, port 31377 unless PGPAY_PORT, its data under /tmp/payroll8 unless TMPDIR; never a real database), and the real
+(pg_stand, port 31377 unless PGPAY_PORT, its data under /tmp/payroll10 unless TMPDIR, removed after; never a real database), and the real
 tally-ingest (server/tally-cloud/index.ts, under Deno) handing the postings out (posts_take), its database calls for the
 queue answered by that PostgreSQL (fake_supabase.py for the rest). Made-up firm, client, company and entries only.
   1. the part queued (tally_post_enqueue) and handed out by tally-ingest; the bridge's report: not in Tally (failed,
@@ -15,7 +15,8 @@ queue answered by that PostgreSQL (fake_supabase.py for the rest). Made-up firm,
   4. the same when the first posting ended "done" (Tally said created, the part not in Tally after all)
 Needs Deno (DENO, or deno on the PATH)."""
 import os, sys, json, time, shutil, hashlib, subprocess, threading, urllib.request, tempfile
-os.environ.setdefault("TMPDIR", "/tmp/payroll9")
+os.environ.setdefault("TMPDIR", "/tmp/payroll10")
+os.makedirs(os.environ["TMPDIR"], exist_ok=True)
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 DENO = os.environ.get("DENO") or shutil.which("deno")
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
@@ -30,12 +31,17 @@ SQL = PS.SQLDIR
 M = [os.path.join(SQL, f) for f in ("migration-184-post-dupes.sql", "migration-185-post-unrouted.sql")]
 LATER = [os.path.join(SQL, f) for f in ("migration-199-post-match-fast.sql", "migration-200-post-settle-itself.sql", "migration-201-post-register-async.sql", "migration-202-post-recheck.sql")]
 st = PS.Stand(int(os.environ.get("PGPAY_PORT") or 31377), extra=M); db = st.db
-import atexit; atexit.register(lambda: st.stop())
+import atexit
+def bye():
+    st.stop(); shutil.rmtree(db.data, ignore_errors=True)
+    try: os.rmdir(os.environ["TMPDIR"])
+    except OSError: pass
+atexit.register(bye)
 m182 = open(os.path.join(SQL, "migration-182-gap-after-post.sql")).read()
 t0_ = m182.index("create table if not exists public.tally_light_days ("); t1_ = m182.index(");", t0_) + 2
 f0_ = m182.index("create or replace function public.tally_post_job_read_back()"); f1_ = m182.index("end $$;", f0_) + len("end $$;")
 db.sql(m182[t0_:t1_] + "\n" + m182[f0_:f1_])
-for p in LATER + [os.path.join(SQL, "migration-201a-post-grants.sql"), os.path.join(SQL, "migration-203-post-linked-guid.sql"), os.path.join(SQL, "migration-212-post-withdraw.sql")]:
+for p in LATER + [os.path.join(SQL, "migration-201a-post-grants.sql"), os.path.join(SQL, "migration-203-post-linked-guid.sql"), os.path.join(SQL, "migration-212-post-withdraw.sql"), os.path.join(SQL, "migration-212-indexes.sql")]:
     r = st.psql_text(open(p).read())
     if r.returncode: raise SystemExit("%s does not run on the stand: %s" % (os.path.basename(p), r.stderr[-400:]))
 st.grants()
@@ -50,7 +56,10 @@ def job(i): return json.loads(db.one("select to_jsonb(j)::text from (select id, 
 
 # ---------------------------------------------------------------- tally-ingest under Deno, its queue calls on PostgreSQL
 KEY = "fcd_" + "7" * 48
-FS.PORT = int(os.environ.get("FAKE_SUPA_PORT") or 9377)
+import socket
+def free_port():   # a port nothing else here listens on (the suites' fixed ports are taken by other runs)
+    with socket.socket() as so: so.bind(("127.0.0.1", 0)); return so.getsockname()[1]
+FS.PORT = int(os.environ.get("FAKE_SUPA_PORT") or free_port())
 FS.T["tally_devices"].append({"id": DA, "firm_id": FIRM, "name": "SRV9 · made-up-a", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": info, "wake_token": "w" * 64, "version": "2.5.18"})
 FS.T["tally_companies"].append({"firm_id": FIRM, "company": CO, "client_id": "c1", "device_id": DA, "book_id": PS.BK})
 orig_rpc = FS.rpc
@@ -64,7 +73,7 @@ def ids_from_pg():   # tally_post_ids as PostgREST would read them (tally-ingest
     FS.T["tally_post_ids"] = json.loads(db.one("select coalesce(json_agg(t), '[]')::text from (select job_id::text, fincom_id, entry_id, live, released_at, released_by, released_why from tally_post_ids) t") or "[]")
 FS.start()
 wrap = tempfile.mkdtemp(prefix="payroll8-ingest-")
-PORT = int(os.environ.get("INGEST_PORT") or 8377)
+PORT = int(os.environ.get("INGEST_PORT") or free_port())
 open(os.path.join(wrap, "serve.ts"), "w").write("const s = Deno.serve; (Deno as any).serve = (h: any) => s({ port: %d, onListen() {} }, h);\nawait import(%s);\n"
                                                   % (PORT, json.dumps("file://" + os.path.abspath(os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")))))
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key")
@@ -76,7 +85,10 @@ ME = {"id": BA, "computer": "SRV9", "user": "SRV9\\made-up-a", "mode": "main", "
 def call(body):
     rq = urllib.request.Request("http://127.0.0.1:%d/" % PORT, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "x-fincom-device": KEY})
     try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        t = e.read() or b"{}"
+        try: return e.code, json.loads(t)
+        except ValueError: return e.code, {"error": t.decode(errors="replace")[:300], "log": "".join(log)[-600:]}
 def take():
     ids_from_pg(); c, r = call({"kind": "posts_take", "version": "2.5.18", "bridge": ME}); return (r or {}).get("job") if c == 200 else {"error": (c, r)}
 def report(i, res):   # the bridge's report as tally-ingest stores it: the results, the status by the queue's own rule

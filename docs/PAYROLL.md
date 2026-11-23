@@ -353,9 +353,21 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   part goes again only from Daily Check's Approve); and, as Approve retires a part, its earlier posting is withdrawn in
   the queue (`tally_post_withdraw`, **migration 212, a DRAFT** for its own review: a withdrawn entry's posting is never
   retried, requeued or handed out again, and its FinCom id is never queued in another posting; tests/run_migration212.py).
-  A posting still being sent: on its way, nothing retired. A cloud without 212: the page's refusal stands alone. The
+  A posting still being sent: on its way, nothing retired. A cloud without 212: Approve waits (tenth review). The
   night: a retired id that shows up in Tally is Needs you, never counted toward done. A part numbered after a retired one
   names its FinCom id beside "part i of n" (in Tally's Day Book: TDSDesk:dc-tp-…).
+- **Migration 212's SQL review and the tenth review (23-Nov-2026)**: 212 is two steps: the file (one transaction,
+  lock_timeout 3 s; its columns made only when absent, so a second run takes no ACCESS EXCLUSIVE lock), then
+  `migration-212-indexes.sql` with `tools/apply_concurrent_indexes.py` (two partial indexes CONCURRENTLY, then
+  `tally_post_withdraw_arm()` makes the two triggers); `tally_post_withdraw` refuses until they are there. It withdraws only
+  a Tally Payroll id, and refuses (busy) a posting waiting, taken, running, held for checking (done + checking), held by
+  its bridge, or owing another entry to send again. The status guard refuses only when a withdrawn entry would be sent
+  (the whole payload, or its resend_only list): a hand-back of another entry goes on. A new posting leaves a withdrawn id
+  out (its result says so; by every spelling), refused only when nothing else is in it. The owner can take a withdrawal
+  back (`tally_post_withdraw_undo`, who and why kept). Approve retires a part only when its old posting was never taken
+  by a bridge or that bridge answered for the part; else it waits ("the Tally computer that took it has not reported;
+  open FinCom Bridge there first"); and a cloud without 212 (or its second step) means wait ("FinCom's cloud is not ready
+  for this yet"), never retire.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: migration 212 applied first (a draft: its own review); the app (legacy.js: `CloudPost.run`
   tells the posting id; the Post page's part, 59-post-owner.js), the `assistant-night` function
