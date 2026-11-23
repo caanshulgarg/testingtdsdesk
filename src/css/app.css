@@ -1229,8 +1229,15 @@ header.top .topright{flex-wrap:wrap;justify-content:flex-end}
   /* fixed, not sticky: the page body hides sideways overflow, which stops a sticky sidebar from staying put */
   .side{position:fixed;left:0;top:0;bottom:0;height:auto;overflow-y:auto;overscroll-behavior:contain;padding-bottom:36px}
   .side:not(.hidden) + .mainwrap{margin-left:208px}
-  .side .side-client{position:sticky;top:0;z-index:2;background:inherit}
+  /* the owner's review of 23-Nov-2026: the client card alone was sticky and see-through (background:inherit took the
+     transparent .side-tree's), so the menu's words slid over it and the FinCom row scrolled away. The brand and the card
+     are one block (.side-top) that stays at the top, painted with the sidebar's own colour, and the menu scrolls under
+     it; ::before covers the sidebar's top padding above it, so nothing shows through there either */
+  .side .side-tree{background:inherit}
+  .side .side-top{position:sticky;top:0;z-index:3;background:inherit;display:flex;flex-direction:column;flex-shrink:0;padding-bottom:2px}
+  .side .side-top::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:24px;background:inherit}
 }
+@media (max-width:900px){.side .side-top{display:contents}}
 .side-firm-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--side-muted);padding:14px 12px 4px}
 
 /* Summary strip (review item 28): the title has its own column and never shrinks under the figures; the buttons go to
