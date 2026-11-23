@@ -13,10 +13,10 @@ export default function BillDoc({ e }) {
   const [zoom, setZoom] = useState(100);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);         // the PDF's pages, once drawn
-  const [bad, setBad] = useState(false);         // a PDF that could not be drawn
+  const [bad, setBad] = useState("");            // "" | "page" | "broken" | "password": a PDF (or its page) not drawn
   useEffect(() => {
     let url = "", gone = false;
-    setDoc(null); setZoom(100); setPage(1); setPages(0); setBad(false);
+    setDoc(null); setZoom(100); setPage(1); setPages(0); setBad("");
     if (e.fileName === "Manual entry") { setState("none"); return; }
     setState("loading");
     FileStore.get(cid, e.id, e.docPath || "", e.fileName || "").then((f) => {
@@ -28,6 +28,9 @@ export default function BillDoc({ e }) {
     }).catch(() => { if (!gone) setState("none"); });
     return () => { gone = true; if (url) URL.revokeObjectURL(url); };
   }, [e.id, e.docPath]);
+  // the page asked for is one the PDF has; another page is tried afresh after one could not be drawn
+  useEffect(() => { if (pages && page > pages) setPage(pages); }, [pages]);
+  useEffect(() => { setBad(""); }, [page]);
   const url = doc ? doc.url : prev, pdf = !!(doc && doc.pdf);
   if (!url && state !== "loading" && e.fileName === "Manual entry") return null;
   // ui-tidy (13-Oct-2026; the owner: "there is some glitch also while opening this"): the document's place is the same size
@@ -52,9 +55,12 @@ export default function BillDoc({ e }) {
     : <div className="billdoc-wait"><p className="note" style={{ margin: 0 }}>{e.docPath
       ? "The bill's document could not be opened from the firm account. Check you are signed in, then open the bill again."
       : "No copy of this bill is kept in the firm account (it was read before documents were kept, or the firm keeps documents off). Upload it again to keep it."}</p></div>;
-  else if (pdf && bad) area = <div className="billdoc-wait"><p className="note" style={{ margin: 0 }}>This PDF could not be shown here. Use “Open ↗” above to see it in a new tab.</p></div>;
+  else if (pdf && bad) area = <div className="billdoc-wait"><p className="note" style={{ margin: 0 }}>{{
+    page: "This page of the PDF could not be shown here. Try another page, or use “Open ↗” above to see it in a new tab.",
+    password: "This PDF could not be shown here: it may be locked with a password. Use “Open ↗” above to see it in a new tab."
+  }[bad] || "This PDF could not be shown here. Use “Open ↗” above to see it in a new tab."}</p></div>;
   else if (pdf) area = <Suspense fallback={<div className="billdoc-wait"><Loading what="the bill" lines={4} /></div>}>
-    <BillPdf file={doc.file} page={page} zoom={zoom} onPages={setPages} onFail={() => setBad(true)} /></Suspense>;
+    <BillPdf file={doc.file} page={page} zoom={zoom} onPages={setPages} onFail={setBad} /></Suspense>;
   else area = <div className="billdoc-img"><img className="preview" src={url} alt="The bill" style={{ maxHeight: "none", maxWidth: "none", width: zoom + "%", border: 0 }} /></div>;
   return (
     <div className="prevbox billdoc" data-bill-doc={url ? (pdf ? "pdf" : "image") : state || "none"}>
