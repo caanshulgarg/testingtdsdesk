@@ -333,6 +333,23 @@ export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : n
 export const SALARY_RE = /SALAR|WAGES|REMUNERATION|STIPEND|BONUS|STAFF\s*(PAY|COST)|PAYROLL|EMPLOYEE\s*(BENEFIT|COST)/i;
 const NOT_SALARY = /AUDIT|WELFARE/i;
 export const salaryNamed = (l) => SALARY_RE.test(l) && !NOT_SALARY.test(l);
+// next-payroll (re-review 1): a pay head of Tally's payroll that is salary paid to the employee (an earning: "Earnings for
+// Employees", bonus, overtime, arrears), by Tally's pay head type; with no type (a bridge before 2.4.4), by its name. The
+// employer's contributions (PF, ESI, EDLI, admin charges), gratuity, reimbursements, loans and deductions are not salary
+// (third review) by Tally's type alone when it gives one (arrears are salary whatever their type, as 73-payroll.js has
+// it); by the name only when it gives none ("Company PF Share", "Mediclaim (Company)", "Employer ESI": not salary; an
+// earning such as "Company Car Allowance" is: "company" counts only with a share, PF, ESI or insurance word)
+const NOT_EARN_TYPE = /employer|gratuity|reimburse|loan|advance|deduction|not applicable/i;
+const EMPLOYER_NAME = /employer|gratuity|contribution|\bedli\b|admin(istrative|istration)?\s*charge|mediclaim|\bbonus\s*provision|\b(company|co\.?)('?s)?\b.*\b(share|pf|epf|esic?|insurance)\b|\b(share|pf|epf|esic?)\b.*\bcompany\b/i;
+const NOT_EARN_NAME = /payable|reimburse|\bloan\b|advance|\btds\b|income\s*tax|prof(essional)?\.?\s*tax|\b(e?pf|esic?)\b/i;
+const ARREARS = /\bar{1,2}ears?\b/i;
+export function earningHead(name, type) {
+  const t = String(type || "").trim(), n = String(name || "");
+  if (ARREARS.test(n) && !/employer|gratuity|loan|advance|deduction/i.test(t)) return true;
+  if (t) return /earning|bonus|overtime|arrear/i.test(t) && !NOT_EARN_TYPE.test(t);
+  return !EMPLOYER_NAME.test(n) && !NOT_EARN_NAME.test(n);
+}
+export const notSalaryHeadName = (l) => EMPLOYER_NAME.test(String(l || "")) && !ARREARS.test(String(l || ""));
 export function salaryClass(A, l, base, ledgers) {
   if (!A.isExpense(l)) return "";
   if (base && l === base) return "yes";

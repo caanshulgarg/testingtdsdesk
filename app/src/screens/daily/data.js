@@ -123,6 +123,14 @@ export async function approveEntry(e) {
   await rpc("entry_decide", { p_id: e.id, p_decision: "approved", p_work_ref: e.work_ref });
   return true;
 }
+// next-payroll (docs/PAYROLL.md 4.3, bridge 2.5.18): a company that books salary in Tally Payroll posts the month as Tally
+// payroll vouchers, not this journal, unless the owner chose "Post as a journal this month" on Payroll
+export function tallyPayrollFor(e, co) {
+  if (!e || e.source !== "payroll") return false;
+  if ((e.voucher || {}).kind === "tallyPayroll") return true;          // the night made it as a Tally payroll voucher
+  if (!co || ((co.payrollMethod || {}).value !== "tally")) return false;
+  return !(co.payrollJournal || {})[String((e.voucher || {}).period || "")];
+}
 // (phase 2) a journal FinCom made: the second check first (the same builder on the books as they are now: anything
 // changed since the night, and nothing is approved), then the EXISTING path for a hand-made voucher
 // (app/src/lib/asstEntries.js: its checks, the post gate, the one XML builder and Bridge.post: the bridge here or the
@@ -131,6 +139,23 @@ export async function approveJournal(e) {
   const cid = e.client_id;
   await openCompany(cid);
   const { recheck } = await import("./again.js");
+  // next-payroll: a Tally Payroll company's month goes as Tally payroll vouchers (lib/payrollPost.js: the same second check,
+  // claim, one posting a voucher and the proof)
+  if (tallyPayrollFor(e, CO(cid))) {
+    const T = await import("../../lib/payrollPost.js");
+    const r = await T.approveTallyPayroll(e, { prior: lastPrior.filter((p) => p.cid === cid) });
+    toast(r.ok ? r.words : r.why + (r.install ? " Download it on Payroll or the Tally page." : ""));
+    return r.ok ? (r.queued ? "queued" : true) : false;
+  }
+  // (fourth, fifth reviews) a month posted as a journal after Tally Payroll parts were sent: each such part settled from
+  // Tally first (not in a copy of Tally read after its send: not posted); one that may still be in Tally, or any FinCom
+  // Tally Payroll id of the month in Tally's copy (a draft or not), holds the journal back
+  if (e.source === "payroll") {
+    const A0 = await import("../../lib/asstEntries.js"), ds = ((await A0.Drafts.load(cid, true)) || []).filter((d) => d && /^dc-tp-/.test(String(d.id || "")) && d.dedupe === e.dedupe && !d.removed && ((d.results || {})[d.id] || {}).state !== "failed");
+    const T = await import("../../lib/payrollPost.js"), bk = typeof S === "object" && S.coId === cid ? S.books : null;
+    const st = await T.settleParts(CO(cid), e, ds, {}, A0, undefined, { forJournal: true, books: bk, pay: bk && bk.payroll, prior: lastPrior.filter((p) => p.cid === cid) });
+    if (st.waits.length) { toast(st.waits[0]); return false; }
+  }
   const why = await recheck(e, { prior: lastPrior.filter((p) => p.cid === cid) });
   if (why) { toast(why); return false; }
   const A = await import("../../lib/asstEntries.js");
@@ -154,7 +179,7 @@ export async function approveJournal(e) {
     toast((res && res.msg) || (r && r.error) || "Not posted."); return false;
   }
   await rpc("entry_approved", { p_id: e.id, p_work_ref: d.id });
-  return true;
+  return res.state === "sent" ? "queued" : true;     // queued in the cloud for the Tally computer: said so, not "sent"
 }
 // Edit: the entry opened where it is made (the bill in Purchase, the line in Bank)
 export async function editEntry(e) {

@@ -81,6 +81,7 @@ const CloudPost = {
     // audit 22-Nov-2026 (low 1): the slot is cleared only while it still holds this posting (a later one took it over)
     const slotDel = () => { try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (!m || m.id === id) lsDel("tdsdesk:cloudpost"); } catch (e){} };
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
+    tell({done: 0, total: ids.length, job: id});   // next-payroll (seventh review): the posting's id the moment it is queued
     const t0 = Date.now(), fin = j => !!j && ["done", "failed", "cancelled"].includes(j.status), far = j => /^Queued: posts/.test((j && j.message) || "");
     // waiting for Tally: the cloud's own words when it is queued for no computer (migration 185), else the company and
     // the computer it waits for

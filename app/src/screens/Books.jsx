@@ -32,6 +32,8 @@ const MyMis = lazy(() => import("./books/MyMis.jsx"));
 // Corporate (07-Nov-2026): a company's profile, e-Forms, resolutions and minutes, AOC-4; a lazy chunk of its own
 // (screens/corp). Its pages are books tabs (books:corp, corp-forms, corp-docs, corp-aoc4) for their addresses only
 const Corporate = lazy(() => import("./corp/Corporate.jsx"));
+// Payroll (next-payroll, docs/PAYROLL.md): any salary sheet, typed entry, the journal or Tally Payroll; a lazy chunk of its own
+const PayrollPage = lazy(() => import("./payroll/Payroll.jsx"));
 // Income Tax Return (next-itr, 22-Nov-2026): AY 2026-27 from the books, checked, as the official ITR JSON; a lazy chunk of
 // its own (screens/itr). Its pages are books tabs: books:itr (Data), itr-comp, itr-checks, itr-json
 const ITR = lazy(() => import("./itr/ITR.jsx"));
@@ -100,6 +102,7 @@ export default function Books() {
   // Ledgers (TaxLed.redirect, src/js/81)
   TaxLed.redirect();
   if (/^corp/.test(booksTab())) return <Suspense fallback={<Loading what="Corporate" page="books" />}><Corporate /></Suspense>;
+  if (booksTab() === "payroll") return <Suspense fallback={<Loading what="Payroll" page="books" />}><PayrollPage /></Suspense>;
   if (/^itr/.test(booksTab())) return <Suspense fallback={<Loading what="the income tax return" page="books" />}><ITR /></Suspense>;
   // 2.4.0: on From Tally, the book's alert (lines waiting, the cloud's gap) is not said twice: the page lists those days,
   // each with its Upload (needDays); the bell keeps it
