@@ -49,7 +49,7 @@ for p in LATER + [os.path.join(SQL, "migration-201a-post-grants.sql"), os.path.j
 st.grants()
 info = st.beat("made-up-a", BA, [CO]); st.setbeat(DA, info)
 J1, J2 = "00000000-0000-4000-8000-0000000000a1", "00000000-0000-4000-8000-0000000000a2"
-PART = "dc-tp-202610-c1-1"
+PART = "dc-tp-202610-c1-p1"
 XML = ("<VOUCHER VCHTYPE=\"Payroll\" ACTION=\"Create\" OBJVIEW=\"PaySlip Voucher View\"><DATE>20261031</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME>"
        "<NARRATION>Salary for Oct 2026 as per the salary sheet (2 employees, part 1 of 2) | TDSDesk:" + PART + "</NARRATION></VOUCHER>")
 PAY = json.dumps({"masters": [], "vouchers": [{"id": PART, "xml": XML}], "ledger": ""})
@@ -123,7 +123,7 @@ if t2: report(J2, [{"id": PART, "kind": "voucher", "ok": False, "alreadySent": T
 db.sql("update tally_post_jobs set status = 'cancelled' where id = %s and status <> 'failed'" % q(J2))
 
 print("== 3. the part under a fresh id: queued, handed out with nothing to release; Tally takes it")
-FRESH_ID = "dc-tp-202610-c1-3"
+FRESH_ID = "dc-tp-202610-c1-p3"
 def fresh(jid, xml_id):
     pay = PAY.replace(PART, xml_id)
     r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(jid), q(pay)))
@@ -154,13 +154,13 @@ ok((r.get("ok") is not True or job(J7)["status"] == "cancelled") and (t is None 
 
 print("== 4. the first posting ended done (Tally said created), the part not in Tally after all: a fresh id still queued")
 J5, J6 = "00000000-0000-4000-8000-0000000000a5", "00000000-0000-4000-8000-0000000000a6"
-P2 = "dc-tp-202612-c1-1"
+P2 = "dc-tp-202612-c1-p1"
 r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(J5), q(PAY.replace(PART, P2).replace("20261031", "20261231"))))
 t = take()
 db.sql("set role service_role; update tally_post_jobs set status = 'done', results = %s::jsonb, done = 1 where id = %s" % (q(json.dumps([{"id": P2, "kind": "voucher", "ok": True, "created": 1, "vchId": "62", "state": "in_tally"}])), q(J5)))
 r2 = member("select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J5))
 ok(r.get("ok") is True and t and t.get("id") == J5 and job(J5)["status"] == "done" and r2.get("ok") is True and not r2.get("retry"), "the first posting done: a Retry of it queues nothing (%s), the dead end the fresh id avoids" % r2)
-r, t, _ = fresh(J6, "dc-tp-202612-c1-2")
+r, t, _ = fresh(J6, "dc-tp-202612-c1-p2")
 ok(r.get("ok") is True and t and t.get("id") == J6 and t.get("released") == [], "the part under its fresh id: queued and handed out (%s)" % (r if not r.get("ok") else t.get("id")))
 db.sql("update tally_post_jobs set status = 'done' where id = %s" % q(J6))
 

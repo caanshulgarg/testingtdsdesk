@@ -369,8 +369,8 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   open FinCom Bridge there first"); and a cloud without 212 (or its second step) means wait ("FinCom's cloud is not ready
   for this yet"), never retire.
 - **Migration 212's re-review (23-Nov-2026)**: a Tally Payroll part's id now carries its client:
-  `dc-tp-<yyyymm>-<client>-<n>` (the client's id in small letters and digits; `server/_shared/tpparts.js`), so the Tally
-  narration's mark is `TDSDesk:dc-tp-202610-<client>-1`. The ids were per firm in the cloud (one live FinCom id per firm,
+  `dc-tp-<yyyymm>-<client>-p<n>` (see below; `server/_shared/tpparts.js`), so the Tally narration's mark is
+  `TDSDesk:dc-tp-202610-<client>-p1`. The ids were per firm in the cloud (one live FinCom id per firm,
   the posting register, 184's dupes) and per computer on the bridge (posted-ids.json keys the tag alone): two clients'
   "part 1 of October" held each other back, or the second was refused as "already sent". bridge-go matches marks by
   `TDSDesk:[A-Za-z0-9._-]+` and keys them by letters and digits, so the new mark needs no bridge change; the night and
@@ -380,6 +380,14 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   answer kept; the note kept by tally-ingest's merge: byItself); a check of Tally is never asked or confirmed for a
   withdrawn entry, and withdrawing waits for a check that is waiting; the words name who withdrew it and why; plural
   "were"; spellings as tally_post_id_match; the guards must be there and enabled.
+- **212's approval (23-Nov-2026)**: the id is `dc-tp-<yyyymm>-<client>-p<n>` (the "p" keeps client a1's part 2 apart from
+  client a's part 12). The client: its FinCom id when it is small letters and digits alone (at most 40), else `h.` and a
+  hash of the whole id (never cut, so two ids alike in their first 40 letters, or alike in letters alone, stay apart); an
+  id with no letter or digit is refused in words, never the shared form. A month half-posted across the release: a part
+  in Tally under its older id `dc-tp-<yyyymm>-<n>` with the very people and amounts of part n is that part, in Tally;
+  otherwise the words name the older id and that it is the same part, safe to accept. 212: a posting with nothing to send
+  never waits again (and the Post page offers no Retry for one); a new posting of only withdrawn ids is not queued, in
+  words (an error, never {ok: true}); withdrawing also waits for a check not seen in Tally and not confirmed.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: migration 212 applied first (a draft: its own review); the app (legacy.js: `CloudPost.run`
   tells the posting id; the Post page's part, 59-post-owner.js), the `assistant-night` function

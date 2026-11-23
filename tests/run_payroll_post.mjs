@@ -52,8 +52,8 @@ const keep = (id, xml, want) => { cases.push({ id, xml, want, js: TP.validatePay
   ok(!/REMOTEID/.test(TP.payrollVoucherXml(Object.assign({}, out.vouchers[0]), "some-remote-id")), "never a REMOTEID, even when one is handed in");
   ok(TP.validatePayrollXml(x.replace('OBJVIEW="PaySlip Voucher View">', 'OBJVIEW="PaySlip Voucher View" REMOTEID="abc">')).length === 1, "a REMOTEID refused by the rules (Create only)");
   const ids = TP.payrollVouchers(base({ idOf: (i) => TPost.voucherIdOf("202610", i, "c1") })).vouchers.map((v) => v.id);
-  ok(ids.join() === "dc-tp-202610-c1-1", "the draft id dc-tp-<yyyymm>-<n>");
-  ok(/TDSDesk:dc-tp-202610-c1-1<\/NARRATION>/.test(TP.payrollVoucherXml(TP.payrollVouchers(base({ idOf: (i) => TPost.voucherIdOf("202610", i, "c1") })).vouchers[0])), "FinCom's id in the narration");
+  ok(ids.join() === "dc-tp-202610-c1-p1", "the draft id dc-tp-<yyyymm>-<n>");
+  ok(/TDSDesk:dc-tp-202610-c1-p1<\/NARRATION>/.test(TP.payrollVoucherXml(TP.payrollVouchers(base({ idOf: (i) => TPost.voucherIdOf("202610", i, "c1") })).vouchers[0])), "FinCom's id in the narration");
 }
 {
   // free text cleaned: no-break and other odd spaces, control characters, line breaks; capped
@@ -107,7 +107,7 @@ const keep = (id, xml, want) => { cases.push({ id, xml, want, js: TP.validatePay
   // the split: one voucher a request, at most 100 employees and the byte cap
   const m = many(230, 3);
   let r = TP.payrollVouchers(base(Object.assign({ idOf: (i) => TPost.voucherIdOf("202610", i, "c1") }, m)));
-  ok(r.vouchers.length === 3 && r.vouchers.map((v) => v.employees.length).join() === "100,100,30" && r.vouchers[2].id === "dc-tp-202610-c1-3" && /part 3 of 3/.test(r.vouchers[2].narration), "230 employees: 3 vouchers of 100, 100 and 30, each its own id and part");
+  ok(r.vouchers.length === 3 && r.vouchers.map((v) => v.employees.length).join() === "100,100,30" && r.vouchers[2].id === "dc-tp-202610-c1-p3" && /part 3 of 3/.test(r.vouchers[2].narration), "230 employees: 3 vouchers of 100, 100 and 30, each its own id and part");
   r.vouchers.forEach((v) => keep(v.id + "-of-230", TP.payrollVoucherXml(v), true));
   const full = many(100, 50);
   r = TP.payrollVouchers(base(full));
@@ -221,11 +221,11 @@ function world(o = {}) {
 const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouchers[0].xml).length === 0 && !/REMOTEID/.test(pl.vouchers[0].xml);
 {
   let w = world(), r = await TPost.approveTallyPayroll(E(), w.env);
-  ok(r.ok && w.log.filter((l) => !/^save/.test(l)).join(" > ") === "entry_claim > post dc-tp-202610-c1-1 > entry_approved", "claimed first, then one posting of one voucher, then approved: " + w.log.filter((l) => !/^save/.test(l)).join(" > "));
+  ok(r.ok && w.log.filter((l) => !/^save/.test(l)).join(" > ") === "entry_claim > post dc-tp-202610-c1-p1 > entry_approved", "claimed first, then one posting of one voucher, then approved: " + w.log.filter((l) => !/^save/.test(l)).join(" > "));
   ok(w.posts.length === 1 && xmlOk(w.posts[0]) && w.posts[0].masters.length === 0 && w.posts[0].company === "ZZ Made Up Traders", "the posting: one payroll voucher of the bridge's shape, no master, the client's posting company");
   ok(r.words === "Tally created 1 payroll voucher (voucher id 101).", "the proof: Tally's answer, in plain words: " + r.words);
-  const d = w.drafts["dc-tp-202610-c1-1"];
-  ok(d && d.dedupe === "payroll:202610" && d.night_entry === "n1" && d.results["dc-tp-202610-c1-1"].ok && d.results["dc-tp-202610-c1-1"].created === 1 && d.state === "posted", "the draft kept with the books: dc-tp-202610-c1-1, the night's dedupe, Tally's created count");
+  const d = w.drafts["dc-tp-202610-c1-p1"];
+  ok(d && d.dedupe === "payroll:202610" && d.night_entry === "n1" && d.results["dc-tp-202610-c1-p1"].ok && d.results["dc-tp-202610-c1-p1"].created === 1 && d.state === "posted", "the draft kept with the books: dc-tp-202610-c1-p1, the night's dedupe, Tally's created count");
   const again = await TPost.approveTallyPayroll(E(), w.env);
   ok(w.posts.length === 1, "Approve again (the claim refused by the cloud, or not): a voucher in Tally is never sent twice");
   ok(again.ok && /Tally created 1/.test(again.words), "  and the proof still says what Tally answered");
@@ -251,10 +251,10 @@ const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouch
   const h = Object.assign({}, HEADS); delete h["ESI Employee"];
   w = world({ heads: h }); r = await TPost.approveTallyPayroll(E(), w.env);
   ok(!r.ok && /Pick the Tally pay head for ESI \(employee\)/.test(r.why) && !w.log.length, "a pay head Tally does not have: asked for, nothing sent: " + r.why);
-  const p = TPost.prepare({ co: { payHeadPlan: {} }, ym: "202610", rows: ROWS, pay: { employees: [{ name: "Ravi Kumar" }], heads: h }, ledgers: ["Salary"] });
+  const p = TPost.prepare({ co: { id: "c1", payHeadPlan: {} }, ym: "202610", rows: ROWS, pay: { employees: [{ name: "Ravi Kumar" }], heads: h }, ledgers: ["Salary"] });
   ok(p.problems.some((x) => /Create the employee “Asha Verma”/.test(x)) && p.problems.some((x) => /Create the employee “Mehta, Sunil”/.test(x)) && p.problems.some((x) => /no salary payable ledger/.test(x)) && p.missing.includes("esiEmp"),
     "the page's list: every missing employee, the payable ledger, the pay heads to pick");
-  const p0 = TPost.prepare({ co: {}, ym: "202610", rows: ROWS, pay: {}, ledgers: [] });
+  const p0 = TPost.prepare({ co: { id: "c1" }, ym: "202610", rows: ROWS, pay: {}, ledgers: [] });
   ok(p0.problems.length === 1 && /has not read this company’s payroll from Tally yet/.test(p0.problems[0]), "no payroll read from Tally yet: said once, not every employee as missing");
   w = world({ seen: ["something else"] }); r = await TPost.approveTallyPayroll(E(), w.env);
   ok(!r.ok && /not the sheet shown here/.test(r.why) && !w.log.length, "the vouchers shown on the page differ from the books': nothing sent");
@@ -267,7 +267,7 @@ const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouch
 {
   let w = world({ answer: (v) => ({ id: v.id, ok: false, message: "Failed: Employee 'Mehta, Sunil' does not exist!" }) }), r = await TPost.approveTallyPayroll(E(), w.env);
   ok(!r.ok && r.why === "Tally has no employee “Mehta, Sunil”. Create it in Tally (Payroll › Employee), then Approve again." && w.log.includes("entry_release") && !w.log.includes("entry_approved"), "Tally's refusal in plain words; the entry released to try again: " + r.why);
-  ok(w.drafts["dc-tp-202610-c1-1"].state === "failed" && /does not exist/.test(w.drafts["dc-tp-202610-c1-1"].results["dc-tp-202610-c1-1"].said), "  the draft keeps Tally's own words too");
+  ok(w.drafts["dc-tp-202610-c1-p1"].state === "failed" && /does not exist/.test(w.drafts["dc-tp-202610-c1-p1"].results["dc-tp-202610-c1-p1"].said), "  the draft keeps Tally's own words too");
   w = world({ answer: (v) => ({ id: v.id, ok: false, message: "The request FinComPayrollImport is not on the bridge's allow-list of requests to Tally (the payroll posting is not one payroll voucher exactly as FinCom builds it); nothing was sent to Tally" }) });
   r = await TPost.approveTallyPayroll(E(), w.env);
   ok(!r.ok && /FinCom Bridge refused it/.test(r.why), "the bridge's pin refusing it: said plainly");
@@ -284,13 +284,13 @@ const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouch
   const gross = m.rows.reduce((s, x) => s + x.gross, 0), net = m.rows.reduce((s, x) => s + x.net, 0);
   const e = E({ voucher: { type: "Journal", period: "202610", date: "20261031", party: "Salary Payable", lines: [{ ledger: "Salary", dr: gross }, { ledger: "Professional Tax Payable", cr: 150 * 200 }, { ledger: "Salary Payable", cr: net }] } });
   let first = true;
-  const w = world({ rows: m.rows, emps: m.employees, heads: m.heads, co: { payHeadPlan: m.plan }, answer: (v, k) => (v.id.endsWith("-2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "2" + k }) });
+  const w = world({ rows: m.rows, emps: m.employees, heads: m.heads, co: { payHeadPlan: m.plan }, answer: (v, k) => (v.id.endsWith("-p2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "2" + k }) });
   let r = await TPost.approveTallyPayroll(e, w.env);
-  ok(!r.ok && w.posts.length === 2 && w.posts.every(xmlOk) && w.posts.map((p) => p.vouchers[0].id).join() === "dc-tp-202610-c1-1,dc-tp-202610-c1-2", "150 employees: two postings of one voucher each (dc-tp-202610-c1-1, -2)");
+  ok(!r.ok && w.posts.length === 2 && w.posts.every(xmlOk) && w.posts.map((p) => p.vouchers[0].id).join() === "dc-tp-202610-c1-p1,dc-tp-202610-c1-p2", "150 employees: two postings of one voucher each (dc-tp-202610-c1-p1, -2)");
   ok(r.proof.length === 2 && /^Part 1 of 2: Tally created 1/.test(r.proof[0].words) && /^Part 2 of 2: not posted\. Tally has no voucher type “Payroll”/.test(r.proof[1].words) && w.log.includes("entry_release"), "the proof part by part; part 2's refusal in plain words; released");
   first = false;
   r = await TPost.approveTallyPayroll(e, w.env);
-  ok(r.ok && w.posts.length === 3 && w.posts[2].vouchers[0].id === "dc-tp-202610-c1-2" && /Part 1 of 2: Tally created 1/.test(r.words) && /Part 2 of 2: Tally created 1/.test(r.words), "approved again: only part 2 sent; both parts in Tally");
+  ok(r.ok && w.posts.length === 3 && w.posts[2].vouchers[0].id === "dc-tp-202610-c1-p2" && /Part 1 of 2: Tally created 1/.test(r.words) && /Part 2 of 2: Tally created 1/.test(r.words), "approved again: only part 2 sent; both parts in Tally");
 }
 {
   ok(TPost.plainPayrollWhy("Pay Head 'Basic Pay' does not exist", (m) => m) === "Tally has no pay head “Basic Pay”. Create it in Tally (Payroll › Pay Head), then Approve again.", "Tally's words for a missing pay head, plainly");

@@ -156,7 +156,8 @@ Object.assign(PostOwner, {
     // next-payroll (ninth review): a Tally Payroll part goes again only through Daily Check's Approve, which checks Tally's
     // copy first: one retired there (not in Tally) was posted again under another part id, so this posting sent again
     // would pay those people twice
-    const tp = ids.find(id => /^dc-tp-\d{6}-([a-z0-9]+-)?\d+$/.test(String(id)));
+    if (j.n != null && Number(j.n) === 0) return "Retry not possible: this posting has nothing left to send (its entries were withdrawn).";
+    const tp = ids.find(id => /^dc-tp-\d{6}-(([a-z0-9]{1,40}|h\.[a-z0-9]{1,16})-p)?\d+$/.test(String(id)));
     if (tp) return "Retry not possible: this is part of a Tally Payroll month (" + tp + "). It goes again only from Daily Check’s Approve, which checks Tally first; it may have been replaced by another part, and posting it again could pay twice.";
     const d = S.data[j.client_id], other = S.bank && S.bank.cid !== j.client_id;
     if (ids.some(id => !ents[id]) && (!(d && d.loaded) || other)) return "Retry not possible here: open this client first (FinCom checks its entries before sending them again).";

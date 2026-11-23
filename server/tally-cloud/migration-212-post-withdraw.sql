@@ -10,23 +10,25 @@
 -- stays failed or done, and nothing in 32 -> 203 stops it going again: a Retry (tally_post_enqueue with its id) re-queues
 -- a failed or cancelled posting, and a posting of the old id would reach a bridge with no record of it: those people
 -- paid twice. So a Tally Payroll entry of a posting can be WITHDRAWN (a part's id carries its client:
--- dc-tp-<yyyymm>-<client>-<n>; an older one dc-tp-<yyyymm>-<n>; each matched within its client):
+-- dc-tp-<yyyymm>-<client>-p<n>; an older one dc-tp-<yyyymm>-<n>; each matched within its client):
 --   tally_post_ids.withdrawn_at / _by / _why, undone_at / _by / _why   the mark on the posting's own id row, and its undo
 --   tally_post_withdraw(p_job, p_id, p_why)   a member who may post (can_write) withdraws one Tally Payroll entry of a
 --                         posting of the firm, with a reason. Refused (busy) while the posting is waiting, taken or
 --                         running, held for checking (done + checking: its bridge went silent and may still post), held by
 --                         its bridge (tally_post_bridge_holds), owing or reserving an entry to send again
---                         (tally_post_resend_reserved), or with a check of Tally waiting for one of its entries
+--                         (tally_post_resend_reserved), or with a check of Tally for one of its entries not settled
+--                         (waiting, or not seen in Tally and not confirmed)
 --   tally_post_withdraw_undo(p_job, p_id, p_why)   the firm's OWNER takes a withdrawal back (who and why kept)
 --   (triggers, made by tally_post_withdraw_arm from the second step)
 --   tally_post_withdrawn_guard   a posting never becomes waiting, taken or running again when an entry it would send is
---                         withdrawn (its whole payload, or its resend_only list: a hand-back of another entry goes on).
+--                         withdrawn (its whole payload, or its resend_only list: a hand-back of another entry goes on),
+--                         nor when it has nothing to send at all.
 --                         A trigger can only refuse by raising: its words come back as the call's error
 --   tally_post_jobs_withdrawn_filter   a QUEUED posting (status waiting, not a record of a posting already made:
 --                         tally_post_record's rows are done or failed, payload.recorded) leaves a withdrawn id of its
 --                         client out (as 184 leaves out an entry another posting holds), its result saying so (kept by
---                         tally-ingest's merge: byItself); a posting of nothing else is queued cancelled, its results
---                         saying why, so the enqueue's own answer (and 184's dupes) stands
+--                         tally-ingest's merge: byItself); a posting of nothing else is not queued: refused in words
+--                         (a trigger refuses only by raising; the enqueue then answers with that error)
 --   tally_post_checks_withdrawn_guard   a check of Tally is never asked or confirmed for a withdrawn entry (else the
 --                         posting would owe it for ever and the cron try it every minute)
 -- The hand-out (tally_post_take_for) takes waiting postings only, so a withdrawn entry is never handed out again.
@@ -85,7 +87,7 @@ create or replace function public.tally_post_withdraw_busy(p_job uuid) returns t
     when j.status = 'done' and coalesce(j.checking, false) then 'This posting is held while FinCom checks whether it reached Tally; wait for that to finish.'
     when tally_post_bridge_holds(j.id) then 'The FinCom Bridge that took this posting still holds it; wait for it to report.'
     when exists (select 1 from tally_post_resend_reserved(j.firm_id) rv where rv.job_id = j.id) then 'This posting still has an entry to send again; wait for that to finish.'
-    when exists (select 1 from tally_post_checks k where k.job_id = j.id and k.state = 'waiting') then 'A check of Tally is waiting for an entry of this posting; wait for it to finish.'
+    when exists (select 1 from tally_post_checks k where k.job_id = j.id and k.state in ('waiting', 'notseen')) then 'A check of Tally for an entry of this posting is not settled yet (waiting, or not seen in Tally and not confirmed); settle it first.'
   end from tally_post_jobs j where j.id = p_job
 $function$;
 
@@ -96,7 +98,7 @@ declare f uuid := my_firm(); why text := left(btrim(coalesce(p_why, '')), 400); 
 begin
   if f is null or not can_write() then
     raise exception 'only a member of the firm who may post (an owner or staff) can withdraw an entry' using errcode = '42501'; end if;
-  if coalesce(p_id, '') !~ '^dc-tp-\d{6}-([a-z0-9]+-)?\d+$' then raise exception 'only a Tally Payroll part (dc-tp-<yyyymm>-<client>-<n>) can be withdrawn'; end if;
+  if coalesce(p_id, '') !~ '^dc-tp-\d{6}-(([a-z0-9]{1,40}|h\.[a-z0-9]{1,16})-p)?\d+$' then raise exception 'only a Tally Payroll part (dc-tp-<yyyymm>-<client>-p<n>) can be withdrawn'; end if;
   if why = '' then raise exception 'say why the entry is withdrawn (kept with your name and the time)'; end if;
   -- (re-review 6) the three guards there AND enabled
   if (select count(*) from pg_trigger t where not t.tgisinternal and t.tgenabled in ('O', 'A')
@@ -137,6 +139,11 @@ create or replace function public.tally_post_withdrawn_guard()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
 declare w text;
 begin
+  -- (212's approval) a posting with nothing to send (every entry left out as withdrawn) never waits again
+  if coalesce(jsonb_array_length(case when jsonb_typeof(new.payload -> 'vouchers') = 'array' then new.payload -> 'vouchers' end), 0) = 0
+     and coalesce(jsonb_array_length(case when jsonb_typeof(new.payload -> 'masters') = 'array' then new.payload -> 'masters' end), 0) = 0 then
+    raise exception 'Not queued again: this posting has nothing to send (its entries were withdrawn).' using errcode = 'P0001';
+  end if;
   select coalesce(i.entry_id, i.fincom_id) into w from tally_post_ids i
    where i.job_id = new.id and i.withdrawn_at is not null
      and (jsonb_typeof(new.resend_only) is distinct from 'array'
@@ -156,7 +163,7 @@ create or replace function public.tally_post_withdrawn_words(p_job uuid, p_entry
 $function$;
 
 -- (trigger) a withdrawn FinCom id of the same client is left out of a QUEUED posting, its result saying so; nothing else
--- in it: the posting is queued cancelled, its results saying why (the enqueue answers as before, 184's dupes with it)
+-- in it: not queued, in words
 create or replace function public.tally_post_jobs_withdrawn_filter()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
 declare out_ jsonb; gone_ jsonb; n_ int; at_ text := to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
@@ -187,9 +194,9 @@ begin
   new.n := jsonb_array_length(out_) + coalesce(jsonb_array_length(new.payload -> 'masters'), 0);
   new.results := coalesce(case when jsonb_typeof(new.results) = 'array' then new.results end, '[]'::jsonb) || gone_;
   if new.n = 0 then
-    new.status := 'cancelled';
-    new.message := left('Not queued: ' || (select string_agg(g ->> 'id', ', ') from jsonb_array_elements(gone_) g) || case when n_ = 1 then ' was' else ' were' end
-                        || ' withdrawn; sending ' || case when n_ = 1 then 'it' else 'them' end || ' again could pay twice.', 500);
+    -- (212's approval) nothing else in it: not queued, in words (the enqueue answers with an error, never {ok: true})
+    raise exception '%', left('Not queued: ' || (select string_agg(g ->> 'id', ', ') from jsonb_array_elements(gone_) g) || case when n_ = 1 then ' was' else ' were' end
+                        || ' withdrawn; sending ' || case when n_ = 1 then 'it' else 'them' end || ' again could pay twice.', 500) using errcode = 'P0001';
   else
     new.message := left(coalesce(new.message || ' ', '') || 'Left out: ' || (select string_agg(g ->> 'id', ', ') from jsonb_array_elements(gone_) g) || case when n_ = 1 then ' was' else ' were' end || ' withdrawn.', 500);
   end if;

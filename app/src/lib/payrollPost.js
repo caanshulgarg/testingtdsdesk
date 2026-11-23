@@ -8,7 +8,7 @@
 //      gross and net as the night's entry, and (on the Payroll page) the very vouchers the person was shown
 //   3. the claim (migration 208 entry_claim: ready -> approving, one person at a time), so two people never post it twice
 //   4. each voucher in a posting of its own (Bridge.post: the bridge here or the cloud's queue; the bridge posts a payroll
-//      voucher alone too), its draft kept with the client's books (asstEntries Drafts, "dc-tp-<yyyymm>-<client>-<n>", the night's
+//      voucher alone too), its draft kept with the client's books (asstEntries Drafts, "dc-tp-<yyyymm>-<client>-p<n>", the night's
 //      dedupe), the bridge's own check by FinCom's id against posting twice
 //   5. the proof: Tally's answer for each voucher (created, with its voucher id) or Tally's refusal in plain words; then
 //      entry_approved, or entry_release so it can be tried again
@@ -16,7 +16,7 @@
 import * as TP from "./tallyPayroll.js";
 import { monLabel } from "./payrollSheet.js";
 import { sheetMonth, earningHead, notSalaryHeadName } from "../../../server/_shared/nightchecks.js";
-import { partsIn, tpPrefix, tpIdRe } from "../../../server/_shared/tpparts.js";
+import { partsIn, tpPrefix, tpIdRe, tpClient, tpPartNo, tpOld } from "../../../server/_shared/tpparts.js";
 
 export const NEED = "2.5.18";
 export const OLD_BRIDGE = "Install FinCom Bridge " + NEED + " to post Tally Payroll";
@@ -36,7 +36,7 @@ export const bridgeOk = (v) => !!String(v || "").trim() && vkey(v) >= vkey(NEED)
 const errWords = (x) => String((x && x.message) || x || "").replace(/^.*?ERROR:\s*/, "");
 const iso = (d) => { const t = String(d || "").replace(/-/g, ""); return /^\d{8}$/.test(t) ? t.slice(0, 4) + "-" + t.slice(4, 6) + "-" + t.slice(6, 8) : ""; };
 export const lastDay = (ym) => ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-" + String(new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(4, 6), 0)).getUTCDate()).padStart(2, "0");
-export const voucherIdOf = (ym, i, cid) => tpPrefix(ym, cid) + (i + 1);   // dc-tp-<yyyymm>-<client>-<n> (tpparts.js)
+export const voucherIdOf = (ym, i, cid) => tpPrefix(ym, cid) + (i + 1);   // dc-tp-<yyyymm>-<client>-p<n> (tpparts.js)
 export const dedupeOf = (ym) => "payroll:" + ym;
 
 // ---------------------------------------------------------------- the bridge that will post it
@@ -118,7 +118,10 @@ export function prepare(o) {
   const L = o.ledgers || [], payable = co.payrollPayable && L.includes(co.payrollPayable) ? co.payrollPayable : o.payable && L.includes(o.payable) ? o.payable : payableOf(co, L);
   const read = emps.length > 0 || Object.keys(heads).length > 0;
   const no = o.partNo || ((i) => i + 1);
-  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, (o.idNo || no)(i) - 1, co.id), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
+  // (212's approval) a client whose FinCom id has no letter or digit has no mark of its own: never the shared one; said
+  // first, and nothing is posted
+  const noMark = !tpClient(co.id);
+  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => (noMark ? "dc-tp-" + o.ym + "-none-p" + (o.idNo || no)(i) : voucherIdOf(o.ym, (o.idNo || no)(i) - 1, co.id)), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
     payable, rows: o.rows || [], plan, employees: emps, skip: o.skip, partNo: o.partNo, parts: o.parts });
   let problems = out.problems.filter((p) => !/^Pick the pay head for /.test(p));
   if (!read) problems = ["FinCom has not read this company’s payroll from Tally yet (its employees and pay heads). Open the company in Tally and read the books again"];
@@ -126,6 +129,7 @@ export function prepare(o) {
   const there = payrollInTally(o.ym, pay, o.books);
   if (there.unknown.length) problems = ["FinCom’s copy of the books does not have the payroll entr" + (there.unknown.length === 1 ? "y" : "ies") + " of " + monLabel(o.ym) + " Tally has (" + named(there.unknown) + ") yet. Read the books again, so FinCom can tell whether it posted " + (there.unknown.length === 1 ? "it" : "them")].concat(problems);
   if (there.length) problems = ["Tally already has a payroll entry for " + monLabel(o.ym) + " that FinCom did not post (" + named(there) + "). Check it in Tally: FinCom does not post the month twice"].concat(problems);
+  if (noMark) problems = ["This client’s FinCom id has no letter or digit, so FinCom cannot mark its payroll in Tally. Ask FinCom support"].concat(problems);
   return { vouchers: missing.length || problems.length ? [] : out.vouchers, missing, problems, payable, plan };
 }
 
@@ -394,7 +398,7 @@ export function localMonth(ym, pay, b, cid) {
 }
 const figs = (emps) => (emps || []).map((e) => fold(e.name) + ":" + (e.heads || []).map((h) => fold(h.head) + "=" + P(h.amount)).sort().join(",")).sort().join("|");
 const live3 = async (g, job) => { if (!job) return false; try { const j = ((await g.Cloud.api("tally_post_jobs?select=id,status&id=eq." + encodeURIComponent(job))) || [])[0]; return !!j && ["waiting", "taken", "running"].includes(j.status); } catch (x) { return true; } };
-const partNoOf = (id) => Number(String(id).split("-").pop()) || 0;
+const partNoOf = tpPartNo;
 // "sent before" from the posting computer's own record, with no Tally id: not known to be in Tally
 export const unconfirmedR = (r) => !!(r && r.ok && r.unconfirmed && !String(r.tallyId || "").trim());
 // the drafts the owner said are not in Tally (a sent_check answered "Not in Tally: offer it again"), as the night reads them
@@ -531,7 +535,17 @@ export async function approveTallyPayroll(e, env = {}) {
   // posted under fresh part numbers (the next ids of the month no posting has used), the parts' "part i of n" counted
   // again as when parts in Tally are accepted; the old draft says it was retired and by which parts it was replaced
   let plan = p.vouchers;
-  const nPart = (d) => Number(d.part) || Number(String(d.id).split("-").pop()) || 0;
+  const nPart = (d) => Number(d.part) || tpPartNo(d.id) || 0;
+  // (212's approval) a month half-posted across the release that put the client in the mark: a part in Tally under its
+  // older id (dc-tp-<yyyymm>-<n>) with the very people and amounts of part n built now is that part, in Tally
+  for (const d of inTally) {
+    if (!tpOld(d.id)) continue;
+    const i = p.vouchers.findIndex((x) => !tpOld(x.id) && tpPartNo(x.id) === tpPartNo(d.id));
+    if (i < 0 || figs(readVoucherXml(sentXmlOf(d)).employees) !== figs(readVoucherXml(xmls[i]).employees)) continue;
+    p.vouchers[i] = Object.assign({}, p.vouchers[i], { id: d.id }); xmls[i] = sentXmlOf(d); byId.set(d.id, xmls[i]);
+  }
+  const oldNote = (d) => tpOld(d.id) ? " (in Tally under its older id " + d.id + ", from before FinCom put the client in the payroll mark: the same part " + tpPartNo(d.id) + ", safe to accept as it is in Tally)" : "";
+  const cmpId = (d) => tpOld(d.id) ? ((p.vouchers.find((x) => tpPartNo(x.id) === tpPartNo(d.id)) || {}).id || d.id) : d.id;
   const differs = inTally.filter((d) => sentXmlOf(d) !== byId.get(d.id));
   const retired = mine.filter((d) => !(((d.results || {})[d.id]) || {}).ok && (d.retiredBy || (d.sent && d.sent.answered === "gone" && d.sent.dayGone)));
   const usedIds = new Set(retired.concat(inTally).map((d) => partNoOf(d.id)));
@@ -558,7 +572,7 @@ export async function approveTallyPayroll(e, env = {}) {
     }
     // (third review) what was accepted is kept as a fingerprint of the differences (each employee's amounts by pay head
     // among them): anything else differing since is asked again
-    const changes = !differs.length ? [] : differs.map((d) => (differs.length > 1 || inTally.length > 1 || p.vouchers.length > 1 ? "part " + nPart(d) + ": " : "") + partChanges(readVoucherXml(sentXmlOf(d)), p.vouchers, d.id).join("; "));
+    const changes = !differs.length ? [] : differs.map((d) => (differs.length > 1 || inTally.length > 1 || p.vouchers.length > 1 ? "part " + nPart(d) + ": " : "") + partChanges(readVoucherXml(sentXmlOf(d)), p.vouchers, cmpId(d)).join("; ") + oldNote(d));
     const fp = fpOf(changes.join("|") + "#" + (rest || []).map(TP.payrollVoucherXml).join(""));
     const accepted = env.accept || differs.every((d) => d.accepted && d.accepted.fp === fp);
     if (!differs.length && !rest) return no("FinCom cannot post the rest of " + monLabel(ym) + " in new parts (" + canWhy + "). Nothing was sent.");

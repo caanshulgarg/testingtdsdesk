@@ -141,13 +141,19 @@ db.sql("alter table tally_post_jobs disable trigger tally_post_jobs_withdrawn_fi
 w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-1', 'retired')::text" % q(J(1)))
 db.sql("alter table tally_post_jobs enable trigger tally_post_jobs_withdrawn_filter")
 ok(w.get("ok") is False and "second step is not run" in err(w), "a guard trigger disabled: refused (%s)" % err(w)[-50:])
-r = enqueue(10, ["dc-tp-202610-c1-3"]); take(); finish(10)
-db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why) values (%s, %s, 'dc-tp-202610-c1-3', %s, %s, 'look')" % (q(F), q(J(10)), q(CO), q(OWNER)))
-w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-3', 'retired')::text" % q(J(10)))
-ok(w.get("busy") is True and "A check of Tally is waiting" in err(w), "busy while a check of Tally waits for an entry of it (%s)" % err(w)[-60:])
+r = enqueue(10, ["dc-tp-202610-c1-p3"]); take(); finish(10)
+db.sql("insert into tally_post_checks (firm_id, job_id, entry_id, company, asked_by, why) values (%s, %s, 'dc-tp-202610-c1-p3', %s, %s, 'look')" % (q(F), q(J(10)), q(CO), q(OWNER)))
+w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-p3', 'retired')::text" % q(J(10)))
+ok(w.get("busy") is True and "is not settled yet" in err(w), "busy while a check of Tally waits for an entry of it (%s)" % err(w)[-60:])
+db.sql("update tally_post_checks set state = 'notseen' where job_id = %s" % q(J(10)))
+w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-p3', 'retired')::text" % q(J(10)))
+ok(w.get("busy") is True and "not seen in Tally and not confirmed" in err(w), "  and while it is not seen in Tally and not confirmed (%s)" % err(w)[-60:])
 db.sql("update tally_post_checks set state = 'withdrawn' where job_id = %s" % q(J(10)))
-w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-3', 'retired')::text" % q(J(10)))
-ok(w.get("ok") is True, "a part id carrying its client (dc-tp-202610-c1-3): withdrawn")
+for bad in ("dc-tp-202610-c1-3", "dc-tp-202610-C1-p3", "dc-tp-202610-c1-p"):
+    w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, %s, 'retired')::text" % (q(J(10)), q(bad)))
+    ok("only a Tally Payroll part" in err(w), "  not a part id: %s refused" % bad)
+w = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-p3', 'retired')::text" % q(J(10)))
+ok(w.get("ok") is True, "a part id carrying its client (dc-tp-202610-c1-p3): withdrawn")
 w = rpc(STAFF, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-1', 'retired by Daily Check: not in Tally')::text" % q(J(1)))
 row = json.loads(db.one("select to_jsonb(t)::text from (select withdrawn_at is not null w, withdrawn_by::text b, withdrawn_why y from tally_post_ids where job_id = %s) t" % q(J(1))) or "{}")
 ok(w.get("ok") is True and w.get("withdrawn") == 1 and row == {"w": True, "b": STAFF, "y": "retired by Daily Check: not in Tally"}, "withdrawn by staff, who and why kept")
@@ -173,21 +179,23 @@ ok(r.get("ok") is True and [v["id"] for v in pl.get("vouchers", [])] == ["dc-tp-
    and db.one("select count(*)::text from tally_post_ids where job_id = %s" % q(J(5))) == "1", "a new posting: the withdrawn id left out (its result says so), the rest queued")
 db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(5)))
 r = enqueue(6, ["dc-tp_202610_1"])
-j6 = json.loads(db.one("select to_jsonb(t)::text from (select status, n, message, results from tally_post_jobs where id = %s) t" % q(J(6))) or "{}")
-ok(r.get("ok") is True and j6.get("status") == "cancelled" and j6.get("n") == 0 and "dc-tp_202610_1 was withdrawn" in str(j6.get("message")) and any(x.get("withdrawn") and x.get("byItself") for x in j6.get("results") or []),
-   "a posting of it alone (another spelling, matched as tally_post_id_match does): queued cancelled, its words and result say why (%s)" % j6.get("message"))
+ok(r.get("ok") is not True and "Not queued: dc-tp_202610_1 was withdrawn" in err(r) and db.one("select count(*)::text from tally_post_jobs where id = %s" % q(J(6))) == "0",
+   "a posting of it alone (another spelling, matched as tally_post_id_match does): not queued, in words, never {ok: true} (%s)" % err(r)[-80:])
 r = enqueue(7, ["dc-tp-202610-1", "dc-tp-202611-1"])
-j7 = json.loads(db.one("select to_jsonb(t)::text from (select status, message from tally_post_jobs where id = %s) t" % q(J(7))) or "{}")
-ok(r.get("ok") is True and j7.get("status") == "cancelled" and "dc-tp-202610-1, dc-tp-202611-1 were withdrawn" in str(j7.get("message")), "two of them: \"were\" (%s)" % j7.get("message"))
+ok(r.get("ok") is not True and "dc-tp-202610-1, dc-tp-202611-1 were withdrawn" in err(r), "two of them: \"were\" (%s)" % err(r)[-60:])
+# an empty posting (a cancelled one with nothing left to send) never waits again
+db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, created_by) values (%s, %s, 'c1', %s, %s, '{\"masters\": [], \"vouchers\": [], \"ledger\": \"\"}', 0, 'cancelled', %s)" % (q(J(13)), q(F), q(CO), q(DA), q(OWNER)))
+r = rpc(OWNER, "select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J(13)))
+ok(r.get("ok") is not True and "nothing to send" in err(r) and status(13) == "cancelled", "a posting with nothing to send: its Retry refused (%s)" % err(r)[-60:])
 # (re-review B1) ids are per client: the queue's own rules are per firm (one live FinCom id, the posting register), so a
 # client-less id of another client is held back by them (why a part's id now carries its client); another client's own
 # part beside a withdrawn one: queued as it is
-r = enqueue(8, ["dc-tp-202610-c1-8"]); finish(8)
-w8 = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-8', 'retired')::text" % q(J(8)))
+r = enqueue(8, ["dc-tp-202610-c1-p8"]); finish(8)
+w8 = rpc(OWNER, "select tally_post_withdraw(%s::uuid, 'dc-tp-202610-c1-p8', 'retired')::text" % q(J(8)))
 db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, created_by) values (%s, %s, 'c2', 'Made-up Egret', null, %s, 1, %s)"
-       % (q(J(11)), q(F), q(json.dumps({"masters": [], "vouchers": [{"id": "dc-tp-202610-c2-8", "xml": X("dc-tp-202610-c2-8")}], "ledger": ""})), q(OWNER)))
+       % (q(J(11)), q(F), q(json.dumps({"masters": [], "vouchers": [{"id": "dc-tp-202610-c2-p8", "xml": X("dc-tp-202610-c2-p8")}], "ledger": ""})), q(OWNER)))
 pl = json.loads(db.one("select payload::text from tally_post_jobs where id = %s" % q(J(11))) or "{}")
-ok(w8.get("ok") is True and [v["id"] for v in pl.get("vouchers", [])] == ["dc-tp-202610-c2-8"] and status(11) == "waiting", "another client's own part 8 beside client c1's withdrawn part 8: queued as it is")
+ok(w8.get("ok") is True and [v["id"] for v in pl.get("vouchers", [])] == ["dc-tp-202610-c2-p8"] and status(11) == "waiting", "another client's own part 8 beside client c1's withdrawn part 8: queued as it is")
 db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J(11)))
 e = sql_try("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, created_by) values (%s, %s, 'c2', 'Made-up Egret', null, %s, 1, %s)"
             % (q(J(12)), q(F), q(json.dumps({"masters": [], "vouchers": [{"id": "dc-tp-202610-1", "xml": X("dc-tp-202610-1")}], "ledger": ""})), q(OWNER)))
