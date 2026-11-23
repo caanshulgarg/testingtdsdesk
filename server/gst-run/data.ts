@@ -73,8 +73,9 @@ export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unkno
 // its number (Tally's own, tallyMatch, when known) with each one's total (its largest line: the party's). The month step
 // has no entries of its own to look in.
 // (final review of 157da641f) a read that fails is an error: the run fails and the app works the month out itself (as
-// "nothing seen" it would count a posted invoice twice); only the invoices posted, queued for posting (postJob) or in
-// Tally are asked about, 200 at a time, 4 requests at once
+// "nothing seen" it would count a posted invoice twice); every marketplace invoice but an ignored one is asked about, in
+// any status (one still "ready" whose tagged entry is already in the book is counted once, as the app counts it), 200 at
+// a time, 4 requests at once
 const SEEN_BATCH = 200, SEEN_AT_ONCE = 4;
 async function inBatches(xs: string[], fn: (part: string[]) => Promise<void>) {
   const parts: string[][] = [];
@@ -86,7 +87,7 @@ export async function salesSeen(rest: Rest, bk: string, sales: any[]) {
   const fids: string[] = [], heads: any[] = [];
   const q = (xs: string[]) => xs.map((x) => enc('"' + String(x).replace(/"/g, "") + '"')).join(",");
   const list = (r: any) => { if (!Array.isArray(r)) throw new Error("the cloud copy's entries could not be read"); return r; };
-  const ids = ms.filter((v: any) => v.status === "posted" || v.postJob).map((v: any) => String(v.id));
+  const ids = ms.map((v: any) => String(v.id));
   const tin = ms.filter((v: any) => v.status === "intally");
   const nos = Array.from(new Set(tin.map((v: any) => String(((v.tallyMatch || {}).number) || (v.x || {}).number || "").trim()).filter(Boolean)));
   await inBatches(ids, async (part) => {
