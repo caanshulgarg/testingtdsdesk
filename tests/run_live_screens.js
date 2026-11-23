@@ -8,7 +8,11 @@
 //   3. the screen left: a minute later both are left (phx_leave); what still comes on them is passed over (their close
 //      never closes the page's connection); drawn again: joined again
 //   4. the tie-out drawn (Rec.tieOf): the gap/locks/tie-outs only
-//   5. off Sync activity the gap is read each minute (not every 5), the held lines still every 5 minutes
+//   5. off Sync activity the gap is read each minute (not every 5), the held lines still every 5 minutes; the books
+//      list the gap is shown with is kept between reads (review of 370f28773)
+//   6. (review of 370f28773, the blocker) left Sync activity, then the line was applied: the bell's held lines, Look up's
+//      "received, not yet entered" and the Tally page's "entries received today" never keep Sync activity's frozen lines
+//      (Rec.act left with the channel); drawn again: read again
 // The real Live of src/js/54 and Rec of src/js/61 and 99, a stand-in WebSocket. LIVE_SRC: another src/js folder.
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm");
@@ -19,6 +23,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const live = fs.readFileSync(path.join(SRC, "54-live-sync.js"), "utf8"), la = live.indexOf("const Live = {"), lb = live.indexOf("/* ---------- next-realtime");
 const rec = fs.readFileSync(path.join(SRC, "61-recorder.js"), "utf8"), ra = rec.indexOf("const Rec = {"), rb = rec.indexOf("\n};\n", ra) + 4;
 const parts = fs.readFileSync(path.join(SRC, "99-screen-parts.js"), "utf8"), pa = parts.indexOf("Object.assign(Rec, {"), pb = parts.indexOf("\n});\n", pa) + 5;
+const alerts = fs.readFileSync(path.join(SRC, "63-alerts.js"), "utf8"), aa = alerts.indexOf("const AlertHub = {"), ab = alerts.indexOf("\n};\n", aa) + 4;
 let now = Date.parse("2026-11-23T10:00:00Z");
 const RealDate = Date;
 class FakeDate extends RealDate { constructor(...a){ super(...(a.length ? a : [now])); } static now(){ return now; } }
@@ -32,7 +37,7 @@ const api = [];
 ctx.Cloud = {on: () => true, st: {firm: "f1"}, cfg: () => ({url: "https://made-up.example", key: "k"}), sess: () => ({access_token: "t1", user_id: "u1"}), fresh: async () => {}, api: async (p) => { api.push(p); return []; }};
 ctx.TCloud = {on: () => true, jobRow(){}, restAll: async () => [], st: {}};
 ctx.S = {syncClient: ""};
-vm.runInContext(live.slice(la, lb) + "\n" + rec.slice(ra, rb) + "\n" + parts.slice(pa, pb) + "\nthis.Live = Live; this.Rec = Rec;", ctx);
+vm.runInContext(live.slice(la, lb) + "\n" + rec.slice(ra, rb) + "\n" + parts.slice(pa, pb) + "\n" + alerts.slice(aa, ab) + "\nthis.Live = Live; this.Rec = Rec; this.AlertHub = AlertHub;", ctx);
 const lines = [], copies = [];
 ctx.Rec.lineIn = r => { lines.push(r); return true; };
 ctx.CopyLive = {in: (t, r) => copies.push(t)};
@@ -86,6 +91,34 @@ const replyAll = () => joins().forEach(reply);
   now += 70000; L.unwant(); api.length = 0;
   ctx.Rec.gaps = {at: now - 61000}; ctx.Rec.gapsOf(); await sleep(5);
   ok(api.some(p => /tally_sync_cursor/.test(p)), "off Sync activity: the gap read after a minute");
+  // the books list kept between reads (a gap in the cursor: the books are read the first time only)
+  const books = [{book_id: "b1", client_id: "c1", company: "ZZ MADE UP CO"}];
+  ctx.Cloud.api = async (p) => { api.push(p); return /tally_sync_cursor/.test(p) ? [{book_id: "b1", gap: {missing: 2}}] : []; };
+  let bookReads = 0; ctx.TCloud.restAll = async () => { bookReads++; return books; };
+  await ctx.Rec.gapsLoad(); await ctx.Rec.gapsLoad(); await ctx.Rec.gapsLoad();
+  ok(bookReads === 1 && (ctx.Rec.gaps.byClient.c1 || []).length === 1, "the gap read 3 times: the books list read once (" + bookReads + "), the gap on its client");
+  ctx.Cloud.api = async (p) => { api.push(p); return /tally_sync_cursor/.test(p) ? [{book_id: "b2", gap: {missing: 1}}] : []; };
+  books.push({book_id: "b2", client_id: "c2", company: "ZZ OTHER CO"});
+  await ctx.Rec.gapsLoad();
+  ok(bookReads === 2 && (ctx.Rec.gaps.byClient.c2 || []).length === 1, "a gap of a book not in the list: the list read again (" + bookReads + ")");
+  ctx.Cloud.api = async (p) => { api.push(p); return []; };
+  console.log("== 6. left Sync activity, then the line was applied");
+  ctx.S.syncClient = "";
+  ctx.Rec.act = {rows: [], at: now, busy: false, cid: ""};
+  ctx.Rec.actOf(); await sleep(10); replyAll(); await sleep(5);
+  const held = {id: 9, client_id: "c1", book_id: "b1", company: "ZZ MADE UP CO", event: "created", state: "held", held_why: "waiting: FinCom asks again at 10:42", received_at: new FakeDate(now).toISOString()};
+  ctx.Rec.lineIn = undefined; delete ctx.Rec.lineIn;
+  vm.runInContext("Rec.lineIn = " + rec.slice(rec.indexOf("lineIn(r){"), rec.indexOf("\n  },", rec.indexOf("lineIn(r){")) + 4).replace(/^lineIn/, "function"), ctx);
+  const rt2 = joined("fincom-recorder-").pop().topic;
+  sock.onmessage({data: JSON.stringify({topic: rt2, event: "postgres_changes", payload: {data: {table: "tally_recorder_lines", record: held}}})});
+  ctx.AlertHub.held = {rows: [held], at: now, busy: false, none: false};
+  ok(ctx.AlertHub.heldFor(["c1"]).length === 1, "on Sync activity: the held line is in the bell's list");
+  now += 70000; L.unwant();                       // the person left Sync activity a minute ago
+  ctx.AlertHub.held = {rows: [], at: now, busy: false, none: false};    // the bell's read: the line applied since
+  ok(ctx.AlertHub.heldFor(["c1"]).length === 0 && ctx.AlertHub.booksHeld("c1") === null, "left Sync activity, then the line was applied: nothing held (Look up, trial balance, day book; Home in sync) (" + ctx.AlertHub.heldFor(["c1"]).length + ")");
+  ok(!Array.isArray(ctx.Rec.act.rows), "Sync activity's lines are let go with its channel (the Tally page's 'entries received today' is not shown from them)");
+  ctx.Rec.actOf(); await sleep(10);
+  ok(api.some(p => /tally_recorder_lines\?select=id,client_id/.test(p)), "Sync activity drawn again: its lines read again");
   console.log(fails ? "FAILED: " + fails : "ALL OK");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("  FAIL " + (e && e.stack || e)); process.exit(1); });

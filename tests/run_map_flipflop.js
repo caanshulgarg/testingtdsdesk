@@ -4,7 +4,8 @@
 // uses in the entries IT holds (LedMaster.refresh -> usage over b.vouchers), and two copies holding different entries
 // (one has read more days of the cloud copy than the other) count differently: A saves 235, B takes it, works the map
 // out again (into -> LedMaster.refresh) to 224 and saves that at its next round, A takes 224, works it out to 235...
-// Now n, and the why of a guess (worked out again by every copy from its own entries), are not what an item is synced by:
+// Now n, and a guess's why and its other worked-out fields (what, kind, rcm, tax, side, reg, gstRate, section, rate:
+// worked out again by every copy from its own entries), are not what an item is synced by:
 // a map item whose only change is them is not sent, and one coming in is not taken. Each copy shows its own count.
 // Two computers in one test, the real BookItems of src/js/54 and server/_shared/gst3b.js, a server that keeps the
 // rows and passes each save to the other computer as Realtime does. Made-up ledgers.
@@ -28,7 +29,8 @@ function computer(name, counts){
   vm.runInContext(core.slice(fa, core.indexOf("\n}", fa) + 2) + "\n" + st.slice(sa, sb) + "\nthis.fpHash = fpHash; this.stableStr = stableStr;", ctx);
   ctx.num = v => Number(v) || 0; ctx.clone = clone;
   // the map as this computer works it out from the entries it holds (LedMaster.refresh: n and the guess's why)
-  const refresh = bk => { Object.keys(bk.map).forEach(n => { const m = bk.map[n]; m.n = counts[n] || 0; if (!m.ok) m.why = "name says GST; used " + m.n + " times"; }); };
+  // (review of 370f28773) and a guess's other fields, worked out from the same entries: its side, rate and registration
+  const refresh = bk => { Object.keys(bk.map).forEach(n => { const m = bk.map[n]; m.n = counts[n] || 0; if (!m.ok && !m.byHand){ m.why = "name says GST; used " + m.n + " times"; m.side = m.n > 230 ? "input" : "output"; m.gstRate = m.n > 230 ? 18 : 12; m.reg = m.n > 230 ? "27" : "29"; } }); };
   ctx.S = {books: {cid: "c1", loading: false, vouchers: [{}], map: {"MADE UP CGST": {what: "gst", tax: "CGST"}, "MADE UP SGST": {what: "gst", tax: "SGST"}, "MADE UP TDS 194C": {what: "tds_payable", section: "194C", ok: true}}}};
   refresh(ctx.S.books);
   ctx.BookSync = {localWork: async (cid, keys) => clone({map: ctx.S.books.map}), openWorkParts: () => null, of: () => ({}), keys: () => ["map"], MASTERS: []};
@@ -60,6 +62,7 @@ async function round(c){
   ok(first === 1, "B's first save of the map: one call (" + first + ")");
   ok(loop === 0, "then 10 rounds on each computer: " + loop + " more saves (" + server.items + " items in all; before: a save a round, the count going 224 -> 235 -> 224)");
   ok(A.ctx.S.books.map["MADE UP CGST"].n === 235 && B.ctx.S.books.map["MADE UP CGST"].n === 224, "each computer shows its own count (A 235, B 224)");
+  ok(A.ctx.S.books.map["MADE UP CGST"].side === "input" && B.ctx.S.books.map["MADE UP CGST"].side === "output", "...and its own guess (a guess's side, rate and registration never saved back and forth)");
   // a real change still goes across, once
   A.ctx.S.books.map["MADE UP SGST"] = Object.assign({}, A.ctx.S.books.map["MADE UP SGST"], {ok: true, byHand: true, tax: "SGST", side: "input"});
   const s0 = server.saves;

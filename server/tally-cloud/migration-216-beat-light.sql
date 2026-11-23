@@ -6,7 +6,8 @@
 -- up to 2,600 buffers each, nearly all of it the lines' bodies and payloads, never sent to the bridge):
 --   1. tally_held_light(firm, device, bridge, books, seen): ONE call a heartbeat for what heldLines, refetch and
 --      ledgersWanted read (server/tally-cloud/index.ts heldOwnLines, ledgersWantedFor): this bridge's own held and
---      fetching lines (any age, at most 2,000), the held lines of the books it follows (migration 146; 30 days, at most
+--      fetching lines (the last 30 days - no rule of the beat reads older ones -, the newest 2,000 when more), the
+--      held lines of the books it follows (migration 146; 30 days, at most
 --      400), and the ":resolved" rows of all of them - light columns only. A line's body comes as {"vouchers": [0]} when
 --      it has entries (else null) and its payload as its waitLedgers only: all the beat's rules look at. With them a
 --      fingerprint (fp) of all that and of the books' month locks; when the beat's last fingerprint (seen) is the same,
@@ -33,7 +34,7 @@ begin
   select md5(p.prosrc) into src from pg_proc p where p.oid = to_regprocedure('public.tally_work_claim(uuid,uuid,text,text[],uuid,text,integer)');
   if src is null then bad := bad || 'function tally_work_claim (not here: run migration 146 first)'::text;
   elsif src not in ('1a78022e9f48f618749a94dea8900781',      -- migration 146's, as on staging on 23-Nov-2026
-                    'a09f9462f13664925446a8568c032fe2') then                   -- this migration's
+                    'bc869188d3dae04b42577625e107b795') then                   -- this migration's
     bad := bad || 'function tally_work_claim (changed since migration 146)'::text;
   end if;
   if array_length(bad, 1) > 0 then
@@ -49,7 +50,8 @@ begin
   if coalesce(auth.role(), '') <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   if p_firm is null or p_device is null or coalesce(p_bridge, '') !~ '^go-[0-9a-f]{6,32}$' then return jsonb_build_object('ok', false); end if;
   if coalesce(array_length(books, 1), 0) > 100 then books := books[1:100]; end if;
-  -- this bridge's own held and fetching lines (index tally_recorder_lines_held_bridge, migration 215)
+  -- this bridge's own held and fetching lines of 30 days, the newest 2,000 (index tally_recorder_lines_held_bridge,
+  -- migration 215); oldest first in the answer, as the beat reads them
   select coalesce(jsonb_agg(z.j order by z.received_at, z.id), '[]'::jsonb) into own from (
     select x.id, x.received_at, jsonb_build_object('id', x.id, 'line_id', x.line_id, 'company', x.company, 'company_guid', x.company_guid, 'event', x.event,
              'master_id', x.master_id, 'vch_type', x.vch_type, 'vch_no', x.vch_no, 'vch_date', x.vch_date, 'book_id', x.book_id, 'received_at', x.received_at,
@@ -58,7 +60,8 @@ begin
              'payload', case when jsonb_typeof(x.payload) = 'object' and x.payload ? 'waitLedgers' then jsonb_build_object('waitLedgers', x.payload -> 'waitLedgers') end) as j
       from tally_recorder_lines x
      where x.firm_id = p_firm and x.device_id = p_device and x.bridge = p_bridge and x.state in ('held', 'fetching')
-     order by x.received_at, x.id limit 2000) z;
+       and x.received_at > now() - interval '30 days'
+     order by x.received_at desc, x.id desc limit 2000) z;
   -- the held lines of the books this bridge follows (another bridge's lines among them; the beat's rules choose)
   select coalesce(jsonb_agg(z.j order by z.received_at, z.id), '[]'::jsonb) into fol from (
     select x.id, x.received_at, jsonb_build_object('id', x.id, 'line_id', x.line_id, 'company', x.company, 'company_guid', x.company_guid, 'event', x.event,
@@ -100,7 +103,10 @@ begin
   if not exists (select 1 from tally_links l where l.firm_id = p_firm and l.book_id = p_book and l.state = 'linked') then return got; end if;
   perform pg_advisory_xact_lock(hashtext('tally_work_claim:' || p_book::text || ':' || p_kind));
   for u in select distinct x from unnest(coalesce(p_units, '{}'::text[])) x where coalesce(x, '') <> '' limit 400 loop
-    -- 216: this bridge's own claim with more than half its time left: kept as it is (no new row version)
+    -- 216: this bridge's own claim with more than half its time left: kept as it is (no new row version). Its effective
+    -- lapse: renewed only under half its time (300 s of the beat's 600), and the beat (tally-ingest, the 2 minutes it keeps
+    -- an answer) calls at least every 2 minutes while the bridge beats: a held claim never has under about 180 s left;
+    -- a bridge that stops lets it lapse 3 to 10 minutes after its last call
     if exists (select 1 from tally_work_claims c where c.book_id = p_book and c.kind = p_kind and c.unit = left(u, 120)
                  and c.device_id = p_device and c.bridge_id = p_bridge and c.firm_id = p_firm and c.until > now() + make_interval(secs => ttl / 2.0)) then
       got := got || left(u, 120);

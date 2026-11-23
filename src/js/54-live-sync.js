@@ -25,12 +25,14 @@ Object.assign(BookItems, {
   on(){ return !this.off && typeof BookSync === "object" && BookSync.on() && !BookSync.off; },
   ik(k, i){ return k + "\u0001" + i; },
   h(d, o){ return fpHash(stableStr(d === undefined ? null : d) + "|" + (o == null ? "" : o)); },
-  // next-db-load-2: what an item is synced by. A ledger's count in the map (n) and a guess's why are worked out by each
-  // copy from the entries IT holds (LedMaster.refresh): two copies holding different entries saved each other's count
-  // back and forth (staging: 4,450 saves in 4 hours). Neither is sent or taken alone; each copy shows its own
+  // next-db-load-2: what an item is synced by. A ledger's count in the map (n), and a guess (not confirmed, not set by
+  // hand) - its why and what it is (what, kind, rcm, tax, side, reg, gstRate, section, rate) - are worked out by each copy
+  // from the entries IT holds (LedMaster.refresh): two copies holding different entries saved each other's back and forth
+  // (staging: 4,450 saves in 4 hours). None is sent or taken alone; each copy shows its own
+  GUESS: ["why", "what", "kind", "rcm", "tax", "side", "reg", "gstRate", "section", "rate"],
   hs(k, i, d, o){
     if (k !== "map" || i[0] !== "." || !d || typeof d !== "object" || Array.isArray(d)) return this.h(d, o);
-    const x = Object.assign({}, d); delete x.n; if (!x.ok && !x.byHand) delete x.why;
+    const x = Object.assign({}, d); delete x.n; if (!x.ok && !x.byHand) this.GUESS.forEach(f => { delete x[f]; });
     return this.h(x, o);
   },
   // the server's copy as last agreed (b): the item as it is, or (a record kept before hs) its whole hash
@@ -393,7 +395,12 @@ const Live = {
     if (k === "rec") this.joinRecorder(); else if (k === "sync") this.joinSync();
   },
   unwant(){
-    if (this.recorderTopic && !this.wanted("rec")){ this.leave(this.recorderTopic); this.recorderTopic = ""; this.recorderLive = false; }
+    if (this.recorderTopic && !this.wanted("rec")){
+      this.leave(this.recorderTopic); this.recorderTopic = ""; this.recorderLive = false;
+      // (review of 370f28773) Sync activity's lines no longer come live: let go, never shown frozen (the bell's held lines,
+      // "received, not yet entered", the Tally page's entries received today); read again when it is drawn again
+      if (typeof Rec === "object" && Rec.act){ Rec.act.rows = null; Rec.act.at = 0; }
+    }
     if (this.syncTopic && !this.wanted("sync")){ this.leave(this.syncTopic); this.syncTopic = ""; this.syncLive = false; }
   },
   // a channel left: what still comes on it (its reply, its close) is passed over, never taken for the page's own

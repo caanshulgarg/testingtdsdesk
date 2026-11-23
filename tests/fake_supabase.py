@@ -71,8 +71,9 @@ def held_light(a):
     if not a.get("p_firm") or not a.get("p_device") or not re.match(r"^go-[0-9a-f]{6,32}$", str(a.get("p_bridge") or "")): return {"ok": False}
     key = lambda r: (_ts(r.get("received_at")), r.get("id") or 0)
     held = lambda r: r.get("state") in ("held", "fetching")
-    own = sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("device_id") == a["p_device"] and r.get("bridge") == a["p_bridge"] and held(r)], key=key)[:2000]
     books, t30 = list(a.get("p_books") or [])[:100], time.time() - 30 * 86400
+    # own lines of 30 days, the newest 2,000, oldest first (as migration 216)
+    own = sorted(sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("device_id") == a["p_device"] and r.get("bridge") == a["p_bridge"] and held(r) and _ts(r.get("received_at")) > t30], key=key, reverse=True)[:2000], key=key)
     fol = sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("book_id") in books and held(r) and r.get("event") in ("created", "altered", "imported") and _ts(r.get("received_at")) > t30], key=key)[:400]
     rids = {str(r.get("line_id")) + ":resolved" for r in own + fol if r.get("line_id")}
     res = sorted([r for r in rows if r.get("firm_id") == a["p_firm"] and r.get("line_id") in rids], key=lambda r: r.get("id") or 0)

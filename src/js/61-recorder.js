@@ -461,7 +461,10 @@ const Rec = {
     g.busy = true;
     try {
       const cur = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,gap,gap_at,last_match_at&gap=not.is.null") || []).filter(c => c && c.gap && typeof c.gap === "object");
-      const books = cur.length ? [].concat(await TCloud.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : [];
+      // (review of 370f28773) the books list kept between reads: read again only for a book not in it, or after 10 minutes
+      const kept = g.books && Date.now() - (g.booksAt || 0) < 600000 && cur.every(c => g.books.some(x => x.book_id === c.book_id)) ? g.books : null;
+      const books = kept || (cur.length ? [].concat(await TCloud.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []);
+      if (!kept && cur.length){ g.books = books; g.booksAt = Date.now(); }
       const by = {};
       cur.forEach(c => { const b = books.find(x => x.book_id === c.book_id); if (b && b.client_id) (by[b.client_id] = by[b.client_id] || []).push({book: c.book_id, company: b.company || "", gap: c.gap, gapAt: c.gap_at}); });
       g.byClient = by; g.no44 = false;

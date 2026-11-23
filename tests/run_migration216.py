@@ -3,7 +3,8 @@ throwaway PostgreSQL (pg_stand, port 55716 unless PG216_PORT; data under /tmp/fi
 database), with migration 146's tally_work_claim and the columns of tally_recorder_lines as on staging. Made-up lines only.
   0. the name guard: a tally_work_claim that is not 146's, or a tally_held_light of something else: stopped, nothing changed
   1. tally_held_light: this bridge's own held and fetching lines (any event, any age; not another bridge's, not applied),
-     the followed books' held lines (created/altered/imported, 30 days), the ":resolved" rows of both; light columns only
+     the followed books' held lines (created/altered/imported, 30 days), the ":resolved" rows of both; own lines of the
+     last 30 days only, the newest 2,000 when more (review of 370f28773); light columns only
      (no body or payload beyond "has entries" and waitLedgers); the same fingerprint twice; seen = fp: {same} and no rows;
      a line changing, a line coming, a month locked: a new fingerprint; only the service role
   2. tally_work_claim: a claim this bridge holds with over half its time left is kept as it is (no new row version) and
@@ -16,7 +17,8 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 os.environ["TMPDIR"] = os.environ.get("PG216_TMP") or "/tmp/fincom-m216"
 import shutil as _sh; os.makedirs(os.environ["TMPDIR"], exist_ok=True); os.chmod(os.environ["TMPDIR"], 0o755); _sh.chown(os.environ["TMPDIR"], "postgres", "postgres")
 if not os.access("/tmp", os.W_OK) or os.stat("/tmp").st_mode & 0o002 == 0: os.environ.setdefault("PG_STAND_SOCKDIR", os.environ["TMPDIR"])
-import pg_stand
+import pg_stand, csv as _csv
+_csv.field_size_limit(1 << 30)   # the 2,000-line answer is one field
 ROOT = os.path.dirname(HERE)
 M = os.environ.get("M216_FILE") or os.path.join(ROOT, "server", "tally-cloud", "migration-216-beat-light.sql")
 SKIP = os.environ.get("M216_SKIP") == "1"
@@ -57,7 +59,8 @@ def seed(db):
         rows.append("('%s', '%s', '%s', '%s', 'MADE UP CO', 'cg-1', '%s', '%s', '101', 'Sales', '7', '2026-10-06', now() - interval '%s days', '%s', '%s', %s, %s)" % (
             F, book, dev, br, lid, ev, days, st, why.replace("'", "''"), "'%s'::jsonb" % json.dumps(body) if body is not None else "null", "'%s'::jsonb" % json.dumps(payload) if payload is not None else "null"))
     add("O1", DA, GA, B1, "created", "held", 1, "waiting for the ledger X", BIG, {"waitLedgers": ["MADE UP LEDGER"], "fid": "B-1", "big": "x" * 3000})
-    add("O2", DA, GA, B1, "altered", "fetching", 40, "the entry was not read from Tally", None, {"fid": "B-2"})
+    add("O2", DA, GA, B1, "altered", "fetching", 20, "the entry was not read from Tally", None, {"fid": "B-2"})
+    add("O6", DA, GA, B1, "created", "held", 40, "the entry was not read from Tally")       # older than 30 days: no rule of the beat reads it
     add("O3", DA, GA, B1, "deleted", "held", 2)
     add("O4", DA, GA, B1, "created", "applied", 1)                       # applied: not listed
     add("O5", DA, "go-cccccc216216", B1, "created", "held", 1)          # another bridge of the same key: not its own
@@ -93,7 +96,7 @@ try:
         print("== 1. tally_held_light")
         a = light(db)
         own = {r["line_id"]: r for r in a["own"]}; fol = {r["line_id"] for r in a["follow"]}; res = {r["line_id"]: r for r in a["resolved"]}
-        ok(a["ok"] and not a["same"] and set(own) == {"O1", "O2", "O3", "O2:resolved"}, "own: this bridge's held and fetching lines, any event and age (%s)" % sorted(own))
+        ok(a["ok"] and not a["same"] and set(own) == {"O1", "O2", "O3", "O2:resolved"}, "own: this bridge's held and fetching lines of 30 days, any event (not O6, 40 days) (%s)" % sorted(own))
         ok(fol == {"F1"}, "followed: the book's created/altered/imported held lines of 30 days (%s)" % sorted(fol))
         ok(set(res) == {"O2:resolved", "F1:resolved"}, "the ':resolved' rows of both, any state (%s)" % sorted(res))
         o1 = own["O1"]
@@ -116,6 +119,10 @@ try:
         db.sql("insert into tally_recorder_lines (firm_id, book_id, device_id, bridge, line_id, event, state) values ('%s', '%s', '%s', '%s', 'O9', 'created', 'held')" % (F, B1, DA, GA))
         f5 = light(db)["fp"]; ok(f5 != f4, "a new held line: a new fingerprint")
         r = raises(lambda: light(db, role=False)); ok(r and "not allowed" in r, "not the service role: not allowed")
+        # more than 2,000 own lines: the newest 2,000 (the beat's lists are of the newest days; oldest first in the answer)
+        db.sql("insert into tally_recorder_lines (firm_id, book_id, device_id, bridge, line_id, event, state, received_at) select '%s', '%s', '%s', '%s', 'M' || g, 'created', 'held', now() - (g || ' minutes')::interval from generate_series(1, 2100) g" % (F, B1, DA, GA))
+        many = light(db)["own"]; ln = [r["line_id"] for r in many]
+        ok(len(many) == 2000 and "M1" in ln and "M2100" not in ln and "O3" not in ln and ln[-1] == "O9", "over 2,000: the newest 2,000, oldest first (%d; first %s, last %s)" % (len(many), ln[0], ln[-1]))
         ok(light(db, br="not-a-bridge") == {"ok": False}, "a bridge id not of the form: nothing")
     print("== 2. tally_work_claim")
     got = claim(db, ["L1", "L2"]); x1 = xmin(db, "L1")

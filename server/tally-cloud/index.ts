@@ -814,7 +814,9 @@ function fastBridge(version: unknown): boolean {
 // followed books' held lines, the ":resolved" rows of both - in light columns (a body as "has entries", a payload as its
 // waitLedgers: all these rules look at), with a fingerprint. The same fingerprint as the last heartbeat's: the database
 // answers {same} and nothing more, and what was worked out from it then is given again (at most 2 minutes, so the 7- and
-// 30-day windows, the links and the claims of followed lines move on; never while a line waits for a ledger, whose list
+// 30-day windows, the links and the claims of followed lines move on - a claim, renewed by the database only under half
+// its 600 s, so never has under about 180 s left while the bridge beats: migration 216; never while a line waits for a
+// ledger, whose list
 // the fingerprint does not cover). A cloud without 216 (said once, asked again 10 minutes later) or any error: the reads
 // as before
 type Light = { fp: string; own: any[]; follow: any[]; resolved: any[]; waiting: boolean; outs: Map<string, { at: number; out: Record<string, unknown>[] }>; err?: boolean };
@@ -849,7 +851,8 @@ function lightPick(rows: any[], o: { cai?: boolean; since?: string; books?: stri
   const t = o.since ? Date.parse(o.since) : -Infinity, w = o.why ? o.why.toLowerCase() : "";
   return rows.filter((r) => ["held", "fetching"].includes(String(r?.state ?? "")) && (!o.cai || CAI.includes(String(r.event ?? ""))) && Date.parse(String(r.received_at)) > t
       && (!o.books || o.books.includes(String(r.book_id ?? ""))) && (!w || String(r.held_why ?? "").toLowerCase().includes(w)) && (!o.ids || o.ids.has(String(r.line_id ?? ""))))
-    .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)) || Number(a.id || 0) - Number(b.id || 0));
+    .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)) || Number(a.id || 0) - Number(b.id || 0))
+    .map((r) => ({ ...r }));     // copies: the rules mark rows (_follow, _old, _waits), never the snapshot kept for the next heartbeat
 }
 async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false, fast = false, follow?: Map<string, Set<string>>, light?: Light | null) {
   if (!light) return await heldOwnLinesNow(dev, firm, bridge, max, want, what, unresolved, fast, follow, null);
@@ -942,7 +945,7 @@ async function heldOwnLinesNow(dev: any, firm: string, bridge: string, max: numb
       const rs: any[] = [];
       for (let i = 0; i < rids.length; i += 60) {
         const part = new Set(rids.slice(i, i + 60));
-        const { data: d, error: re } = light ? { data: light.resolved.filter((x: any) => part.has(String(x?.line_id ?? ""))), error: null as any } : await db.from("tally_recorder_lines").select("id, line_id, state, held_why, body, payload, received_at").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
+        const { data: d, error: re } = light ? { data: light.resolved.filter((x: any) => part.has(String(x?.line_id ?? ""))).map((x: any) => ({ ...x })), error: null as any } : await db.from("tally_recorder_lines").select("id, line_id, state, held_why, body, payload, received_at").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
         if (re) { fail("held_resolved", re); console.log("tally-ingest beat: " + what + ": the lines already resolved not read:", String(re.message || "").slice(0, 200)); return []; }
         rs.push(...(d || []));
       }
