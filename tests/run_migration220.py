@@ -472,6 +472,32 @@ try:
     ok(e == "" and has("RR-6") and not fbh("RR-6") and db.one("select last_value from fb_missed_seq") != seq0, "12. review 2: fb_books and fb_mirror_errors both locked: the copy's write commits; fb_missed_seq ticks (%s)" % e[-80:])
     run(); run()
     ok(fbh("RR-6") and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0", "12. review 2: the next runs see the tick, sweep, and mirror it")
+    # round 3 B1: a statement spanning more than 5 copy books whose note cannot be written: the miss names every enrolled book ('')
+    extra = ["bbbbbbbb-0000-0000-0000-00000000005%d" % i for i in range(1, 6)]
+    for i, tb in enumerate(extra):
+        db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('%s', '%s', 'cx%d', 'Extra %d (made up)', '2025-04-01');"
+               "insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno, party, narration, cancelled, optional) values ('%s', '%s', 'X-1', '2026-11-20', 1, 'Journal', 'X-1', '', 'x', false, false)" % (tb, F1, i, i, tb, F1))
+    e = missed_change("update tally_vouchers set narration = 'six books (made up)' where (book_id = '%s' and guid = '%s') or (book_id in (%s) and guid = 'X-1')" % (TB1, gs[5], ",".join("'%s'" % t for t in extra)),
+                      lock="lock table fb_mirror_dirty in access exclusive mode;")
+    ok(e == "" and db.one("select count(*) from fb_mirror_errors where kind = 'missed' and resolved_at is null and book_id is null and key = ''") == "1",
+       "12. round 3 B1: a statement over 6 copy books that cannot be noted: the miss names every enrolled book, not just 5 (%s)" % db.rows("select key from fb_mirror_errors where kind = 'missed' and resolved_at is null"))
+    db.one("set role service_role; select fb_mirror_triage()")
+    ok(db.one("select count(*) from fb_mirror_errors where kind = 'missed' and resolved_at is null and book_id in ('%s', '%s')" % (BK, BK4)) == "2", "12. ... the triage gives both enrolled books a sweep")
+    run(); run()
+    ok(nar(gs[5]) == "six books (made up)" and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0", "12. ... and the sweep mirrors the change")
+    # round 3 (2): a chunk of 500 entries uses one subtransaction, not one per entry or per edit-log row (no subtransaction overflow)
+    ingest("update tally_vouchers set narration = narration || ' .' where book_id = '%s' and day >= '2025-04-01';" % TB1, catch=False)
+    nn = int(db.one("select count(*) from fb_mirror_dirty where book_id = '%s'" % BK))
+    ov = db.rows("begin; do $$ begin perform fb_mirror_catchup('%s', 500); end $$; select s.subxact_count, s.subxact_overflowed from pg_stat_get_backend_idset() i, pg_stat_get_backend_subxact(i) s where pg_stat_get_backend_pid(i) = pg_backend_pid(); commit;" % BK)
+    ok(nn > 200 and ov and ov[-1].get("subxact_overflowed") == "f", "12. round 3 (2): mirroring %d noted entries in one chunk does not overflow the subtransaction cache (%s)" % (nn, ov[-1] if ov else ov))
+    # round 3 (1): an asked tie-out never does more than a short catch-up; still behind: 'updating', the book's step unchanged
+    db.sql("alter table fb_vouchers add constraint test_break2 check (narration <> 'STUCK (made up)')")
+    ingest("update tally_vouchers set narration = 'STUCK (made up)' where book_id = '%s' and guid = '%s';" % (TB1, gs[7]), catch=False)
+    before = db.one("select coalesce(in_step::text, '') || coalesce(last_tieout_id::text, '') from fb_books where book_id = '%s'" % BK)
+    r = json.loads(db.one("set role service_role; select fb_tieout('%s', 'asked')" % BK))
+    ok(r.get("updating") is True and db.one("select coalesce(in_step::text, '') || coalesce(last_tieout_id::text, '') from fb_books where book_id = '%s'" % BK) == before,
+       "12. round 3 (1): an asked tie-out while the book is still behind answers 'Updating' and stores no result (%s)" % r.get("words"))
+    db.sql("alter table fb_vouchers drop constraint test_break2"); run()
     # the copy's write never waits for the catch-up: the book's mirror lock held by a run
     a = bg("begin; select pg_advisory_xact_lock(hashtextextended('fb_mirror:%s', 0)); select pg_sleep(4); commit;" % BK); time.sleep(0.7)
     t = time.time(); b = bg("set statement_timeout = '1s'; begin; " + vsql("RR-3") + " commit;"); b.stdout.read(); b.wait(); dt = time.time() - t; a.stdout.read(); a.wait()

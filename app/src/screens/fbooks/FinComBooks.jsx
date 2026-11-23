@@ -99,7 +99,7 @@ function NotSetUp({ canSetUp, cid, onDone }) {
 function StepBanner({ book, onChecked }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
   const src = srcName(book.source), t = book.tieout || null, c = book.counts || {};
-  const check = () => { setBusy(true); setMsg(""); rpc("fb_tieout_ask", { p_book: book.book }).then(() => { setBusy(false); onChecked(); }, (e) => { setBusy(false); setMsg(plain(e)); }); };
+  const check = () => { setBusy(true); setMsg(""); rpc("fb_tieout_ask", { p_book: book.book }).then((r) => { setBusy(false); if (r && r.updating) setMsg(r.words); onChecked(); }, (e) => { setBusy(false); setMsg(plain(e)); }); };
   let tone, head, text;
   if (book.state === "read_only") { tone = "bad"; head = "Read-only."; text = "FinCom Books’ own check found a problem: " + book.read_only_why; }
   else if (book.state === "setting_up") { tone = "info"; head = "Being built."; text = "FinCom is copying this client’s entries from " + src + ". This page fills in as it goes."; }

@@ -132,3 +132,18 @@ No edge function changes. No change to the bridge, legacy.js or any existing rep
 `fb_mirror_txn`. The migration has never been applied anywhere, so removing them carries no risk, while keeping dead
 commit-time code would invite someone to switch it back on. New: `fb_mirror_state` (the mirror's bookkeeping, kept out of
 `fb_books` so it does not fill the edit log every 3 minutes), `fb_missed_seq`, `fb_behind_since`, `fb_mirror_failed`.
+
+### Round 3 of the review (23-Nov-2026)
+
+| Finding | Fix | Test |
+|---|---|---|
+| B1: a `missed` row named at most 5 copy books, so a statement over more lost the rest | more than 5 copy books: the row names none (`''`), and every enrolled book is swept | 12 (round 3 B1); `conc3.py` C |
+| (1) a member's tie-out ran a catch-up of up to 20,000 entries | asked tie-outs (and the opening sign-off) catch up at most 500; still behind: "Updating", nothing stored; the page shows that answer | 12 (round 3 (1)) |
+| (2) one subtransaction per entry (and per edit-log row) | a chunk is one subtransaction (`fb_mirror_list`); on a failure it is split in halves until the failing entry is alone; the edit log works out the request's client details once per transaction | 12 (round 3 (2)): 250 entries, 1 subtransaction, no overflow (before: 64, overflowed) |
+| (3) the note's row lock held through the scans | the mirrored notes are deleted right after they are mirrored, before the AlterID scan and the sweep; the runner commits each chunk of 500 | (structural) |
+| The same day sent again notes every entry | not changed: deciding "unchanged" needs the entry's content hash, which is the work the copy's path no longer does. The catch-up compares and finds them the same (5.6 s for three such days, off the copy's path) | `bench.py` |
+
+**TODO before P4 (own-books entry), from round 3 (5):** the D3 guard's "voucher opened in this transaction" list
+(`fincom.fb_open`) and the edit log's actor and reason (`fincom.fb_actor`, `fincom.fb_reason`) are session settings.
+Nothing reaches them from outside today (no write path through PostgREST), but before own-books writes exist they must move
+to a transaction-local table keyed by txid, written only by the posting functions, so that no caller can set them.
