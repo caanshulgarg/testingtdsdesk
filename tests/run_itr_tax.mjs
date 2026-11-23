@@ -97,7 +97,7 @@ ok(a3.adds.find((a) => a.key === "40aia").amt === 33000 && a3.adds.find((a) => a
 console.log("Chapter VI-A");
 const d1 = compute(biz(1000000, { regime: "old", deductions: { "80C": 200000, "80TTA": 15000 } }));
 ok(d1.ded === 160000 && d1.warn.some((w) => w.key === "via_80C"), "old: 80C capped at 1.5 lakh, 80TTA at 10,000");
-const d2 = compute(biz(1000000, { salary: { gross: 800000, std: 75000 }, deductions: { "80C": 150000, "80CCD2": 50000 } }));
+const d2 = compute(biz(1000000, { salary: { gross: 800000, std: 75000, basicDa: 800000 }, deductions: { "80C": 150000, "80CCD2": 50000 } }));
 ok(d2.ded === 50000 && d2.warn.some((w) => w.key === "via_80C"), "new regime: 80C left out, 80CCD(2) allowed (within 14% of salary)");
 ok(compute(biz(100000, { regime: "old", cg: { s111A: 300000 }, deductions: { "80C": 150000 } })).ded === 100000, "deductions never against special-rate income");
 console.log("special rates");
@@ -154,16 +154,18 @@ ok(g4.ti === 480000 && g4.tax.rebate === 0 && g4.tax.specialTax === 13125 && g4.
 const g5 = compute(biz(200000, { cg: { s111A: 300000, s112: 100000 } }));
 ok(g5.tax.specialTax === 32500 && g5.tax.rebate === 0 && g5.liability === 33800, "G5 new: normal 2L, 111A 3L, 112 1L: the 2L unused against 111A first: 20,000 + 12,500 = 32,500; 33,800");
 // Chapter VI-A, old regime, age 40, salary 10L (private employer)
-const g6 = compute(biz(1500000, { regime: "old", salary: { gross: 1000000, std: 50000 }, deductions: { "80C": 160000, "80D_self": 30000, "80D_parents": 60000, parentsSenior: true, "80DD": 90000, "80DDB": 50000, "80U": 140000, uSevere: true, "80CCD2": 120000, "80TTA": 12000 } }));
+const g6 = compute(biz(1500000, { regime: "old", salary: { gross: 1000000, std: 50000, basicDa: 1000000 }, deductions: { "80C": 160000, "80D_self": 30000, "80D_parents": 60000, parentsSenior: true, "80DD": 90000, "80DDB": 50000, "80U": 140000, uSevere: true, "80CCD2": 120000, "80TTA": 12000 } }));
 ok(g6.ded === 150000 + 25000 + 50000 + 75000 + 40000 + 125000 + 100000 + 10000, "G6 old: 80C 1.5L, 80D 25k + 50k (senior parents), 80DD 75k, 80DDB 40k, 80U 1.25L (severe), 80CCD(2) 10% of salary = 1L, 80TTA 10k = " + g6.ded);
 const g6s = compute(biz(1500000, { regime: "old", age: 65, deductions: { "80D_self": 70000, "80TTA": 10000, "80TTB": 70000, "80DDB": 120000 } }));
 ok(g6s.ded === 50000 + 50000 + 100000 && g6s.warn.some((w) => w.key === "via_80TTA"), "G6s old, senior: 80D 50k, 80TTB 50k (80TTA not for a senior), 80DDB 1L (senior patient): " + g6s.ded);
 const g6g = compute(biz(1000000, { regime: "old", deductions: { "80C": 150000, "80CCD1B": 50000, "80G": [{ amt: 200000, pct: 50, qualifying: true }, { amt: 20000, pct: 100, qualifying: false }, { amt: 5000, pct: 100, qualifying: false, cash: 5000 }] } }));
 ok(g6g.ded === 150000 + 50000 + 40000 + 20000, "G6g 80G: adjusted GTI 8L, qualifying limit 80,000 at 50% = 40,000; 100% without limit 20,000; a cash donation above 2,000 nothing: " + g6g.ded);
 // new regime, individual: only 80CCD(2) at 14% of salary, 80CCH (and 80JJAA, section 115BAC(2)(ii))
-const g7 = compute(biz(500000, { salary: { gross: 1000000, std: 75000 }, deductions: { "80C": 150000, "80CCD2": 200000, "80CCH": 10000, "80D_self": 25000 } }));
+const g7 = compute(biz(500000, { salary: { gross: 1000000, std: 75000, basicDa: 1000000 }, deductions: { "80C": 150000, "80CCD2": 200000, "80CCH": 10000, "80D_self": 25000 } }));
 ok(g7.ded === 140000 + 10000 && g7.warn.some((w) => w.key === "via_80C") && g7.warn.some((w) => w.key === "via_80CCD2"), "G7 new: 80CCD(2) 14% of 10L = 1.4L, 80CCH 10k; 80C and 80D left out: " + g7.ded);
-ok(compute(biz(500000, { regime: "old", salary: { gross: 1000000, std: 50000 }, deductions: { "80CCD2": 200000, govtEmployer: true } })).ded === 140000, "G7b old, government employer: 80CCD(2) 14%");
+ok(compute(biz(500000, { regime: "old", salary: { gross: 1000000, std: 50000, basicDa: 1000000 }, deductions: { "80CCD2": 200000, govtEmployer: true } })).ded === 140000, "G7b old, government employer: 80CCD(2) 14%");
+{ const g7c = compute(biz(500000, { salary: { gross: 1000000, std: 75000 }, deductions: { "80CCD2": 100000 } }));
+  ok(g7c.ded === 0 && g7c.needs.some((x) => x.key === "ccd2_basic"), "80CCD(2) without basic + DA: nothing allowed on a guess, and it is asked (" + g7c.ded + ")"); }
 // companies: 115BAA allows only 80JJAA and 80M; the 25% rate is asked, never assumed
 const g8 = compute(co(5000000, { regime: "115BAA", deductions: { "80IAC": 1000000, "80G": [{ amt: 100000, pct: 100, qualifying: false }], "80JJAA": 200000 } }));
 ok(g8.ded === 200000 && g8.warn.some((w) => w.key === "via_80IAC") && g8.warn.some((w) => w.key === "via_80G"), "G8 115BAA: 80IAC and 80G not allowed, 80JJAA allowed");
@@ -190,10 +192,11 @@ for (let i = 0; i < 600; i++) {
   if (ent === "F") m.partners = [{ remuneration: amt(3e6), interest: amt(3e5), rate: pick([10, 12, 15, 18]), working: rnd() < 0.9 }];
   if (ent === "C" && rnd() < 0.6) { m.bookProfit = amt(5e8); m.matCredit = amt(1e6); }
   if (rnd() < 0.4) m.os = { interest: amt(4e5), dividend: amt(1e5) };
-  if (rnd() < 0.3 && ent !== "C") m.salary = { gross: amt(2e6), std: 75000 };
+  if (rnd() < 0.3 && ent !== "C") { m.salary = { gross: amt(2e6), std: 75000 }; if (rnd() < 0.7) m.salary.basicDa = amt(1e6); }
   if (rnd() < 0.3) m.cg = { s111A: amt(5e6), s112A: amt(3e6), s112: amt(1e6) };
   if (rnd() < 0.2) m.hp = amt(4e5) - 2e5;
   if (rnd() < 0.3) m.losses = { business: [{ ay: pick(["2016", "2019", "2023"]), amt: amt(5e5) }], unabsorbedDep: amt(2e5) };
+  if (rnd() < 0.3) m.losses = Object.assign(m.losses || {}, { hp: [{ ay: pick(["2017", "2020", "2024"]), amt: amt(3e5) }], stcl: [{ ay: pick(["2017", "2022"]), amt: amt(2e6) }], ltcl: [{ ay: pick(["2018", "2025"]), amt: amt(2e6) }] });
   if (rnd() < 0.4) m.deductions = { "80C": amt(2e5), "80D_self": amt(6e4), "80D_parents": amt(6e4), parentsSenior: rnd() < 0.5, "80G": [{ amt: amt(2e5), pct: pick([50, 100]), qualifying: rnd() < 0.5, cash: amt(5000) }], "80CCD2": amt(2e5),
     "80TTA": amt(2e4), "80TTB": amt(6e4), "80DD": amt(1.5e5), ddSevere: rnd() < 0.5, "80DDB": amt(1.2e5), ddbSenior: rnd() < 0.5, "80U": amt(1.5e5), uSevere: rnd() < 0.5, "80CCH": amt(2e4), "80JJAA": amt(1e5), "80IAC": amt(1e5), "80M": amt(5e4), "80GGC": amt(3e4) };
   if (rnd() < 0.2) m.age = 65;

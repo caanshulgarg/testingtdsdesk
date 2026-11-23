@@ -20,7 +20,9 @@ const NAMES = ["xesc", "r2", "num", "amt", "toTallyDate", "fmtDate", "toDateObj"
   // next-fix-audit-bank: a receipt's allocations, of the invoices of the customer posted to (src/js/22-bank-guards.js)
   "bankSalesOf", "bankSalesAlloc",
   // (next-fix-audit-sales-einv) a credit note against an invoice posted from FinCom is set against its bill: salesAgainstOf (src/js/25)
-  "salesAgainstOf"];
+  "salesAgainstOf",
+  // (the owner's approval of 23-Nov-2026) one Tally company with several GSTINs: the entry names its GST registration
+  "billReg", "vchGstReg"];
 const re = /\n(?:async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/g;
 const decl = []; let m;
 while ((m = re.exec(js))) decl.push({name: m[1], at: m.index});
@@ -38,7 +40,8 @@ const ctx = {console, Math, JSON, Date, Number, String, RegExp, Object, Array, S
   salesCmpGstin: (v, co) => co.gstin || "", salesOwnStates: () => ["27"], salesRegOf: () => ({code: "27", gstin: "27AAACZ1234Z1Z5"}),
   // the invoice's lines (salesLines works them out from the invoice and the company's ledgers): given here as they come out
   // (staging-next had the same stub, salesCmpGstin, here: one kept, above, with the sales track's)
-  salesLines: v => v.lines};
+  salesLines: v => v.lines,
+  ownGstins: co => [co.gstin].concat(String(co.otherGstins || "").split(/[,\s]+/).filter(Boolean))};
 vm.createContext(ctx);
 // the shared name helpers ledNm calls (namesBreaks), as the app has them first (build.py NAMES_JS, without the export line); not hashed: they are
 // the cloud's and the app's one rule for Tally names, not a posting builder
@@ -62,6 +65,19 @@ const shapes = {
   "new-customer": x.customerMasterXml({name: "Acme Traders", gstin: "27AABCA1234A1Z5", address: "1 Road\nPune"}),
   "voucher-type-numbering": ["Purchase", "Journal", "Payment"].map(ctx.__vt).join(""),
 };
+// (the owner's approval of 23-Nov-2026) "This Tally company has more than one GSTIN": a bill to the client's Karnataka
+// registration and a sales invoice issued from it carry that registration; the shapes above (one GSTIN) are unchanged
+const coM = Object.assign({}, co, {multiGstin: true, otherGstins: "29AAACZ1234Z1Z1", gstRegName: {"29": "Karnataka Registration"}});
+const billM = bill("pbm", "KA/77", "Fingate", [{ledger: "Electricity Charges", side: "Dr", amt: 1000}, {ledger: "Fingate", side: "Cr", amt: 1000, role: "party"}]); billM.x.buyerGstin = "29AAACZ1234Z1Z1";
+shapes["purchase-bill-multi-gstin"] = x.voucherXml(billM, coM);
+ctx.salesCmpGstin = () => "29AAACZ1234Z1Z1";
+shapes["sales-invoice-multi-gstin"] = x.salesVoucherXml({id: "s2", customerLedger: "Acme Traders", source: "created", x: {date: "2026-07-02", number: "KA-INV-3", customerName: "Acme Traders", customerGstin: "29AABCA1234A1Z1", total: 1180,
+  noteKind: ""}, lines: [{side: "Dr", ledger: "Acme Traders", amt: 1180, role: "party"}, {side: "Cr", ledger: "Sales 18%", amt: 1000, role: "sales"},
+  {side: "Cr", ledger: "Output IGST 18% KA", amt: 180, role: "tax"}]}, coM);
+ctx.salesCmpGstin = (v, c) => c.gstin || "";
+const REG = '<GSTREGISTRATION TAXTYPE="GST" TAXREGISTRATION="29AAACZ1234Z1Z1">Karnataka Registration</GSTREGISTRATION>';
+const bad = Object.entries(shapes).filter(([k, v]) => /multi-gstin/.test(k) ? !v.includes(REG) || (k.startsWith("purchase") && !v.includes("<CMPGSTIN>29AAACZ1234Z1Z1</CMPGSTIN>")) : /GSTREGISTRATION /.test(v)).map(([k]) => k);
+if (bad.length) { console.error("the GST registration on the entry is wrong in: " + bad.join(", ")); process.exit(1); }
 fs.mkdirSync(OUT, {recursive: true});
 for (const [k, v] of Object.entries(shapes)) fs.writeFileSync(path.join(OUT, k + ".xml"), v);
 const hash = crypto.createHash("sha256").update(parts.join("\n")).digest("hex");

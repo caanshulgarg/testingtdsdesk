@@ -279,6 +279,73 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
   const shD = [["Name", "Created at", "Financial Status", "Total", "Taxes", "Lineitem name", "Lineitem price", "Tax 1 Name", "Tax 1 Value", "Shipping Province"], ["#1001", "2016-03-01 10:00:00 +0530", "paid", 1180, 180, "ZZ Mug", 1000, "IGST 18%", 180, "KA"]];
   tryOk(() => { const d = F.apply(F.builtin(shD[0], "sales"), shD, 0, CO, "sales"); return d.length === 1 && /before GST/.test(d[0].hold || ""); }, "a Shopify order of 1 March 2016: held, before GST began");
 
+  console.log("21. (the owner, 23-Nov-2026; review of ad4be74c3) marketplace credit notes without a number of their own: <invoice>-CN1, -CN2 by return date (a GSTR-1 note number: letters, digits, - and /, at most 16), kept on a re-import");
+  { const fr = (rows) => [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Return Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State"]].concat(rows);
+    const r = (d, amt, inv) => ["OD5", "I5", "Return", inv || "FK-055", "05/09/2026", d, -amt, -C.r2(amt * .18), -C.r2(amt * 1.18), "Karnataka"];
+    const up = (rows) => C.SheetPost.toSales(F.apply(F.builtin(fr(rows)[0], "sales"), fr(rows), 0, CO, "sales"), "c1", "fk.csv");
+    const nos = (re) => list.filter(v => (re || /^FK-055/).test(v.x.number)).map(v => v.x.number + "@" + v.x.date + "=" + v.x.total).sort();
+    const valid = (n) => /^[A-Za-z0-9\/-]{1,16}$/.test(n);
+    tryOk(() => { list.length = 0; const a = up([r("20/09/2026", 200), r("12/09/2026", 100)]);
+      return a.added === 2 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=236"]); }, "two returns of FK-055 in one report: -CN1 the earlier, -CN2 the later");
+    tryOk(() => { const b = up([r("12/09/2026", 100), r("20/09/2026", 200)]);
+      return b.added === 0 && b.again === 2 && nos().length === 2; }, "the report again: each return keeps its number, nothing added");
+    tryOk(() => { const c = up([r("20/09/2026", 200), r("02/10/2026", 50)]);
+      return c.added === 1 && c.again === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=236", "FK-055-CN3@2026-10-02=59"]); }, "a later report with a third return: -CN3, the second kept as -CN2");
+    tryOk(() => { const d = up([r("20/09/2026", 150)]);
+      return d.added === 0 && d.fixed === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=177", "FK-055-CN3@2026-10-02=59"]); }, "the 20 September return revised to 150: -CN2 updated, not a new note");
+    // (re-review of bac94a801) an older report again does not put the waiting note back; once posted, a revision is a
+    // further note of the DIFFERENCE only; a note matched by its number when its invoice is not kept on it
+    tryOk(() => { const e = up([r("20/09/2026", 200)]); return e.added === 0 && JSON.stringify(nos()) === JSON.stringify(["FK-055-CN1@2026-09-12=118", "FK-055-CN2@2026-09-20=177", "FK-055-CN3@2026-10-02=59"]); }, "the older report again: -CN2 stays at the revised 177, not back to 236");
+    tryOk(() => { list.forEach(v => { if (v.x.number === "FK-055-CN2") { v.status = "posted"; v.x.total = 236; v.x.cnSeen = [236]; } });
+      const g = up([r("20/09/2026", 350)]), fn = list.find(v => v.hold && /^FK-055-CN/.test(v.x.number));
+      return g.added === 1 && fn && Math.abs(Math.abs(fn.x.total) - 177) < 0.01 && fn.x.number === "FK-055-CN4"; }, "posted at 236, revised to 413: a further note -CN4 of the difference 177, held (" + "" + ")");
+    tryOk(() => { list.length = 0; list.push({id: "n1", x: {number: "FK-055-CN1", date: "2026-09-12", total: 118, noteKind: "credit", customerName: "Retail customer", againstInvoice: ""}, status: "posted", source: "market"});
+      const h = up([r("12/09/2026", 100)]); return h.added === 0 && list.length === 1; }, "a note FK-055-CN1 kept without its invoice: matched by its number, not added again");
+    tryOk(() => { list.length = 0; list.push({id: "old1", x: {number: "FK-055 (CN)", date: "2026-09-12", total: 118, noteKind: "credit", customerName: "Retail customer"}, status: "posted", source: "sheet"});
+      const d = up([r("12/09/2026", 100), r("20/09/2026", 200)]);
+      return d.added === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055 (CN)@2026-09-12=118", "FK-055-CN1@2026-09-20=236"]); }, "one kept before as (CN): still that one, not added again; the new return -CN1");
+    tryOk(() => { list.length = 0; up([["OD6", "I6", "Return", "FK-066", "05/09/2026", "", -100, -18, -118, "Karnataka"]]); return list.length === 1 && list[0].x.number === "FK-066-CN1"; }, "a single return with no return date: -CN1");
+    tryOk(() => { list.length = 0; const L = "AMZ_IN/2026 000123456"; up([r("12/09/2026", 100, L), r("13/09/2026", 100, L)]);
+      const ns = list.map(v => v.x.number); return ns.length === 2 && ns.every(valid) && new Set(ns).size === 2 && ns.every(n => /-CN[12]$/.test(n)); }, "a long invoice number with other characters: valid, at most 16, still unique (" + "" + ")");
+    tryOk(() => { list.length = 0; const k = (p) => ["OD7", "I7", "Return", "FK-077", "05/09/2026", "12/09/2026", -100, -18, -118, "Karnataka"].map((v, i) => i === 9 ? p : v);
+      up([k("Karnataka")]); const fr2 = [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Return Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State", "Buyer Name"], ["OD7", "I7", "Return", "FK-077", "05/09/2026", "12/09/2026", -100, -18, -118, "Karnataka", "Zinnia Retail"]];
+      const b = C.SheetPost.toSales(F.apply(F.builtin(fr2[0], "sales"), fr2, 0, CO, "sales"), "c1", "fk2.csv");
+      const ns = list.map(v => v.x.number + ":" + (v.x.customerName || "")).sort(); return b.added === 1 && list.length === 2 && new Set(list.map(v => v.x.number)).size === 2; }, "a return of the same invoice and day for another party: its own number, not the first one's");
+  }
+
+  console.log("22. (review of ad4be74c3, decided) any credit note without a number of its own (a register's negative row): <invoice>-CN1 too, valid, at most 16, kept on a re-import, an old (CN) matched");
+  { const rg = (rows) => [["Invoice Number", "Invoice Date", "Document Type", "Customer Name", "GSTIN", "Taxable Value", "CGST Amount", "SGST Amount", "Invoice Amount"]].concat(rows);
+    const G1 = "09BBBBB1111B1Z5", inv = ["UP/26-27/0041", "05/09/2026", "Invoice", "P One", G1, 1000, 90, 90, 1180], cn = (d, a) => ["UP/26-27/0041", d, "Credit Note", "P One", G1, a, C.r2(a * .09), C.r2(a * .09), C.r2(a * 1.18)];
+    const up = (rows) => C.SheetPost.toSales(F.apply(F.builtin(rg(rows)[0], "sales"), rg(rows), 0, CO, "sales"), "c1", "reg.csv");
+    const ns = () => list.filter(v => /0041/.test(v.x.number)).map(v => v.x.number + "@" + v.x.date).sort();
+    tryOk(() => { list.length = 0; const a = up([inv, cn("20/09/2026", 400)]);
+      return a.added === 2 && JSON.stringify(ns()) === JSON.stringify(["26-27/0041-CN1@2026-09-20", "UP/26-27/0041@2026-09-05"]) && list.every(v => /^[A-Za-z0-9\/-]{1,16}$/.test(v.x.number)); }, "the register's credit note: 26-27/0041-CN1 (the cut made at a separator), the invoice as it is");
+    tryOk(() => { const b = up([inv, cn("20/09/2026", 400)]); return b.added === 0 && ns().length === 2; }, "the register again: nothing added, the note keeps its number");
+    tryOk(() => { list.length = 0; list.push({id: "o1", x: {number: "UP/26-27/0041 (CN)", date: "2026-09-20", total: 472, noteKind: "credit", customerName: "P One", customerGstin: G1}, status: "posted", source: "sheet"});
+      const c = up([cn("20/09/2026", 400)]), c2 = up([cn("25/09/2026", 100)]); return c.added === 0 && c.again === 1 && c2.added === 1 && JSON.stringify(ns()) === JSON.stringify(["26-27/0041-CN1@2026-09-25", "UP/26-27/0041 (CN)@2026-09-20"]); }, "one kept before as (CN): matched, not added again; a later note -CN1");
+    tryOk(() => { list.length = 0; const r1 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]);
+      list.length = 0; list.push({id: "o2", x: {number: "SR/26-27/9 (CN)", date: "2026-09-20", total: 472, noteKind: "credit", customerName: "P One", customerGstin: G1}, status: "posted", source: "sheet"});
+      const r2 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]);
+      return r1.added === 1 && r2.added === 0 && r2.again === 1 && list.length === 1; }, "a note with a number of its own (no invoice of it) keeps it; one kept before as (CN) is matched");
+    tryOk(() => { list.length = 0; up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]); const r3 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]); return list[0].x.number === "SR/26-27/9" && r3.added === 0 && list.length === 1; }, "… its number as it is: SR/26-27/9; the sheet again adds nothing");
+  }
+
+  console.log("23. (re-review of bf5c7f9c0) a return reduced after its note was posted: a held debit note of the difference; numbers never shared by two invoices");
+  { const fr = (rows) => [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Return Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State"]].concat(rows);
+    const r = (d, amt, inv) => ["OD8", "I8", "Return", inv || "FK-088", "05/09/2026", d, -amt, -C.r2(amt * .18), -C.r2(amt * 1.18), "Karnataka"];
+    const up = (rows) => C.SheetPost.toSales(F.apply(F.builtin(fr(rows)[0], "sales"), fr(rows), 0, CO, "sales"), "c1", "fk.csv");
+    const mine = () => list.filter(v => /FK-088/.test(v.x.number));
+    tryOk(() => { list.length = 0; up([r("20/09/2026", 200)]); list.forEach(v => { v.status = "posted"; });
+      const a = up([r("20/09/2026", 150)]), dn = mine().find(v => v.hold);
+      return a.added === 1 && dn && dn.x.noteKind === "debit" && Math.abs(Math.abs(dn.x.total) - 59) < 0.01 && /debit note/i.test(dn.hold) && /236/.test(dn.hold) && /177/.test(dn.hold) && /^FK-088-DN1$/.test(dn.x.number); }, "posted at 236, reduced to 177: a held DEBIT note FK-088-DN1 of 59 that says what to do");
+    tryOk(() => { const b = up([r("20/09/2026", 150)]); return b.added === 0 && mine().length === 2; }, "the same reduced report again: nothing added");
+    tryOk(() => { const c = up([r("20/09/2026", 200)]); return c.added === 0 && mine().length === 2; }, "the original report again: nothing added");
+    tryOk(() => { const d = up([r("20/09/2026", 250)]), fx = mine().filter(v => v.hold && v.x.noteKind === "credit"); return d.added === 1 && fx.length === 1 && Math.abs(Math.abs(fx[0].x.total) - 118) < 0.01; }, "then raised to 295: a further credit note of 118 (from the 177 last seen)");
+    tryOk(() => { list.length = 0; up([r("12/09/2026", 100, "AMZ/2026/000123456")]); up([r("12/09/2026", 100, "AMZ/2025/000123456")]);
+      const ns = list.map(v => v.x.number), a = up([r("12/09/2026", 100, "AMZ/2026/000123456")]), b = up([r("12/09/2026", 100, "AMZ/2025/000123456")]);
+      return ns.length === 2 && new Set(ns).size === 2 && a.added === 0 && b.added === 0 && list.length === 2 && list.every(v => v.x.cnOf); }, "two invoices whose numbers end alike (AMZ/2026/… and AMZ/2025/…): two numbers, each kept on a re-import");
+  }
+
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();

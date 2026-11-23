@@ -20,7 +20,7 @@ const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sig
 const sumBy = (xs, f) => (xs || []).reduce((s, x) => s + N(f(x)), 0);
 const has = (v) => v !== null && v !== undefined && v !== "" && !(typeof v === "number" && !isFinite(v));
 const dmy = (d) => (d ? String(d).slice(6, 8) + "-" + String(d).slice(4, 6) + "-" + String(d).slice(0, 4) : "");
-export const GROUPS = [["ais", "26AS, AIS and TIS"], ["books", "Tally books"], ["gst", "GST"], ["tds", "TDS returns"], ["pf", "PF and ESI"], ["dis", "43B and 43B(h)"], ["3cd", "Tax audit (3CD)"], ["comp", "The computation"], ["json", "The JSON"]];
+export const GROUPS = [["ais", "26AS, AIS and TIS"], ["books", "Tally books"], ["gst", "GST"], ["tds", "TDS returns"], ["pf", "PF and ESI"], ["dis", "43B and 43B(h)"], ["3cd", "Tax audit (3CD)"], ["sch", "Salary, house property, capital gains, AL, FA, SH"], ["comp", "The computation"], ["json", "The JSON"]];
 
 // a short stable hash of a check's figures (FNV-1a over its JSON)
 export function fingerprint(c) {
@@ -205,6 +205,8 @@ export function verify(c) {
       { label: "Schedule BP", amt: x.itrBase != null ? x.itrBase : N(line(x.itrKey)), src: x.itrSrc }))));
   }
 
+  schedules(c, M, S, im, ais, as26, bk).forEach((x) => out.push(x));
+
   // ---------- the computation ----------
   (S.needs || []).forEach((n) => out.push(needs("need_" + n.key, "comp", n.text.split(":")[0], n.text, "Settle it on Data.", [], true)));
   (S.warn || []).forEach((w) => out.push({ id: "warn_" + w.key, group: "comp", title: w.text.split(/[.:]/)[0], status: "difference", diff: 0, text: w.text, rows: [], how: "Correct the figure, or accept it with a note." }));
@@ -224,6 +226,110 @@ export function verify(c) {
     const a = acc[x.id];
     if (x.status !== "matched" && a && !x.noAccept) { if (a.fp === x.fp) x.accepted = a; else x.lapsed = a; }
   });
+  return out;
+}
+
+
+// ---------- the schedules (heads.js, sched.js): each against an independent source where there is one ----------
+const SEC_KINDS = ["eq", "eqNoStt", "bond", "zcb", "mfDebt", "mf50AA"];
+// the schedules' checks alone (the tests): c as for verify()
+export function schedulesChecks(c) {
+  const im = c.imports || {}, bk = c.books && c.books.ok ? c.books : null;
+  return schedules(c, c.model || {}, c.main || {}, im, im.ais && im.ais.data, im.as26 && im.as26.data, bk);
+}
+function schedules(c, M, S, im, ais, as26, bk) {
+  const out = [], sh = M.salaryHead, hh = M.hpHead, g = M.cgHead;
+  // Form 16, employer by employer (TAN): gross salary and TDS
+  const f16 = im.f16 || [];
+  if (f16.length) {
+    const rows = f16.map((f) => { const d = f.data || {}, e = sh ? sh.rows.find((r) => r.tan && r.tan === d.tan) : null; return { label: (d.employer || "Employer") + " (" + (d.tan || "no TAN") + ")", a: e ? e.gross : null, b: R(N(d.s171) + N(d.s172) + N(d.s173)), tan: d.tan, tds: R(d.tds), e }; });
+    out.push(two("f16_salary", "sch", "Salary: Form 16 against Schedule S", { label: "Schedule S, gross salary", amt: sh ? R(sumBy(rows.filter((r) => r.e), (r) => r.a)) : null, src: "the employers entered on Schedules", why: "no employer in Schedule S", how: "Take the employer from the Form 16 on Schedules." },
+      { label: "Form 16, 17(1) + 17(2) + 17(3)", amt: R(sumBy(rows, (r) => r.b)), src: f16.length + " Form 16" + (f16.length === 1 ? "" : "s") }, rows.map((r) => ({ label: r.label, a: r.a, b: r.b })), "An employer's salary differs from the Form 16: correct Schedule S, or ask the employer for a revised Form 16."));
+    const claimed = ((M.paid || {}).tdsSal || []), byTan = (t) => R(sumBy(claimed.filter((x) => x.tan === t), (x) => x.amt));
+    out.push(two("f16_tds", "sch", "TDS on salary: Form 16 against 26AS (claimed)", { label: "TDS on salary claimed (26AS, section 192)", amt: as26 ? R(sumBy(claimed, (x) => x.amt)) : null, src: "Form 26AS Part I, section 192", why: "26AS is not brought in", how: "Bring in 26AS." },
+      { label: "Form 16 Part A", amt: R(sumBy(rows, (r) => r.tds)), src: "Form 16" }, rows.map((r) => ({ label: r.label, a: as26 ? byTan(r.tan) : null, b: r.tds })), "The employer's deposit does not match its Form 16: ask the employer to correct its 24Q; claim only what 26AS shows."));
+    // the regime the employee told the employer (Form 16 Part B: "Whether opting out of taxation u/s 115BAC(1A)?")
+    // against the return's; a salaried person without business income may choose again in the return (115BAC(6)),
+    // one with business income only through Form 10-IEA
+    const said = f16.map((f) => ({ f, opt: String((f.data || {}).optOut || "") })).filter((x) => /^(yes|no)$/i.test(x.opt));
+    if (said.length && (M.regime === "new" || M.regime === "old")) {
+      const differ = said.filter((x) => (/^yes$/i.test(x.opt) ? "old" : "new") !== M.regime);
+      const rowsR = said.map((x) => ({ label: ((x.f.data || {}).employer || "Employer") + ": " + (/^yes$/i.test(x.opt) ? "opted out (old regime)" : "new regime") }));
+      out.push(differ.length ? needs("f16_regime", "sch", "Regime: Form 16 against the return", "The return is in the " + M.regime + " regime; " + differ.length + " Form 16" + (differ.length === 1 ? " says" : "s say") + " the employee chose the other with the employer (115BAC(1A)).", "Confirm the regime with the client (with business income the old regime needs Form 10-IEA by the due date), then answer with a note.", rowsR)
+        : matched("f16_regime", "sch", "Regime: Form 16 against the return", "The employer's Form 16 and the return are in the same regime (" + M.regime + ").", rowsR));
+    }
+  }
+  // section 194IA: the buyer deducts 1% of the higher of the consideration and the stamp duty value when the whole
+  // property's consideration (all sellers and buyers together, from 1-10-2024) is Rs 50 lakh or more; on the seller's own
+  // share. The TDS in 26AS against what the sale should carry
+  const whole = (x) => Math.max(x.totalConsid || 0, x.value);
+  const props = M.cgHead ? M.cgHead.rows.filter((x) => x.kind === "land" && (whole(x) >= 5000000 || x.sdv >= 5000000)) : [];
+  if (props.length) {
+    const t194 = ((M.paid || {}).tds || []).filter((x) => /^194IA$/i.test(String(x.sec || "").replace(/[()\s-]/g, "")));
+    out.push(two("tds_194ia", "sch", "TDS on the sale of property (194IA): 26AS against the sale", { label: "Form 26AS, section 194IA", amt: as26 ? R(sumBy(t194, (x) => x.amt)) : null, src: "26AS Part I", why: "26AS is not brought in", how: "Bring in 26AS." },
+      { label: "1% of the higher of the consideration and the stamp duty value", amt: R(sumBy(props, (x) => Math.max(x.value, x.sdv) * 0.01)), src: props.length + " sale" + (props.length === 1 ? "" : "s") + " on Schedules" }, props.map((x) => ({ label: (x.desc || "Property") + ": " + R(Math.max(x.value, x.sdv)), b: R(Math.max(x.value, x.sdv) * 0.01) })),
+      "The buyer's TDS differs from 1%: claim only what 26AS shows, and check the consideration and the stamp duty value (a short deduction is the buyer's default, not a reason to change the gain)."));
+  }
+  if (ais) {
+    const cat = (k) => ais.rows.filter((r) => r.cat === k);
+    if (cat("salary").length || sh) out.push(two("ais_salary", "sch", "Salary: AIS against Schedule S", { label: "Schedule S, gross salary", amt: sh ? sh.gross : null, src: "Schedules", why: "no salary in the return", how: "Give the employers on Schedules." },
+      { label: "AIS, salary (TDS 192)", amt: R(sumBy(cat("salary"), (x) => x.amount)), src: "AIS" }, cat("salary").map((x) => ({ label: (x.src || x.desc) + (x.srcId ? " (" + x.srcId + ")" : ""), b: R(x.amount) }))));
+    const secR = g ? g.rows.filter((x) => SEC_KINDS.includes(x.kind)) : [], propR = g ? g.rows.filter((x) => x.kind === "land") : [];
+    if (cat("cgsale").length || secR.length) out.push(two("ais_cg_sec", "sch", "Sale of securities and fund units: AIS against Schedule CG", { label: "Schedule CG, sale value of securities and units", amt: R(sumBy(secR, (x) => x.value)), src: secR.length + " sales on Schedules" },
+      { label: "AIS, SFT-17 (sales)", amt: R(sumBy(cat("cgsale"), (x) => x.amount)), src: "AIS" }, secR.map((x) => ({ label: x.desc || x.kind, a: x.value })).concat(cat("cgsale").map((x) => ({ label: (x.src || x.desc), b: R(x.amount) }))), "A sale the AIS reports is not in Schedule CG (or the other way): add it, or give feedback on the AIS."));
+    if (cat("cgprop").length || propR.length) out.push(two("ais_cg_prop", "sch", "Sale of land or building: AIS against Schedule CG", { label: "Schedule CG, consideration of land and buildings", amt: R(sumBy(propR, (x) => x.value)), src: propR.length + " sales on Schedules" },
+      { label: "AIS, sale of immovable property (SFT-12 / TDS 194IA)", amt: R(sumBy(cat("cgprop").filter((x) => !/^TDS/i.test(x.code)), (x) => x.amount)) || R(sumBy(cat("cgprop"), (x) => x.amount)), src: "AIS" }, [], "The property sale in the AIS and Schedule CG differ: check the consideration (the stamp duty value is used under 50C when higher than 110%)."));
+  }
+  // what the heads' rules cut or need (heads.js)
+  [sh, hh, g].filter(Boolean).forEach((h) => { (h.warn || []).forEach((w) => out.push({ id: "warn_" + w.key, group: "sch", title: w.text.split(/[.:;]/)[0], status: "difference", diff: 0, text: w.text, rows: [], how: "Correct the entry, or accept it with a note." }));
+    (h.needs || []).forEach((n) => out.push(needs("need_" + n.key, "sch", n.text.split(":")[0], n.text, "Settle it on Schedules.", [], true))); });
+  // a buy-back from 1-10-2024: the money received is dividend (2(22)(f)), taxed under other sources; only the cost is a
+  // capital loss (46A): the dividend must be in Schedule OS (validation rule 549)
+  const bb = g ? g.rows.filter((x) => x.kind === "buyback") : [];
+  if (bb.length) {
+    const t194 = ((M.paid || {}).tds || []).filter((x) => /^194$/.test(String(x.sec || "").replace(/[()\s-]/g, "")));
+    out.push(needs("cg_buyback", "sch", "Shares bought back: the money is dividend", bb.length + " buy-back" + (bb.length === 1 ? "" : "s") + " in Schedule CG: the cost (" + R(sumBy(bb, (x) => x.cost)) + ") is a capital loss (46A), and the amount received, " + R((M.os || {}).buyback) + ", is taken as dividend under section 2(22)(f) in other sources. The company deducts TDS on it under section 194 (10%): 26AS shows " + R(sumBy(t194, (x) => x.amt)) + " under 194 in all.",
+      "Check the amount received against the company's letter and its 194 TDS in 26AS (other dividends are under 194 too), then confirm with a note.", t194.map((x) => ({ label: (x.name || "") + " (" + (x.tan || "") + ", 194)", b: R(x.gross) }))));
+  }
+  // Schedule AL (ITR-3: other than the business's assets in Part A-BS)
+  if (M.al && M.form === "ITR-3") {
+    const a = M.al, tb = bk && bk.sched ? bk.sched.bs : null, cash = tb ? R(tb.cash.cy) : null, bank = tb ? R(tb.bank.cy) : null;
+    const dup = [];
+    if (tb && R(a.cash) && R(a.cash) === cash) dup.push({ label: "Cash in hand: AL " + R(a.cash) + ", the books' cash " + cash, a: R(a.cash), b: cash });
+    if (tb && R(a.deposits) && R(a.deposits) === bank) dup.push({ label: "Bank deposits: AL " + R(a.deposits) + ", the books' bank " + bank, a: R(a.deposits), b: bank });
+    out.push(dup.length ? needs("al_bs", "sch", "Schedule AL against the balance sheet", "Schedule AL of ITR-3 is for the assets other than those in Part A-BS; these equal the business's own to the rupee.", "Take the business's assets out of Schedule AL, or confirm with a note that these are other assets.", dup)
+      : matched("al_bs", "sch", "Schedule AL against the balance sheet", "No AL figure repeats the business's balance sheet; the business's capital (" + (tb ? R(bk.sched.totals.equity) : 0) + ") is not an AL item.", tb ? [{ label: "Books: cash " + cash + ", bank " + bank, a: null, b: null }] : []));
+    (a.firms || []).filter((x) => x.name || x.pan).forEach((x, i) => out.push(needs("al_firm_" + i, "sch", "Interest in " + (x.name || "a firm"), "Schedule AL shows " + R(x.amt) + " invested in " + (x.name || "a firm") + (x.pan ? " (" + x.pan + ")" : "") + ".", "Confirm it against the firm's balance sheet (the partner's capital account at 31-03-2026).")));
+  }
+  // ITR-6 AL-1 against the balance sheet
+  if (M.al6 && bk && bk.sched) {
+    const all = Object.values(bk.sched.bs).flatMap((l) => l.trace), cs = (codes) => R(all.filter((x) => codes.includes(x.code)).reduce((s2, x) => s2 + N(x.amt), 0));
+    const sumK = (k, f) => R(sumBy(M.al6[k] || [], f));
+    const sharesAL = sumK("DtlsListedEquitySharesUC", (r) => r.ClBalAcquisitionCost) + sumK("DtlsUnListedEquitySharesUC", (r) => r.ClBalAcquisitionCost) + sumK("DtlsOtherSecuritiesUC", (r) => r.ClBalAcquisitionCost);
+    if ((M.al6.DtlsLoansAdvancesUC || []).length || cs(["38D", "12G", "12H"])) out.push(two("al6_loans", "sch", "AL-1 loans and advances given against the balance sheet", { label: "Schedule AL-1, closing balances", amt: sumK("DtlsLoansAdvancesUC", (r) => r.ClosingBalance), src: "Schedules" }, { label: "Balance sheet, loans and advances given", amt: cs(["38D", "12G", "12H"]), src: "codes 38D, 12G, 12H" }));
+    if (sharesAL || cs(["36A", "37A"])) out.push(two("al6_shares", "sch", "AL-1 shares and securities against the balance sheet", { label: "Schedule AL-1, closing cost", amt: sharesAL, src: "Schedules" }, { label: "Balance sheet, investments", amt: cs(["36A", "37A"]), src: "codes 36A, 37A" }));
+    if ((M.al6.DtlsLiabilitiesUC || []).length || cs(["30B", "33B"])) out.push(two("al6_liab", "sch", "AL-1 loans taken (other than from banks) against the balance sheet", { label: "Schedule AL-1, closing balances", amt: sumK("DtlsLiabilitiesUC", (r) => r.ClosingBalance), src: "Schedules" }, { label: "Balance sheet, loans from others", amt: cs(["30B", "33B"]), src: "codes 30B, 33B" }));
+  }
+  if (M.form === "ITR-6" && !M.al6 && M.listed !== true) out.push(needs("al6_none", "sch", "Schedule AL-1 (an unlisted company)", "An unlisted company lists in Schedule AL-1 its land and buildings, shares and securities, loans and advances given, loans taken from others, vehicles and jewellery at the year end. None are entered.", "Enter them on Schedules, or confirm with a note that the company holds none of these."));
+  // Schedule SH-1 against the share capital
+  if (M.form === "ITR-6" && M.sh && bk && bk.sched) {
+    const all = Object.values(bk.sched.bs).flatMap((l) => l.trace), cap = R(all.filter((x) => x.code === "3A" || x.code === "3B").reduce((s2, x) => s2 + N(x.amt), 0));
+    const rs = (M.sh.DtlsSHEndPreviousYearUC || []).concat((M.sh.startup && M.sh.startup.DtlsSHEndPreviousYearSU) || []);
+    out.push(two("sh_capital", "sch", "Schedule SH: shares held at the year end against the share capital", { label: "Schedule SH, shares x face value", amt: R(sumBy(rs, (r) => N(r.NumberOfSharesHeld) * N(r.FaceValuePerShare))), src: rs.length + " shareholders" },
+      { label: "Balance sheet, issued and paid-up capital", amt: cap, src: "codes 3A, 3B at 31-03-2026" }, rs.map((r) => ({ label: (r.ShareholderName || "") + " " + (r.PAN || ""), a: R(N(r.NumberOfSharesHeld) * N(r.FaceValuePerShare)) })), "The register of members and the balance sheet differ: correct Schedule SH or the books."));
+  }
+  // Schedule FA: money sent abroad under LRS (TCS 206C(1G)) or a foreign income in the AIS asks whether there are assets
+  const P = c.profile || {}, faRows = M.fa ? Object.values(M.fa).filter(Array.isArray).reduce((a, v) => a + v.length, 0) : 0;
+  const lrs = as26 ? as26.tcs.filter((x) => /1G/i.test(String(x.sec || ""))) : [];
+  if (lrs.length && !faRows) out.push(needs("fa_lrs", "sch", "Money sent abroad (TCS 206C(1G))", lrs.length + " remittances with TCS in 26AS. A resident holding any asset abroad at any time in calendar year 2025 fills Schedule FA (Black Money Act, section 43: penalty).", "Say on Schedules whether any foreign asset was held; answer with a note.", lrs.map((x) => ({ label: x.name + " (" + x.tan + ")", b: R(x.amount) }))));
+  if (faRows && M.resident === false) out.push(needs("fa_nr", "sch", "Schedule FA for a non-resident", "Schedule FA is for residents (ordinarily resident) only.", "Remove the rows, or correct the residential status.", [], true));
+  if (M.form === "ITR-6" && (P.indAs === true || M.indAs === true) && bk && bk.sched) {
+    const pref = R(Object.values(bk.sched.bs).flatMap((l) => l.trace).filter((x) => x.code === "3B").reduce((s2, x) => s2 + N(x.amt), 0));
+    if (pref && P.prefEquity !== true && P.prefEquity !== false) out.push(needs("indas_pref", "sch", "Preference shares under Ind AS", "Preference share capital of " + pref + " is shown as a financial liability (Ind AS 32: a redeemable preference share is a liability), not as equity.",
+      "Say on Data whether the shares are redeemable (a liability) or irredeemable with discretionary dividends (equity); or confirm with a note.", [{ label: "Preference share capital (3B)", b: pref }]));
+  }
+  if (M.form === "ITR-6" && (P.indAs === true || M.indAs === true)) out.push(needs("indas_map", "sch", "Ind AS statements from the books", "Part A-BS / P&L Ind AS are placed from the books' codes (Schedule III Division I lines into the Division II heads); other comprehensive income is as entered.",
+    "Compare with the audited Ind AS statements and confirm with a note. The MAT book profit must carry the 115JB(2A) adjustments (Data)."));
   return out;
 }
 
