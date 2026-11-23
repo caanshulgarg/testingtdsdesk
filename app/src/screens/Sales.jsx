@@ -198,7 +198,7 @@ function Detail({ v }) {
             <tr><td><b>Total</b></td><td className="n"><b>{INR.format(tot("Dr"))}</b></td><td className="n"><b>{INR.format(tot("Cr"))}</b></td></tr>
           </tbody>
         </table></div>
-        <p className="note">Voucher type “{salesVt(x)}” · bill-wise {ag ? "Agst Ref " + ag.x.number + " (the invoice this note is against)" : "New Ref " + x.number + (x.againstInvoice ? " (no one posted invoice " + x.againstInvoice + " of this customer ledger in the note's year on or before it: set it against the bill in Tally if it is one)" : "")}{co.createOptional ? " · posted as Optional" : ""}</p>
+        <p className="note">Voucher type “{salesVt(x)}” · bill-wise {ag ? "Agst Ref " + ag.x.number + " (the invoice this note is against)" : "New Ref " + x.number + (x.againstInvoice ? " (invoice " + x.againstInvoice + " not matched: no one invoice of that number to this customer ledger, posted or in Tally, dated on or before the note, in its year or, with none there, in an earlier year; set it against the bill in Tally if it is one)" : "")}{co.createOptional ? " · posted as Optional" : ""}</p>
       </section>
       <EinvPanel v={v} />
       {(v.trace || []).length > 0 && <section><h3>How it was read</h3><ol className="note">{v.trace.map((t, i) => <li key={i}>{t.ok ? "✔ " : "✖ "}{t.step}: {t.note || ""}</li>)}</ol></section>}

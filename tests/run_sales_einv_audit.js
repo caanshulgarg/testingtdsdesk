@@ -10,6 +10,9 @@
 //   6. (the review of b4ff11b10) only the same customer's one invoice of that number in the note's year, on or before it;
 //      a live IRN: the customer ledger never rewrites the party, no Ignore or Delete; a cancel with a posting queued;
 //      a cancel of an IRN made before irnGstin was kept; IGST against CGST + SGST on the IRP; the items check on opening.
+//   (the owner, 23-Nov-2026, in 6) a note against an earlier year's invoice (s.34(2) CGST Act): Agst Ref when the
+//      customer ledger has exactly one invoice of that number in earlier years (and none in the note's year); New Ref
+//      when none, two or more, or one dated after the note.
 // Run after python3 build.py (it reads site-test/index.html).
 const {load, HTML} = require("./harness");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -123,13 +126,30 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   // (b) a series that starts again each year: last year's invoice 5 is not this year's
   const old5 = add({number: "5", date: "2025-06-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); old5.status = "posted";
   const cn26 = add({number: "C-1", noteKind: "credit", againstInvoice: "5", date: "2026-07-10", taxable: 100, cgst: 9, sgst: 9, total: 118});
-  ok(!x.salesAgainstOf(cn26), "a 2026-27 note against invoice 5: never set against 2025-26's invoice 5 (New Ref)");
+  // (the owner, 23-Nov-2026: s.34(2) CGST Act lets a note be issued up to 30 November of the next year) the one invoice
+  // 5 of the customer in an earlier year, none in the note's year: set against it
+  ok(x.salesAgainstOf(cn26) === old5 && /<NAME>5<\/NAME>\n<BILLTYPE>Agst Ref<\/BILLTYPE>/.test(x.salesVoucherXml(cn26, co)), "a 2026-27 note against invoice 5, the customer's only invoice 5 is 2025-26's: against it (Agst Ref)");
   const new5 = add({number: "5", date: "2026-05-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); new5.status = "posted";
   ok(x.salesAgainstOf(cn26) === new5, "with 2026-27's invoice 5 posted: against that one");
   const early = add({number: "C-2", noteKind: "credit", againstInvoice: "5", date: "2026-04-20", taxable: 100, cgst: 9, sgst: 9, total: 118});
-  ok(!x.salesAgainstOf(early), "a note dated before the invoice is never set against it");
+  ok(x.salesAgainstOf(early) !== new5 && x.salesAgainstOf(early) === old5, "a note dated before this year's invoice 5 is never set against it (the one dated on or before it: 2025-26's)");
   const twin5 = add({number: "5", date: "2026-05-02", taxable: 500, cgst: 45, sgst: 45, total: 590}); twin5.status = "intally";
   ok(!x.salesAgainstOf(cn26), "two invoices 5 of the customer in the year: not known which, New Ref");
+  // earlier years only: exactly one invoice of that number and customer ledger, else New Ref
+  const old7a = add({number: "7", date: "2024-08-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); old7a.status = "posted";
+  const cn7 = add({number: "C-7", noteKind: "credit", againstInvoice: "7", date: "2026-06-10", taxable: 100, cgst: 9, sgst: 9, total: 118});
+  ok(x.salesAgainstOf(cn7) === old7a, "a note against 2024-25's invoice 7 (the only one): against it");
+  const old7b = add({number: "7", date: "2025-08-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); old7b.status = "intally";
+  ok(!x.salesAgainstOf(cn7) && /<NAME>C-7<\/NAME>\n<BILLTYPE>New Ref<\/BILLTYPE>/.test(x.salesVoucherXml(cn7, co)), "invoice 7 in 2024-25 and in 2025-26: not known which, New Ref");
+  const old9 = add({number: "9", date: "2025-08-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); old9.status = "posted"; old9.customerLedger = "Customer A";
+  const cn9 = add({number: "C-9", noteKind: "credit", againstInvoice: "9", date: "2026-06-10", taxable: 100, cgst: 9, sgst: 9, total: 118}); cn9.customerLedger = "Customer B";
+  ok(!x.salesAgainstOf(cn9), "last year's invoice 9 is customer A's: a note to customer B stays New Ref");
+  const old11 = add({number: "11", date: "2025-08-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); old11.status = "review";
+  const cn11 = add({number: "C-11", noteKind: "credit", againstInvoice: "11", date: "2026-06-10", taxable: 100, cgst: 9, sgst: 9, total: 118});
+  ok(!x.salesAgainstOf(cn11), "last year's invoice 11 never posted nor in Tally: New Ref");
+  const cnE = add({number: "C-12", noteKind: "credit", againstInvoice: "12", date: "2025-03-10", taxable: 100, cgst: 9, sgst: 9, total: 118});
+  const inv12 = add({number: "12", date: "2025-08-01", taxable: 1000, cgst: 90, sgst: 90, total: 1180}); inv12.status = "posted";
+  ok(!x.salesAgainstOf(cnE), "an invoice 12 dated after the note (in a later year): never set against it");
   // a live IRN: the customer ledger never rewrites the party, GSTIN or place of supply the IRN was made with
   const sheet = add({customerGstin: "", pos: "", taxable: 1000, cgst: 90, sgst: 90, total: 1180});
   sheet.sheetHad = {gstin: false, pos: false}; sheet.customerLedger = "Customer A"; x.salesPartyFill(sheet);

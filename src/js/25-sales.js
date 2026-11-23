@@ -700,10 +700,14 @@ function salesCmpGstin(v, co){ const r = salesRegOf(v); return r.gstin && salesI
 // (next-fix-audit-sales-einv) the invoice a credit note is against (x.againstInvoice), posted from FinCom or found in Tally:
 // the note is set against that bill (Agst Ref), so the invoice is not left outstanding; else null (its own New Ref).
 // Only the one invoice of that number to the same customer ledger, dated in the note's financial year on or before it:
-// another party's bill, or last year's of a series that starts again each year, is never taken (review of b4ff11b10)
+// another party's bill is never taken (review of b4ff11b10). (The owner, 23-Nov-2026: s.34(2) CGST Act lets a note be
+// issued up to 30 November of the next year.) With none of that number in the note's year, the one invoice of the
+// customer ledger and number in any earlier year is taken; two or more there (a series that starts again each year),
+// none, or one dated after the note: New Ref
 function salesAgainstOf(v){ const x = v.x, ag = x.noteKind === "credit" && x.date && v.customerLedger && normInvNo(x.againstInvoice);
-  const c = ag ? salesOfNo(x.againstInvoice).filter(o => o.id !== v.id && !o.x.noteKind && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === ag && o.customerLedger === v.customerLedger && o.x.date && o.x.date <= x.date && fyLabel(o.x.date) === fyLabel(x.date)) : [];
-  return c.length === 1 ? c[0] : null; }
+  const c = ag ? salesOfNo(x.againstInvoice).filter(o => o.id !== v.id && !o.x.noteKind && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === ag && o.customerLedger === v.customerLedger && o.x.date && o.x.date <= x.date) : [];
+  const same = c.length ? c.filter(o => fyLabel(o.x.date) === fyLabel(x.date)) : [], pick = same.length ? same : c;
+  return pick.length === 1 ? pick[0] : null; }
 function salesVoucherXml(v, co){
   const x = v.x, cn = x.noteKind === "credit";
   const vt = xesc(salesVt(x)), d = toTallyDate(x.date);

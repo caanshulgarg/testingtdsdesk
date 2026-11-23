@@ -30,7 +30,7 @@
     "bankSalesAlloc",
     "salesAgainstOf"
   ],
-  "sha256": "ed6113376f42398c0b4f2374d1eb94ce3d7adc6b415915e324a7948ecaaa4d03",
+  "sha256": "1911646f5a91377fbb4da06aec43e7a5b9bfd39941dbfc27bc996f493d56c94e",
   "files": [
     "purchase-bill.xml",
     "journal.xml",
