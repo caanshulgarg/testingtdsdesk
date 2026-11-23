@@ -145,6 +145,11 @@ export function plainPayrollWhy(msg, plainWhy) {
   return typeof plainWhy === "function" ? plainWhy(m) : m.replace(/^Failed:\s*/i, "") || "Not posted.";
 }
 export function partWords(r) {
+  const w = partWords0(r);
+  // (ninth review) a part numbered after a retired one: its FinCom id in Tally's Day Book is not "part i"
+  return r.id && r.part && partNoOf(r.id) !== Number(r.part) ? w.replace(/\s*$/, "") + " (in Tally’s Day Book: TDSDesk:" + r.id + ")" : w;
+}
+function partWords0(r) {
   const of = r.parts > 1 ? "Part " + r.part + " of " + r.parts + ": " : "";
   if (r.ok && r.existed) return of + "already in Tally (not sent again).";
   if (r.ok && r.unconfirmed) return of + "sent before as exactly this from that computer (not sent again); Tally has not confirmed it yet. FinCom checks it in Tally’s copy of the books once they are read again.";
@@ -241,6 +246,19 @@ async function postOne(co, company, e, v, A, g, progress, before) {
   res.words = partWords(res);
   await A.Drafts.save(co.id, d, "Tally Payroll: " + res.words);
   return res;
+}
+// (ninth review) a retired part's earlier posting withdrawn in the cloud's queue (tally_post_withdraw, migration 212):
+// never retried, requeued, handed out or queued again -> {job} | {busy} | {error} | {} (no posting, or a cloud without 212)
+async function withdrawOld(g, cid, d, company) {
+  if (!(g.TCloud && typeof g.TCloud.rpc === "function" && g.Cloud && typeof g.Cloud.api === "function")) return {};
+  const J = await partJob(g, cid, d.id, company, (((d.results || {})[d.id]) || {}).job || d.job);
+  if (!J) return {};
+  let k = null;
+  try { k = await g.TCloud.rpc("tally_post_withdraw", { p_job: J.id, p_id: d.id, p_why: "retired by Daily Check: not in Tally's copy of " + ((d.sent || {}).dayGone || "its day") + " read after the send" }); }
+  catch (err) { const m = errWords(err); if (/PGRST202|tally_post_withdraw|does not exist|schema cache/i.test(m)) return {}; return { error: m.slice(0, 160) }; }
+  if (k && k.busy) return { busy: true };
+  if (!k || k.ok === false) return { error: String((k && k.error) || "no answer").slice(0, 160) };
+  return { job: J.id };
 }
 // (seventh review) the cloud's posting that sent a part: its job id on record (the bridge's sentJob, else the draft's),
 // else the newest posting of this client's company holding its FinCom id (tally_post_ids) whose result is not the
@@ -556,7 +574,14 @@ export async function approveTallyPayroll(e, env = {}) {
     // the retired parts say so (and the parts that replace them); a part never sent that is not in the plan now goes
     const nowIds = new Set(plan.map((v) => v.id)), by = rest.map((v) => v.id);
     for (const d of mine) {
-      if (retired.includes(d) && !d.retiredBy) { d.retiredBy = { at: new Date().toISOString(), by: A.me ? A.me() : "", why: "not in Tally’s copy of " + (d.sent.dayGone || "its day") + " read after the send" }; d.replacedBy = by; d.state = "failed";
+      if (retired.includes(d) && !d.retiredBy) {
+        // (ninth review) its earlier posting in the cloud's queue is withdrawn first (migration 212), so no Retry, requeue or
+        // other page can send the old id again; a posting still being sent: on its way, nothing retired yet. A cloud
+        // without 212: the page's own refusal (59-post-owner.js retryChanged) stands alone
+        const wd = await withdrawOld(g, co.id, d, company);
+        if (wd.busy) return no("On its way to Tally (part " + nPart(d) + "): wait for it to finish.");
+        if (wd.error) return no("FinCom could not withdraw the earlier posting of part " + nPart(d) + " in its cloud (" + wd.error + "). Nothing was sent.");
+        d.retiredBy = { at: new Date().toISOString(), by: A.me ? A.me() : "", why: "not in Tally’s copy of " + (d.sent.dayGone || "its day") + " read after the send", withdrawn: wd.job || "" }; d.replacedBy = by; d.state = "failed";
         await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + " (" + d.id + ") retired, not in Tally; posted again as " + by.join(", ")); }
       else if (!nowIds.has(d.id) && !d.sent && !d.retiredBy && !d.removed && !(((d.results || {})[d.id]) || {}).ok) { d.removed = true; await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + " not needed in the new split"); }
     }

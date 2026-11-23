@@ -454,8 +454,11 @@ function tallyOne(ym, rows, inp, c) {
   const drafts = (inp.drafts || []).map((d) => (!d ? d : inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" })
     : /^dc-tp-/.test(String(d.vid || "")) && (d.state === "pending" || d.state === "unconfirmed") ? Object.assign({}, d, { state: tpDayRead(inp, Object.assign({ date }, d)) ? "unconfirmed" : "pending" }) : d));
   { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you, "sent to Tally (the posting computer says so) but not in Tally’s copy of its day read since"); if (sc) return sc; }
-  // (eighth review) a part retired as not in Tally (posted again under fresh ids) is replaced: neither missing nor counted
-  const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")) && !(d.retired && !inBooks.has(String(d.vid))));
+  // (eighth review) a part retired as not in Tally (posted again under fresh ids) is replaced: neither missing nor counted.
+  // (ninth review) one in Tally after all: Needs you (its people were posted again), never counted toward done
+  const back = drafts.find((d) => d && d.dedupe === dedupe && !d.removed && d.retired && inBooks.has(String(d.vid)));
+  if (back) return you(T + ": part " + String(back.vid) + " was set aside as not in Tally, but Tally has it now, and its people were posted again in another part. Check Tally (Day Book) and delete one of them.");
+  const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")) && !d.retired);
   if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
   const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));
   inBooks.forEach((x) => done.add(x));

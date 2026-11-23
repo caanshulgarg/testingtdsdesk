@@ -10,10 +10,12 @@ queue answered by that PostgreSQL (fake_supabase.py for the rest). Made-up firm,
   2. a NEW posting of the same id is refused by the queue (its id still live) or carries no release: never the way
   3. the part under a fresh id (its people, "part 1 of 2" again): queued although the first posting holds the old id,
      handed out by tally-ingest with nothing to release, the same computer; Tally takes it: done
+  3b. (migration 212, a draft) the old posting withdrawn as the part is retired: its Retry refused, it cannot wait again
+     (a requeue after a crash), tally-ingest hands nothing of it out, its id is never queued in another posting
   4. the same when the first posting ended "done" (Tally said created, the part not in Tally after all)
 Needs Deno (DENO, or deno on the PATH)."""
 import os, sys, json, time, shutil, hashlib, subprocess, threading, urllib.request, tempfile
-os.environ.setdefault("TMPDIR", "/tmp/payroll8")
+os.environ.setdefault("TMPDIR", "/tmp/payroll9")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 DENO = os.environ.get("DENO") or shutil.which("deno")
 if not DENO: print("skipped: no deno (set DENO)"); raise SystemExit(0)
@@ -33,7 +35,7 @@ m182 = open(os.path.join(SQL, "migration-182-gap-after-post.sql")).read()
 t0_ = m182.index("create table if not exists public.tally_light_days ("); t1_ = m182.index(");", t0_) + 2
 f0_ = m182.index("create or replace function public.tally_post_job_read_back()"); f1_ = m182.index("end $$;", f0_) + len("end $$;")
 db.sql(m182[t0_:t1_] + "\n" + m182[f0_:f1_])
-for p in LATER + [os.path.join(SQL, "migration-201a-post-grants.sql"), os.path.join(SQL, "migration-203-post-linked-guid.sql")]:
+for p in LATER + [os.path.join(SQL, "migration-201a-post-grants.sql"), os.path.join(SQL, "migration-203-post-linked-guid.sql"), os.path.join(SQL, "migration-212-post-withdraw.sql")]:
     r = st.psql_text(open(p).read())
     if r.returncode: raise SystemExit("%s does not run on the stand: %s" % (os.path.basename(p), r.stderr[-400:]))
 st.grants()
@@ -120,6 +122,19 @@ ok(r.get("ok") is True and not r.get("dupes") and t and t.get("id") == J4 and t.
    "queued although posting J1 holds the old id; handed out on the same computer, nothing released (%s)" % (r if not r.get("ok") else json.dumps(t)[:160]))
 db.sql("set role service_role; update tally_post_jobs set status = 'done', results = %s::jsonb, done = 1 where id = %s" % (q(json.dumps([{"id": FRESH_ID, "kind": "voucher", "ok": True, "created": 1, "vchId": "61", "state": "in_tally"}])), q(J4)))
 ok(job(J4)["status"] == "done" and job(J1)["status"] in ("failed", "done"), "Tally took it: done; the old posting left as it was (%s)" % job(J1)["status"])
+
+print("== 3b. the retired part's old posting withdrawn (migration 212, a draft): never retried, requeued or handed out")
+k = member("select tally_post_withdraw(%s::uuid, %s, %s)::text" % (q(J1), q(PART), q("retired by Daily Check: not in Tally's copy of 2026-10-31 read after the send")))
+ok(k.get("ok") is True and k.get("withdrawn") == 1, "withdrawn as Approve retires the part (%s)" % k)
+r = member("select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J1))
+ok(r.get("ok") is not True and job(J1)["status"] in ("failed", "done"), "a Retry of the old posting (the Post page, another browser): refused, still %s" % job(J1)["status"])
+try: db.sql("set role service_role; update tally_post_jobs set status = 'waiting', taken_at = null where id = %s" % q(J1)); back = job(J1)["status"]
+except RuntimeError as e: back = "refused"
+ok(back == "refused", "a resumed posting (the requeue after a crash) cannot wait again: %s" % back)
+t = take()
+ok(t is None or t.get("id") != J1, "tally-ingest hands nothing of it out (%s)" % ((t or {}).get("id")))
+r = member("select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q("00000000-0000-4000-8000-0000000000a7"), q(PAY)))
+ok(r.get("ok") is not True, "the old id in a new posting: refused")
 
 print("== 4. the first posting ended done (Tally said created), the part not in Tally after all: a fresh id still queued")
 J5, J6 = "00000000-0000-4000-8000-0000000000a5", "00000000-0000-4000-8000-0000000000a6"

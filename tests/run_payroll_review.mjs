@@ -767,6 +767,7 @@ console.log("seventh review: through FinCom's cloud queue (the bridge's releases
     const w2 = wire(world(rows, { sheet, drafts: d0 }), q);
     const r = await w2.run(t.entry);
     const ids = w2.posts.map((pl) => pl.vouchers[0].id), od = w2.drafts["dc-tp-202610-1"];
+    ok(q.calls.includes("tally_post_withdraw dc-tp-202610-1 " + J1) && od.retiredBy && od.retiredBy.withdrawn === J1, "  ninth review: its earlier posting " + J1.slice(-2) + " withdrawn in the cloud's queue as it is retired (" + q.calls.join("; ") + ")");
     ok(r.ok && once(q, 150) && q.tally.length === 2 && JSON.stringify(ids) === '["dc-tp-202610-2","dc-tp-202610-3"]' && !q.calls.some((c) => /owner_release|tally_post_enqueue/.test(c)) && od.retiredBy && JSON.stringify(od.replacedBy) === JSON.stringify(ids),
       "  eighth review: its day read since, part 1 retired; the month posted as " + ids.join(", ") + " (part 1 of 2, part 2 of 2), nothing released or re-queued; everyone paid once");
     const pn = w2.posts.map((pl) => (pl.vouchers[0].xml.match(/part (\d+) of (\d+)\)/) || []).slice(1).join("/")).join(" ");
@@ -811,6 +812,17 @@ console.log("seventh review: through FinCom's cloud queue (the bridge's releases
     ok(!tn.entry, "  the night counts the month done (3 parts in Tally, the retired one replaced)");
   }
   {
+    // (ninth review) the withdrawal refused as the old posting is being sent: on its way, nothing retired or sent
+    const q = cloud(); q.lose = true;
+    const w = wire(world(rows, { sheet, closeAt: (d) => d.id === "dc-tp-202610-1" && d.state !== "posting" }), q);
+    try { await w.run(t.entry); } catch (x) { /* the page closed */ }
+    q.lose = false; q.sync();
+    const rpc0 = q.rpc; q.rpc = async (fn, a) => (fn === "tally_post_withdraw" ? { ok: false, busy: true, error: "This posting is still being sent to Tally; wait for it to finish." } : rpc0(fn, a));
+    const w2 = wire(world(rows, { sheet, drafts: JSON.parse(JSON.stringify(w.drafts)) }), q);
+    const r = await w2.run(t.entry);
+    ok(!r.ok && /On its way/.test(String(r.why)) && !w2.posts.length && !w2.drafts["dc-tp-202610-1"].retiredBy, "the old posting being sent when it would be withdrawn: on its way; nothing retired or sent");
+  }
+  {
     // the queue's refusal as a piece of its SQL: plain words
     const q = cloud();
     const w = wire(world(rows, { sheet }), q);
@@ -850,6 +862,26 @@ console.log("seventh review: the book that holds the day, India's month-ends, a 
   const w = world(rows, { drafts: { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", part: 1, parts: 1, state: "failed", sent: { xml: xs, at: "2026-11-22T10:00:00Z", answered: "gone" }, results: { "dc-tp-202610-1": { ok: false, state: "failed" } }, vouchers: [{ xml: xs }] } }, readMonth: notIn });
   const r = await w.run(e);
   ok(!r.ok && !w.posts.length && /goes again only through that computer/.test(String(r.why)), "a part settled “not in Tally” without its day read, no computer on record and none named here: waits, nothing sent");
+}
+
+console.log("ninth review: a retired part's old posting never goes again");
+{
+  // the Post page: Retry of a failed posting holding a Tally Payroll part is refused (src/js/59-post-owner.js, lazy)
+  const vm = await import("node:vm"), fs = await import("node:fs");
+  const ctx = { S: { data: { c1: { loaded: true, entries: {} } }, bank: null }, console };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(new URL("../src/js/59-post-owner.js", import.meta.url), "utf8") + ";globalThis.__PO = PostOwner;", ctx);
+  const no = ctx.__PO.retryChanged({ client_id: "c1", id: "j1", status: "failed" }, ["dc-tp-202610-1"], {});
+  ok(/Retry not possible: this is part of a Tally Payroll month \(dc-tp-202610-1\)/.test(no) && /pay twice/.test(no), "the Post page: “Post again” of a posting holding a Tally Payroll part refused (" + no.slice(0, 80) + "…)");
+  ok(ctx.__PO.retryChanged({ client_id: "c1", id: "j2", status: "failed" }, ["b1"], { b1: { status: "approved", x: {} } }) === "", "  a bill's posting as before");
+  // the night: a retired id that shows up in Tally is Needs you, never counted toward done
+  const xs = TP.payrollVoucherXml(TPost.prepare({ co: rowsOf().co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rowsOf().ledgers.map((l) => l.name), books: {} }).vouchers[0]);
+  const v = TPost.readVoucherXml(xs), xt = inTally({ id: "dc-tp-202610-1", narration: "Salary for Oct 2026 as per the salary sheet (3 employees)", payable: v.payable, net: v.net, employees: v.employees }, "g1");
+  const drafts = { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", part: 1, parts: 1, state: "failed", retiredBy: { at: "x" }, replacedBy: ["dc-tp-202610-2"], sent: { xml: xs, answered: "gone", dayGone: "2026-10-31" }, results: { "dc-tp-202610-1": { ok: false, state: "failed" } } },
+    "dc-tp-202610-2": { id: "dc-tp-202610-2", dedupe: "payroll:202610", part: 1, parts: 1, state: "posted", results: { "dc-tp-202610-2": { ok: true, state: "posted", tallyId: "9" } } } };
+  const tn = night(rowsOf({ vouchers: [xt.voucher] }), { draftRecs: asRecs(drafts) });
+  const f = (tn.finding || {}).facts || {};
+  ok(!tn.entry && tn.finding && tn.finding.state === "you" && /set aside as not in Tally/.test(String(f.title)) && /dc-tp-202610-1/.test(String(f.title)), "the night: a retired part in Tally after all is Needs you (" + String(f.title).slice(0, 90) + "…)");
 }
 
 console.log("the drafts the night reads carry the parts");

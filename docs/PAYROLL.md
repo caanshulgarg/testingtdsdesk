@@ -347,7 +347,17 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   are in Tally (retired ones neither missing nor counted). A retired id that shows up in Tally after all stops the month
   ("Check Tally and delete one of them"). The queue's refusal that comes back as a piece of SQL is said in plain words.
   `tests/run_payroll_cloud_resend.py` runs the fresh-id route on the queue's SQL with the real tally-ingest.
+- **Ninth review (23-Nov-2026)**: a retired part's old posting stays listed as failed under Post to Tally, and the
+  cloud's Retry would send it to a bridge with no record of the old id. Guards: the Post page refuses "Post again" of any
+  posting holding a Tally Payroll part (`PostOwner.retryChanged`, src/js/59-post-owner.js, the Post page's lazy part: a
+  part goes again only from Daily Check's Approve); and, as Approve retires a part, its earlier posting is withdrawn in
+  the queue (`tally_post_withdraw`, **migration 212, a DRAFT** for its own review: a withdrawn entry's posting is never
+  retried, requeued or handed out again, and its FinCom id is never queued in another posting; tests/run_migration212.py).
+  A posting still being sent: on its way, nothing retired. A cloud without 212: the page's refusal stands alone. The
+  night: a retired id that shows up in Tally is Needs you, never counted toward done. A part numbered after a retired one
+  names its FinCom id beside "part i of n" (in Tally's Day Book: TDSDesk:dc-tp-…).
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
-- **Redeploy when published**: the app (legacy.js: `CloudPost.run` tells the posting id), the `assistant-night` function
+- **Redeploy when published**: migration 212 applied first (a draft: its own review); the app (legacy.js: `CloudPost.run`
+  tells the posting id; the Post page's part, 59-post-owner.js), the `assistant-night` function
   (dailyjournals.js, tpparts.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.
