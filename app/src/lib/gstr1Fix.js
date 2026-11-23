@@ -251,7 +251,7 @@ function fix3b(t, ym, reg) {
   t.unregPos = Object.values(up).filter((x) => Math.abs(x.taxable) >= 0.005 || Math.abs(x.igst) >= 0.005).sort((a, c) => a.pos.localeCompare(c.pos));
   t.toUnreg = plus(t.toUnreg, { taxable: ut, igst: ui });
   t.r1Fix = d;
-  if (t.netItc && typeof GSTR.setOff === "function") { t.pay = GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening); t.payable = t.pay.cash; }
+  if (t.netItc && typeof GSTR.setOff === "function") { t.pay = GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening, t.zero); t.payable = t.pay.cash; }
   return t;
 }
 

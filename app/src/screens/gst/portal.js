@@ -224,7 +224,7 @@ export function r3bTables(t, j) {
       groups: [["", 2], ["Tax paid through ITC", 4], ["", 3]],
       cols: ["payable", "ui", "uc", "us", "ucs", "cash", "int", "fee"],
       rows: [{ id: "6.1A", label: "(A) Other than reverse charge", group: true }].concat(H4.map((k) => ({ id: "6.1A|" + k, label: { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" }[k], head: k,
-        payable: V(t.net, k), ui: V(P.use.igst, k), uc: V(P.use.cgst, k), us: V(P.use.sgst, k), ucs: V(P.use.cess, k), cash: R(V(P.cash, k) - V(P.rcmCash, k)), int: 0, fee: 0 })),
+        payable: V(P.due || t.net, k), ui: V(P.use.igst, k), uc: V(P.use.cgst, k), us: V(P.use.sgst, k), ucs: V(P.use.cess, k), cash: R(V(P.cash, k) - V(P.rcmCash, k)), int: 0, fee: 0 })),
       [{ id: "6.1B", label: "(B) Reverse charge", group: true }], H4.map((k) => ({ id: "6.1B|" + k, label: { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" }[k], head: k,
         payable: V(t.rcmOut, k), ui: 0, uc: 0, us: 0, ucs: 0, cash: V(P.rcmCash, k), int: 0, fee: 0 }))) },
   ];

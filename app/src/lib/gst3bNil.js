@@ -9,9 +9,9 @@ export function nil3b(t) {
 }
 // re-review (next-fix-audit-gst): what the CA decides on the GSTR-3B before filing, each a line for "Needs you":
 //  - a negative value in 3.1(b), 3.1(c) or 3.1(e) (credit notes on an earlier month's supplies of that class, above this
-//    month's): the Negative Liability Statement carries tax, not values, and the portal may refuse a negative value;
-//  - 3.1(b) IGST or cess (exports or SEZ supplies with payment of tax): payable on the portal with 3.1(a)'s, but not part
-//    of FinCom's 6.1 set-off, cash or set-off journal (a negative one is not carried as negative liability either).
+//    month's): the Negative Liability Statement carries tax, not values, and the portal may refuse a negative value.
+// (3.1(b)'s IGST and cess are in FinCom's 6.1 set-off, cash and set-off journal since the owner's decision of 23-Nov-2026,
+// a negative one carried as negative liability: GSTR.setOff, server/_shared/gst3b.js; nothing to say of them here)
 const INR = (v) => "Rs " + Math.round(Math.abs(v)).toLocaleString("en-IN");
 export function r3bNeeds(t) {
   const w = [];
@@ -20,8 +20,5 @@ export function r3bNeeds(t) {
     const v = n((t[k] || {}).taxable);
     if (v <= -0.005) w.push(l + ": the taxable value is negative (" + "-" + INR(v) + "), from credit notes on an earlier month's supplies. The portal may not take a negative value here, and the Negative Liability Statement carries tax only: decide with the CA how to report it (for example nil here, and the note against a later month's figure) before filing; FinCom's 3B JSON carries the figure as it is.");
   });
-  const z = t.zero || {}, ig = n(z.igst), cs = n(z.cess);
-  if (Math.abs(ig) >= 0.005 || Math.abs(cs) >= 0.005)
-    w.push("3.1(b) carries " + (Math.abs(ig) >= 0.005 ? "IGST " + (ig < 0 ? "-" : "") + INR(ig) : "") + (Math.abs(ig) >= 0.005 && Math.abs(cs) >= 0.005 ? " and " : "") + (Math.abs(cs) >= 0.005 ? "cess " + (cs < 0 ? "-" : "") + INR(cs) : "") + " (exports or SEZ supplies with payment of tax). It is payable on the portal with 3.1(a), but FinCom's 6.1 set-off, cash and set-off journal leave it out" + (ig < 0 || cs < 0 ? ", and a negative figure is not carried as negative liability" : "") + ": work out 6.1 on the portal before filing.");
   return w;
 }

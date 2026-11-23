@@ -24,8 +24,8 @@
 //   re-review (next-fix-audit-gst, second pass):
 //   1b. our credit notes rejected by the customer in IMS are added back in the class they came off (an SEZ unit's note
 //      to 3.1(b), an exempt supply's to 3.1(c)), not all to 3.1(a); the R3B bill breakdown the same
-//   1c. a negative 3.1(c) value (a credit note on an earlier month's exempt sale) and 3.1(b) IGST (not in FinCom's 6.1
-//      set-off) are shown as "Needs you" (r3bNeeds)
+//   1c. a negative 3.1(c) value (a credit note on an earlier month's exempt sale) is shown as "Needs you" (r3bNeeds);
+//      3.1(b) IGST is in the 6.1 set-off (test 11), so nothing is said of it
 //   3b. GSTR-9 heldEnd leaves out credit 2B says is not available (held for good, not "held back for 2B")
 //   4b. GSTR-9 QRMP: the quarter's 3B kept as filed counts when the quarter's last month is not in the books
 //   6b. D2: not answered, but a 3B already filed reversed D2: it stays on until the CA says
@@ -38,6 +38,13 @@
 //      3.1(a) 67,000 (IGST 3,060), table 14 Amazon 10,000 and Flipkart 5,000 (u/s 52), never Shopify (no e-commerce
 //      operator: the owner, 23-Nov-2026). Then AMZ-21 posted (its voucher in the books, "| TDSDesk:<id>"), FK-31's voucher
 //      in the books with the invoice not yet marked posted, SH-41 found already in Tally (intally, no tag): the same.
+//  11. (the owner, 23-Nov-2026) 3.1(b)'s IGST and cess (exports and SEZ supplies with payment of tax) are tax payable in
+//      6.1 with 3.1(a)'s (sections 49 and 49A, rule 88A), a negative one carried as negative liability. December 2025: a
+//      B2C sale 50,000 (CGST/SGST 4,500), an export with payment 1,00,000 (IGST 18,000, cess 1,000), an SEZ supply with
+//      payment 20,000 (IGST 3,600), a purchase with IGST credit 10,000: 6.1 IGST 21,600 (10,000 by IGST credit, 11,600
+//      in cash), CGST/SGST 4,500 each and cess 1,000 in cash; the set-off journal the same. January 2026: the SEZ
+//      supply's credit note (IGST 3,600) alone: IGST -3,600, carried as negative liability. February 2026: an export
+//      with payment 50,000 (IGST 9,000): 3,600 adjusted, 5,400 in cash. GSTR-9 table 9: IGST payable 27,000, cess 1,000.
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm");
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
@@ -254,14 +261,16 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     (await import(path.join(__dirname, "..", "app", "src", "lib", "custImsLetter.js"))).installCustIms();
     const cs = x.CustIMS.customers(reg), c = cs.find((q) => q.party === "Sunrise SEZ Unit"), L = c ? x.CustIMS.letter(reg, c.gstin, c.party, c.items) : "";
     ok(cs.length === 2 && c && c.items.length === 2 && /rejected in your Invoice Management System/.test(L) && L.includes("ZC/1") && L.includes("ZC/2"), "the letter to the SEZ unit names its two credit notes (" + cs.map((q) => q.party + ":" + q.items.length).join(", ") + ")"); }
-  console.log("== 1c. what the CA decides: a negative 3.1(c), and 3.1(b) IGST outside the set-off");
+  console.log("== 1c. what the CA decides: a negative 3.1(c); 3.1(b) IGST is in the set-off");
   const {r3bNeeds} = await import(path.join(__dirname, "..", "app", "src", "lib", "gst3bNil.js"));
   { books([out("Sales", "20250910", "X/61", "Harbour Exempt Clinic", "", 20000, {}, {taxability: "Exempt"}), out("Credit Note", "20251008", "CN/61", "Harbour Exempt Clinic", "", 5000, {}, {taxability: "Exempt"}),
       out("Sales", "20251012", "E/61", "Kelpie Trading GmbH", "", 40000, {igst: 7200}, {country: "Germany"})]);
     const t = T("202510"), w = r3bNeeds(t);
     ok(near(t.nil.taxable, -5000), "3.1(c) is -5,000 (" + t.nil.taxable + ")");
     ok(w.some((m) => /3\.1\(c\)/.test(m) && /negative/i.test(m)), "Needs you: 3.1(c) is negative (" + JSON.stringify(w) + ")");
-    ok(w.some((m) => /3\.1\(b\)/.test(m) && /7,200|7200/.test(m) && /6\.1/.test(m)), "Needs you: 3.1(b) IGST 7,200 is not in FinCom's 6.1 set-off");
+    // (the owner, 23-Nov-2026: 3.1(b)'s IGST and cess are in 6.1 now, test 11; nothing to decide about them)
+    ok(!w.some((m) => /3\.1\(b\)/.test(m)), "3.1(b) IGST 7,200 is in FinCom's 6.1 set-off: nothing for the CA about it (" + JSON.stringify(w) + ")");
+    ok(near(t.pay.due.igst, 7200) && near(t.pay.cash.igst, 7200), "6.1: IGST 7,200 payable, paid in cash (no credit) (" + f(t.pay.due) + ", " + f(t.pay.cash) + ")");
     ok(!r3bNeeds(NOV).length, "November of test 2: nothing to say"); }
 
   // ---------------------------------------------------------------- 8. the GSTR-1 bills Excel
@@ -318,5 +327,35 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     check("after posting", ctx.S.books);
     ctx.S.sales = null;
   }
+  // ---------------------------------------------------------------- 11. 3.1(b) IGST and cess in 6.1 (the owner, 23-Nov-2026)
+  console.log("== 11. 3.1(b) IGST and cess are set off and paid in 6.1, a negative one carried");
+  { const SZ = "07AABCS3333C1Z3", cessed = (v, c) => { v.ent[0].a = x.r2(v.ent[0].a - c); v.ent.push({l: "CESS", a: c}); return v; };
+    books([out("Sales", "20251203", "S/111", "Walk-in Customers", "", 50000, {cgst: 4500, sgst: 4500}),
+      cessed(out("Sales", "20251205", "E/111", "Kelpie Trading GmbH", "", 100000, {igst: 18000}, {country: "Germany"}), 1000),
+      out("Sales", "20251207", "Z/111", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}),
+      buy("20251209", "P/111", "Alder Stationers", GA, 50000, {igst: 10000}),
+      out("Credit Note", "20260112", "ZC/111", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}),
+      out("Sales", "20260210", "E/112", "Kelpie Trading GmbH", "", 50000, {igst: 9000}, {country: "Germany"})]);
+    const b = ctx.S.books; b.map.CESS = {n: 0, what: "gst", kind: "gst", tax: "CESS", side: "output", reg, ok: true, byHand: true};
+    const d = T("202512");
+    ok(near(d.zero.igst, 21600) && near(d.zero.cess, 1000) && near(d.net.igst, 0), "December 3.1(b): IGST 21,600, cess 1,000; 3.1(a) IGST nil (" + f(d.zero) + ")");
+    ok(near(d.pay.due.igst, 21600) && near(d.pay.due.cgst, 4500) && near(d.pay.due.cess, 1000), "6.1 tax payable: IGST 21,600 (3.1(b)), CGST 4,500, SGST 4,500, cess 1,000 (" + f(d.pay.due) + ")");
+    ok(near(d.pay.use.igst.igst, 10000) && near(d.pay.use.igst.cgst, 0) && near(d.pay.use.igst.sgst, 0), "IGST credit 10,000 against IGST first (rule 88A), none to CGST or SGST (" + JSON.stringify(d.pay.use.igst) + ")");
+    ok(near(d.pay.cash.igst, 11600) && near(d.pay.cash.cgst, 4500) && near(d.pay.cash.sgst, 4500) && near(d.pay.cash.cess, 1000) && near(d.pay.carry.igst, 0), "cash: IGST 11,600, CGST 4,500, SGST 4,500, cess 1,000; no credit carried (" + f(d.pay.cash) + ", carry " + f(d.pay.carry) + ")");
+    const J = x.GSTF.journal("202512", reg), L = (n) => J.lines.find((l) => l.l === n) || {};
+    ok(J.balanced && near(L("IGST").dr, 21600) && near(L("CESS").dr, 1000) && near(L("Input IGST").cr, 10000) && near(J.cash, 21600), "the set-off journal: IGST output 21,600 and cess 1,000 debited, IGST input 10,000 and cash 21,600 credited (" + JSON.stringify(J.lines) + ")");
+    ok(DJ.setoffLegal(d.pay, d.pay.due, d.rcmOut, d.netItc, d.opening) === "", "the daily check finds December's set-off legal (" + DJ.setoffLegal(d.pay, d.pay.due, d.rcmOut, d.netItc, d.opening) + ")");
+    ok(DJ.setoffMin(d.pay.due, d.rcmOut, d.netItc, d.opening).cash === Math.round((11600 + 4500 + 4500 + 1000) * 100), "and the least cash the law allows is the same 21,600");
+    ok(!r3bNeeds(d).length, "nothing for the CA (" + JSON.stringify(r3bNeeds(d)) + ")");
+    const j = T("202601");
+    ok(near(j.zero.igst, -3600) && near(j.pay.cash.igst, 0) && j.pay.carry.neg && near(j.pay.carry.neg.igst, 3600), "January: the SEZ credit note's IGST -3,600 is carried as negative liability (" + JSON.stringify(j.pay.carry.neg) + ")");
+    const fb = T("202602");
+    ok(fb.pay.negAdj && near(fb.pay.negAdj.igst, 3600) && near(fb.pay.cash.igst, 5400), "February: IGST 9,000 less the 3,600 carried: 5,400 in cash (" + JSON.stringify(fb.pay.negAdj) + ", " + f(fb.pay.cash) + ")");
+    const d9 = x.GST9.build("2025", reg);
+    ok(near(d9.pay.igst.due, 27000) && near(d9.pay.cess.due, 1000) && near(d9.pay.igst.cash, 17000), "GSTR-9 table 9: IGST payable 27,000 (21,600 - 3,600 + 9,000), cess 1,000; IGST cash 17,000 (" + JSON.stringify(d9.pay.igst) + ")");
+    const p = G.setOff({igst: 0, cgst: 100, sgst: 100, cess: 0}, {}, {igst: 0, cgst: 0, sgst: 0, cess: 300}, {}, {igst: 500, cess: 200});
+    ok(near(p.due.igst, 500) && near(p.due.cess, 200) && near(p.use.cess.cess, 200) && near(p.cash.igst, 500) && near(p.carry.cess, 100), "setOff with 3.1(b): IGST 500 in cash, cess 200 by cess credit, 100 carried (" + JSON.stringify(p) + ")");
+    const p0 = G.setOff({igst: 0, cgst: 100, sgst: 100, cess: 0}, {}, {igst: 300, cgst: 0, sgst: 0, cess: 0}, {});
+    ok(near(p0.due.igst, 0) && near(p0.use.igst.cgst + p0.use.igst.sgst, 200), "setOff without 3.1(b) (an older caller): as before (" + JSON.stringify(p0.use.igst) + ")"); }
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

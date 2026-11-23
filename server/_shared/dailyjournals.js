@@ -203,7 +203,7 @@ export function gstMonths(E, months) {
       const it = rec.r3b ? E.GSTF.interest(ym, reg, t) : null, fee = rec.r3b ? E.GSTF.lateFee(ym, reg, "r3b", nil) : null;
       const pick = (o) => JSON.parse(JSON.stringify(o || {}));
       out.push({ reg, ym, filed: String(rec.r3b || "").replace(/-/g, ""), due: String(E.GSTF.due(ym, "r3b", reg) || "").replace(/-/g, ""), arn: rec.r3bArn || "", kept: !!rec.snap, snapPay: rec.snap ? pick(rec.snap.pay) : null,
-        t: { net: pick(t.net), rcmOut: pick(t.rcmOut), netItc: pick(t.netItc), opening: pick(t.opening), pay: pick(t.pay) },
+        t: { net: pick(t.net), zero: pick(t.zero), rcmOut: pick(t.rcmOut), netItc: pick(t.netItc), opening: pick(t.opening), pay: pick(t.pay) },
         journal: { lines: pick(J.lines), missing: J.missing || [], date: J.date, narr: J.narr, cashL: J.cashL, balanced: !!J.balanced },
         interest: it ? { total: r2(it.total), days: it.days } : null, fee: fee ? { fee: r2(fee.fee || 0), days: fee.days || 0, unknown: !!fee.unknown } : null,
         portalInt: rec.portalInt != null ? num(rec.portalInt) : null, portalFee: rec.portalFee3 != null ? num(rec.portalFee3) : null,
@@ -212,6 +212,10 @@ export function gstMonths(E, months) {
   }
   return out;
 }
+// 6.1's tax payable by head, other than reverse charge: 3.1(a), with 3.1(b)'s IGST and cess (exports and SEZ supplies with
+// payment of tax), set off and paid with it under sections 49(4), 49(5) and 49A with rule 88A (the owner, 23-Nov-2026), as
+// GSTR.setOff (server/_shared/gst3b.js) takes them; a month the night carried without 3.1(b) is its 3.1(a)
+export const due61 = (t) => { const o = {}; for (const h of H) o[h] = r2(num((t.net || {})[h]) + (h === "igst" || h === "cess" ? num((t.zero || {})[h]) : 0)); return o; };
 // a nil GSTR-3B for the late fee: no tax payable (Notification 19/2021-CT) in 3.1(a), 3.1(b) (IGST and cess on exports
 // or SEZ supplies with payment, re-review) or 3.1(d), whatever the credit (as app/src/lib/gst3bNil.js)
 export const nil3bOf = (t) => H.every((h) => ["net", "zero", "rcmOut"].every((k) => P((t[k] || {})[h]) <= 0));
@@ -278,9 +282,9 @@ export function setoffOne(m, inp, others) {
   if (miss.length) return { finding: you("Set-off " + label + ": pick the " + miss.map(([r]) => ROLES[r].what).join(" and ") + " ledger", [], { waits: true }).finding, picks: picksNeeded(miss) };
   const lines = merge(lines0.concat(intAmt ? [{ ledger: ledI.ledger, dr: intAmt }, { ledger: J.cashL, cr: intAmt }] : [], feeAmt ? [{ ledger: ledF.ledger, dr: feeAmt }, { ledger: J.cashL, cr: feeAmt }] : []));
   // 5. two ways: the plain set-off from the 3B's own figures, and its journal
-  const owed = {}; for (const h of H) owed[h] = num((t.net || {})[h]) - num(((t.pay || {}).negAdj || {})[h]);
+  const due = due61(t), owed = {}; for (const h of H) owed[h] = num(due[h]) - num(((t.pay || {}).negAdj || {})[h]);
   const least = setoffMin(owed, t.rcmOut, t.netItc, t.opening), plain = t.pay;
-  const legal = setoffLegal(t.pay, t.net, t.rcmOut, t.netItc, t.opening);
+  const legal = setoffLegal(t.pay, due, t.rcmOut, t.netItc, t.opening);
   const appCash = H.reduce((s, h) => s + P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]), 0);
   const want = {};
   const add = (k, p) => { if (p) want[k] = (want[k] || 0) + p; };
@@ -297,7 +301,7 @@ export function setoffOne(m, inp, others) {
   // 6. the trace: each head, the credit used and the cash
   const ev = [{ t: "gst3b", ref: "3b:" + m.reg + ":" + m.ym, label: "GSTR-3B " + label + (m.filed ? " · filed " + dmon(m.filed) + (m.arn ? " · ARN …" + String(m.arn).slice(-6) : "") : " · kept as filed") }];
   for (const h of H) {
-    const owe = Math.max(0, P(t.net[h])), used = H.reduce((s, f) => s + P((t.pay.use[f] || {})[h]), 0), cash = P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]);
+    const owe = Math.max(0, P(owed[h])), used = H.reduce((s, f) => s + P((t.pay.use[f] || {})[h]), 0), cash = P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]);
     if (owe || used || cash) ev.push({ t: "gst3b", ref: "3b:" + h, label: h.toUpperCase() + " tax " + inr(R(owe)) + " = credit " + inr(R(used)) + " + cash " + inr(R(cash)) });
     if (P((t.pay.rcmCash || {})[h])) ev.push({ t: "gst3b", ref: "3b:rcm:" + h, label: "Reverse charge " + h.toUpperCase() + " " + inr(t.pay.rcmCash[h]) + ", paid in cash" });
   }

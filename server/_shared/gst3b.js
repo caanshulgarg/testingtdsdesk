@@ -1529,7 +1529,7 @@ const GSTQ = {
     t.r37 = {rev: ts.reduce((a, x) => this.add(a, (x.r37 || {}).rev || {}), this.z()), re: ts.reduce((a, x) => this.add(a, (x.r37 || {}).re || {}), this.z())};
     t.ineligible = r2(ts.reduce((a, x) => a + num(x.ineligible), 0));
     t.opening = GSTR.creditIn(ms[0] || qEnd, reg);
-    t.pay = GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening);
+    t.pay = GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening, t.zero);
     // PMT-06 deposits of the quarter's first two months are in the cash ledger: they pay first
     const dep = this.deposited(qEnd, reg); t.pmt = dep;
     t.cashAfter = {}; t.pmtLeft = {};
@@ -1551,7 +1551,7 @@ const GSTQ = {
     } else { const t = GSTR.threeBm(ym, reg), q0 = GSTSet.qStart(ym);
       // (re-review: the second month starts from what the first left of the credit and of an earlier negative liability,
       // not from the quarter's opening again: section 39(7) proviso, Notification 85/2020-CT, the tax due less the credit left)
-      const p = q0 !== ym && GSTR.months().includes(q0) ? GSTR.setOff(t.net, t.rcmOut, t.netItc, GSTR.threeBm(q0, reg).pay.carry) : t.pay;
+      const p = q0 !== ym && GSTR.months().includes(q0) ? GSTR.setOff(t.net, t.rcmOut, t.netItc, GSTR.threeBm(q0, reg).pay.carry, t.zero) : t.pay;
       this.H.forEach(h => { amt[h] = Math.max(0, Math.round(num(p.cash[h]))); }); why = "the month\u2019s tax less its credit"; }
     const total = this.H.reduce((a, h) => a + amt[h], 0), paid = rec.pmt06 || {};
     return {method, amt, total, why, known, due: GSTF.due(ym, "pmt06", reg), paid, paidTotal: r2(this.H.reduce((a, h) => a + num(paid[h]), 0))};
@@ -2281,7 +2281,7 @@ const GSTR = {
     const rev1 = {igst: r2(rules.igst + reversal.igst), cgst: r2(rules.cgst + reversal.cgst), sgst: r2(rules.sgst + reversal.sgst), cess: r2(rules.cess + reversal.cess)};
     const netItc = {cgst: r2(itc.cgst - rev1.cgst - rev2.cgst), sgst: r2(itc.sgst - rev1.sgst - rev2.sgst), igst: r2(itc.igst - rev1.igst - rev2.igst), cess: r2(itc.cess - rev1.cess - rev2.cess)};
     const opening = this.creditIn(ym, reg);
-    const pay = this.setOff(net, rcmOut, netItc, opening);
+    const pay = this.setOff(net, rcmOut, netItc, opening, zero);
     return {sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
       buy, itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: P31.unregPos,
       basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, isdAdj, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash};
@@ -2303,7 +2303,12 @@ const GSTR = {
   // Statement, GSTN advisory of Aug-2023 under rule 61 and sections 39 and 49): a head's negative figure is not tax to pay;
   // it is carried (carry.neg, beside the credit) and set against the next return's tax of the same head (negAdj: 6.1's
   // "adjustment of negative liability of previous tax period"), never against another head and never paid out
-  setOff(liab, rcm, credit, opening){
+  // (the owner, 23-Nov-2026) zero: 3.1(b)'s IGST and cess (exports and SEZ supplies with payment of tax, section 16(3)(b)
+  // IGST Act) are output tax payable like 3.1(a)'s (section 49(4) and (5), section 49A, rule 88A): added to the liability
+  // of their head before the set-off, so they are set off, paid in cash and carried as negative liability with it; due
+  // is that liability (6.1's "tax payable", other than reverse charge). Left out, as an older caller does: no 3.1(b)
+  setOff(liab, rcm, credit, opening, zero){
+    if (zero) liab = {igst: r2(num((liab || {}).igst) + num(zero.igst)), cgst: num((liab || {}).cgst), sgst: num((liab || {}).sgst), cess: r2(num((liab || {}).cess) + num(zero.cess))};
     const L = {}, C = {}, use = {igst: {igst: 0, cgst: 0, sgst: 0}, cgst: {cgst: 0, igst: 0}, sgst: {sgst: 0, igst: 0}, cess: {cess: 0}};
     const g0 = (opening || {}).neg || {}, neg = {}, negAdj = {}, nz = o => this.HEADS.some(h => o[h] >= .005);
     this.HEADS.forEach(h => { const l = r2(num(liab[h])), g = Math.max(0, num(g0[h])), v = r2(l - g); L[h] = Math.max(0, v); neg[h] = Math.max(0, -v); negAdj[h] = Math.min(g, Math.max(0, l));

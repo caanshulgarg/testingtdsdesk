@@ -49,7 +49,8 @@ function Bills({ id, per, reg, t, label }) {
 // 6.1, one head: the tax payable, the credit used head by head, the cash, the credit carried
 function PayDetail({ t, head }) {
   const P = t.pay || { use: {}, cash: {}, rcmCash: {}, carry: {} }, HW = { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" };
-  const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
+  // (A): 3.1(a) with 3.1(b)'s IGST and cess, as the set-off takes them (P.due; the owner, 23-Nov-2026)
+  const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((P.due || t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
     ["Credit brought forward", num((t.opening || {})[head])], ["Net ITC of the month, 4(C)", num((t.netItc || {})[head])]]
     .concat(num(((P.negAdj || {})[head])) ? [["Less: negative liability of an earlier month adjusted (Negative Liability Statement)", -num(P.negAdj[head])]] : [])
     .concat(["igst", "cgst", "sgst", "cess"].map((c) => ["Paid with " + HW[c] + " credit", num(((P.use || {})[c] || {})[head])]))
@@ -62,7 +63,7 @@ function PayDetail({ t, head }) {
 // under 6.1: the tax payable (A) + (B) by head, and the electronic credit ledger brought forward and carried (FinCom's working)
 function Ledger({ t }) {
   const H = ["igst", "cgst", "sgst", "cess"], P = t.pay, line = (f) => H.map((k) => HEADW[k] + " " + money(f(k))).join(" · ");
-  return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
+  return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((P.due || t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
     Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.
     {P.negAdj && <><br /><span data-r3b-negadj="">Negative liability of an earlier month set against this month's tax: {line((k) => num(P.negAdj[k]))}.</span></>}
     {(P.carry || {}).neg && <><br /><b data-r3b-neg="" style={{ color: "var(--warn)" }}>Needs you: the tax in 3.1 is negative in a head (credit notes above the sales). FinCom carries {line((k) => num(P.carry.neg[k]))} as negative liability and sets it against next month's tax of the same head, as the portal's Negative Liability Statement does. Check that the portal shows the same figure there before filing; if the offline tool refuses the negative figure, enter 3.1 on the portal.</b></>}</p>;

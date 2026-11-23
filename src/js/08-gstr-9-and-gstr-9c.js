@@ -103,7 +103,8 @@ const GST9 = {
     // Part IV: tax payable and paid
     const pay = {};
     ["igst", "cgst", "sgst", "cess"].forEach(h => {
-      const due = inBooks.reduce((s2, m) => s2 + num(t3[m].net[h]) + num(t3[m].rcmOut[h]), 0);
+      // (the owner, 23-Nov-2026) with 3.1(b)'s IGST and cess, tax payable as 3.1(a)'s (section 49, rule 88A): GSTR.setOff
+      const due = inBooks.reduce((s2, m) => s2 + num(t3[m].net[h]) + (h === "igst" || h === "cess" ? num((t3[m].zero || {})[h]) : 0) + num(t3[m].rcmOut[h]), 0);
       const cash = inBooks.reduce((s2, m) => s2 + num(t3[m].pay.cash[h]), 0);
       const by = {}; ["igst", "cgst", "sgst", "cess"].forEach(f => { by[f] = r2(inBooks.reduce((s2, m) => s2 + num(((t3[m].pay.use[f] || {})[h]) || 0), 0)); });
       pay[h] = {due: r2(due), cash: r2(cash), itc: r2(by.igst + by.cgst + by.sgst + by.cess), by};
