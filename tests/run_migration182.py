@@ -171,6 +171,10 @@ try:
         for i in (1, 2):
             r = psql_text(text)
             ok(r.returncode == 0, "182 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
+        # M182_THEN: a later migration that replaces 182's functions (214), run after 182: 182's checks must still hold
+        if os.environ.get("M182_THEN"):
+            r = psql_text(open(os.environ["M182_THEN"]).read())
+            ok(r.returncode == 0, "%s runs after 182: %s" % (os.path.basename(os.environ["M182_THEN"]), r.stderr[-300:]))
     print("== 0. grants")
     if text:
         for t in ("tally_gap_retries", "tally_light_days", "tally_light_pace"):
