@@ -1072,7 +1072,8 @@ function itcCheck(e, co){
   else if (billedTo && !own.includes(billedTo)){ ok = false; why = "other-gstin"; if (gst > 0) notes.push({lvl:"hi", t:"No input credit: the bill is billed to GSTIN " + billedTo + ", not this client's " + cli + ". The GST of " + money(gst) + " is added to the expense. Ask the supplier for a bill on the right GSTIN."}); }
   // each GSTIN is a distinct person (s.25(4) CGST Act) and the credit is the registration's the bill is made out to (s.16):
   // posted to this client's GST ledgers it is that GSTIN's only once a person says so (e.regOk; compute's missing)
-  if (reg !== cli && gst > 0) notes.push({lvl:e.regOk === reg ? "" : "hi", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. " + (e.regOk === reg ? "You confirmed the GST ledgers are " + reg + "'s." : "Check the GST ledgers are the ones for " + reg + ".")});
+  // (the owner, 23-Nov-2026) co.multiGstin, Client setup's "This Tally company has more than one GSTIN": no per-bill word
+  if (reg !== cli && gst > 0) notes.push({lvl:e.regOk === reg || co.multiGstin ? "" : "hi", t:"Billed to this client's other registration " + reg + ": the input credit is that GSTIN's. " + (e.regOk === reg ? "You confirmed the GST ledgers are " + reg + "'s." : co.multiGstin ? "This Tally company has more than one GSTIN (Client setup): use " + reg + "'s GST ledgers." : "Check the GST ledgers are the ones for " + reg + ".")});
   if (ok && gst > 0 && pos.expect && pos.charged && pos.expect !== pos.charged)
     notes.push({lvl:"hi", t:pos.expect === "cgst" ? "The supplier is in the client's state (" + sup + "), so CGST + SGST are expected, but the bill charges IGST. Check the place of supply." : "The supplier is in another state (" + sup + ", client " + home + "), so IGST is expected, but the bill charges CGST + SGST. Check the place of supply."});
   return {ok, why, pos, notes, reg};
@@ -1287,7 +1288,7 @@ function compute(e, cid){
   const missing = [];
   if (e.docKind && !e.docOverride) missing.push("your confirmation that this really is a purchase bill");
   if (co.gstin && !mine && !e.buyerOverride) missing.push("your confirmation that this bill belongs to " + co.name);
-  if (itc.reg !== String(co.gstin || "").toUpperCase() && num(x.cgst) + num(x.sgst) + num(x.igst) > 0 && e.regOk !== itc.reg) missing.push("your word that the GST ledgers are " + itc.reg + "'s");
+  if (itc.reg !== String(co.gstin || "").toUpperCase() && num(x.cgst) + num(x.sgst) + num(x.igst) > 0 && e.regOk !== itc.reg && !co.multiGstin) missing.push("your word that the GST ledgers are " + itc.reg + "'s");
   if (!x.vendorName) missing.push("supplier name");
   if (!x.invoiceDate) missing.push("invoice date");
   if (!(base > 0)) missing.push("taxable value");

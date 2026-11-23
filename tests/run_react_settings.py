@@ -49,6 +49,18 @@ with sync_playwright() as p:
     pg.fill('#app label:has-text("PAN") input', "AANFG3202D"); pg.locator('#app label:has-text("PAN") input').blur()
     pg.fill('#app label:has-text("Client name") input', "ZZ Zeta Exports Pvt Ltd"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
+    # (the owner, 23-Nov-2026) "This Tally company has more than one GSTIN": kept as the client's, like its other settings
+    mg = '#app [data-multi-gstin] label:has-text("This Tally company has more than one GSTIN") input'
+    ok(pg.locator(mg).count() == 1 and not pg.is_checked(mg) and not pg.evaluate("!!CO().multiGstin"), "Company: “This Tally company has more than one GSTIN”, off for a new client")
+    saved = pg.evaluate("() => { window.__mgSaved = []; const o = Store.saveCompany; Store.saveCompany = function(c){ window.__mgSaved.push(!!c.multiGstin); return o.apply(this, arguments); }; return true; }")
+    pg.click(mg); pg.wait_for_timeout(300)
+    ok(pg.evaluate("CO().multiGstin") is True and pg.is_checked(mg) and pg.evaluate("window.__mgSaved").count(True) >= 1, "ticked: kept on the client and saved with its settings (Store.saveCompany)")
+    save()
+    nav("Tally"); pg.wait_for_timeout(200); nav("Company"); pg.wait_for_timeout(300)
+    ok(pg.is_checked(mg), "still ticked when the section is opened again")
+    pg.click(mg); pg.wait_for_timeout(300)
+    ok(pg.evaluate("CO().multiGstin") is False and not pg.is_checked(mg), "untick: off again")
+    pg.click(mg); pg.wait_for_timeout(300)
     save()
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 0 and pg.locator("#app .setbody [data-tally-one]").count() == 1, "Tally section: one line for the client's Tally (24-Oct-2026: linked on the Tally page only)")

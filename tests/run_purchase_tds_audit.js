@@ -7,6 +7,8 @@
 //   P7  the drafts' checks in one job (refreshStats, the review table): the suppliers indexed, the others-count once;
 //       many bills at once (a sheet, Approve all) count the client once at the end
 //   P8  a bill to the client's other registration (Other GSTINs, its own PAN) is the client's: input credit kept
+//   MG  (the owner, 23-Nov-2026) with Client setup's "This Tally company has more than one GSTIN" ticked, such a bill does
+//       not wait for the per-bill word on the GST ledgers (N1's), a plain note instead
 //   PL  an inbox file sent to Sales / Unsorted is read; a PDF of several bills is read once all its parts are
 //   T2  TDS cut in the payment voucher of a bill booked earlier without TDS: 201(1A)(i) interest from the bill's date
 //   T2b a bill paid in instalments, TDS cut in each payment (Agst Ref): each row keeps its own amount paid; several bills
@@ -204,6 +206,15 @@ guard("P8", () => {
   e.regOk = gj;
   const cOk = comp(e);
   ok(!cOk.missing.some(m => /GST ledgers/.test(m)) && cOk.flags.some(f => f.lvl === "" && /other registration/.test(f.t)), "N1 P8 confirmed: approval goes on, a plain note stays");
+  // (the owner, 23-Nov-2026) Client setup's "This Tally company has more than one GSTIN": the company keeps each
+  // registration's GST ledgers, so a bill to the other one does not wait for the per-bill word; a plain note says so
+  delete e.regOk; co.multiGstin = true;
+  const cM = comp(e);
+  ok(!cM.missing.some(m => /GST ledgers/.test(m)) && cM.itc.ok, "MG the client's Tally company has more than one GSTIN: a bill to " + gj + " does not stop for the GST ledgers (" + cM.missing.join("; ") + ")");
+  ok(cM.flags.some(f => f.lvl === "" && /other registration/.test(f.t) && /more than one GSTIN/.test(f.t)) && !cM.flags.some(f => f.lvl === "hi" && /other registration/.test(f.t)), "MG a plain note names the setting, no warning (" + cM.flags.filter(f => /registration/.test(f.t)).map(f => f.lvl + ":" + f.t).join(" | ") + ")");
+  co.multiGstin = false;
+  ok(comp(e).missing.some(m => /GST ledgers/.test(m)), "MG the setting off again: the bill waits for the word once more");
+  delete co.multiGstin;
   const e2 = bill({x: Object.assign(amt(100000, 9000), {buyerGstin: gst("24", "AAACZ9999Z"), vendorGstin: sup, vendorPan: "AAACH3333M", vendorName: "Heron Supplies Pvt Ltd"}), e: {natureId: "goods", expenseLedger: "Purchases"}});
   ok(!comp(e2).itc.ok, "P8 a GSTIN of another PAN is still not the client's");
 });
