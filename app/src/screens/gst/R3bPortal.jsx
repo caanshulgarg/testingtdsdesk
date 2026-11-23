@@ -66,7 +66,9 @@ function Ledger({ t }) {
   return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((P.due || t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
     Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.
     {P.negAdj && <><br /><span data-r3b-negadj="">Negative liability of an earlier month set against this month's tax: {line((k) => num(P.negAdj[k]))}.</span></>}
-    {(P.carry || {}).neg && <><br /><b data-r3b-neg="" style={{ color: "var(--warn)" }}>Needs you: the tax in 3.1 is negative in a head (credit notes above the sales). FinCom carries {line((k) => num(P.carry.neg[k]))} as negative liability and sets it against next month's tax of the same head, as the portal's Negative Liability Statement does. Check that the portal shows the same figure there before filing; if the offline tool refuses the negative figure, enter 3.1 on the portal.</b></>}</p>;
+    {/* (re-review of bac94a801, N1) 3.1 is never negative in the return: a head below nil is shown nil and carried as
+        negative liability; it is set against a later month's tax only once the CA confirms the portal's statement */}
+    {(P.carry || {}).neg && <><br /><span data-r3b-neg="">Carried as negative liability (3.1 below nil in a head, shown as nil in the return): {line((k) => num(P.carry.neg[k]))}. It is set against a later month’s tax once you confirm the portal’s Negative Liability Statement shows it.</span></>}</p>;
 }
 
 export default function R3bPortal({ b, t, cloud }) {
@@ -81,8 +83,11 @@ export default function R3bPortal({ b, t, cloud }) {
   const openTb = open && tables.find((tb) => tb.rows.some((r) => r.id === open)), openRow = openTb && openTb.rows.find((r) => r.id === open);
   const is4 = /^4/.test(open), is61 = /^6\.1[AB]\|/.test(open);
   const needs = r3bNeeds(t, !!(typeof GSTF === "object" && (GSTF.peek(ym, reg) || {}).r3b)), carried = r3bCarry(t, ym);
+  // (re-review of bac94a801, N1) the CA's word that the portal's Negative Liability Statement shows the negative liability
+  // carried in (books.gst3b["<reg>|<month>"].nls, GSTR.nlsOk); then it is set off this month
+  const nlsYes = () => { const bk = S.books, k = reg + "|" + ym; bk.gst3b = Object.assign({}, bk.gst3b, { [k]: Object.assign({}, (bk.gst3b || {})[k], { nls: true }) }); GSTR._carry = null; saveBooks(); render(); };
   return <div data-r3b-portal="">
-    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}</p>)}
+    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}{/Negative Liability Statement/.test(m) && <> <button type="button" className="btn small" data-r3b-nls="" onClick={nlsYes}>The portal shows it</button></>}</p>)}
     {carried.map((m, i) => <p key={"c" + i} className="note" data-r3b-carry={i}>{m}</p>)}
     {tables.map((tb) => {
       return <section key={tb.id} className="r3b-t" data-r3b-table={tb.id}>

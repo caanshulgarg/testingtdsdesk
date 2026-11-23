@@ -23,6 +23,10 @@ export function r3bNeeds(t, filed) {
     if (v <= -0.005) w.push(l + ": the taxable value is negative (-" + INR(v) + "). " + (filed ? "This 3B was filed so, before FinCom showed such a box as nil: nothing to change in it now, and the next 3B takes nothing off for it."
       : "FinCom now shows such a box as nil and carries the excess to the next return; this figure was worked out before that, so work the month out again before filing."));
   });
+  // (re-review of bac94a801, N1) negative liability carried in waits for the CA's word on the portal's statement
+  const nw = (t.opening || {}).negWait;
+  if (nw && ["igst", "cgst", "sgst", "cess"].some((h) => n(nw[h]) >= 0.005))
+    w.push("negative liability of " + [["igst", "IGST"], ["cgst", "CGST"], ["sgst", "SGST"], ["cess", "cess"]].filter(([h]) => n(nw[h]) >= 0.005).map(([h, l]) => l + " " + RS(nw[h])).join(", ") + " is carried in from credit notes of an earlier return. Check that the portal's Negative Liability Statement shows it, then confirm: it is set against this return's tax. Until then it is not.");
   return w;
 }
 // (the owner, 23-Nov-2026) the plain notes for the 3B page on what was carried: brought in from the return before and
@@ -42,7 +46,7 @@ export function r3bCarry(t, ym) {
     if (i) s.push(RS(i.taxable) + " of credit notes brought from " + prev + " taken off here.");
     if (o) s.push((i && n(r.taxable) >= 0 ? "With them the box is below nil" : "Credit notes more than supplies " + per) + ": shown as nil, " + RS(o.taxable) + " carried to " + next + ".");
     const ig = Math.min(0, n(r.igst)), cs = Math.min(0, n(r.cess));
-    if (ig || cs) s.push("Its " + [ig ? "IGST " + RS(ig) : "", cs ? "cess " + RS(cs) : ""].filter(Boolean).join(" and ") + " below nil " + (ig && cs ? "are" : "is") + " shown as nil here and set off against " + (ig && cs ? "IGST and cess" : ig ? "IGST" : "cess") + " in 6.1; what is left is carried as negative liability.");
+    if (ig || cs) s.push("Its " + [ig ? "IGST " + RS(ig) : "", cs ? "cess " + RS(cs) : ""].filter(Boolean).join(" and ") + " below nil " + (ig && cs ? "are" : "is") + " taken off 3.1(a)'s " + (ig && cs ? "IGST and cess" : ig ? "IGST" : "cess") + ", in the return as here; what is still below nil is carried as negative liability.");
     if (s.length) w.push(l + ": " + s.join(" "));
   });
   return w;

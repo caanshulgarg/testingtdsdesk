@@ -147,8 +147,13 @@ console.log("== 2. a negative head is carried to the next month (Negative Liabil
   books([out("Sales", "20251004", "S/11", "Walk-in Customers", "", 20000, {cgst: 1800, sgst: 1800}),
     out("Credit Note", "20251020", "CN/11", "Walk-in Customers", "", 50000, {cgst: 4500, sgst: 4500}),
     out("Sales", "20251110", "S/12", "Walk-in Customers", "", 40000, {cgst: 3600, sgst: 3600})]);
-  const o = T("202510"), n = T("202511");
-  ok(near(o.net.cgst, -2700) && near(o.pay.cash.cgst, 0), "October: CGST -2,700, nothing to pay (" + o.net.cgst + ", " + o.pay.cash.cgst + ")");
+  // (re-review of bac94a801, N1) 3.1 is never negative in the return: October's CGST shown nil, the 2,700 carried as
+  // negative liability; November sets it off only once the CA confirms the portal's statement shows it
+  const o = T("202510"), n0 = T("202511");
+  ok(near(o.net.cgst, 0) && o.f31 && near(o.f31.raw.cgst, -2700) && near(o.pay.cash.cgst, 0), "October: CGST -2,700 shown nil, nothing to pay (" + o.net.cgst + ", " + o.pay.cash.cgst + ")");
+  ok(near(n0.pay.cash.cgst, 3600) && !n0.pay.negAdj && n0.opening.negWait && near(n0.opening.negWait.cgst, 2700), "November, not confirmed: 3,600 paid, the 2,700 waits for the CA (" + f(n0.pay.cash) + ")");
+  ctx.S.books.gst3b = {[reg + "|202511"]: {nls: true}};
+  const n = T("202511");
   ok(o.pay.carry.neg && near(o.pay.carry.neg.cgst, 2700) && near(o.pay.carry.neg.sgst, 2700), "October carries 2,700 CGST and SGST of negative liability (" + JSON.stringify(o.pay.carry.neg) + ")");
   ok(near(n.pay.cash.cgst, 900) && near(n.pay.cash.sgst, 900), "November: 3,600 less 2,700 carried: cash 900 each (" + f(n.pay.cash) + ")");
   ok(!n.pay.carry.neg, "November carries no negative liability on");
@@ -407,10 +412,11 @@ console.log("== 6. rule 42: D2 off unless answered; outward reverse charge is ex
     // month's 3.1(b); its tax is set off against IGST and what is left carried as negative liability, section 49 / r.88A)
     ok(near(j.zero.taxable, 0) && near(j.zero.igst, 0) && near(j.pay.cash.igst, 0) && j.pay.carry.neg && near(j.pay.carry.neg.igst, 3600) && j.pay.carry.cls && near(j.pay.carry.cls.zero.taxable, 20000),
       "January: 3.1(b) nil; the SEZ credit note's 20,000 carried to February's 3.1(b), its IGST 3,600 as negative liability (" + f(j.zero) + ", " + JSON.stringify(j.pay.carry) + ")");
+    ctx.S.books.gst3b = {[reg + "|202602"]: {nls: true}};   // (N1: the CA confirmed the portal's statement)
     const fb = T("202602");
     ok(near(fb.zero.taxable, 30000) && near(fb.zero.igst, 9000) && fb.pay.negAdj && near(fb.pay.negAdj.igst, 3600) && near(fb.pay.cash.igst, 5400), "February: 3.1(b) 50,000 less 20,000 (IGST 9,000); 3,600 adjusted, 5,400 in cash (" + f(fb.zero) + ", " + JSON.stringify(fb.pay.negAdj) + ", " + f(fb.pay.cash) + ")");
     const d9 = x.GST9.build("2025", reg);
-    ok(near(d9.pay.igst.due, 27000) && near(d9.pay.cess.due, 1000) && near(d9.pay.igst.cash, 17000), "GSTR-9 table 9: IGST payable 27,000 (21,600 - 3,600 + 9,000), cess 1,000; IGST cash 17,000 (" + JSON.stringify(d9.pay.igst) + ")");
+    ok(near(d9.pay.igst.due, 30600) && near(d9.pay.cess.due, 1000) && near(d9.pay.igst.cash, 17000), "GSTR-9 table 9: IGST payable 30,600 (21,600 + January nil + 9,000, as the 3Bs file it), cess 1,000; IGST cash 17,000 (3,600 by the negative liability) (" + JSON.stringify(d9.pay.igst) + ")");
     const p = G.setOff({igst: 0, cgst: 100, sgst: 100, cess: 0}, {}, {igst: 0, cgst: 0, sgst: 0, cess: 300}, {}, {igst: 500, cess: 200});
     ok(near(p.due.igst, 500) && near(p.due.cess, 200) && near(p.use.cess.cess, 200) && near(p.cash.igst, 500) && near(p.carry.cess, 100), "setOff with 3.1(b): IGST 500 in cash, cess 200 by cess credit, 100 carried (" + JSON.stringify(p) + ")");
     const p0 = G.setOff({igst: 0, cgst: 100, sgst: 100, cess: 0}, {}, {igst: 300, cgst: 0, sgst: 0, cess: 0}, {});

@@ -19,7 +19,7 @@
 // No AI here: M2B.aiLinks only reads the pairs the gst-2b-match function already stored for the year.
 // GST3B_SRC: this file's and names.js's text (this value left out), hashed (tests/run_gst_cloud.js keeps it so): a 3B the
 // cloud worked out carries it, and the 3B page uses the cloud's only when its own is the same (app/src/screens/gst/cloud3b.js)
-const GST3B_SRC = "sd92ecb2756fa6b31";
+const GST3B_SRC = "sc4dda0a68c72270c";
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1537,7 +1537,7 @@ const GSTQ = {
     // (the owner, 23-Nov-2026) 3.1(b), (c), (e) of the quarter: the months' own figures summed (threeBm leaves a quarterly
     // filer's month as it is), then nil and carried to the next quarter (GSTR.carry31)
     const c31 = GSTR.carry31(t, t.opening); if (c31) t.c31 = c31;
-    t.pay = GSTR.pay31(t.net, t.rcmOut, t.netItc, t.opening, t.zero, c31);
+    t.pay = GSTR.pay31(t, t.netItc);
     // PMT-06 deposits of the quarter's first two months are in the cash ledger: they pay first
     const dep = this.deposited(qEnd, reg); t.pmt = dep;
     t.cashAfter = {}; t.pmtLeft = {};
@@ -2320,10 +2320,10 @@ const GSTR = {
     // (the owner, 23-Nov-2026) a negative 3.1(b), (c) or (e): nil, the excess carried (carry31); a quarterly filer's
     // month is left as it is, the quarter's return works it out on the quarter's sum (GSTQ.threeBQ)
     const c31 = typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" ? null : this.carry31({zero, nil, nongst}, opening);
-    const pay = this.pay31(net, rcmOut, netItc, opening, zero, c31);
-    return Object.assign({sale: taxableOut, cn, net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
+    const t31 = {net, rcmOut, opening, zero, c31}, pay = this.pay31(t31, netItc);
+    return Object.assign({sale: taxableOut, cn, net: t31.net, adv, amend: amd, custRej: cust, rules, r42: rul.r42, r43: rul.r43, zero, nil, nongst, rcmOut, rcmIn, toUnreg, impGoods, impServ, isd, other, blocked,
       buy, itc, reversal, rev1, rev2, reclaim, r37, na, inw5, unregPos: P31.unregPos,
-      basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, isdAdj, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash}, c31 ? {c31} : {});
+      basis: basis.on ? "2b" : basis.why, held, released, cn2b, rejBack, isdAdj, netItc, ineligible: buy.ineligible, opening, pay, payable: pay.cash}, c31 ? {c31} : {}, t31.f31 ? {f31: t31.f31} : {});
   },
   // (the owner, 23-Nov-2026; review of ad4be74c3) 3.1(b), 3.1(c) and 3.1(e) are never reported negative (the portal takes
   // no negative value there): a box whose credit notes are above the return's supplies of the class is nil, and its
@@ -2353,10 +2353,28 @@ const GSTR = {
     return pay;
   },
   // 6.1 with 3.1(b) and the carry (every caller that works the set-off out again: threeBm, GSTQ.threeBQ, the Final credit
-  // for 3B, the GSTR-1 corrections): 3.1(b)'s own tax goes to the set-off even where the box shows it as nil
-  pay31(net, rcm, netItc, opening, zero, c31){
-    return this.withCarry31(this.setOff(net, rcm, netItc, opening, c31 && c31.zt ? Object.assign({}, zero, c31.zt) : zero), c31);
+  // for 3B, the GSTR-1 corrections). t: {net, rcmOut, opening, zero, c31, f31}; t.net and t.f31 are set here.
+  // (re-review of bac94a801, N1) 6.1 takes only what the return's 3.1 says, as the JSON files it (never negative):
+  //  - 3.1(b)'s IGST or cess below nil (c31.zt) comes off 3.1(a)'s same head, in the box as in the JSON (f31.take);
+  //  - a 3.1(a) head still below nil is shown nil and carried as negative liability (f31.up): the portal's Negative
+  //    Liability Statement nets it by head in a later return;
+  //  - a negative liability carried in is set off only once the CA has confirmed the portal's statement shows it
+  //    (creditIn: else it waits, opening.negWait, carried on unchanged)
+  // f31: {raw (3.1(a) before), take, up}; none when 3.1(a) is as the books give it
+  pay31(t, netItc){
+    const raw = t.f31 ? t.f31.raw : t.net, net = Object.assign({}, raw), zt = t.c31 && t.c31.zt, take = {}, up = {};
+    if (zt) ["igst", "cess"].forEach(h => { if (num(zt[h]) <= -.005){ net[h] = r2(num(net[h]) + num(zt[h])); take[h] = r2(num(zt[h])); } });
+    this.HEADS.concat(["taxable"]).forEach(h => { if (num(net[h]) <= -.005){ up[h] = r2(-num(net[h])); net[h] = 0; } });
+    if (Object.keys(take).length || Object.keys(up).length){ t.net = net; t.f31 = {raw: Object.assign({}, raw), take, up}; } else { t.net = raw; delete t.f31; }
+    const op = t.opening || {}, pay = this.withCarry31(this.setOff(t.net, t.rcmOut, netItc, op, t.zero), t.c31);
+    const extra = [up, op.negWait].filter(o => o && this.HEADS.some(h => num(o[h]) >= .005));
+    if (extra.length){ const neg = {}; this.HEADS.forEach(h => { neg[h] = r2(num((pay.carry.neg || {})[h]) + extra.reduce((a, o) => a + num(o[h]), 0)); }); pay.carry = Object.assign({}, pay.carry, {neg}); }
+    return pay;
   },
+  // the CA's word that the portal's Negative Liability Statement shows what FinCom carries (books.gst3b["<reg>|<month>"]
+  // .nls; a quarterly filer's, the quarter's last month's too)
+  nlsOk(ym, reg){ const g = (S.books || {}).gst3b || {}, k = m => !!((g[(reg || "") + "|" + m] || {}).nls);
+    return k(ym) || (typeof GSTSet === "object" && reg && GSTSet.typeOf(ym, reg) === "qrmp" && k(GSTSet.qEnd(ym))); },
   // credit on the 2B basis for a month: on when that month's 2B is here and the client has not chosen the books basis
   itcBasis(ym, reg, quick){
     const b = S.books, choice = ((b.itcBasis || {})[reg || ""]) || "2b";
@@ -2407,7 +2425,10 @@ const GSTR = {
     let bal = {igst: num(open.igst), cgst: num(open.cgst), sgst: num(open.sgst), cess: num(open.cess)};
     if (i > 0 && typeof GSTSet === "object" && GSTSet.typeOf(ym, reg) === "qrmp" && GSTSet.qStart(ym) !== ym && months.includes(GSTSet.qStart(ym))){ this._carry.m[ym] = this.creditIn(GSTSet.qStart(ym), reg); return this._carry.m[ym]; }
     // (gst-run's month step: the credit the month before carried, as the cloud kept it in order, when it has it)
-    if (i > 0){ const prev = months[i - 1], f = typeof GSTF === "object" ? GSTF.filed3b(prev, reg) : null, t = f || (b.shareSrc && b.shareSrc.carry ? b.shareSrc.carry(prev, reg) : null) || this.threeB(prev, reg); bal = Object.assign({}, t.pay.carry); }
+    if (i > 0){ const prev = months[i - 1], f = typeof GSTF === "object" ? GSTF.filed3b(prev, reg) : null, t = f || (b.shareSrc && b.shareSrc.carry ? b.shareSrc.carry(prev, reg) : null) || this.threeB(prev, reg); bal = Object.assign({}, t.pay.carry);
+      // (re-review of bac94a801, N1) negative liability carried in: set off only on the CA's word that the portal's
+      // statement shows it (nlsOk); else it waits (negWait, carried on by pay31)
+      if (bal.neg && this.HEADS.some(h => num(bal.neg[h]) >= .005) && !this.nlsOk(ym, reg)){ bal.negWait = bal.neg; delete bal.neg; } }
     this._carry.m[ym] = bal;
     return bal;
   },

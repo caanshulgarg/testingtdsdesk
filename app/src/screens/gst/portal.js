@@ -249,13 +249,15 @@ export function r3bBills(id, ym, reg, t) {
   const c31 = (k) => { const c = t.c31; if (!c) return;
     if (c.cin && c.cin[k]) A("Credit notes brought from the return before, taken off here", { taxable: -V(c.cin[k], "taxable") });
     if (c.out && c.out[k]) A("Credit notes more than supplies: shown as nil, carried to the next return", { taxable: V(c.out[k], "taxable") });
-    if (c.raw && c.raw[k]) A("Tax below nil: set off against its head in 6.1", { igst: -Math.min(0, V(c.raw[k], "igst")), cgst: -Math.min(0, V(c.raw[k], "cgst")), sgst: -Math.min(0, V(c.raw[k], "sgst")), cess: -Math.min(0, V(c.raw[k], "cess")) }); };
+    if (c.raw && c.raw[k]) A(k === "zero" ? "Tax below nil: taken off 3.1(a)'s same head" : "Tax below nil: shown as nil", { igst: -Math.min(0, V(c.raw[k], "igst")), cgst: -Math.min(0, V(c.raw[k], "cgst")), sgst: -Math.min(0, V(c.raw[k], "sgst")), cess: -Math.min(0, V(c.raw[k], "cess")) }); };
   switch (id) {
     case "3.1a": {
       bills = B(out.filter((r) => r.cls === "taxable" && r.kind !== "CDNR")).concat(B(out.filter((r) => r.kind === "CDNR" && r.cls === "taxable"), -1));
       A("Tax on advances, 11A less 11B", t.adv);
       rej(t, "net");
       if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.out);
+      // (re-review of bac94a801, N1) 3.1(b)'s tax below nil taken off here; a head below nil shown as nil (negative liability)
+      if (t.f31) { A("3.1(b)'s tax below nil, taken off here", t.f31.take); A("Below nil: shown as nil, carried as negative liability", t.f31.up); }
       figure = S5(t.net); break; }
     case "3.1b": bills = CN(out.filter((r) => r.cls === "export" || r.cls === "sez")); if (t.amend) A("Amendments of earlier months (9A, 9C, 10)", t.amend.zero); rej(t, "zero"); c31("zero"); figure = S5(t.zero); break;
     case "3.1c": bills = CN(out.filter((r) => r.cls === "exempt" || r.cls === "nil")); rej(t, "nil"); c31("nil"); figure = S5(t.nil); break;

@@ -69,7 +69,7 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
 {
   const r = night(gstRows({ ym: "202610", intra: 10000, credit: 30000, buyIntra: 5000, rec: { cashLedger: CASH } }));
   const m = r.gst[0];
-  ok(m && m.t.net.cgst < 0 && !entry(r, "gst_setoff").length && !one(r, "setoff_due").length, "more credit notes than sales (a negative liability): no tax to pay, no journal");
+  ok(m && m.t.pay.carry.neg && m.t.pay.carry.neg.cgst > 0 && !entry(r, "gst_setoff").length && !one(r, "setoff_due").length, "more credit notes than sales (a negative liability): no tax to pay, no journal");
   ok(J.setoffMin(m.t.net, m.t.rcmOut, m.t.netItc, m.t.opening).cash === 0, "the independent least cash: a negative liability is no tax");
 }
 {

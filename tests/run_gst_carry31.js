@@ -65,35 +65,64 @@ for (const [label, wrap, o] of [["the engine alone", "", {}], ["with a 2B loaded
   ok(near(m.nil.taxable, 7000), "March: 10,000 less 3,000 = 7,000 (" + m.nil.taxable + ")");
 }
 
-console.log("== B. 3.1(b): the value carried, the tax set off against IGST as negative liability");
+console.log("== B. 3.1(b): the value carried; its tax below nil off 3.1(a)'s head, in the box as in the JSON; what is left a negative liability the CA confirms");
 const sez = () => [out("Sales", "20251207", "Z/1", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}), out("Credit Note", "20260112", "ZC/1", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}),
   out("Sales", "20260210", "E/2", "Kelpie Trading GmbH", "", 50000, {}, {country: "Germany"}), out("Sales", "20260212", "S/2", "Walk-in Customers", "", 100000, {igst: 18000})];
+// (re-review of bac94a801, N1) what FinCom's 6.1 takes is what the JSON's 3.1 says: 6.1's tax payable per head is 3.1(a) +
+// 3.1(b) as the JSON files them; a head still below nil is negative liability, set off a later month only once the CA has
+// confirmed the portal's Negative Liability Statement shows it (books.gst3b["<reg>|<month>"].nls)
+const agree = (A, t, ym, label) => { A.G._carry = null; const j0 = A.G.threeBJson(ym, reg).sup_details, a = j0.osup_det, z = j0.osup_zero;
+  const js = {igst: a.iamt + z.iamt, cgst: a.camt, sgst: a.samt, cess: a.csamt + z.csamt};
+  ok(["igst", "cgst", "sgst", "cess"].every((h) => near(t.pay.due[h], js[h])) && !/:-\d/.test(JSON.stringify(j0)), label + ": 6.1's tax payable is the JSON's 3.1(a) + 3.1(b), none negative (" + JSON.stringify(t.pay.due) + " / " + JSON.stringify(js) + ")"); };
+const nls = (A, ym) => { A.ctx.S.books.gst3b = Object.assign({}, A.ctx.S.books.gst3b, {[reg + "|" + ym]: {nls: true}}); A.G._carry = null; };
 for (const [label, wrap, o] of [["the engine alone", "", {}], ["with a 2B loaded", "itc", {twoB: 1}]]) {
   const A = app(wrap); books(A, sez(), o);
   const d = T(A, "202512"), j = T(A, "202601"), f = T(A, "202602");
   ok(near(d.zero.igst, 3600) && near(d.pay.cash.igst, 3600), label + ": December 3.1(b) IGST 3,600 paid (" + d.pay.cash.igst + ")");
-  ok(near(j.zero.taxable, 0) && near(j.zero.igst, 0) && j.pay.carry.cls && near(j.pay.carry.cls.zero.taxable, 20000) && !("igst" in j.pay.carry.cls.zero && Math.abs(j.pay.carry.cls.zero.igst) >= .005),
-    label + ": January 3.1(b) nil; only its value 20,000 carried in the box (" + JSON.stringify(j.zero) + ", " + JSON.stringify(j.pay.carry.cls) + ")");
-  ok(j.pay.carry.neg && near(j.pay.carry.neg.igst, 3600) && near(j.pay.cash.igst, 0), label + ": the credit note's IGST 3,600 carried as negative liability of IGST (" + JSON.stringify(j.pay.carry.neg) + ")");
-  ok(near(f.zero.taxable, 30000) && near(f.zero.igst, 0), label + ": February 3.1(b) 50,000 less 20,000 = 30,000, no tax (" + JSON.stringify(f.zero) + ")");
-  ok(f.pay.negAdj && near(f.pay.negAdj.igst, 3600) && near(f.pay.cash.igst, 14400), label + ": February 6.1 IGST 18,000 less the 3,600 carried: 14,400 in cash (" + JSON.stringify(f.pay.negAdj) + ", " + f.pay.cash.igst + ")");
-  for (const ym of ["202601", "202602"]) { A.G._carry = null; const js = JSON.stringify(A.G.threeBJson(ym, reg).sup_details);
-    ok(!/:-\d/.test(js), label + ": " + ym + "'s 3B JSON has no negative figure (" + js + ")"); }
+  ok(near(j.zero.taxable, 0) && near(j.zero.igst, 0) && near(j.net.igst, 0) && j.pay.carry.cls && near(j.pay.carry.cls.zero.taxable, 20000), label + ": January 3.1(b) nil, its value 20,000 carried; 3.1(a) IGST nil (" + JSON.stringify(j.zero) + ", " + JSON.stringify(j.pay.carry.cls) + ")");
+  ok(j.pay.carry.neg && near(j.pay.carry.neg.igst, 3600) && near(j.pay.cash.igst, 0), label + ": its IGST 3,600 below nil: negative liability of IGST (" + JSON.stringify(j.pay.carry.neg) + ")");
+  agree(A, j, "202601", label + ", January");
+  ok(near(f.zero.taxable, 30000) && near(f.zero.igst, 0) && !f.pay.negAdj && near(f.pay.cash.igst, 18000) && f.opening.negWait && near(f.opening.negWait.igst, 3600) && f.pay.carry.neg && near(f.pay.carry.neg.igst, 3600),
+    label + ": February, not confirmed: 3.1(b) 30,000; IGST 18,000 in cash, the 3,600 waits for the CA (" + JSON.stringify(f.opening) + ", " + f.pay.cash.igst + ")");
+  agree(A, f, "202602", label + ", February");
+  nls(A, "202602"); const f2 = T(A, "202602");
+  ok(f2.pay.negAdj && near(f2.pay.negAdj.igst, 3600) && near(f2.pay.cash.igst, 14400) && !f2.pay.carry.neg, label + ": February, the statement confirmed: 18,000 less 3,600, 14,400 in cash (" + JSON.stringify(f2.pay.negAdj) + ", " + f2.pay.cash.igst + ")");
 }
-{ // the same box: a credit note's IGST above the month's 3.1(b) IGST while the value stays positive
+{ // the reviewer's repro: the SEZ credit note in February itself, with an export under LUT and a B2C sale (IGST 18,000)
+  const A = app("itc"); books(A, [out("Sales", "20251207", "Z/1", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}), out("Credit Note", "20260205", "ZC/1", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}),
+    out("Sales", "20260210", "E/2", "Kelpie Trading GmbH", "", 50000, {}, {country: "Germany"}), out("Sales", "20260212", "S/2", "Walk-in Customers", "", 100000, {igst: 18000})], {twoB: 1});
+  const f = T(A, "202602");
+  ok(near(f.zero.taxable, 30000) && near(f.zero.igst, 0) && near(f.net.igst, 14400) && near(f.pay.cash.igst, 14400) && !f.pay.carry.neg, "February: 3.1(b) 30,000 with no tax; 3.1(a) IGST 18,000 less the note's 3,600 = 14,400, paid (" + JSON.stringify(f.net) + ", " + f.pay.cash.igst + ")");
+  agree(A, f, "202602", "February");
+}
+{ // a 3.1(b) note's IGST above 3.1(a)'s IGST while 3.1(b)'s value stays positive
   const A = app(""); books(A, [out("Sales", "20251207", "Z/1", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}), out("Credit Note", "20260112", "ZC/1", "Sunrise SEZ Unit", SZ, 20000, {igst: 3600}, {regType: "SEZ"}),
     out("Sales", "20260115", "E/3", "Kelpie Trading GmbH", "", 40000, {}, {country: "Germany"}), out("Sales", "20260116", "S/3", "Walk-in Customers", "", 10000, {igst: 1800})]);
   const j = T(A, "202601");
-  ok(near(j.zero.taxable, 20000) && near(j.zero.igst, 0) && near(j.pay.cash.igst, 0) && j.pay.carry.neg && near(j.pay.carry.neg.igst, 1800),
-    "January: 3.1(b) 40,000 - 20,000 = 20,000 shown with IGST 0 (not -3,600); 3.1(a) IGST 1,800 less 3,600: 1,800 carried as negative liability (" + JSON.stringify(j.zero) + ", " + JSON.stringify(j.pay.carry.neg) + ")");
-  A.G._carry = null; ok(!/:-\d/.test(JSON.stringify(A.G.threeBJson("202601", reg).sup_details)), "and its JSON is never negative");
+  ok(near(j.zero.taxable, 20000) && near(j.zero.igst, 0) && near(j.net.igst, 0) && near(j.pay.cash.igst, 0) && j.pay.carry.neg && near(j.pay.carry.neg.igst, 1800),
+    "January: 3.1(b) 20,000, IGST 0; 3.1(a) IGST 1,800 less 3,600: nil, 1,800 negative liability (" + JSON.stringify(j.net) + ", " + JSON.stringify(j.pay.carry.neg) + ")");
+  agree(A, j, "202601", "January");
+}
+{ // a negative 3.1(a) head alone: nil in the box and the JSON; the rest negative liability, confirmed before it is used
+  const A = app(""); books(A, [out("Sales", "20251204", "S/11", "Walk-in Customers", "", 20000, {cgst: 1800, sgst: 1800}), out("Credit Note", "20260120", "CN/11", "Walk-in Customers", "", 50000, {cgst: 4500, sgst: 4500}),
+    out("Sales", "20260210", "S/12", "Walk-in Customers", "", 40000, {cgst: 3600, sgst: 3600})]);
+  const j = T(A, "202601"), f = T(A, "202602");
+  ok(near(j.net.cgst, 0) && near(j.net.taxable, 0) && j.pay.carry.neg && near(j.pay.carry.neg.cgst, 4500), "January: 3.1(a) nil (not -50,000 / -4,500); CGST and SGST 4,500 each negative liability (" + JSON.stringify(j.net) + ", " + JSON.stringify(j.pay.carry.neg) + ")");
+  agree(A, j, "202601", "January");
+  ok(near(f.pay.cash.cgst, 3600) && !f.pay.negAdj, "February, not confirmed: CGST 3,600 paid in cash (" + f.pay.cash.cgst + ")");
+  nls(A, "202602"); const f2 = T(A, "202602");
+  ok(near(f2.pay.cash.cgst, 0) && f2.pay.negAdj && near(f2.pay.negAdj.cgst, 3600) && f2.pay.carry.neg && near(f2.pay.carry.neg.cgst, 900), "February, confirmed: 3,600 of the 4,500 adjusted, 900 carried on (" + JSON.stringify(f2.pay.negAdj) + ", " + JSON.stringify(f2.pay.carry.neg) + ")");
 }
 console.log("== C. what the 3B page says, and the figures behind each box add up");
 { const lib = (A) => { vm.runInContext("globalThis.__nil = (function(){" + strip("gst3bNil.js") + "\n; return {r3bNeeds, r3bCarry}; })(); globalThis.__portal = (function(){" + strip("../screens/gst/portal.js".replace(/^/, "")) + "\n; return {r3bBills}; })();", A.ctx); return {N3: A.ctx.__nil, P: A.ctx.__portal}; };
   const A = app(""); books(A, sez()); const {N3, P} = lib(A), j = T(A, "202601"), w = N3.r3bCarry(j, "202601");
-  ok(w.some((s) => /^3\.1\(b\)/.test(s) && s.includes("\u20b920,000 carried to February 2026") && /IGST \u20b93,600 below nil is shown as nil here and set off against IGST in 6\.1/.test(s)), "3.1(b): the value carried, the IGST below nil set off against IGST (" + JSON.stringify(w) + ")");
+  ok(w.some((s) => /^3\.1\(b\)/.test(s) && s.includes("\u20b920,000 carried to February 2026") && /IGST \u20b93,600 below nil is taken off 3\.1\(a\)'s IGST/.test(s)), "3.1(b): the value carried, the IGST below nil taken off 3.1(a)'s (" + JSON.stringify(w) + ")");
   const x = P.r3bBills("3.1b", "202601", reg, j);
-  ok(x && !x.off.length && x.adj.length === 2, "3.1(b)'s figure (nil) is its bills and the two lines: carried on, tax set off (" + JSON.stringify(x && x.adj.map((a) => a.label)) + ", off " + JSON.stringify(x && x.off) + ")");
+  const xa = P.r3bBills("3.1a", "202601", reg, j);
+  ok(xa && !xa.off.length, "3.1(a)'s figure adds up with 3.1(b)'s IGST taken off and the nil floor (" + JSON.stringify(xa && xa.adj.map((a) => a.label + " " + a.igst)) + ", off " + JSON.stringify(xa && xa.off) + ")");
+  const nd = N3.r3bNeeds(T(A, "202602"), false);
+  ok(nd.some((s) => /Negative Liability Statement/.test(s) && /\u20b93,600/.test(s) && /IGST/.test(s)), "February: Needs you asks the CA to confirm the portal's Negative Liability Statement shows IGST 3,600 (" + JSON.stringify(nd) + ")");
+  ok(x && !x.off.length && x.adj.length === 2, "3.1(b)'s figure (nil) is its bills and the two lines: carried on, tax taken off 3.1(a) (" + JSON.stringify(x && x.adj.map((a) => a.label)) + ", off " + JSON.stringify(x && x.off) + ")");
   const B2 = app(""); books(B2, exempt()); const L2 = lib(B2), fb = T(B2, "202602"), jn = T(B2, "202601");
   ok(!L2.P.r3bBills("3.1c", "202601", reg, jn).off.length && !L2.P.r3bBills("3.1c", "202602", reg, fb).off.length, "3.1(c): January's nil and February's 5,000 (25,000 brought in) add up to their bills and lines");
   ok(L2.N3.r3bCarry(fb, "202602").some((s) => /25,000 of credit notes brought from January 2026 taken off here/.test(s)), "February: what was brought in, said");
@@ -102,6 +131,14 @@ console.log("== C. what the 3B page says, and the figures behind each box add up
   ok(w3.some((s) => /With them the box is below nil: shown as nil, \u20b920,000 carried to March 2026/.test(s)), "February 5,000 of its own, 25,000 brought in: says the carry took it below nil (" + JSON.stringify(w3) + ")");
   ok(L3.N3.r3bNeeds({nil: {taxable: -5000}}, true).some((s) => /filed so/.test(s) && /nothing to change/.test(s)) && L3.N3.r3bNeeds({nil: {taxable: -5000}}, false).some((s) => /work the month out again/.test(s)), "a negative box: a filed 3B is left as filed; one not filed is worked out again");
   ok(L3.N3.r3bCarry(Object.assign({}, f3, {quarter: true}), "202603").some((s) => /this quarter|brought from the quarter before/.test(s) && /the next quarter \(April 2026 to June 2026\)/.test(s)), "a quarterly return: the quarter's words");
+}
+console.log("== D. the cloud's 3B is not shown for a month a correction kept only here reaches (the GSTR-1 corrections, ITC adjustments)");
+{ const A = app(""); books(A, exempt()); vm.runInContext("globalThis.__c3 = (function(){" + strip("../screens/gst/cloud3b.js") + "\n; return {correctedHere}; })();", A.ctx);
+  const C = A.ctx.__c3; ok(typeof C.correctedHere === "function" && !C.correctedHere("07", "202602"), "nothing corrected: the cloud's 3B may be shown");
+  A.ctx.S.books.r1Fix = {"07|202601": {cur: {mods: {}, dels: {}, adds: [{id: "c1", t: "nil", f: {sply_ty: "INTRB2C", expt_amt: 100}}]}}};
+  ok(C.correctedHere("07", "202601") && C.correctedHere("07", "202602") && !C.correctedHere("07", "202512"), "a GSTR-1 correction of January: January and the months after it (the carry) are worked out here");
+  A.ctx.S.books.r1Fix = {}; A.ctx.S.books.itcAdj = {a1: {reg: "07", ym: "202602", line: "4A5", head: "igst", amt: 10}};
+  ok(C.correctedHere("07", "202602") && !C.correctedHere("07", "202601") && !C.correctedHere("29", "202602"), "an ITC adjustment of February: February on, that registration only");
 }
 console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
 process.exit(fails ? 1 : 0);

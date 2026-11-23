@@ -244,7 +244,7 @@ function fix3b(t, ym, reg) {
   const d = delta3b(ym, reg);
   if (!d) return t;
   const plus = (o, x) => { const r = Object.assign({}, o || {}); Object.keys(x).forEach((k) => { r[k] = R(N(r[k]) + N(x[k])); }); return r; };
-  t.net = plus(t.net, d.a);
+  t.net = plus(t.f31 ? t.f31.raw : t.net, d.a); delete t.f31;   // (3.1(a) as the books gave it: pay31 folds it again)
   // (review of ad4be74c3) 3.1(b), (c), (e): the corrections go on the boxes as the books gave them (before a carry), and
   // the carry is worked out again on the result (GSTR.carry31): a box never negative, the value carried on right
   const raw = (k) => (t.c31 && t.c31.raw[k]) || t[k];
@@ -256,7 +256,7 @@ function fix3b(t, ym, reg) {
   t.unregPos = Object.values(up).filter((x) => Math.abs(x.taxable) >= 0.005 || Math.abs(x.igst) >= 0.005).sort((a, c) => a.pos.localeCompare(c.pos));
   t.toUnreg = plus(t.toUnreg, { taxable: ut, igst: ui });
   t.r1Fix = d;
-  if (t.netItc && typeof GSTR.setOff === "function") { t.pay = GSTR.pay31 ? GSTR.pay31(t.net, t.rcmOut, t.netItc, t.opening, t.zero, t.c31) : GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening, t.zero); t.payable = t.pay.cash; }
+  if (t.netItc && typeof GSTR.setOff === "function") { t.pay = GSTR.pay31 ? GSTR.pay31(t, t.netItc) : GSTR.setOff(t.net, t.rcmOut, t.netItc, t.opening, t.zero); t.payable = t.pay.cash; }
   return t;
 }
 

@@ -315,7 +315,7 @@ function apply(t, ym, reg) {
   const netItc = {}; H.forEach((k) => { netItc[k] = R(itc[k] - N(rev1[k]) - N(rev2[k])); });
   // (with 3.1(b)'s IGST and cess, as GSTR.threeBm: the owner, 23-Nov-2026)
   // (and the value carried of a negative 3.1(b), (c), (e), with 3.1(b)'s own tax: GSTR.pay31; review of ad4be74c3)
-  const pay = GSTR.pay31 ? GSTR.pay31(t.net, t.rcmOut, netItc, t.opening, t.zero, t.c31) : GSTR.setOff(t.net, t.rcmOut, netItc, t.opening, t.zero);
+  const pay = GSTR.pay31 ? GSTR.pay31(t, netItc) : GSTR.setOff(t.net, t.rcmOut, netItc, t.opening, t.zero);
   // next-fix-toggles (the owner: "ineligible ITC to eligible ITC, it did not convert"): the 17(5) reversal is the person's
   // choice too where they set one, so the register's tie-out, GSTR-9 7E and the 3B workbook (they read t.reversal) agree
   const reversal = plus(t.reversal, mo.rev);
