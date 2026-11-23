@@ -376,5 +376,24 @@ T("UD rows", () => {
   same(r, "liability", 31200, "unabsorbed depreciation by year, less the barred part, against 111A: 31,200");
 });
 
+console.log("Three losses together (final check of f10f5a715): the same slab limit for every loss as a starting point");
+T("three losses", () => {
+  // old regime: other income 3,00,000; business loss 50,000; self-occupied interest 2,50,000 (house loss 2,00,000);
+  // unabsorbed depreciation 3,50,000 brought forward; land bought 1-06-2015 (covered by the proviso), unlisted shares,
+  // 111A gain 6,00,000, a long-term loss on gold, a 50AA fund gain. The best placing of the three losses together was
+  // found by trying every limit for each loss jointly (tests/run_itr_law_joint.mjs): 8,66,580 (was 8,92,320 - the
+  // losses one at a time missed it: each loss down to 4,00,000 of normal income, then the special-rate income)
+  const mk3 = (p) => mk({ regime: "old", os: { other: 300000 }, business: { pbt: -50000, adds: [], less: [] }, losses: { unabsorbedDep: 350000 } }, { houses: [{ kind: "S", loans: [{ interest: 250000 }] }], cgRows: [
+    { id: "L", kind: "land", acq: p.lacq, sale: "20250701", value: p.lv, cost: p.lc }, { id: "U", kind: "unlisted", acq: "20200101", sale: "20250801", value: p.uv, cost: p.uc },
+    { id: "A", kind: "eq", acq: "20250101", sale: "20250901", value: 700000, cost: 100000 }, { id: "G", kind: "other", acq: "20150101", sale: "20250901", value: 100000, cost: 100000 + p.ltcl },
+    { id: "D", kind: "mf50AA", acq: "20230601", sale: "20251201", value: 100000 + p.d, cost: 100000 }] });
+  r = both(mk3({ lacq: "20150601", lv: 6100000, lc: 700000, uv: 3200000, uc: 700000, ltcl: 1900000, d: 100000 }));
+  same(r, "liability", 866580, "three losses: 8,66,580");
+  // the same with land bought 1-06-2010 for 30,00,000 sold 66,00,000, unlisted 8,00,000 / 10,00,000 (a loss), gold loss
+  // 9,00,000, 50AA gain 3,00,000: 33,800 (was 57,200)
+  r = both(mk3({ lacq: "20100601", lv: 6600000, lc: 3000000, uv: 800000, uc: 1000000, ltcl: 900000, d: 300000 }));
+  same(r, "liability", 33800, "three losses, a smaller return: 33,800");
+});
+
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

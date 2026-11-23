@@ -135,6 +135,8 @@ export function compute(inp) {
     for (let m = 0; m < Math.pow(opts.length, flags.length); m++) {
       let lo = Object.assign({}, lo0, { keepA }); let q = m; flags.forEach((f) => { lo[f] = opts[q % opts.length]; q = Math.floor(q / opts.length); });
       let best0 = m === 0 ? first : run(B, lo);
+      // with two or more losses, also start from the same limit for every loss (the losses one at a time can miss it)
+      if (kinds.length > 1) for (const T of LOSS_LIMITS) { const l2 = Object.assign({}, lo); kinds.forEach((k) => { l2[k] = T; }); const t = run(B, l2); if (t.liability < best0.liability) { best0 = t; lo = l2; } }
       for (const k of kinds) for (const T of LOSS_LIMITS) { if (T === lo[k]) continue; const l2 = Object.assign({}, lo, { [k]: T }), t = run(B, l2); if (t.liability < best0.liability) { best0 = t; lo = l2; } }
       if (best0.liability < cur.liability) cur = best0;
     }

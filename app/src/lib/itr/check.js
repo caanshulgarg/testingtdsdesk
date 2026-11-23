@@ -461,6 +461,8 @@ export function check(inp) {
     while (m < total) {
       let lo = Object.assign({}, lo0); let q = m; for (const f of flags) { lo[f] = opts[q % opts.length]; q = Math.floor(q / opts.length); }
       let here = m === 0 ? first : go(lo);
+      // two or more losses: first the same limit for all of them, then each in turn
+      if (kinds.length >= 2) for (const T of LIMITS) { const l2 = Object.assign({}, lo); for (const k of kinds) l2[k] = T; const t = go(l2); if (t.liability < here.liability) { here = t; lo = l2; } }
       for (const k of kinds) for (const T of LIMITS) { if (T === lo[k]) continue; const l2 = Object.assign({}, lo); l2[k] = T; const t = go(l2); if (t.liability < here.liability) { here = t; lo = l2; } }
       if (here.liability < cur.liability) cur = here;
       m++;
