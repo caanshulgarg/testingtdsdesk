@@ -564,7 +564,13 @@ const TCloud = {
     // the newest line applied (before reading, so a line applied meanwhile is read again next time, not missed)
     let last = [];
     try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
-    const newest = (last[0] || {}).applied_at || seen;
+    // next-fix-applied-empty (Sentry, staging): a last look kept empty or not a time (books opened before the bridge applied
+    // a line) is never sent as "applied_at=gt." (the cloud refuses it, and changes were missed): the book is checked from
+    // the start, as on opening, and a proper time kept
+    const at = t => t && Date.parse(t) ? t : "";
+    seen = at(seen);
+    const newest = at((last[0] || {}).applied_at) || seen;
+    if (c && newest && !seen) full = true;
     const byGuids = async (g) => [].concat(...await this.byChunks(g, c => read("&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")));
     // next-fast-open (Leads, 20-Oct-2026: 4,414 entries' full heads, 2.8 MB, on every opening): books already here are
     // checked with each entry's GUID, AlterID and deletion; only the entries new, later, deleted, or with Tally's TDS

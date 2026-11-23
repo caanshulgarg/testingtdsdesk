@@ -96,7 +96,7 @@ with sync_playwright() as p:
     # B12: ALTERED said as altered
     w = E("""() => [postWord({ok: true, altered: 1, created: 0, message: "ALTERED 1"}), postWord({ok: true, message: "ALTERED: 1"}), postWord({ok: true, verified: true, created: 1}),
       postWord({ok: true, verified: null}), postWord({ok: false, message: "Ledger &apos;X&apos; does not exist!"})]""")
-    ok(w == ["Altered in Tally", "Altered in Tally", "In Tally (verified)", "In Tally, not yet read back", "Failed: Ledger 'X' does not exist!"], "B12. one word each: %s" % w)
+    ok(w == ["Altered in Tally", "Altered in Tally", "In Tally (verified)", "Not confirmed by Tally yet", "Failed: Ledger 'X' does not exist!"], "B12. one word each: %s" % w)
     # the whole run: the main button shows every entry first (Post / Cancel); a master Tally has is dropped; ALTERED shown
     E("""() => { window.__sent = []; window.__reply = (p) => ({ok: true, company: p.company, results: p.masters.map(m => ({id: m.id, ok: true, altered: 1, created: 0, message: "ALTERED 1"}))
         .concat(p.vouchers.map((v, i) => i === 0 ? {id: v.id, ok: true, verified: true, altered: 1, created: 0} : {id: v.id, ok: true, verified: true, created: 1}))});

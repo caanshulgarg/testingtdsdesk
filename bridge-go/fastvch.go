@@ -135,6 +135,11 @@ var liveKeepInv2512 = []string{
 	"ALLLEDGERENTRIES.INVENTORYALLOCATIONS.RATE", "ALLLEDGERENTRIES.INVENTORYALLOCATIONS.AMOUNT",
 }
 
+// 2.5.19 (C5, the owner's approval of 23-Nov-2026): the entry's post-dated mark (Tally's stored Yes/No), so FinCom keeps a
+// post-dated entry out of the totals until its date. Kept by the strip of FinComVoucherObject's answer (Tally sends the
+// whole voucher; its FETCHLIST is unchanged) and asked by FinComVoucherBatch's FETCH, at its end
+var liveKeepPost2519 = []string{"ISPOSTDATED"}
+
 // never kept, whatever list approves (the owner's decision of 12-Oct-2026, items 3 and 5)
 var fastNeverPay244 = map[string]bool{"ALLLEDGERENTRIES.BANKALLOCATIONS.ACCOUNTNUMBER": true, "ALLLEDGERENTRIES.BANKALLOCATIONS.IFSCODE": true,
 	"ALLLEDGERENTRIES.BANKALLOCATIONS.PAYMENTFAVOURING": true}
@@ -165,6 +170,9 @@ func fastApprovedPaths() map[string]bool {
 		m[f] = true
 	}
 	for _, f := range liveKeepInv2512 {
+		m[f] = true
+	}
+	for _, f := range liveKeepPost2519 {
 		m[f] = true
 	}
 	return m

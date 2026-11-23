@@ -74,8 +74,14 @@ with sync_playwright() as p:
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 0 and pg.locator("#app .setbody [data-tally-one]").count() == 1, "Tally section: one line for the client's Tally (24-Oct-2026: linked on the Tally page only)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
+    # owner, 23-Nov-2026: Optional vouchers off in every client; the tick stays, in plain words, to switch it on on purpose
+    opt = pg.locator('#app label:has-text("Optional vouchers")')
+    ok(opt.count() == 1 and "Post bills, sales and journals as Optional vouchers (they don\u2019t count in Tally\u2019s books until made regular)" in opt.inner_text() and not opt.locator("input").is_checked()
+       and pg.evaluate("CO().createOptional") is False, "a new client: Optional vouchers off, the tick in plain words (%s)" % (opt.inner_text() if opt.count() else "no tick"))
+    ok(pg.inner_text("#app [data-optional-note]") == "Off: entries go in as regular vouchers.", "the note under the tick says off (%s)" % pg.inner_text("#app [data-optional-note]"))
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
-    ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
+    ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is True and pg.evaluate("typeof CO().createOptionalAt") == "string", "voucher type; Optional vouchers ticked on purpose (with when)")
+    ok(pg.inner_text("#app [data-optional-note]").startswith("On: entries go in as Optional vouchers. They don\u2019t count in Tally\u2019s books until made regular: open one in Tally and press Ctrl+L."), "ticked: the note says on, and how to make one regular")
     pg.fill('#app label:has-text("Round off") input', "Rounding Off"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().roundOff") == "Rounding Off", "a ledger used in every entry")
     save()

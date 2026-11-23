@@ -27,6 +27,8 @@ func driveEveryRequest(t *testing.T) *standTally {
 	standBridge(t, f, "")
 	oldDaysOn() // round 19: ReadDays on: every builder is driven, the dated ones too (refused with it off)
 	liveFrom(td)
+	// 2.5.19: the requests held behind the names to confirm are driven as they will go once confirmed
+	r2519Confirm(t, "Confirmed2519VchTypeGst", "Confirmed2519GstRegs", "Confirmed2519LedgerLists", "Confirmed2519GroupClosing")
 	must := func(what string, err error) {
 		t.Helper()
 		if err != nil {
@@ -147,6 +149,16 @@ func driveEveryRequest(t *testing.T) *standTally {
 	must("measure", err)
 	// Update now
 	runNow(t, "now")
+	// 2.5.19 (C8): the daily idle catch-up's tie-out; (B1) a band of a heavy day being read in bands
+	r2519DayRun(t)
+	pull.mu.Lock()
+	pull.work = &pullWork{it: pullItem{Company: zz, Day: td}, heads: map[string]pullHead{}, bands: true, bandA: 1, bandN: 200, bandSpan: 200, bandOpen: true}
+	pull.mu.Unlock()
+	_, err = invokeTally(recorderTC(nil), f.port, dayPartRequest(zz, td, 1, 0), 0)
+	pull.mu.Lock()
+	pull.work = nil
+	pull.mu.Unlock()
+	must("a band of a day", err)
 	_, err = measureSnapshot(measureOpts{company: zz, snapshot: "every"})
 	must("snapshot", err)
 	// the small checks after a timeout: with a company (FinComCompany) and without (FinComFree)
@@ -160,6 +172,7 @@ func driveEveryRequest(t *testing.T) *standTally {
 }
 
 func TestEveryRequestOnList(t *testing.T) {
+	r2519Confirm(t, "Confirmed2519GstRegs", "Confirmed2519GroupClosing") // 2.5.19: as they will go once confirmed
 	// each builder's request, as the table fingerprints it
 	samples := allowListSamples()
 	for id := range tallyAllowList {
@@ -272,6 +285,11 @@ func computedFigure(x string) string {
 	if stockClickRead(x) {
 		return ""
 	}
+	// 2.5.19 (the owner's decision of 23-Nov-2026, C8 option a): the primary groups' closing balances at a day, exactly
+	// FinComGroupClosing as built (the daily tie-out; requests2519.go)
+	if groupClosingRead(x) {
+		return ""
+	}
 	if m := reBalField.FindString(x); m != "" && (strings.Contains(x, "SVFROMDATE") || strings.Contains(x, "SVTODATE")) && !booksYearLedgerRead(x) {
 		return m + " with a period"
 	}
@@ -287,6 +305,10 @@ func computedFigure(x string) string {
 func stockClickRead(x string) bool {
 	return tallyRequestID(x) == stockID && stockExact(x) && strings.Count(x, "SVFROMDATE") == 2 && strings.Count(x, "SVTODATE") == 2 &&
 		strings.Count(x, "<COLLECTION ") == 1 && strings.Count(x, "<SYSTEM ") == 1
+}
+
+func groupClosingRead(x string) bool {
+	return tallyRequestID(x) == groupClosingID && x == groupClosingRebuild(x) && strings.Count(x, "<COLLECTION ") == 1 && strings.Count(x, "<SYSTEM ") == 1
 }
 
 // 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the one narrow exemption from "no opening balance with a

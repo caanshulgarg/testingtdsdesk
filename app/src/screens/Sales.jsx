@@ -32,6 +32,8 @@ import "../../../src/js/97-postto-link.js";
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
 // next-fix-sales-readback: an invoice in Tally as an Optional voucher (sent so, or found so), said on its row and panel
+// (next-sales-followups) the panel's "untick ... in Client setup" advice: only on one FinCom posted with the client's Optional
+// tick on, never on one found in Tally (entered there by hand as Optional)
 const salesOptShown = (v) => !!v.postedOptional && ["posted", "intally"].includes(v.status);
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
@@ -63,7 +65,7 @@ function salesCols(s, list, nSel) {
     { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
       cell: (v) => { const x = v.x; return <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}{gstinFromLedger(v) && <> <span className="src" data-gstin-from={v.id}>GSTIN from Tally ledger</span></>}</div></>; } },
     { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
-    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <><span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>{salesOptShown(v) && <div className="nr" data-sales-opt={v.id}>Optional voucher</div>}</>; } },
+    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <><span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>{salesOptShown(v) && <div className="nr" data-sales-opt={v.id}>Optional voucher</div>}{v.copyCheck && <div className="nr" data-sales-copy={v.id} title={v.copyCheck.note}>Checked on FinCom’s copy</div>}</>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
     { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => <>{money(gstOf(v.x))}
       {(v.taxPicks || []).map((t, i) => <div key={i} className="nr" data-tax-led={t.kind} title={t.why ? t.ledger + ": " + t.why : t.ledger}>{t.ledger}</div>)}</> },
@@ -169,7 +171,9 @@ function Detail({ v }) {
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
       {v.postError && v.status !== "intally" && <div className="bk-alert bad">Tally: {v.postError}</div>}
-      {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers). To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup.</div>}
+      {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
+      {/* next-fix-sales-readsoff: checked for duplicates against an old FinCom cloud copy (src/js/26-sales-invoice.js salesCheckSafe) */}
+      {v.copyCheck && <div className="bk-alert" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}
       <SalesAsk v={v} wide />
       <section><h3>Invoice details</h3>
         <div className="bk-form">

@@ -1485,6 +1485,9 @@ func keepWorker(r runReq) {
 						dayCheckNote(o.name, true, "") // next-fix-mastersread: the day's check of this company done (daycatch.go)
 					}
 				}
+				if k.caughtUp && r.day {
+					k.tieOut(o.name, o.port) // 2.5.19 (C8, option a): the daily tie-out, after the company's other reads
+				}
 				if k.caughtUp {
 					upToDate[o.name] = true
 				}

@@ -434,8 +434,9 @@ function TallySetup() {
             </div></>}
       </div>
       <div className="stack" style={{ gap: 8 }}>
-        <CoCheck path="createOptional" on={!!co.createOptional}>Post purchase bills and sales invoices as Optional vouchers</CoCheck>
-        <p className="note">Tally hides Optional vouchers from the Day Book until they are made regular with Ctrl+L.</p>
+        {/* owner, 23-Nov-2026: off for every client unless ticked here */}
+        <CoCheck path="createOptional" on={!!co.createOptional}>Post bills, sales and journals as Optional vouchers (they don’t count in Tally’s books until made regular)</CoCheck>
+        <p className="note" data-optional-note="">{co.createOptional ? "On: entries go in as Optional vouchers. They don’t count in Tally’s books until made regular: open one in Tally and press Ctrl+L." : "Off: entries go in as regular vouchers."}</p>
         <CoCheck path="billwise" on={!!co.billwise}>Add the invoice number as a bill-wise reference on the party</CoCheck>
       </div>
     </Card>

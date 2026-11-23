@@ -575,6 +575,13 @@ type leaseHeld struct {
 	wanted  bool   // this posting's want is recorded: the reader gives way at its next request
 }
 
+// 2.5.19 (E): this bridge holds the company's lease for a posting now (FinCom's cloud keeps leases)
+func leaseHeldPost(company string) bool {
+	leaseMu.Lock()
+	defer leaseMu.Unlock()
+	return leasePurp[company] == "post" && time.Until(leases[company]) > 0
+}
+
 // take or renew the lease on a company (a read): true to go on; false and who holds it when another bridge does
 func leaseTake(company string) (bool, string) {
 	ok, h := leaseTakeFor(company, "read")

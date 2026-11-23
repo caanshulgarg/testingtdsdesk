@@ -313,6 +313,10 @@ func TestR2515RenameRetriesBackToBack(t *testing.T) {
 // take no longer than 2.5.14's 500 writes of the same text (alternated, 5 rounds, the median round; 1.2 times for the
 // noise), and the burst is flushed once or twice, after it, not once a save
 func TestR2515BurstAs2514(t *testing.T) {
+	// 2.5.19: the flushes earlier tests left running (their bridges' saves, flushed in the background) finish first, so
+	// they do not fall on one side of this comparison. In the full suite of 23-Nov-2026 the burst measured 169 ms
+	// against 132 ms; alone, six runs gave 0.92 to 1.11 of 2.5.14's time. The code measured is 2.5.15's, unchanged since
+	durableWaitAll()
 	dir := t.TempDir()
 	r2515LogHere(t, dir)
 	var n atomic.Int64

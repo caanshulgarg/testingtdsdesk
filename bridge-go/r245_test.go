@@ -248,6 +248,9 @@ func pullReset() {
 	pickReset()                 // 2.5.10 (pickack.go)
 	paceReset()                 // 2.5.16 (daypace2516.go)
 	pull.retry = map[string]M{} // 2.5.16 (daystop2516.go)
+	vchTop.Lock()
+	vchTop.m = map[string]int64{} // 2.5.19 (daybands2519.go)
+	vchTop.Unlock()
 	pull.brake = map[string][]time.Time{}
 	pullSaveMu.Lock()
 	pullSaveText.Store("")

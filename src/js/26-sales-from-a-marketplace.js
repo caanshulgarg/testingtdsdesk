@@ -245,16 +245,17 @@ function mastersFor(list){
 // (the most entries the cloud copy answers in one read, server/tally-cloud tally_vouchers_in: an answer of that many may
 // have stopped short, so nothing is posted on it)
 const SALES_CHECK_CAP = 20000;
-async function salesCheckTally(list){
+// (call: how Tally is read, tallyCall when not said; the cloud copy's CloudTally.call when reads are off here: salesCheckSafe)
+async function salesCheckTally(list, call){
   const co = CO(SL().cid);
-  if (!tallyVia(co) || !list.length) return 0;
+  if (!(call || tallyVia(co)) || !list.length) return 0;
   const dates = list.map(v => v.x.date).filter(Boolean).sort();
   if (!dates.length) return 0;
   // next-fix-sales-upload (item 2; review of 44e4c1e97): the vouchers of the invoices' own dates only (the first to the last,
   // a day either side), every type (Tally and the cloud copy match a type by its exact name, and the client's own sales
   // type, "Sales UP", is not known before), the Sales-class ones kept here (salesTypeClasses)
   const cfg = SL().cfg, lc = s => String(s || "").toLowerCase().trim(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
-  const got = await salesVouchersIn(co, addDays(dates[0], -1), addDays(dates[dates.length - 1], 1));
+  const got = await salesVouchersIn(co, addDays(dates[0], -1), addDays(dates[dates.length - 1], 1), call);
   const all = got.filter(v => !/^yes$/i.test(v.cancelled || ""));
   const own = list.filter(v => !v.x.noteKind).map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales");
   const isInv = salesTypeClasses(own), noteTypes = new Set(notes.concat(list.filter(v => v.x.noteKind).map(v => salesVt(v.x))).map(lc));
@@ -289,8 +290,8 @@ async function salesCheckTally(list){
 }
 // the vouchers of a period (yyyy-mm-dd, both ends), read again in smaller pieces when an answer reaches the cloud copy's
 // cap (review of d487be4c1): the period halved until each piece is under it; only a single day at the cap is refused
-async function salesVouchersIn(co, from, to){
-  const ask = async (a, b) => [].concat((await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(a) + "&to=" + isoToTally(b) + Bridge.pinQ())).vouchers || []);
+async function salesVouchersIn(co, from, to, call){
+  const ask = async (a, b) => [].concat((await (call || tallyCall)(co, "/vouchers?company=" + encodeURIComponent(tallyCoName(co)) + "&from=" + isoToTally(a) + "&to=" + isoToTally(b) + Bridge.pinQ())).vouchers || []);
   const days = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000);
   const out = [], seen = new Set();
   const take = list => list.forEach(x => { const k = salesTallyKey(x); if (!seen.has(k)){ seen.add(k); out.push(x); } });
@@ -326,16 +327,24 @@ function salesTallyKey(x){ return String(x.guid || x.masterId || [x.date, x.type
 // sales already in Tally are still found when posting (build 190)
 // invoices held by a posting in FinCom's cloud (v.postJob): that posting's result marked on them once it has one
 async function salesQueuedSync(){
-  const s = SL(); let n = 0;
+  const s = SL(), co = CO(s.cid); let n = 0;
   // (and one whose IRN was cancelled while it was queued: its result still recorded, review of b4ff11b10)
   for (const v of s.list.filter(x => x.postJob && (x.status === "ready" || x.x.irnCancelInTally))){
     let j = null; try { j = await CloudPost.row(v.postJob); } catch (e){ continue; }
     const r = j && [].concat(j.results || []).find(x => x && x.id === v.id);
-    if (r && r.ok){ n++; v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; delete v.postJob; }
+    // (a posting or a result still checking: looked at again next time, its link kept, as bills wait in postReconcile)
+    if (j && (j.checking || (r && r.pendingCheck))) continue;
+    // (next-sales-followups) the same rule as a direct post: Tally's reply or a read back is posted, an answer not
+    // confirmed is not; one Tally already had is In Tally; an IRN cancelled keeps its mark while it may be in Tally
+    let maybeIn = false;
+    if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
+    else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
+    // (the bridge's "already" refusal: said on the invoice, as a direct post says it)
+    else if (r && r.already){ n++; delete v.postJob; v.postError = plainMsg(r.message) || "Tally did not confirm this invoice."; maybeIn = true; }
     else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
     // (not posted, its IRN cancelled: no sale any more, CGST Rules r.48(4), so set aside, nothing to cancel in Tally)
-    if (!v.postJob && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
+    if (!v.postJob && !maybeIn && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
   }
   if (n){ saveSales(); render(); }
 }
@@ -355,6 +364,8 @@ async function salesAutoSync(checkOnly, asked){
 // next-fix-sales-readback (23-Nov-2026): since FinCom Bridge round 15 nothing is read back; Tally's own reply
 // (byReply) is the answer, as for bills (postTaken). Optional: the voucher was sent so (Client setup) or Tally said so
 function salesOptional(r, co){ return !!(r && r.optional) || !!(co && co.createOptional); }
+// an answer Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
+function salesUnconfirmed(x){ return "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x && x.verifyNote ? " [" + x.verifyNote + "]" : ""); }
 async function postSalesToTally(){ try { return await postSalesRun(); } catch (e){ salesPostFailed(e); } }
 function salesPostFailed(e){ const s = SL(); if (s) s.busy = ""; toast("Posting failed: " + plainMsg((e && (e.message || e.code)) || String(e || "unknown error"))); render(); }
 async function postSalesRun(){
@@ -367,13 +378,15 @@ async function postSalesRun(){
   let sent = [];
   try {
     const asked = list.slice();
-    await salesCheckTally(list);
-    list = list.filter(v => v.status === "ready");
+    // (reads off here: checked against the cloud copy, said when that copy is old; none: nothing sent; an invoice on a day
+    // the copy does not hold: held, Ready with a red note: src/js/26-sales-invoice.js)
+    const chk = await salesCheckSafe(list), note = chk.note ? " " + chk.note : "", held = chk.held ? ", " + chk.held : "";
+    list = list.filter(v => v.status === "ready" && !v.copyHeld);
     const probs = salesReadyProblems(list);
     // (a number already in Tally or posted from FinCom: skipped, listed with "Post duplicate anyway")
     s.dupSkipped = asked.filter(v => v.status !== "ready" && salesDupOf(v)).map(v => v.id);
-    list = list.filter(v => v.status === "ready");
-    if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally."); render(); return; }
+    list = list.filter(v => v.status === "ready" && !v.copyHeld);
+    if (!list.length){ s.busy = ""; saveSales(); toast((held ? "0 posted" + held + "." : probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally.") + note); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
     const tn = tallyCoName(co);
@@ -391,17 +404,17 @@ async function postSalesRun(){
       // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
-      if (r && r.ok && !postTaken(r)){ bad++; const x = r; v.postError = "In Tally, not yet read back, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : ""); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
+      if (r && r.ok && !postTaken(r)){ bad++; v.postError = salesUnconfirmed(r); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     salesOverrideSpent(list);
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
-      (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + ".");
-    if (!bad && !queued && !refusedN) s.filter = "done";
+    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + held + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
+      (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + "." + note);
+    if (!bad && !queued && !refusedN && !held) s.filter = "done";
     else if (refusedN && !bad && !queued) s.filter = "review";
     syncLedgersFromTally(true);
-  } catch (e){ s.busy = ""; salesOverrideSpent(sent); saveSales(); toast("Posting failed: " + e.message); }
+  } catch (e){ s.busy = ""; salesOverrideSpent(sent); saveSales(); toast(e.code === "check_off" ? e.message : "Posting failed: " + e.message); }
   render();
 }
 // a "Post duplicate anyway" is good for one post attempt: after it (posted, no answer, not confirmed, refused, failed),

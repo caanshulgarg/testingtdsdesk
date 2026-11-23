@@ -92,6 +92,7 @@ function tree() {
         count: S.bank && S.bank.cid === open.id ? tabCounts(S.bank.rows).review : 0 },
       { icon: "sales", label: "Sales", on: work && mod === "sales", go: () => goClient("sales") },
       { icon: "txn", label: "Transactions", on: inCo && S.tab === "txn", go: () => goClient("txn"), title: "One register: purchase, sales and bank" },
+      { icon: "txn", label: "Payroll", on: bt === "payroll", go: () => goClient("books:payroll"), title: "Salary: any sheet, or typed in" },
     ]],
     ["Returns", [
       { icon: "tds", label: "TDS", on: bt === "tds", go: () => goClient("books:tds"), title: "TDS returns and the challan register" },
@@ -103,6 +104,8 @@ function tree() {
       // 29-Oct-2026 (the owner: "From Tally is not visible anywhere"): the Tally page's redesign dropped Connect Tally's
       // step 6, the last way in, so From Tally (Day Book, ledger masters, trial balance) is in the sidebar again
       { icon: "fromtally", label: "From Tally", on: bt === "import", go: () => goClient("books:import"), title: "Bring in a Day Book, the ledger masters or a trial balance exported from Tally" },
+      // FinCom Books (next-books-p1): one set of books for every client, read from fb_* (screens/fbooks)
+      { icon: "books", label: "FinCom Books", on: bt === "fb", go: () => goClient("books:fb"), title: "Trial balance, ledgers and day book from FinCom Books" },
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
       { icon: "reports", label: "MIS", on: bt === "mis", go: () => goClient("books:mis"), title: "Management reports from the books" },
       // ROUND 105: the person's own MIS (templates, charts, describe in words, save and share, Excel and PDF)
