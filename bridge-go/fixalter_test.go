@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -196,6 +197,8 @@ type fixStand struct {
 
 func (s *fixStand) install(t *testing.T) {
 	t.Helper()
+	logFileOverride = filepath.Join(t.TempDir(), "tds-bridge.log") // the fix's log line never in the package folder
+	t.Cleanup(func() { logFileOverride = "" })
 	o1, o2, o3, o4, o5 := fixReadVoucherFn, fixSendFn, fixQueueFn, fixTypingFn, fixPortFn
 	t.Cleanup(func() { fixReadVoucherFn, fixSendFn, fixQueueFn, fixTypingFn, fixPortFn = o1, o2, o3, o4, o5 })
 	fixPortFn = func(p M) (int, string, error) { return 9000, fxCo, nil }
