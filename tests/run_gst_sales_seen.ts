@@ -51,8 +51,9 @@ const inv = (id: string, no: string, status: string, o: any = {}) => Object.assi
   for (let i = 0; i < 4000; i++) list.push(inv("p" + i, "P-" + i, i % 3 === 0 ? "posted" : i % 3 === 1 ? "review" : "ready", i % 3 === 2 ? { postJob: "job-" + i } : {}));
   list.push(inv("r-never", "R-1", "review"), inv("ig", "I-1", "ignored"));
   const t0 = Date.now(), s = await salesSeen(rest, BK, list), ms = Date.now() - t0;
-  const want = list.filter((v) => v.status === "posted" || v.postJob).length;
-  ok(asked.length === want && !asked.includes("r-never") && !asked.includes("ig") && !asked.includes("p1"), "2. only the invoices posted or queued for posting are asked about: " + asked.length + " of " + list.length + " (" + want + ")");
+  // (closing the edge) every invoice but an ignored one is asked about: one in any status whose tagged entry is in the books
+  const want = list.filter((v) => v.status !== "ignored").length;
+  ok(asked.length === want && asked.includes("r-never") && asked.includes("p1") && !asked.includes("ig"), "2. every marketplace invoice but the ignored one is asked about: " + asked.length + " of " + list.length + " (" + want + ")");
   ok(ms <= 1500 && calls <= Math.ceil(want / 200) + 2 && most > 1 && most <= 4, "2. " + want + " invoices in " + calls + " requests, " + most + " at a time, " + ms + " ms (within the run's 1,500 ms)");
   ok(s.fids.length === asked.filter((x) => /0$/.test(x)).length, "2. the FinCom ids found: " + s.fids.length);
 }
@@ -66,6 +67,20 @@ const inv = (id: string, no: string, status: string, o: any = {}) => Object.assi
   };
   const s = await salesSeen(rest, BK, [inv("t1", "AMZ-21", "intally", { tallyMatch: { number: "AMZ21", date: "20251002" } })]);
   ok(s.heads.length === 1 && s.heads[0].total === 5900 && s.heads[0].vno === "AMZ21", "3. an invoice in Tally: the entry of Tally's number AMZ21, its total 5,900 (" + JSON.stringify(s.heads) + ")");
+}
+
+// 4. an invoice still "ready" whose tagged entry is in the book (the entry came back before the invoice was marked): gst-run
+// sees it and counts it once, as its entry, never from Sales too
+{
+  const rest = async (p: string) => /fincom_id=in/.test(p) && /rdy1/.test(decodeURIComponent(p)) ? [{ fincom_id: "rdy1" }] : [];
+  const r = inv("rdy1", "AMZ-41", "ready", { x: { number: "AMZ-41", date: "2025-10-01", total: 1180, taxable: 1000, igst: 180, cgst: 0, sgst: 0, ecommerce: "amazon" } });
+  const seen = await salesSeen(rest, BK, [r]);
+  const G: any = globalThis, was = G.S;
+  G.S = { coId: "c1", books: { cid: "c1", vouchers: [], meta: {}, salesSeen: seenOf(seen) }, sales: { cid: "c1", list: [r] } };
+  try {
+    const rows = E.GSTR.marketRows("202510");
+    ok(seen.fids.includes("rdy1") && rows.length === 1 && rows[0].booked && !E.GSTR.fromSales("202510").length, "4. a \"ready\" invoice whose tagged entry is in the book: seen by gst-run, counted as its entry only, none from Sales (" + JSON.stringify(seen.fids) + ")");
+  } finally { G.S = was; }
 }
 
 console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
