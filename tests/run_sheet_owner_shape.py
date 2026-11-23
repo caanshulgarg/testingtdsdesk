@@ -453,7 +453,7 @@ with sync_playwright() as p:
     res = pg.inner_text("#app [data-sheet-result]") if pg.locator("#app [data-sheet-result]").count() else ""
     L = E("SL().list.map(v => [v.id, v.x.number, v.x.noteKind || '', v.x.total, v.hold || '', v.status])")
     v31 = ([x for x in L if x[0] == id31] or [[]])[0]
-    ok(v31[1:] == ["UP/26-27/0031 (CN)", "credit", 472, "", "ready"] and len(L) == 3 and "1 held before, now put right" in res and "1 added" in res and "1 already here" in res,
+    ok(v31[1:] == ["26-27/0031-CN1", "credit", 472, "", "ready"] and len(L) == 3 and "1 held before, now put right" in res and "1 added" in res and "1 already here" in res,
        "the held invoice itself becomes the credit note (the same row: nothing deleted by hand, nothing twice); the one set by Edit type is already here (%s; %s)" % (v31, res))
     E("SheetImport.close()"); W(200)
     E("() => { S.tab = null; goStep('review', 'bills'); }"); W(600)
@@ -505,7 +505,7 @@ with sync_playwright() as p:
     ok(g == [["", "UP/X/1"], ["", -472, True]], "Edit type does nothing to an invoice that is not held, nor to one already posted (%s)" % g)
     res = up_sales("sales_repro_fixed.xlsx")
     r1 = rows()
-    ok(len(r1) == 2 and r1[0] == r0[0] and r1[1] == [r0[1][0], "UP/X/1 (CN)", "credit", 472, False] and "1 held before, now put right" in res and "1 already here" in res,
+    ok(len(r1) == 2 and r1[0] == r0[0] and r1[1] == [r0[1][0], "UP/X/1-CN1", "credit", 472, False] and "1 held before, now put right" in res and "1 already here" in res,
        "the corrected sheet: the held row itself becomes the credit note of 472; the invoice of 1,180 is untouched (%s; %s)" % ([x[1:] for x in r1], res))
     # -- Purchase: QP/2 1,180 and QP/2 -472; a 1,00,000 professional-fees bill and its return
     E("() => { S.tab = null; goStep('review', 'bills'); }"); W(600)

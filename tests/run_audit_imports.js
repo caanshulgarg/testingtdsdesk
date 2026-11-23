@@ -305,6 +305,23 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
       const ns = list.map(v => v.x.number + ":" + (v.x.customerName || "")).sort(); return b.added === 1 && list.length === 2 && new Set(list.map(v => v.x.number)).size === 2; }, "a return of the same invoice and day for another party: its own number, not the first one's");
   }
 
+  console.log("22. (review of ad4be74c3, decided) any credit note without a number of its own (a register's negative row): <invoice>-CN1 too, valid, at most 16, kept on a re-import, an old (CN) matched");
+  { const rg = (rows) => [["Invoice Number", "Invoice Date", "Document Type", "Customer Name", "GSTIN", "Taxable Value", "CGST Amount", "SGST Amount", "Invoice Amount"]].concat(rows);
+    const G1 = "09BBBBB1111B1Z5", inv = ["UP/26-27/0041", "05/09/2026", "Invoice", "P One", G1, 1000, 90, 90, 1180], cn = (d, a) => ["UP/26-27/0041", d, "Credit Note", "P One", G1, a, C.r2(a * .09), C.r2(a * .09), C.r2(a * 1.18)];
+    const up = (rows) => C.SheetPost.toSales(F.apply(F.builtin(rg(rows)[0], "sales"), rg(rows), 0, CO, "sales"), "c1", "reg.csv");
+    const ns = () => list.filter(v => /0041/.test(v.x.number)).map(v => v.x.number + "@" + v.x.date).sort();
+    tryOk(() => { list.length = 0; const a = up([inv, cn("20/09/2026", 400)]);
+      return a.added === 2 && JSON.stringify(ns()) === JSON.stringify(["26-27/0041-CN1@2026-09-20", "UP/26-27/0041@2026-09-05"]) && list.every(v => /^[A-Za-z0-9\/-]{1,16}$/.test(v.x.number)); }, "the register's credit note: 26-27/0041-CN1 (the cut made at a separator), the invoice as it is");
+    tryOk(() => { const b = up([inv, cn("20/09/2026", 400)]); return b.added === 0 && ns().length === 2; }, "the register again: nothing added, the note keeps its number");
+    tryOk(() => { list.length = 0; list.push({id: "o1", x: {number: "UP/26-27/0041 (CN)", date: "2026-09-20", total: 472, noteKind: "credit", customerName: "P One", customerGstin: G1}, status: "posted", source: "sheet"});
+      const c = up([cn("20/09/2026", 400)]), c2 = up([cn("25/09/2026", 100)]); return c.added === 0 && c.again === 1 && c2.added === 1 && JSON.stringify(ns()) === JSON.stringify(["26-27/0041-CN1@2026-09-25", "UP/26-27/0041 (CN)@2026-09-20"]); }, "one kept before as (CN): matched, not added again; a later note -CN1");
+    tryOk(() => { list.length = 0; const r1 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]);
+      list.length = 0; list.push({id: "o2", x: {number: "SR/26-27/9 (CN)", date: "2026-09-20", total: 472, noteKind: "credit", customerName: "P One", customerGstin: G1}, status: "posted", source: "sheet"});
+      const r2 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]);
+      return r1.added === 1 && r2.added === 0 && r2.again === 1 && list.length === 1; }, "a note with a number of its own (no invoice of it) keeps it; one kept before as (CN) is matched");
+    tryOk(() => { list.length = 0; up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]); const r3 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]); return list[0].x.number === "SR/26-27/9" && r3.added === 0 && list.length === 1; }, "… its number as it is: SR/26-27/9; the sheet again adds nothing");
+  }
+
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();
