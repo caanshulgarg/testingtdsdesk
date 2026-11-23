@@ -4,6 +4,14 @@
 Each request below goes into the bridge only after the owner says yes to that exact request, and only after it has been
 timed on the ZZ BIG TEST company under the 2-second rule. Written 23-Nov-2026 on branch `next-bridge-2519`.
 
+## The owner's decisions (23-Nov-2026, given directly to the coordinator)
+
+- B1 `FinComDayHeadsPart`: **approved**.
+- C1 to C7 (`FinComBillOpenings`, `FinComVoucherTypes`, `FinComCostCentres`, `FinComCostCategories`, ISPOSTDATED on FinComVoucherObject/FinComVoucherBatch, `FinComGstRegistrations`, the added FinComLedgers fields): **approved**. A field name marked "to confirm" that changes after the ZZ TEST export goes back to the owner before it is built.
+- C8 `FinComGroupClosing`: **approved, option (a)**: the daily tie-out may ask it in the background once a day (one request at a time, 2 s stop, typing gate).
+- E (FinComTag before posting): **option (a)**: only for entries FinCom had handed out before (the job's released / resendOnly lists).
+- Every request is still timed on ZZ BIG TEST under the 2-second rule before release; the stock reads (section D) are not decided.
+
 ---
 
 ## The one-page summary (plain English)
