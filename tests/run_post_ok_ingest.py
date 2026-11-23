@@ -201,6 +201,23 @@ try:
     c, r = ask("p122"); F.FAIL_RPC.pop("tally_post_link_guid", None)
     ok(c == 200 and r.get("post") is False and r.get("stop") == "checking", "the link's GUID not had: refused (%s %s)" % (c, r))
     F.LINK_GUID.pop((FIRM, "c1", "ZZ HERON CO"))
+    # next-fix-postok (staging 23-Nov-2026: a posting of 674 entries stopped after 230, post_ok answering "could not confirm
+    # in time" while every round trip to the database took ~0.35 s): a slow but healthy database is answered within the
+    # budget. The posting's reads go beside the bridge's binding (all read only), so the answer takes three round trips one
+    # after another (the key, then the binding and the reads together, then the link's GUID), not five
+    F.LINK_GUID[(FIRM, "c1", "ZZ HERON CO")] = "g-same-001"
+    F.DELAY[0] = 0.38
+    t0 = time.time(); c, r = ask("p122"); t = time.time() - t0
+    F.DELAY[0] = 0.0
+    ok(c == 200 and r.get("post") is True and t < 1.8, "each round trip 0.38 s: answered post true in time (%.2f s, %s %s)" % (t, c, r))
+    F.T["tally_post_jobs"].append(job("p124", "running", client_id="c1", company_guid="g-old-0001"))
+    F.DELAY[0] = 0.38
+    c, r = ask("p124"); F.DELAY[0] = 0.0
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "stopped", "and a changed link is still stopped (%s %s)" % (c, r))
+    F.TABLE_DELAY["tally_post_jobs"] = [12]
+    t0 = time.time(); c, r = ask("p122"); t = time.time() - t0; F.TABLE_DELAY.pop("tally_post_jobs", None)
+    ok(c == 200 and r.get("post") is False and r.get("stop") == "checking" and t < 2.0, "the posting's read not had in time: still refused, never allowed (%.2f s, %s)" % (t, r))
+    F.LINK_GUID.pop((FIRM, "c1", "ZZ HERON CO"))
     j123 = job("p123", "running"); F.T["tally_post_jobs"].append(j123); F.NO_COL["tally_post_jobs"] = {"company_guid"}
     c, r = ask("p123"); F.NO_COL.pop("tally_post_jobs", None)
     ok(c == 200 and r.get("post") is True, "a cloud without 203: read without company_guid, post true (%s %s)" % (c, r))

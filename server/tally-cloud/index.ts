@@ -305,6 +305,12 @@ const POST_LINKED_ELSEWHERE = "The client was linked to another Tally company af
 const POST_LINK_GONE = "The client's Tally link changed or was removed after this posting was made: check the entries and post again. Nothing more of it was sent to Tally.";
 const POST_OK_UNSURE = "FinCom could not confirm in time that this posting may be sent now, so nothing more is sent now. If none of it was sent on this try, FinCom puts it back for this FinCom Bridge, which tries again shortly; otherwise FinCom judges what reached Tally from this bridge's report.";
 const postOkUnsure = () => new Response(JSON.stringify({ ok: true, post: false, stop: "checking", error: POST_OK_UNSURE }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+// a read of post_ok cut at what is left of its budget (left: ms); an abort or a throw is an error, as any other (never allowed)
+async function postOkInTime(left: () => number, qb: any): Promise<any> {
+  const ms = left() - 150;
+  if (ms < 50) return { error: { message: "post_ok: out of time" } };
+  try { return await qb.abortSignal(AbortSignal.timeout(ms)); } catch (e) { return { error: { message: String((e as Error)?.message || e) } }; }
+}
 const busyReply = () => new Response(JSON.stringify({ ok: false, busy: true, retry: true, error: BUSY_WORDS }), { status: 503, headers: { ...cors, "Content-Type": "application/json", "Retry-After": "30" } });
 
 async function sha256(s: string) {
@@ -4785,6 +4791,18 @@ Deno.serve(sentry.wrap(async (req) => {
   // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
   // and nothing it says is kept. A cloud without the function: as before
   let boundOwn = "";     // 2.3.1: the bridge id the bind just found this computer's own (its idRefused, if any, was cleared there)
+  // next-fix-postok (staging 23-Nov-2026: a posting stopped "could not confirm in time" while each round trip took ~0.35 s):
+  // post_ok's two reads of the posting (its bridge's Changes only, the posting's row) are asked here, beside the binding
+  // below, each cut at what is left of the budget. All three are read only for the answer and each must be had before
+  // post: true (post_ok below awaits them in the same order as before), so nothing is allowed that was not allowed before;
+  // the answer takes three round trips one after another (the key, these together, the link's GUID), not five
+  const postOkPre = isPostOk && body?.shadow !== true ? (() => {
+    const meP = bridgeOf(dev, body, false).id, idP = String(body.id || "").slice(0, 64);
+    return {
+      co: postOkInTime(postOkLeft, db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", meP).maybeSingle()),
+      q: postOkInTime(postOkLeft, db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", idP).eq("device_id", dev.id).maybeSingle()),
+    };
+  })() : null;
   {
     const bid = body?.bridge && typeof body.bridge === "object" ? String(body.bridge.id || "") : "";
     if (/^go-[0-9a-f]{6,32}$/.test(bid)) {
@@ -5155,17 +5173,14 @@ Deno.serve(sentry.wrap(async (req) => {
         const meOB = bridgeOf(dev, body, false), meO = meOB.id;
         const no = (stop: string, error: string) => reply(200, { ok: true, post: false, stop, error });
         // a read of the database cut at what is left of the budget (an abort or a throw: an error, as any other)
-        const inTime = async (qb: any): Promise<any> => {
-          const left = postOkLeft() - 150;
-          if (left < 50) return { error: { message: "post_ok: out of time" } };
-          try { return await qb.abortSignal(AbortSignal.timeout(left)); } catch (e) { return { error: { message: String((e as Error)?.message || e) } }; }
-        };
+        const inTime = (qb: any): Promise<any> => postOkInTime(postOkLeft, qb);
         if (!mayPost(dev, meO, (meOB.entry as any).user)) return no("notMain", "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one does not post.");
-        const co: any = await inTime(db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", meO).maybeSingle());
+        // (next-fix-postok) the two reads asked beside the binding, above (the same reads, the same bridge and posting)
+        const co: any = await (postOkPre ? postOkPre.co : inTime(db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", meO).maybeSingle()));
         if (co.error && !missingRel(co.error)) { console.error("tally-ingest: post_ok changes only not read", dev.id, String(co.error.message || "").slice(0, 200)); return postOkUnsure(); }
         if (!co.error && co.data?.changes_only === true) return no("notMain", CHANGES_ONLY);
         const id = String(body.id || "").slice(0, 64);
-        let q: any = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", id).eq("device_id", dev.id).maybeSingle());
+        let q: any = await (postOkPre ? postOkPre.q : inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only, firm_id, client_id, company, company_guid").eq("id", id).eq("device_id", dev.id).maybeSingle()));
         // a cloud without 203 (company_guid): read without it; without 174 (stop_reason) or 54 (target_bridge, resend_only): without them
         if (q.error && /company_guid/.test(String(q.error.message || ""))) q = await inTime(db.from("tally_post_jobs").select("status, checking, stop_reason, taken_by, target_bridge, resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle());
         if (q.error && /stop_reason|taken_by|target_bridge|resend_only/.test(String(q.error.message || ""))) q = await inTime(db.from("tally_post_jobs").select("status, checking").eq("id", id).eq("device_id", dev.id).maybeSingle());
