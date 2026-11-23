@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.19 - TEST SHEET (2.5.18's sheet below, with 2.5.19's changes first)
 
 File:        FinComBridge-Setup-2.5.19.exe
-Fingerprint: (filled in when the setup is built)
+Fingerprint: SHA-256 072291c20b12540fc31d8cee8a9f40112dfd169abb30169fef283473f5106306 (FinComBridge-Setup-2.5.19.exe, built 23-Nov-2026 13:25 UTC at f81ce24c6 after release-check.sh passed, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.19.exe SHA-256 16eeb37e32cee53486697f1837fb3b737c3111b9b38edcf3af5e983b4d35bf1c. A staging download only: its update list is NOT signed, so no bridge updates itself to it; not to be handed out to clients until the ZZ BIG TEST timings (items 2 and 10) are done
 
 2.5.19, item 1: after Quit on the tray icon, background reading starts again by itself. Item 1 asks nothing new of
 Tally; the same 2-second stop, one request at a time, postings first, never while someone is typing in Tally.
