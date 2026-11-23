@@ -200,7 +200,8 @@ const Bridge = {
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress, onChecked){
     // console phase 1b: a paused firm or a company FinCom switched off posts nothing (src/js/99; the database refuses it too)
-    const hold = (why, r) => ({ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why})).concat(r || [])});
+    // (23-Nov-2026) the cloud not read: an entry already in a posting still going keeps that posting's words (postLiveSay)
+    const hold = (why, r) => ({ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why === LINK_UNREAD && postLiveSay(payload.client || (CO() || {}).id, x.id) || why})).concat(r || [])});
     { const why = typeof FirmGate === "object" ? FirmGate.why(payload.client || (S.view === "company" ? S.coId : "")) : "";
       if (why) return hold(why); }
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
@@ -988,7 +989,9 @@ async function checkBankBalance(opts){
 function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].concat(ids || []), note: note || ""}; b.sel.clear(); b.limit = 500; }
 
 /* ---------- taking an entry back out of Tally ---------- */
-const LINK_UNREAD = "Nothing was sent to Tally: FinCom could not read this client's Tally link just now. Try again in a moment.";
+const LINK_UNREAD = "Not sent: FinCom's cloud did not answer. Nothing went to Tally; try again in a minute.";
+// the words of an entry in a posting of FinCom's cloud still going (as last read), else ""
+function postLiveSay(cid, id){ const j = cid && typeof postJobOf === "function" ? postJobOf(cid, id) : null; return j && CloudJobs.live(j) ? (j.status === "waiting" ? "Waiting for Tally" : "Being posted on the Tally computer") + ": it stays queued and posts by itself." : ""; }
 // the linked company's GUID a posting or deletion straight to the bridge names, asked right before it: {guid} or {why}
 // (98's LinkRec.sendTo: the link record read afresh, the bridge's /status says linkGuid)
 async function linkGuid(co, name){ return typeof LinkRec === "object" ? LinkRec.sendTo(co, name) : {guid: "", why: LINK_UNREAD}; }

@@ -72,6 +72,8 @@ def match(row, q):
         if op == "is" and val == "null" and cell is not None: return False
         if op == "in" and cs not in val.strip("()").split(","): return False
         if op == "ilike" and not re.fullmatch(like_re(val), cs, re.I | re.S): return False   # bridge 2.3.1: a name in other capitals
+        if op == "like" and not re.fullmatch(like_re(val), cs, re.S): return False
+        if op == "not" and val == "is.null" and cell is None: return False   # not.is.null
     return True
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)

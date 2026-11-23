@@ -183,6 +183,75 @@ try:
                "%s: %s (%s %s; X1 %s; %s)" % (jid, want, c, r, x_.get("state"), j_["message"][:90]))
         F.JOB_ACCEPTED[0] = None
     else: ok(False, "the put-back against the real resend guard (no PostgreSQL stand)")
+    print("== 14. stopped part-way because FinCom could not confirm in time: carried on for the same bridge a few minutes later")
+    # (next-fix-post-resume, the owner's "yes to both" of 23-Nov-2026) the bridge's own record (its kept results and
+    # posted-ids.json) keeps what it sent from going again (bridge-go/postresume_test.go); FinCom puts the posting back for
+    # that same bridge only, only after a few minutes, and only when 36b's resend guard takes it
+    PAUSED = "Paused: FinCom's cloud was slow to answer"
+    MID = "Stopped by FinCom before part %s was sent: FinCom could not confirm in time that this posting may be sent now, so nothing more is sent now."
+    K1OK = {"id": "K1", "ok": True, "byReply": True, "state": "posted", "vchId": "41", "batchN": 1, "batchEnd": "41"}
+    V3 = {"vouchers": [{"id": "K1", "xml": "<VOUCHER/>"}, {"id": "K2", "xml": "<VOUCHER/>"}, {"id": "K3", "xml": "<VOUCHER/>"}]}
+    IT3 = [{"id": "K1", "kind": "voucher", "state": "posted"}, {"id": "K2", "kind": "voucher", "state": "waiting"}, {"id": "K3", "kind": "voucher", "state": "waiting"}]
+    def stop_mid(jid, part="2 of 3", results=None, **kw):
+        F.T["tally_post_jobs"].append(job(jid, "running", attempts=1, payload=V3, **kw))
+        return call({"kind": "posts_update", "version": "2.5.19", "bridge": ME, "id": jid, "status": "taken", "done": 1, "seq": 5, "updatedAt": "2026-11-23T10:00:00Z",
+                     "message": MID % part, "results": [K1OK] if results is None else results, "items": IT3, "reqs": [], "secondsTotal": 0.4})
+    ago = lambda m: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 60 * m))
+    beat = lambda: call({"kind": "beat", "version": "2.5.19", "bridge": ME, "tally": True, "open": ["ZZ HERON CO"], "companies": [{"name": "ZZ HERON CO", "open": True}]})
+    c, r = stop_mid("p141")
+    j_ = row("p141")
+    ok(c == 200 and j_["status"] == "taken" and j_["taken_by"] == ME["id"] and j_["message"].startswith(PAUSED) and "never sent again" in j_["message"],
+       "stopped before part 2 of 3: kept taken by this bridge, said as paused (%s %s; %s)" % (c, r, j_["message"][:140]))
+    beat()
+    ok(row("p141")["status"] == "taken", "a moment later: not put back yet (FinCom's cloud may still be slow)")
+    j_["updated_at"] = ago(4)
+    c, r = beat(); j_ = row("p141")
+    ok(c == 200 and j_["status"] == "waiting" and j_["taken_by"] == ME["id"] and j_.get("target_bridge") == ME["id"] and not j_["message"].startswith("Put back for the same FinCom Bridge") and "never sent again" in j_["message"],
+       "a few minutes later, at this bridge's beat: put back for the SAME bridge (%s; %s)" % (j_["status"], j_["message"][:140]))
+    ok(r.get("posts", 0) >= 1, "the beat tells the bridge a posting waits (it takes it at once): %s" % r.get("posts"))
+    # another bridge's paused posting on this computer: never put back by this bridge's beat
+    F.T["tally_post_jobs"].append(job("p142", "taken", taken_by=OTHER, target_bridge=OTHER, message=PAUSED + ": test", updated_at=ago(10), results=[K1OK], items=IT3))
+    beat()
+    ok(row("p142")["status"] == "taken" and row("p142")["taken_by"] == OTHER, "another bridge's paused posting: left to that bridge")
+    # Tally accepted an entry FinCom has not confirmed (36b): not paused, the bridge's words kept (judged as before)
+    F.JOB_ACCEPTED[0] = lambda a_: "K1" if a_.get("p_job") == "p143" else None
+    c, r = stop_mid("p143", results=[{"id": "K1", "ok": False, "accepted": True, "lastVchId": "43", "message": "Tally replied CREATED 1 LASTVCHID 43"}])
+    F.JOB_ACCEPTED[0] = None
+    ok(c == 200 and row("p143")["status"] == "taken" and not row("p143")["message"].startswith(PAUSED), "an entry accepted, not confirmed: not paused (%s)" % row("p143")["message"][:100])
+    # a re-send list (resend_only): never carried on this way (its own path judges it)
+    c, r = stop_mid("p144", resend_only=["K2"])
+    ok(c == 200 and row("p144")["status"] == "taken" and not row("p144")["message"].startswith(PAUSED), "a re-send list: not paused (%s)" % row("p144")["message"][:100])
+    # paused, then an owner released one of its entries: not put back by itself
+    c, r = stop_mid("p145")
+    F.T.setdefault("tally_post_ids", []).append({"job_id": "p145", "fincom_id": "K2", "entry_id": "K2", "accepted_at": None, "released_at": "2026-11-23T10:01:00Z", "released_by": "owner", "live": False})
+    row("p145")["updated_at"] = ago(4); beat()
+    ok(row("p145")["message"].startswith(PAUSED) and row("p145")["status"] == "taken", "an entry of it released meanwhile: not put back (%s)" % row("p145")["status"])
+    # carried on, then FinCom slow again before the first part of that try (part 1 of 1): paused again, never failed
+    c, r = stop_mid("p146", part="1 of 1", results=[])
+    row("p146")["results"] = [K1OK]
+    c, r = call({"kind": "posts_update", "version": "2.5.19", "bridge": ME, "id": "p146", "status": "taken", "done": 1, "seq": 9, "updatedAt": "2026-11-23T10:09:00Z",
+                 "message": MID % "1 of 1", "results": [K1OK], "items": IT3, "reqs": [], "secondsTotal": 0.1})
+    ok(c == 200 and row("p146")["status"] == "taken" and row("p146")["message"].startswith(PAUSED), "stopped again on the try that carried on: paused again (%s)" % row("p146")["message"][:100])
+    # cancelled in FinCom while paused: never put back
+    c, r = stop_mid("p147"); row("p147")["status"] = "cancelled"; row("p147")["updated_at"] = ago(4); beat()
+    ok(row("p147")["status"] == "cancelled", "cancelled while paused: stays cancelled")
+    # 36b's resend guard and tally_post_job_accepted, the real ones (PostgreSQL): an entry stamped accepted by FinCom whose
+    # result the bridge says "sent, no answer": not paused; one Tally's reply posted (confirmed): paused, then put back
+    if PG:
+        F.JOB_ACCEPTED[0] = real_accepted
+        XBR2 = {"id": "K1", "ok": False, "outcomeUnknown": True, "sent": True, "state": "unknown", "message": "Sent; no answer from Tally"}
+        for jid, res, want in (("p6m1", [XBR2], False), ("p6m2", [K1OK], True)):
+            F.T.setdefault("tally_post_ids", []).append({"job_id": jid, "fincom_id": "K1", "entry_id": "K1", "accepted_at": "2026-11-23T10:00:00Z", "released_at": None, "live": True})
+            F.T["tally_post_jobs"].append(job(jid, "running", attempts=1, payload=V3, results=[]))
+            c, r = call({"kind": "posts_update", "version": "2.5.19", "bridge": ME, "id": jid, "status": "taken", "done": 1, "seq": 5, "updatedAt": "2026-11-23T10:00:00Z",
+                         "message": MID % "2 of 3", "results": res, "items": IT3, "reqs": [], "secondsTotal": 0.4})
+            j_ = row(jid)
+            ok(c == 200 and j_["status"] == "taken" and j_["message"].startswith(PAUSED) == want, "%s (real guard): %s (%s)" % (jid, "paused" if want else "not paused", j_["message"][:100]))
+            if want:
+                j_["updated_at"] = ago(4); beat()
+                ok(row(jid)["status"] == "waiting" and row(jid)["taken_by"] == ME["id"], "%s: the real resend guard takes the put-back (%s)" % (jid, row(jid)["status"]))
+        F.JOB_ACCEPTED[0] = None
+    else: ok(False, "the part-way put-back against the real resend guard (no PostgreSQL stand)")
     print("== 12. the client linked to another Tally company since the posting was stamped (203)")
     LINKED = "The client was linked to another Tally company after this posting was made: check the entries and post again"
     F.T["tally_post_jobs"].append(job("p121", "running", client_id="c1", company_guid="g-old-0001"))
