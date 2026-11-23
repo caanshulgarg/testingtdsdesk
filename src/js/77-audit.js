@@ -469,9 +469,16 @@ const AuditRep = {
     const shortOf = x => r2(Math.min(num(x.base != null ? x.base : tot(x)), allR.filter(r => r.sepShort && r.party === x.party && TDS.sec(r.section) === TDS.sec(x.section) &&
       (x.fy ? fyR(r) === x.fy : r.date >= from && r.date <= to)).reduce((a, r) => a + Math.max(0, num(r.paid) - num(r.covers)), 0)));
     const noDed = x => r2(Math.max(0, num(x.base != null ? x.base : tot(x)) - shortOf(x)));
-    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.base == null || (Math.abs(tot(x) - x.base) < 0.01 && !shortOf(x)) ? x.rows.map(r => [r.party, r.amount, r.note]) :
-      noDed(x) > 0.005 ? [[x.party, noDed(x), x.section + ": the part of " + x.rows.length + " bills of \u20b9" + m(tot(x)) + " not covered by the TDS deducted"]] : []),
-      (tm.length ? "" : "None found. ") + (tm.some(x => shortOf(x) > 0) ? "TDS deducted short of the rate is in 34(a) (at a lower rate), not here; whether section 40(a)(ia) reaches a short deduction is for the auditor." : ""));
+    // (the owner, 23-Nov-2026) a short deduction is in 34(a) at a lower rate AND 30% of the part its TDS does not cover is
+    // inadmissible under section 40(a)(ia) here, the rule the ITR's Schedule BP uses (D40AIA, app/src/lib/itr/law.js). A
+    // finding's base (the part not covered) is listed once: its short part (shortOf) and the rest without deduction
+    // (noDed) add up to it; 34(a)'s "without deduction" is noDed only, so nothing is counted twice
+    const dis = a => r2(num(a) * 0.3), sec = x => x.section + ": the part of " + x.rows.length + " bills of \u20b9" + m(tot(x)) + " ";
+    const r21 = tm.flatMap(x => x.base == null || (Math.abs(tot(x) - x.base) < 0.01 && !shortOf(x)) ? x.rows.map(r => [r.party, r.amount, dis(r.amount), r.note]) :
+      [[x.party, shortOf(x), dis(shortOf(x)), sec(x) + "its TDS, deducted short of the rate, does not cover (also in 34(a), at a lower rate)"], [x.party, noDed(x), dis(noDed(x)), sec(x) + "with no TDS deducted"]].filter(z => z[1] > 0.005));
+    const s21 = r2(r21.reduce((a2, z) => a2 + num(z[1]), 0));
+    add("21(b)(ii)(A)", "Amounts inadmissible under section 40(a)(ia): TDS not deducted, or deducted short", ["Party", "Amount", "Inadmissible, 30% (40(a)(ia))", "Detail"], r21,
+      tm.length ? "Inadmissible under section 40(a)(ia): 30% of \u20b9" + m(s21) + ", \u20b9" + m(dis(s21)) + ", allowed in the year the TDS is paid." + (tm.some(x => shortOf(x) > 0) ? " A deduction short of the rate: the part its TDS does not cover is here, and the payment in 34(a) at a lower rate." : "") : "None found.");
     const c3 = f("cash40A3");
     add("21(d)(A)", "Cash payments above the limit, section 40A(3)", ["Date", "Party or ledger", "Amount"], c3 ? c3.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], c3 ? "" : "None found.");
     const ms = f("msme43Bh");
@@ -521,24 +528,28 @@ const AuditRep = {
     add("40", "Turnover and ratios", ["Item", "This year"], [["Turnover", rev], ["Gross profit", pl.gross.t], ["Gross profit to turnover", rev ? (Math.round(pl.gross.t / rev * 10000) / 100) + "%" : ""], ["Net profit before tax", pl.pbt.t], ["Net profit to turnover", rev ? (Math.round(pl.pbt.t / rev * 10000) / 100) + "%" : ""]],
       "Before the change in stock; add the stock figures from the accounts.");
     // 44: expenditure by the GST status of the supplier
-    const info = b.ledInfo || {}, gst = b.gstins || {}, g44 = {exempt: 0, comp: 0, other: 0, unreg: 0, total: 0};
+    const info = b.ledInfo || {}, gst = b.gstins || {}, g44 = {exempt: 0, comp: 0, other: 0, unreg: 0, total: 0, dirFee: 0};
     (b.vouchers || []).forEach(v => {
       if (v.date < from || v.date > to || v.opt || v.cancel || Books.isSale(v)) return;
       // (review of 22-Nov-2026) expenditure on goods and services only: not depreciation, provisions or employees' pay (no
       // supply under Schedule III of the CGST Act), and not an entry with no supplier, cash or bank side (a book entry).
       // Only partners' and directors' remuneration is left out as pay (review of 22-Nov-2026: any "remuneration" left out the
       // auditor's fee, and "staff welfare" the goods and services bought for the staff from suppliers)
-      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l)) && !/DEPRECIATION|AMORTI[SZ]|PROVISION|SALAR|WAGES|BONUS|GRATUITY|STIPEND|EMPLOYEE|PROVIDENT|\bE?PF\b|\bESIC?\b|LEAVE ENCASH|(PARTNER|DIRECTOR)S?'?S?\W*REMUNERATION|REMUNERATION\W+(TO|OF)\W+(THE\W+)?(PARTNER|DIRECTOR)/i.test(e.l)).reduce((s, e) => s - e.a, 0);
+      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l)) && !/DEPRECIATION|AMORTI[SZ]|PROVISION|SALAR|WAGES|BONUS|GRATUITY|STIPEND|EMPLOYEE|PROVIDENT|\bE?PF\b|\bESIC?\b|LEAVE ENCASH|(PARTNER|DIRECTOR|\bWTD|\bMD)S?'?S?\W*REMUNERATION|REMUNERATION\W+(TO|OF)\W+(THE\W+)?(WHOLE\W*TIME\W+|MANAGING\W+|EXECUTIVE\W+)?(PARTNER|DIRECTOR)/i.test(e.l)).reduce((s, e) => s - e.a, 0);
       if (!val || !v.ent.some(e => e.a > 0 && (this.isPerson(e.l) || this.isCash(e.l) || this.isBankL(e.l) || gst[e.l]))) return;
       const party = (v.ent.find(e => e.a > 0 && (gst[e.l] || this.isCreditor(e.l))) || {}).l || v.party, g = gst[party] || v.gstin, rt = String((info[party] || {}).regType || "");
       const tax = v.ent.some(e => { const k = Books.ledgerOf(e.l).kind; return e.a < 0 && (k === "gst" || k === "gst_common" || k === "ineligible"); });
       g44.total += val;
+      // (the owner, 23-Nov-2026) a director's fee (sitting fees) kept in: a director who is not an employee supplies it
+      // under reverse charge (Notification 13/2017-CT(Rate), entry 6); its GST is said in the note
+      g44.dirFee += v.ent.filter(e => e.a < 0 && /SITTING FEE|DIRECTORS?'?S?\W*FEE/i.test(e.l)).reduce((s, e) => s - e.a, 0);
       if (!g) g44.unreg += val; else if (/composition/i.test(rt)) g44.comp += val; else if (!tax) g44.exempt += val; else g44.other += val;
     });
     add("44", "Break-up of expenditure by the GST status of the supplier", ["Total expenditure", "Registered: exempt or nil", "Registered: composition", "Registered: others", "Total with registered suppliers", "With unregistered suppliers"],
       [[r2(g44.total), r2(g44.exempt), r2(g44.comp), r2(g44.other), r2(g44.exempt + g44.comp + g44.other), r2(g44.unreg)]],
       "Purchases, expenses and fixed assets booked in the period; \u201cexempt or nil\u201d is a registered supplier's bill with no GST on it. Composition dealers are recognised from their GST type in Tally. " +
-        "Employees' pay and partners' and directors' remuneration are left out (Schedule III); a director who is not an employee supplies a service under reverse charge (circular 140/10/2020-GST): add that remuneration if so.");
+        "Employees' pay and partners' and directors' remuneration (whole-time and managing directors: employees) are left out (Schedule III); a director who is not an employee supplies a service under reverse charge (circular 140/10/2020-GST): add such a director's remuneration if so." +
+        (g44.dirFee >= 0.005 ? " Included: \u20b9" + m(g44.dirFee) + " of fees to directors (sitting fees), a service under reverse charge (Notification 13/2017-CT(Rate), entry 6): GST of \u20b9" + m(g44.dirFee * 0.18) + " (18%) payable by the company in 3.1(d); with unregistered suppliers unless the director is registered." : ""));
     return {from, to, at: run.at, code: run.code, clauses: C};
   },
   async form3cdExcel(run){
