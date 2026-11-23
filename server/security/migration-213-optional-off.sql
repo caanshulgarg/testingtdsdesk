@@ -4,18 +4,21 @@
 -- clientOptKeep, so an old open tab cannot put the old "on" back).
 --
 -- The owner, 23-Nov-2026: "optional entries to be defaulted off in every client". New clients start off in the app
--- (src/js/00-core.js newCompany); this turns both Optional settings off in the live clients that hold them on today:
---   data.createOptional = true  (bills, sales, journals: Client setup)  ->  false, data.createOptionalAt = this run's time
---   data.bankOptional   = true  (bank entries: Bank settings)           ->  false, data.bankOptionalAt   = this run's time
+-- (src/js/00-core.js newCompany); this turns Optional vouchers for bills, sales and journals off in the live clients
+-- that hold it on today (it was on by default for every client until now):
+--   data.createOptional = true (Client setup)  ->  false, data.createOptionalAt = this run's time
 --   The time is UTC ISO with milliseconds and Z, as the app writes it; updated_at = now(), so every browser pulls the new
---   copy. A setting whose stamp (<key>At) is already there was chosen deliberately with the new build: left as it is.
---   Soft-deleted clients are left out. updated_by (where the table has it) is not set by this UPDATE; a trigger that
---   sets it is named in a notice (none in this repository's migrations).
---   public.optional_off_213  one row per client and setting changed: firm_id, client_id, setting, the old value and the
---                            old stamp, changed_at. The undo, at the foot, puts those back.
+--   copy. A client whose stamp (createOptionalAt) is already there chose it deliberately with the new build: left as it is.
+--   Bank entries (data.bankOptional) are NOT changed: they were never on by default, so a client with them on ticked
+--   them on purpose; only new clients start off there (the app).
+--   Soft-deleted clients are left out. updated_by: staging's trigger clients_touch sets it to auth.uid(), which is NULL
+--   when this runs from the SQL editor, so the changed clients' updated_by becomes NULL (accepted: the change is in
+--   optional_off_213 and in client_settings_history); any trigger on clients that mentions updated_by is named in a notice.
+--   public.optional_off_213  one row per client changed: firm_id, client_id, setting, the old value and the old stamp,
+--                            changed_at. The undo, at the foot, puts the value back with a stamp of its own.
 -- ADD-ONLY: one new table (no policy: nobody reads it through the API; the SQL editor does); UPDATEs of clients.data,
--- only of those two keys and their stamps, only where the key is JSON true. Nothing is dropped or deleted.
--- Safe to run twice: a setting already in optional_off_213 is never changed again (an "on" chosen after this run stays).
+-- only of createOptional and its stamp, only where it is JSON true. Nothing is dropped or deleted.
+-- Safe to run twice: a client already in optional_off_213 is never changed again (an "on" chosen after this run stays).
 -- Supabase gives anon and authenticated every right on a new table by default: all taken back, public and service_role
 -- too. One transaction, lock_timeout 10 s.
 begin;
@@ -37,7 +40,7 @@ end $names$;
 create table if not exists public.optional_off_213 (
   firm_id     uuid not null,
   client_id   text not null,
-  setting     text not null check (setting in ('createOptional', 'bankOptional')),
+  setting     text not null check (setting in ('createOptional')),
   old_value   jsonb,                       -- data.<setting> before (true)
   old_at      jsonb,                       -- data.<setting>At before (none: null)
   changed_at  timestamptz not null default now(),
@@ -55,7 +58,7 @@ begin
   select string_agg(t.tgname, ', ') into trg from pg_trigger t join pg_proc p on p.oid = t.tgfoid
    where t.tgrelid = 'public.clients'::regclass and not t.tgisinternal and p.prosrc ilike '%updated_by%';
   if trg is not null then raise notice 'migration 213: these triggers on clients may set updated_by: %', trg; end if;
-  foreach k in array array['createOptional', 'bankOptional'] loop
+  foreach k in array array['createOptional'] loop
     select count(*) filter (where c.data -> k = 'true'::jsonb),
            count(*) filter (where c.data -> k = 'true'::jsonb and c.data ? (k || 'At'))
       into n_on, n_kept
@@ -81,23 +84,16 @@ end $off$;
 
 commit;
 
--- UNDO (by hand, only if the owner asks): each setting changed here gets its old value back, unless it was changed
--- again since (its stamp no longer this run's). The stamp goes back to its old value, or JSON null where there was none
--- (a key left out would be kept by the trigger clients_keep_keys, migration 30).
+-- UNDO (by hand, only if the owner asks): each client changed here gets its old value back, unless it was changed
+-- again since (its stamp no longer this run's). The stamp is the undo's own time (the same format), so the restored
+-- value is newer than the copy of this run that a browser may still hold (src/js/27 clientOptKeep).
 --   begin;
 --   set local lock_timeout = '10s';
 --   update public.clients c
---      set data = c.data || jsonb_build_object(a.setting, a.old_value, a.setting || 'At', coalesce(a.old_at, 'null'::jsonb)),
+--      set data = c.data || jsonb_build_object(a.setting, a.old_value, a.setting || 'At', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
 --          updated_at = now()
 --     from public.optional_off_213 a
 --    where c.firm_id = a.firm_id and c.id = a.client_id and a.setting = 'createOptional'
---      and c.data -> a.setting = 'false'::jsonb
---      and c.data ->> (a.setting || 'At') = to_char(a.changed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
---   update public.clients c
---      set data = c.data || jsonb_build_object(a.setting, a.old_value, a.setting || 'At', coalesce(a.old_at, 'null'::jsonb)),
---          updated_at = now()
---     from public.optional_off_213 a
---    where c.firm_id = a.firm_id and c.id = a.client_id and a.setting = 'bankOptional'
 --      and c.data -> a.setting = 'false'::jsonb
 --      and c.data ->> (a.setting || 'At') = to_char(a.changed_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 --   commit;
