@@ -155,7 +155,7 @@ func TestFastRequestsAsInTheDoc(t *testing.T) {
 		t.Fatalf("W2 FinComVoucherWindow:\n%s\nwant (the doc)\n%s", got, blocks[1])
 	}
 	// the same fields as the approved requests: W1 FinComDayHeads' four, W2 FinComVoucherBatch's frozen FETCH
-	if !strings.Contains(blocks[0], "<FETCH>"+dayHeadsFetch+"</FETCH>") || !strings.Contains(blocks[1], "<FETCH>"+batchFetchText+"</FETCH>") || !batchFetchOK() {
+	if !strings.Contains(blocks[0], "<FETCH>"+dayHeadsFetch+"</FETCH>") || !strings.Contains(blocks[1], "<FETCH>"+batchFetchText2518+"</FETCH>") || !batchFetchOK() {
 		t.Fatal("a FETCH other than the approved ones")
 	}
 	for _, x := range blocks {

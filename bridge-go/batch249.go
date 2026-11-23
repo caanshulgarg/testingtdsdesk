@@ -75,14 +75,25 @@ func batchFetchFields() []string {
 			o = append(o, strings.TrimPrefix(f, "ALL"))
 		}
 	}
-	return o
+	return append(o, liveKeepPost2519...) // 2.5.19 (C5): the post-dated mark, at the very end
 }
 
 var batchFetchText = strings.Join(batchFetchFields(), ", ")
 
+// 2.5.19: 2.5.18's FETCH, byte for byte (FinComVoucherWindow keeps it: the fast window was not part of C5)
+var batchFetchText2518 = strings.TrimSuffix(batchFetchText, ", "+strings.Join(liveKeepPost2519, ", "))
+
+func batchFetch2518OK() bool {
+	s := sha256.Sum256([]byte(batchFetchText2518))
+	return hex.EncodeToString(s[:]) == batchFetchSHA2518
+}
+
 // 2.4.9 review R1-11 / S-5: the approved FETCH, frozen (the text of testdata/batch249/b4-range.xml). 2.5.12: unchanged (the
 // independent review: a group gains nothing from a ledger line's stock items; TestR2512GroupRequestAs2511)
-const batchFetchSHA = "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280"
+// 2.5.19 (C5, the owner's approval of 23-Nov-2026): ", ISPOSTDATED" added at the end, the one change (2.5.18's text:
+// batchFetchSHA2518)
+const batchFetchSHA = "3c00f695f3fc01b892a4a9899ed698394ef67e9ec913bded5d7b247c50db5a1e"
+const batchFetchSHA2518 = "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280"
 
 func batchFetchOK() bool {
 	s := sha256.Sum256([]byte(batchFetchText))

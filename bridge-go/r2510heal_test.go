@@ -373,7 +373,10 @@ func TestR2510EarlierHoldKeptAcrossRestart(t *testing.T) {
 	if !strings.Contains(readText(logFile()), "nothing is sent to it until") {
 		t.Fatal("not said")
 	}
-	for i := 0; i < 40 && earlierRefusal(port) != nil; i++ {
+	// 2.5.19: until both have ended. The hold's end clears the refusal, then gives the lock back a moment later; the
+	// loop waited for the refusal alone, so on a loaded machine (the release check of 23-Nov-2026, and reproduced with
+	// the CPUs kept busy) the lock was looked at in that moment and the test failed "still held after"
+	for i := 0; i < 40 && (earlierRefusal(port) != nil || len(portLock(port).ch) != 0); i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if earlierRefusal(port) != nil || len(portLock(port).ch) != 0 {

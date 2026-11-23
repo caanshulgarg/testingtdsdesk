@@ -14,7 +14,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -152,24 +151,9 @@ func updateHealth() {
 	writeLog("Update: FinCom Bridge " + BridgeVersion + " runs well")
 }
 
-// --- the tray icon in the owner's session(s): started by the service, and again if it stops; not after Quit
-var (
-	trayQuitMu sync.Mutex
-	trayQuit   = map[int]bool{}
-	trayPing   = map[int]time.Time{}
-)
-
-func trayAlive(session int) {
-	trayQuitMu.Lock()
-	trayPing[session] = time.Now()
-	trayQuitMu.Unlock()
-}
-func trayQuitSession(session int) {
-	trayQuitMu.Lock()
-	trayQuit[session] = true
-	trayQuitMu.Unlock()
-}
-
+// --- the tray icon in the owner's session(s): started by the service, and again if it stops; after Quit, again 10
+// minutes later (2.5.19, the owner's decision A of 23-Nov-2026; trayquit2519.go). Until it reports, the typing gate
+// holds every background read (mode.go trayPerson), as in 2.5.18
 func trayKeeper() {
 	sleepOrStop(10 * time.Second)
 	for !stopping() {
@@ -179,23 +163,18 @@ func trayKeeper() {
 				continue
 			}
 			live[s.id] = true
-			trayQuitMu.Lock()
-			quit, ping := trayQuit[s.id], trayPing[s.id]
-			trayQuitMu.Unlock()
-			if quit || time.Since(ping) < 40*time.Second {
+			due, afterQuit := trayStartDueWhy(s.id, time.Now())
+			if !due {
 				continue
 			}
 			if err := startTrayIn(uint32(s.id)); err == nil {
 				trayAlive(s.id) // give it time to start
+				if afterQuit {
+					writeLog("The tray icon was started again 10 minutes after Quit, so background reading can go again once it reports (it still waits while someone types in Tally)")
+				}
 			}
 		}
-		trayQuitMu.Lock()
-		for id := range trayQuit {
-			if !live[id] {
-				delete(trayQuit, id) // signed out: the next sign-in gets the icon again
-			}
-		}
-		trayQuitMu.Unlock()
+		trayForgetSignedOut(live) // signed out: the next sign-in gets the icon again at once
 		sleepOrStop(20 * time.Second)
 	}
 }
