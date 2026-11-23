@@ -213,10 +213,17 @@ html.nl .nl-needs > .linkbtn { font-size: 14px; text-align: left; min-height: 32
   html.nl #app:has(> .react-host > nav.nl-banktabs) { display: flex; flex-direction: column; }
   html.nl #app > .react-host > nav.nl-banktabs { order: -1; margin-top: 0; }
   html.nl #app:has(> .react-host > nav.nl-banktabs) .sbar-band { padding-top: 4px; }
+  /* room under the page for what is fixed at its foot (the bottom menu and the bank's foot bar): the last words of the
+     page (a missing month's "… to 31-Mar-2026") scroll clear of them (the re-review) */
+  html.nl #app:has(> .react-host > nav.nl-banktabs) { padding-bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
+  html.nl #app:has(> .react-host > nav[data-nl-bank="stmts"]), html.nl #app:has(> .react-host > nav[data-nl-bank="recon"]) { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   html.nl #app .bk-actionbar.bs-bankbar { flex-wrap: wrap; }
   html.nl #app .bk-actionbar.bs-bankbar .ab-left, html.nl #app .bk-actionbar.bs-bankbar .bk-stat { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
   html.nl table.cards tr.nl-gap > td, html.nl table.lt tr.nl-gap > td { border-top: 0 !important; border-bottom: 0 !important; }
   html.nl table tr.nl-gap { outline: 1.5px dashed var(--nl-rose); outline-offset: -1px; border-radius: 12px; }
+  /* the missing month's words wrap inside their field, never cut at the side ("… to 31-Mar-") */
+  html.nl #app tr.nl-gap > td:has(.nl-gap-w) { white-space: normal; overflow: visible; height: auto; }
+  html.nl #app tr.nl-gap .nl-gap-w { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; text-align: right; }
 }
 
 /* ---- a phone, signed in: the page's title fits beside the top bar's buttons (wraps to two lines, never cut) */

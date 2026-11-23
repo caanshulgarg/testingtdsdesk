@@ -91,6 +91,13 @@ TITLE = """() => { const h = document.querySelector('header.top .tbar-title h2')
   const lines = new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size; const cs = getComputedStyle(h);
   return {text: h.textContent, fits: h.scrollWidth <= h.clientWidth + 1, lines, ws: cs.whiteSpace, to: cs.textOverflow}; }"""
 
+# scrolled to the end, the element is wholly above what is fixed at the foot (the bottom menu, the bank's foot bar)
+CLEAR = """(sel) => { const se = document.scrollingElement; se.scrollTop = se.scrollHeight; const el = document.querySelector(sel); if (!el) return null;
+  const fixed = [...document.querySelectorAll('body *')].filter((e) => { const cs = getComputedStyle(e); if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
+    const r = e.getBoundingClientRect(); return r.height > 0 && r.height < innerHeight / 2 && r.bottom >= innerHeight - 40 && !e.closest('#app tr'); });
+  const top = Math.min(innerHeight, ...fixed.map((e) => e.getBoundingClientRect().top)), b = el.getBoundingClientRect().bottom;
+  return {bottom: Math.round(b), top: Math.round(top), ok: b <= top + 1}; }"""
+
 def page(br, w=1366, h=768, nl=False, phone=False):
     ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, is_mobile=phone, has_touch=phone)
     if nl: ctx.add_init_script(NL_ON)
@@ -270,6 +277,9 @@ with sync_playwright() as p:
     ok(pg.locator("[data-nl-port] th, [data-nl-this] thead [data-ltf]").count() >= 3, "the ports table has a filter in its headings")
     ok("Computers that send" not in pg.locator("[data-nl-this]").inner_text(), "signed out: no empty Computers heading")
     ok(not pg.evaluate("!!(S.tsm && S.tsm.open)"), "the old look's guide is not opened by the new look's Tally page (S.tsm)")
+    go(pg, "S.nlTsm = Object.assign(S.nlTsm || {}, {open: false}); render();", 500)
+    go(pg, "navHome('today')", 800); go(pg, "navHome('tally')", 1500)
+    ok(pg.evaluate("!!(S.nlTsm && S.nlTsm.open)") and pg.locator("[data-tsm-step]").count() == 6, "the six steps shown again each time the Tally page opens (hidden only until the page is left)")
     shot(pg, "desktop-14-tally")
     pg.locator('[data-nl-tallytab="settings"]').click(); pg.wait_for_timeout(1200)
     ok(pg.locator("[data-nl-tally-settings]").count() == 1 and "Post automatically" in pg.locator("[data-nl-tally-settings]").inner_text(), "Settings tab: Post automatically (moved from Settings)")
@@ -359,6 +369,10 @@ with sync_playwright() as p:
     pg.evaluate("() => { window.FCOwn = Object.assign({}, window.__own, {bridge: () => ({dev: TLight.st.devs[0], id: 'b1'})}); TLight.st.at = Date.now(); render(); }"); go(pg, "navHome('today')", 1000)
     txt = pg.locator("[data-nl-home-needs]").inner_text() if pg.locator("[data-nl-home-needs]").count() else ""
     ok("Your computer with Tally is offline since " in txt and "Test PC" not in txt, "their own Tally computer offline: Home › Needs you says so (%r)" % txt)
+    tile = pg.evaluate("() => { const m = [...document.querySelectorAll('.metrics .metric')].find((e) => /Needs you/.test(e.textContent)); return m ? Number(m.querySelector('b').textContent) : null; }")
+    items = pg.locator("[data-nl-home-needs] [data-nl-needs-go]").count()
+    head = pg.locator("[data-nl-home-needs] > b").inner_text() if pg.locator("[data-nl-home-needs] > b").count() else ""
+    ok(tile == items and "(" not in head, "one Needs you count on Home: the tile counts the firm's items too, the strip has no count of its own (tile %s, items %s, %r)" % (tile, items, head))
     shot(pg, "desktop-20-home-needs-tally")
     if pg.locator('[data-nl-needs-go="tally"]').count(): pg.locator('[data-nl-needs-go="tally"]').click(); pg.wait_for_timeout(1500)
     ok(pg.evaluate("S.homeTab") == "tally", "the warning opens the Tally page")
@@ -458,11 +472,24 @@ with sync_playwright() as p:
       return {gap: Math.round(top - h), tabsFirst: !!(nav && sb && nav.getBoundingClientRect().top < sb.getBoundingClientRect().top), sbPad: sb ? parseFloat(getComputedStyle(sb).paddingTop) : 0, cut: nl ? (nl.scrollWidth > nl.clientWidth + 1 || nl.getBoundingClientRect().right > innerWidth + 1) : null}; }""")
     ok(lay["gap"] <= 28 and lay["tabsFirst"] and lay["sbPad"] <= 6, "phone Bank: the Bank tabs first, then the row of states, no empty band above it (%s)" % lay)
     ok(lay["cut"] is False, "phone Bank: the foot bar's words are not cut (%s)" % lay)
+    c = pg.evaluate(CLEAR, "#app .bk-space")
+    ok(c and c["ok"], "phone Bank lines, scrolled to the end: nothing of the page under the foot bar (%s)" % c)
+    pg.evaluate("() => { document.scrollingElement.scrollTop = 0; }"); pg.wait_for_timeout(200)
     shot(pg, "phone-01-bank-lines")
     pg.locator('[data-nl-banktab="stmts"]').click(); pg.wait_for_timeout(1000)
     ok(pg.evaluate("document.scrollingElement.scrollWidth - innerWidth") <= 1, "Statements: no sideways scroll")
     dash = pg.evaluate("""() => { const tds = [...document.querySelectorAll('#app tr.nl-gap > td')]; return tds.slice(1, -1).filter((t) => getComputedStyle(t).borderTopStyle === 'dashed').length; }""")
     ok(dash == 0, "phone Statements: the missing month's card is dashed around, not each of its fields (%d)" % dash)
+    c = pg.evaluate(CLEAR, "#app tr.nl-gap [data-nl-gap]")
+    ok(c and c["ok"], "phone Statements, scrolled to the end: the missing month's words above the bottom bars (%s)" % c)
+    w = pg.evaluate("""() => { const e = document.querySelector('#app tr.nl-gap [data-nl-gap]'); if (!e) return null; const td = e.closest('td'), r = e.getBoundingClientRect(), t = td.getBoundingClientRect();
+      return {right: Math.round(r.right), tdRight: Math.round(t.right), vw: innerWidth, over: td.scrollWidth - td.clientWidth}; }""")
+    ok(w and w["right"] <= w["tdRight"] + 1 and w["right"] <= w["vw"] and w["over"] <= 1, "phone Statements: the missing month's words shown in full, not cut at the side (%s)" % w)
+    # the missing month's card in view: its words wholly above the bottom bars
+    v = pg.evaluate("""() => { const e = document.querySelector('#app tr.nl-gap'); e.scrollIntoView({block: 'center'}); return null; }""")
+    pg.wait_for_timeout(300)
+    c = pg.evaluate(CLEAR.replace("se.scrollTop = se.scrollHeight; ", ""), "#app tr.nl-gap [data-nl-gap]")
+    ok(c and c["ok"], "phone Statements, the missing month's card in view: its words above the bottom bars (%s)" % c)
     shot(pg, "phone-02-bank-statements")
     pg.locator("[data-nl-new]").click(); pg.wait_for_timeout(300); shot(pg, "phone-03-new-menu")
     pg.locator('[data-nl-record="Receipt"]').click(); pg.wait_for_timeout(1000); shot(pg, "phone-04-new-receipt")

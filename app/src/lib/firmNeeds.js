@@ -28,3 +28,16 @@ export function gstSignals() {
   const soon = gstins.filter((g) => { const x = G.live(g) && G.accessLeft ? G.accessLeft(g) : null; return x && x.soon && !x.over; }).length;
   return { notLinked, soon };
 }
+
+// the firm's own Needs you items, as Settings' Needs you had them (the same words and order): [key, words]. The new look's
+// Home lists them (newlook/HomeNeeds.jsx) and counts them in its Needs you figure (screens/Today.jsx): one count
+const plural = (n, one) => n + " " + (n === 1 ? one : one + "s");
+export function firmNeedItems() {
+  // (GST portal links need the firm account, as in Settings; the Tally warning, as in Settings, does not)
+  const cloud = typeof Cloud === "object" && Cloud.on();
+  const sig = Object.assign({}, tallyOffline(), cloud ? gstSignals() : { notLinked: 0, soon: 0 }), items = [];
+  if (sig.off.length) items.push(["tally", "Your computer with Tally is offline" + (sig.offSince ? " since " + sig.offSince : "")]);
+  if (sig.notLinked) items.push(["gstapi", "GST API not linked for " + plural(sig.notLinked, "client")]);
+  if (sig.soon) items.push(["gstapi", "GST API link ends soon for " + plural(sig.soon, "client")]);
+  return items;
+}

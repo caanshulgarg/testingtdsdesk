@@ -10,6 +10,7 @@
 //   Settings   Post automatically and Books in the cloud (they were in Settings).
 // Nothing new is asked of the bridge or of Tally: the ports are what the bridge's beats, its /status (sessions) and the
 // look on 127.0.0.1 already said (lib/ownBridge.js, the same reads every Tally word comes from).
+import { useState } from "react";
 import TallyHome, { CloudBooks } from "../screens/Tally.jsx";
 import SyncActivity from "../screens/TallySync.jsx";
 import { PostLog } from "../screens/Done.jsx";
@@ -142,7 +143,9 @@ function ThisComputer() {
 
 export default function NLTally() {
   // (the six steps stay shown, the owner: "show the 6 steps": the guide keeps the new look's own state, open unless hidden,
-  // parts/TallySimple.jsx UI; the old look's S.tsm is never touched from here)
+  // parts/TallySimple.jsx UI; the old look's S.tsm is never touched from here). Shown again each time the page opens
+  // (the re-review: the owner found them "not visible anywhere"): Hide the steps lasts only until the page is left
+  useState(() => { if (S.nlTsm) S.nlTsm.open = true; return 0; });
   const tab = TABS.some(([k]) => k === S.tallyTab) ? S.tallyTab : "computers";
   const go = (k) => () => { S.tallyTab = k; if (k === "activity" && typeof Rec === "object" && Rec.act) Rec.act.at = 0; render(); window.scrollTo(0, 0); };
   const { own, rows, free } = portRows(), line = statusLine(own, rows, free);

@@ -54,7 +54,7 @@ export default function Today() {
         <Metric label="To read" n={inboxTotal()} onClick={() => navHome("inbox")} tone="violet" Icon={Inbox} />
         <Metric label="To review" n={sum("review")} onClick={go("review", "drafts", "review")} tone="amber" Icon={ReceiptText} />
         <Metric label="Ready to post" n={sum("post")} onClick={go("post", "waiting", "post")} tone="indigo" Icon={Send} />
-        <Metric label="Needs you" n={sum("look")} onClick={go("look", "check", "review")} warn tone="rose" Icon={TriangleAlert} />
+        <Metric label="Needs you" n={sum("look") + (newLook() && window.__nlFirmNeeds ? window.__nlFirmNeeds() : 0)} onClick={go("look", "check", "review")} warn tone="rose" Icon={TriangleAlert} />
       </div>
       <AutoToday />
       <MeetToday />
