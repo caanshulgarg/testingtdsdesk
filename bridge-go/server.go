@@ -1098,10 +1098,15 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		trayAlive(toInt(o["session"]))
 		return M{"ok": true}, nil
 	case "/tray/quit":
-		// Quit in the tray: the service does not start the icon again in this session until the next sign-in
+		// Quit in the tray: as a service, the icon is started again in this session 10 minutes later (2.5.19, the owner's
+		// decision A of 23-Nov-2026; trayquit2519.go); until it reports, background reads wait (the typing gate)
 		o, _ := bodyObj(body)
 		trayQuitSession(toInt(o["session"]))
-		writeLog("The tray icon was closed (Quit); the bridge keeps running")
+		if runMode == "service" {
+			writeLog("The tray icon was closed (Quit); the bridge keeps running. Background reading waits until the icon is back: it is started again in 10 minutes")
+		} else {
+			writeLog("The tray icon was closed (Quit); the bridge keeps running")
+		}
 		return M{"ok": true}, nil
 	case "/tray/check":
 		// "Test connection" in the tray: Tally asked now, and a hello to FinCom's cloud with this computer's key
