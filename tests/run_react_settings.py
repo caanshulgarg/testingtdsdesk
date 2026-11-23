@@ -23,15 +23,16 @@ with sync_playwright() as p:
         pg.wait_for_timeout(100); pg.click('#app [data-confirm-foot] [data-cfm="save"]'); pg.wait_for_timeout(300)
     # the firm
     pg.evaluate("navHome('rules')"); pg.wait_for_timeout(500)
-    ok(head() == "Firm details" and pg.locator("#app .setnav .setgroup-t").count() == 4, "Settings opens on Firm details, sections in four groups (GST API added)")
+    ng = pg.evaluate("Array.from(document.querySelectorAll('#app .setnav .setgroup:not([data-admin-console]) .setgroup-t')).map(e => e.innerText)")
+    ok(head() == "Firm details" and all(g in ng for g in ["Your firm", "Tally", "How the work is done"]) and ("GST" in ng) == pg.evaluate("typeof Cloud === 'object' && Cloud.on()"), "Settings opens on Firm details, its sections in groups: Your firm, Tally, How the work is done, and GST (the GST API) with the firm account (%s)" % ng)
     pg.fill('#app label:has-text("Firm name") input', "Garg Shekhar & Co (test)"); pg.wait_for_timeout(900)
     ok(pg.evaluate("S.firm.firmName") == "Garg Shekhar & Co (test)" and "Garg Shekhar & Co (test)" in pg.inner_text("#app .setnav"), "the firm's name: kept, and shown in the list")
     ok("Not saved yet" in foot(), "review 18: the change is a draft until Save (%s)" % foot())
     save()
     ok("Saved ·" in foot() and "this computer" in foot(), "review 18: after Save, “Saved · <time> · this computer” (%s)" % foot())
     # clean-up batch 2: FinCom Bridge and Sent to Tally have one home, the Tally page; their sections link there
-    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("Connect Tally", "Open the Tally page"), ("Books in the cloud", "Books in the cloud"),
-                        ("Sent to Tally", "Open it on the Tally page"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")]:
+    for label, text in [("Sign-in and people", "Sign-in and people"), ("Plan and credit", "Plan and credit"), ("Connect Tally", "Open the Tally page"),
+                        ("Sent to Tally", "Open it on the Tally page"), ("TDS rates and limits", "Rates and limits for all clients"), ("Reading bills", "Reading bills"), ("AI help", "AI help")] + ([("Books in the cloud", "Books in the cloud")] if pg.evaluate("typeof Cloud === 'object' && Cloud.on()") else []):
         nav(label); pg.wait_for_timeout(350)
         ok(head() == label and text in pg.inner_text("#app .setbody") and pg.get_attribute('#app .setnav button[aria-current="page"]', "aria-current") == "page", "Settings → " + label)
     ok("Firm name" not in pg.inner_text("#app .setbody"), "the rates page no longer holds the firm's name")
@@ -42,11 +43,11 @@ with sync_playwright() as p:
     pg.evaluate("""() => { const c = newCompany({name: "ZZ Zeta Exports", gstin: ""}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; return openCompany(c.id); }"""); pg.wait_for_timeout(800)
     pg.evaluate("toggleSetup()"); pg.wait_for_timeout(500)
     ok(head() == "Company" and pg.locator("header nav.sbar").count() == 0 and pg.locator("#app .setnav button").count() == 9, "Client setup: nine sections on the left (Register formats the ninth, 14-Oct-2026), no row of tabs at the top (Remove this client is under More)")
-    g = pg.locator('#app label:has-text("GSTIN") input'); g.fill("09aanfg3202d1zr"); g.blur(); pg.wait_for_timeout(500)
+    g = pg.locator('#app').get_by_role("textbox", name="GSTIN", exact=True); g.fill("09aanfg3202d1zr"); g.blur(); pg.wait_for_timeout(500)
     ok(pg.evaluate("CO().gstin") == "09AANFG3202D1ZR" and pg.evaluate("CO().pan") == "AANFG3202D", "GSTIN kept in capitals; the PAN filled in from it")
-    pg.fill('#app label:has-text("PAN") input', "AAAAA1111A"); pg.locator('#app label:has-text("PAN") input').blur(); pg.wait_for_timeout(400)
+    pg.locator('#app').get_by_role("textbox", name="PAN", exact=True).fill("AAAAA1111A"); pg.locator('#app').get_by_role("textbox", name="PAN", exact=True).blur(); pg.wait_for_timeout(400)
     ok("carries PAN AANFG3202D" in pg.inner_text("body"), "a PAN that does not match the GSTIN: said so")
-    pg.fill('#app label:has-text("PAN") input', "AANFG3202D"); pg.locator('#app label:has-text("PAN") input').blur()
+    pg.locator('#app').get_by_role("textbox", name="PAN", exact=True).fill("AANFG3202D"); pg.locator('#app').get_by_role("textbox", name="PAN", exact=True).blur()
     pg.fill('#app label:has-text("Client name") input', "ZZ Zeta Exports Pvt Ltd"); pg.wait_for_timeout(700)
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     # (the owner, 23-Nov-2026) "This Tally company has more than one GSTIN": kept as the client's, like its other settings
@@ -61,7 +62,7 @@ with sync_playwright() as p:
     pg.click(mg); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().multiGstin") is False and not pg.is_checked(mg), "untick: off again")
     pg.click(mg); pg.wait_for_timeout(300)
-    save()
+    if pg.locator('#app [data-confirm-foot] [data-cfm="save"]').count(): save()   # ticked again: back as saved, nothing left to save
     nav("Tally"); pg.wait_for_timeout(300)
     ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 0 and pg.locator("#app .setbody [data-tally-one]").count() == 1, "Tally section: one line for the client's Tally (24-Oct-2026: linked on the Tally page only)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
