@@ -561,3 +561,23 @@ func TestFastBankRecoversAfterSlowSpell(t *testing.T) {
 		t.Fatalf("after a slow spell the parts did not grow back: %v", fastBankHead(sizes))
 	}
 }
+
+// the review of ff7609b6a: every counter of a kept record is read as 0 or more, so a changed post-pace.json cannot buy
+// more than the lifetime's 3 over-long probes (or any other negative count)
+func TestFastBankPaceCountersNeverNegative(t *testing.T) {
+	reviewPaceStart(t, "")
+	key := companyKey("ZZ NEG CO") + "|g-neg"
+	_ = saveFile(postPaceFile(), jsonText(M{"format": postPaceFormat, "version": BridgeVersion, "companies": M{
+		postPaceKey(key, true): M{"last": 900, "avg": 900, "n": 5, "klast": 1, "kavg": 1, "kn": -3, "part": -2, "cap": -1, "capok": -4,
+			"reprobes": -7, "over": -5, "nonspike": -6, "probewait": -8, "pervch": true}}}))
+	postPaceReset()
+	p := postPaceGet(key, true)
+	for name, v := range map[string]int{"n": p.N, "kn": p.KN, "part": p.Part, "cap": p.Cap, "capok": p.CapOK, "reprobes": p.Reprobes, "over": p.Over, "nonspike": p.NonSpike, "probewait": p.ProbeWait, "hn": p.HN} {
+		if v < 0 {
+			t.Errorf("%s read as %d", name, v)
+		}
+	}
+	if p.N != 5 || !p.PerVch {
+		t.Fatalf("the record was not read: %+v", p)
+	}
+}

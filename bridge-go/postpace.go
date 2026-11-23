@@ -645,6 +645,13 @@ func postPaceFreshLocked() {
 		if truthy(e["fit"]) {
 			r.FixMs, r.VchMs, r.FitOK = num(e["fix"]), num(e["vch"]), true // review B2: a no-fixed-cost fit kept too
 		}
+		// the review of ff7609b6a: every counter 0 or more, whatever the file says (a negative Over or Reprobes would buy
+		// more than the lifetime's over-long probes)
+		for _, c := range []*int{&r.N, &r.KN, &r.Part, &r.Cap, &r.CapOK, &r.Reprobes, &r.Over, &r.NonSpike, &r.ProbeWait} {
+			if *c < 0 {
+				*c = 0
+			}
+		}
 		if r.N <= 0 || r.Avg <= 0 {
 			r.N, r.Last, r.Avg = 0, 0, 0
 		}
