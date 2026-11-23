@@ -1,13 +1,15 @@
-"""python3 tests/run_migration215.py - server/tally-cloud/migration-215-db-load.sql and migration-215-indexes.sql (DRAFTS,
+"""python3 tests/run_migration215_dbload.py - server/tally-cloud/migration-215-db-load.sql and migration-215-indexes.sql (DRAFTS,
 not applied anywhere), on a throwaway PostgreSQL (pg_stand, port 55715 unless PG215_PORT; its data dir under TMPDIR,
 /tmp/fincom-m215 unless PG215_TMP; never a real database). public.records as staging has it, with its triggers (touch_row,
-inbox_guard as on staging; migration 19's sync guard), and the tables tally_read_view reads, with stand-ins for the
+inbox_guard as on staging; migration 19's sync guard; console_company_off_records), and the tables tally_read_view reads, with stand-ins for the
 functions it calls (tally_read_serving, STABLE as on staging, counts its calls). Made-up firms, books and lines only.
   0. the name guard: a records_skip_same that is not 215's, or a tally_read_view that is not migration 196's: stopped,
      nothing changed
   1. records: the same record saved again (the app's upsert, its keys in another order) writes nothing: no new row
      version, updated_at not moved; a real change, a deletion and a restore are written as before (the delete and
-     restore stamps); sync_guard still keeps a firm's data from an empty save; inbox_guard still keeps an inbox status
+     restore stamps); a write a guard puts back to the stored row (sync_guard keeping ledTpl and postLog sent empty, or a
+     firm's data from an empty save; inbox_guard keeping an inbox status) is still written, updated_at moved, so the page
+     gets the server's copy back (the review of 9b6e65341)
   2. tally_read_view: the same answer as migration 196's, with the serving bridges worked out once a linked book
      (196: several times a book)
   3. grants: records_skip_same executable by nobody; tally_read_view by authenticated and service_role, not anon
@@ -61,6 +63,9 @@ begin
   return new;
 end $f$;
 create trigger inbox_guard before update on public.records for each row execute function public.inbox_guard();
+-- as on staging: console_company_off_records (a company switched off; here it lets everything through)
+create or replace function public.console_company_off_records() returns trigger language plpgsql set search_path to '' as $f$ begin return new; end $f$;
+create trigger console_company_off_records before insert or update on public.records for each row execute function public.console_company_off_records();
 """
 # what tally_read_view reads (its columns as on staging), and stand-ins for the functions it calls
 VIEW_TABLES = """
@@ -138,7 +143,7 @@ try:
         db.sql("drop function public.records_skip_same();")
         db.sql("create or replace function public.tally_read_view() returns jsonb language sql stable as $$ select '{}'::jsonb $$;")
         r = raises(lambda: db.sql(SQL)); ok(r and "changed since migration 196" in r, "0. a tally_read_view that is not 196's: stopped")
-        ok(db.one("select count(*) from pg_trigger where tgname = 'zz_records_skip_same'") == "0", "0. nothing was made")
+        ok(db.one("select count(*) from pg_trigger where tgname = 'h_records_skip_same'") == "0", "0. nothing was made")
         db.sql("drop function public.tally_read_view();"); m196(db)
     old, old_calls = view(db)
     if not SKIP: db.sql(SQL)
@@ -167,17 +172,26 @@ try:
     db.sql("update records set deleted = false where firm_id = '%s' and kind = 'entry' and id = 'e1'" % F1, U1)
     v5 = ver(db, F1, "entry", "e1")
     ok(v5["del"] == "false" and v5["ra"], "1. a restore is written, stamped")
-    firm = {"firmName": "Made Up & Co", "rules": [1, 2]}
+    # review of 9b6e65341 (the blocker): a write a guard rewrites back to the stored row is still written, updated_at moved,
+    # so the page that sent it gets the server's copy back (staging's sync_refused: ledTpl, postLog, crossBook)
+    firm = {"firmName": "Made Up & Co", "rules": [1, 2], "ledTpl": {"Made Up Purchase": "gst"}, "postLog": [{"at": "2026-11-01"}]}
     upsert(db, [{"firm_id": F1, "kind": "firm", "id": "firm", "client_id": "", "data": firm, "deleted": False}])
     vf = ver(db, F1, "firm", "firm")
-    upsert(db, [{"firm_id": F1, "kind": "firm", "id": "firm", "client_id": "", "data": {}, "deleted": False}])
+    upsert(db, [{"firm_id": F1, "kind": "firm", "id": "firm", "client_id": "", "data": dict(firm, ledTpl={}, postLog=[]), "deleted": False}])
     vf2 = ver(db, F1, "firm", "firm")
-    ok(json.loads(vf2["d"]) == firm and vf2["x"] == vf["x"], "1. an empty firm record: sync_guard keeps the data (and nothing is written)")
-    ok(db.one("select count(*) from sync_refused where kind = 'firm'") == "1", "1. ... the refusal still logged")
+    ok(json.loads(vf2["d"]) == firm, "1. a firm record sent with ledTpl and postLog empty: sync_guard keeps them")
+    ok(vf2["x"] != vf["x"] and vf2["u"] != vf["u"], "1. ...and the write is still written, updated_at moved (the page gets the server's copy back) (%s -> %s)" % (vf["u"], vf2["u"]))
+    upsert(db, [{"firm_id": F1, "kind": "firm", "id": "firm", "client_id": "", "data": {}, "deleted": False}])
+    vf3 = ver(db, F1, "firm", "firm")
+    ok(json.loads(vf3["d"]) == firm and vf3["u"] != vf2["u"], "1. an empty firm record: the data kept, written, updated_at moved")
+    ok(db.one("select count(*) from sync_refused where kind = 'firm'") == "2", "1. ... both refusals logged")
+    upsert(db, [{"firm_id": F1, "kind": "firm", "id": "firm", "client_id": "", "data": firm, "deleted": False}])
+    ok(ver(db, F1, "firm", "firm")["x"] == vf3["x"], "1. the firm record sent again as it is: nothing written")
     upsert(db, [{"firm_id": F1, "kind": "inbox", "id": "i1", "client_id": "", "data": {"status": "read", "file": "made-up.pdf"}, "deleted": False}])
     vi = ver(db, F1, "inbox", "i1")
     db.sql("update records set data = jsonb_set(data, '{status}', '\"bogus\"') where firm_id = '%s' and kind = 'inbox' and id = 'i1'" % F1, U1)
-    ok(json.loads(ver(db, F1, "inbox", "i1")["d"])["status"] == "read" and ver(db, F1, "inbox", "i1")["x"] == vi["x"], "1. an inbox status moved back: inbox_guard keeps it (nothing written)")
+    vi2 = ver(db, F1, "inbox", "i1")
+    ok(json.loads(vi2["d"])["status"] == "read" and vi2["u"] != vi["u"], "1. an inbox status moved back: inbox_guard keeps it, and the write is written (updated_at moved)")
     upsert(db, [{"firm_id": F2, "kind": "entry", "id": "e1", "client_id": "c1", "data": entry, "deleted": False}], U2)
     ok(json.loads(ver(db, F1, "entry", "e1")["d"])["billNo"] == "8", "1. another firm's record of the same id is its own")
     # 2. tally_read_view
@@ -199,12 +213,13 @@ try:
         ok(all(g(r, "public.records_skip_same()") == "f" for r in ("anon", "authenticated", "service_role")) and db.one("select count(*) from pg_proc p, aclexplode(p.proacl) a where p.proname = 'records_skip_same' and a.grantee = 0") == "0",
            "3. records_skip_same: executable by nobody (anon, authenticated, service_role, public)")
         ok(g("authenticated", "public.tally_read_view()") == "t" and g("service_role", "public.tally_read_view()") == "t" and g("anon", "public.tally_read_view()") == "f", "3. tally_read_view: authenticated and service_role, not anon")
-        ok(db.one("select prosecdef::text || array_to_string(proconfig, ',') from pg_proc where proname = 'records_skip_same'") == "truesearch_path=public, pg_temp", "3. records_skip_same: security definer, search_path public, pg_temp")
+        ok(db.one("select prosecdef::text || array_to_string(proconfig, ',') from pg_proc where proname = 'records_skip_same'") == "falsesearch_path=public, pg_temp", "3. records_skip_same: not security definer (it reads only the row), search_path public, pg_temp")
         # 4. twice
         print("== 4. run twice")
         r = raises(lambda: db.sql(SQL)); ok(r is None, "4. a second run: no error (%s)" % (r or "")[-120:])
-        ok(db.one("select count(*) from pg_trigger where tgrelid = 'records'::regclass and tgname = 'zz_records_skip_same'") == "1", "4. one trigger")
-        ok(db.one("select tgname from pg_trigger where tgrelid = 'records'::regclass and not tgisinternal and tgtype & 16 = 16 order by tgname desc limit 1") == "zz_records_skip_same", "4. it is the last BEFORE UPDATE trigger of records")
+        ok(db.one("select count(*) from pg_trigger where tgrelid = 'records'::regclass and tgname = 'h_records_skip_same'") == "1", "4. one trigger")
+        order = [r["tgname"] for r in db.rows("select tgname from pg_trigger where tgrelid = 'records'::regclass and not tgisinternal and tgtype & 2 = 2 and tgtype & 16 = 16 order by tgname")]
+        ok(order.index("h_records_skip_same") < min(order.index(t) for t in ("inbox_guard", "records_touch", "sync_guard")), "4. it runs before the guards and the touch (%s)" % order)
         # 5. the indexes file
         print("== 5. indexes")
         for line in open(IX):

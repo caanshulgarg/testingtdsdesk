@@ -1,4 +1,4 @@
--- Migration 215 (23-Nov-2026, branch next-db-load). Written and tested here (tests/run_migration215.py on pg_stand);
+-- Migration 215 (23-Nov-2026, branch next-db-load). Written and tested here (tests/run_migration215_dbload.py on pg_stand);
 -- NOT run anywhere: the coordinator runs it on staging after the review. Then, separately, migration-215-indexes.sql
 -- (python3 tools/apply_concurrent_indexes.py --run "<runner>" server/tally-cloud/migration-215-indexes.sql).
 --
@@ -10,11 +10,14 @@
 --      at the next sync (every 45 s while a page is open; the app's side is fixed in src/js/27, cloudApplyNow). Every such
 --      write was a new row version (no HOT: updated_at is indexed), its large data toasted and logged again, decoded by
 --      Realtime and sent to every open page of the firm.
---      records_skip_same: a BEFORE UPDATE trigger, the LAST of the table's (its name sorts after sync_guard), that drops an
---      update which changes nothing of the record (data, client, deleted and its stamps): no new row version, no WAL, no
---      Realtime change, updated_at not moved (there is nothing new for another computer to pull). A real change, a
---      deletion, a restore, and what the other triggers do (sync_guard keeping data, inbox_guard keeping the status) are
---      as before.
+--      records_skip_same: a BEFORE UPDATE trigger, h_records_skip_same, that drops an update which changes nothing of
+--      the record AS SENT (every column but updated_at and updated_by, columns added later included): no new row
+--      version, no WAL, no Realtime change, updated_at not moved (there is nothing new for another computer to pull).
+--      It runs BEFORE the guards (BEFORE triggers run in name order: after console_company_off_records, before
+--      inbox_guard, records_touch and sync_guard): a write a guard puts back to the stored row (sync_guard keeping keys
+--      a page sent empty - staging's sync_refused: ledTpl, postLog, crossBook - or inbox_guard keeping a status) is still
+--      written, updated_at moved, so the page that sent it gets the server's copy back (review of 9b6e65341). A real
+--      change, a deletion and a restore are as before.
 --   2. tally_read_view(): 1.2 s a call (the page's "which Tally reads this company", at most once a minute a page). The
 --      planner folded the lateral "tally_read_serving(...) as srv" into each place srv is used, so the serving bridges of
 --      every linked book were worked out 3 to 5 times. The same function with OFFSET 0 on that lateral (evaluated once a
@@ -29,7 +32,7 @@
 -- ADD-ONLY: one new function and its trigger; tally_read_view replaced by the same query (OFFSET 0 added); no table,
 -- column, row or policy changed or dropped. Safe to run twice. One transaction, lock_timeout 10 s.
 -- UNDO (by hand, if ever needed):
---   drop trigger if exists zz_records_skip_same on public.records; drop function if exists public.records_skip_same();
+--   drop trigger if exists h_records_skip_same on public.records; drop function if exists public.records_skip_same();
 --   and migration 196's tally_read_view (server/tally-cloud/migration-196-recorder-no-held.sql) run again.
 begin;
 set local lock_timeout = '10s';
@@ -43,8 +46,8 @@ begin
   if to_regprocedure('public.my_firm()') is null then raise exception 'migration 215: public.my_firm() is not on this database. Nothing was changed.'; end if;
   if exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'records_skip_same'
                and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'db load (migration 215)') then bad := bad || 'function records_skip_same'::text; end if;
-  if exists (select 1 from pg_trigger t where t.tgrelid = 'public.records'::regclass and t.tgname = 'zz_records_skip_same'
-               and coalesce(obj_description(t.oid, 'pg_trigger'), '') <> 'db load (migration 215)') then bad := bad || 'trigger zz_records_skip_same on records'::text; end if;
+  if exists (select 1 from pg_trigger t where t.tgrelid = 'public.records'::regclass and t.tgname = 'h_records_skip_same'
+               and coalesce(obj_description(t.oid, 'pg_trigger'), '') <> 'db load (migration 215)') then bad := bad || 'trigger h_records_skip_same on records'::text; end if;
   foreach src in array array['tally_recorder_lines_firm_line', 'tally_recorder_lines_held_bridge'] loop
     if to_regclass('public.' || src) is not null and coalesce(obj_description(to_regclass('public.' || src), 'pg_class'), '') <> 'db load (migration 215)' then bad := bad || ('index ' || src); end if;
   end loop;
@@ -59,13 +62,12 @@ begin
   end if;
 end $names$;
 
--- 1. records: an update that changes nothing is not written
+-- 1. records: an update that changes nothing of the record as sent is not written. Not SECURITY DEFINER: it reads only
+-- the row (a trigger function needs no EXECUTE right of the writer)
 create or replace function public.records_skip_same() returns trigger
-language plpgsql security definer set search_path = public, pg_temp as $function$
+language plpgsql set search_path = public, pg_temp as $function$
 begin
-  if (new.firm_id, new.kind, new.id, new.client_id, new.data, new.deleted, new.deleted_at, new.deleted_by, new.delete_reason, new.restored_at, new.restored_by)
-     is not distinct from
-     (old.firm_id, old.kind, old.id, old.client_id, old.data, old.deleted, old.deleted_at, old.deleted_by, old.delete_reason, old.restored_at, old.restored_by) then
+  if (to_jsonb(new) - 'updated_at' - 'updated_by') = (to_jsonb(old) - 'updated_at' - 'updated_by') then
     return null;            -- the same record: nothing written (no row version, no WAL, no Realtime change)
   end if;
   return new;
@@ -75,10 +77,10 @@ revoke all on function public.records_skip_same() from public, anon, authenticat
 
 do $trg$
 begin
-  if not exists (select 1 from pg_trigger where tgrelid = 'public.records'::regclass and tgname = 'zz_records_skip_same') then
-    -- BEFORE triggers run in name order: zz_ after console_company_off_records, inbox_guard, records_touch, sync_guard
-    create trigger zz_records_skip_same before update on public.records for each row execute function public.records_skip_same();
-    comment on trigger zz_records_skip_same on public.records is 'db load (migration 215)';
+  if not exists (select 1 from pg_trigger where tgrelid = 'public.records'::regclass and tgname = 'h_records_skip_same') then
+    -- BEFORE triggers run in name order: h_ after console_company_off_records, before inbox_guard, records_touch, sync_guard
+    create trigger h_records_skip_same before update on public.records for each row execute function public.records_skip_same();
+    comment on trigger h_records_skip_same on public.records is 'db load (migration 215)';
   end if;
 end $trg$;
 
