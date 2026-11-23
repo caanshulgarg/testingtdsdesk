@@ -294,6 +294,9 @@ type TC struct {
 	// bridge stops waiting after this many milliseconds (a context deadline from the send). Never for a posting (Import), a
 	// person's read or the light company check FinComCompany (they never set it)
 	limitMs int
+	// 2.5.19 (E, the owner's option a): the look for FinCom's mark before a re-sent entry's first part (resent2519.go):
+	// FinComTag as built, for the date being looked at now, under the 2 s stop, whatever ReadDays says
+	resentLook bool
 	// 2.5.2 (the stock on a person's click, gate run 41393411255 s6 on 3.0 and 4.1): once sent, the request is not stopped
 	// for FinCom's request. A stopped request keeps Tally's lock until Tally has answered it anyway (holdUntilAnswered), so
 	// the posting waits the same; the click keeps Tally's answer instead of losing it. Only with limitMs (2 s hard stop)
@@ -424,7 +427,28 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return errFastRefused
-	case ledListID, ledChangesID, ledByNameID:
+	case dayPartID:
+		// 2.5.19 (B1, the owner's approval of 23-Nov-2026): a band of the day being read in bands now, as built, under the
+		// 2 s stop; refused otherwise whatever ReadDays says (daypull.go, requests2519.go)
+		if dayPartExact(tc, x) {
+			return nil
+		}
+		return errDayHeadsRefused
+	case tagCheckID:
+		// 2.5.19 (E, the owner's option a of 23-Nov-2026): the look for FinCom's mark before a re-sent entry goes: exactly
+		// FinComTag as built for the date being looked at now, under the 2 s stop, whatever ReadDays says (its rows are
+		// taken only for that date: resent2519.go); any other FinComTag as before
+		if resentAsking(tc, x) {
+			return nil
+		}
+	case groupClosingID:
+		// 2.5.19 (C8, option a): exactly the daily tie-out's request for today, while it is being asked, under the 2 s
+		// stop; refused otherwise whoever asks (requests2519.go)
+		if groupClosingAsking(tc, x) {
+			return nil
+		}
+		return errGroupClosingRefused
+	case ledListID, ledChangesID, ledByNameID, billOpenID: // 2.5.19: C1 carries the books' first year as they do
 		// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the narrow ReadDays exemption for exactly these three:
 		// as built, with exactly SVFROMDATE = the company's books-from and SVTODATE = a year on less a day (TYPE="Date"),
 		// whatever ReadDays says; any other period, or none, is refused whoever asks
@@ -1212,7 +1236,8 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	}
 	// 2.2.2: the recorder's hard stop, counted from the send itself (after any gentle wait: tallyRaw starts it)
 	stopAt := time.Duration(0)
-	if tc.limitMs > 0 && tc.copier && !tc.person && !isImportRequest(x) && !isPostingRequest(x) {
+	// 2.5.19 (E): the look for FinCom's mark before a re-sent entry, a posting's read, is stopped at 2 s too
+	if tc.limitMs > 0 && !isImportRequest(x) && ((tc.copier && !tc.person && !isPostingRequest(x)) || tc.resentLook) {
 		stopAt = time.Duration(tc.limitMs) * time.Millisecond
 		ctx = context.WithValue(ctx, stopKey{}, stopAt)
 	}

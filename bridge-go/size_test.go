@@ -148,6 +148,20 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 			sr.rows++
 			fmt.Fprintf(&out, `<TDSRATE NAME="Big Nature %03d"><GUID>big-nat-%d</GUID><MASTERID> %d</MASTERID><CATEGORYDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><TDSRATESECTION>194C</TDSRATESECTION><EXEMPTIONLIMIT>30000.00</EXEMPTIONLIMIT></CATEGORYDETAILS.LIST></TDSRATE>`, mid, mid, mid)
 		}
+	case strings.Contains(body, "<TYPE>VoucherType</TYPE>") || strings.Contains(body, "<TYPE>CostCentre</TYPE>") || strings.Contains(body, "<TYPE>CostCategory</TYPE>") || strings.Contains(body, "<TYPE>TaxUnit</TYPE>"):
+		// 2.5.19 (C2 to C4, C6): a big company's other masters (200 voucher types, 2,000 cost centres, 5 categories, 5 GST
+		// registrations), MasterIDs from 1; a request reads those of its MasterID span
+		n := map[bool]int64{true: 200}[strings.Contains(body, "<TYPE>VoucherType</TYPE>")] + map[bool]int64{true: 2000}[strings.Contains(body, "<TYPE>CostCentre</TYPE>")] + 5*map[bool]int64{true: 1}[strings.Contains(body, "<TYPE>CostCategory</TYPE>") || strings.Contains(body, "<TYPE>TaxUnit</TYPE>")]
+		var after, upto int64 = 0, 1 << 62
+		if m := reMidRange.FindStringSubmatch(body); m != nil {
+			after = toI64(m[1])
+			if m[2] != "" {
+				upto = toI64(m[2])
+			}
+		}
+		for mid := after + 1; mid <= upto && mid <= n; mid++ {
+			sr.rows++
+		}
 	case strings.Contains(body, "<TYPE>Group</TYPE>"):
 		sr.rows = 40
 		for i := 1; i <= 40; i++ {
@@ -176,13 +190,6 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 	b.record(sr)
 	_, _ = w.Write([]byte(out.String()))
 	return true
-}
-
-func minI64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func (b *bigTally) record(sr simReq) {

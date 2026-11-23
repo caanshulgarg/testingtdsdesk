@@ -234,6 +234,7 @@ func newPostJob(pl M) (M, error) {
 					its = []any{}
 				}
 				pay["items"] = its
+				pay["checkFirst"] = arr(pl["resendOnly"]) // 2.5.19 (E): looked for in Tally before the first part
 				_ = saveJSONBak(filepath.Join(dir, "payload.json"), pay)
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
@@ -317,6 +318,9 @@ func newPostJob(pl M) (M, error) {
 	}
 	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
 	payload := M{"company": str(pl["company"]), "items": items, "released": arr(pl["released"])}
+	if len(only) > 0 {
+		payload["checkFirst"] = arr(pl["resendOnly"]) // 2.5.19 (E): looked for in Tally before the first part (resent2519.go)
+	}
 	if truthy(pl["fromCloud"]) {
 		payload["fromCloud"] = true // 2.5.15 item 1: FinCom is asked before each part is sent
 	}
@@ -894,6 +898,17 @@ func jobWorker(dir string) {
 		}
 		todo = left
 	}
+	// 2.5.19 (E, the owner's option a): an entry FinCom had handed out before is looked for in Tally (FinComTag, its
+	// date) before the first part; an ordinary posting asks nothing more (resent2519.go)
+	// review B1: the look is this worker run's only (never kept in progress.json): a job resumed after a stop, or handed
+	// back, looks again; and again in the part loop below whenever FinCom's lease had to be taken anew
+	delete(p, "resentLooked") // (a progress.json of an earlier build of this branch)
+	resent := resentIDs(pl)
+	if len(resent) > 0 {
+		left, rs := resentLookFirst(port, company, todo, resent)
+		results = append(results, rs...)
+		todo = left
+	}
 	// what cannot be sent at all (no valid date, not a voucher or master) is said now
 	var masters, vouchers []M
 	for _, it := range todo {
@@ -920,6 +935,7 @@ func jobWorker(dir string) {
 	nVouchers := 0
 	total := toInt(p["total"])
 	round = 0
+	partsTried := 0 // 2.5.19 (R3): the part loop's turns (the first follows the job's own look)
 	for i := 0; pq.left(); {
 		K = i + pq.parts()
 		if cancelled() || stopping() {
@@ -936,9 +952,37 @@ func jobWorker(dir string) {
 		if !waitRecord() { // 2.5.15 item 4
 			return
 		}
+		hadLease := leaseHeldPost(asked)
 		if !waitLease(asked, setStatus, pause) {
 			cancelled()
 			return
+		}
+		// 2.5.19 (E, review B1): the lease was let go and taken anew: another computer may have posted meanwhile, so the
+		// re-sent entries not sent yet are looked for in Tally again before anything more goes. R3: a cloud that keeps no
+		// lease (or did not answer the lease) shows no lapse at all, so then they are looked for again before every part
+		// after the first
+		noLease := !leaseHeldPost(asked)
+		lookAgain := (!hadLease && !noLease) || (noLease && partsTried > 0)
+		partsTried++
+		if len(resent) > 0 && lookAgain {
+			pending := pq.pending()
+			left, rs := resentLookFirst(port, company, pending, resent)
+			if len(rs) > 0 {
+				keep := map[string]bool{}
+				for _, it := range left {
+					keep[str(it["id"])] = true
+				}
+				var gone []M
+				for _, it := range pending {
+					if !keep[str(it["id"])] {
+						gone = append(gone, it)
+					}
+				}
+				pq.drop(gone)
+				results = append(results, rs...)
+				save()
+				continue
+			}
 		}
 		// 2.5.15 item 1 (the owner's approval of 13-Nov-2026): a posting taken from FinCom's queue asks FinCom, before each
 		// part goes to Tally, whether it is still this bridge's and not stopped, cancelled or settled (post_ok, read only,

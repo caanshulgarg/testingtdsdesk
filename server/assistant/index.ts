@@ -34,7 +34,7 @@ import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./filetable.ts";
 import { ATTACH, fitAttachments, NATIVE, sniff, textTokens, zipSizes, zipTooBig } from "../_shared/attachrules.js";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
-import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
+import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM, PAYROLL_SYSTEM, PAYROLL_ROWS, payrollPrompt, parsePayrollMap } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
 import { aiMap } from "./fsmap.ts";
@@ -210,7 +210,9 @@ export function handler(deps: Deps) {
     // firm's switch, consent and rupee cap like every call; the answer is a mapping the person confirms, never a figure
     if (action === "sheet_map") {
       const head = (Array.isArray(body.head) ? body.head : []).map((x: unknown) => String(x ?? "").slice(0, 60)).slice(0, 80);
-      const rows = (Array.isArray(body.rows) ? body.rows : []).slice(0, 10).map((r: unknown) => (Array.isArray(r) ? r : []).map((x: unknown) => String(x ?? "").slice(0, 40)).slice(0, 80));
+      // next-payroll: a salary sheet sends at most 3 rows (docs/PAYROLL.md); more are never passed on
+      const payroll = body.side === "payroll";
+      const rows = (Array.isArray(body.rows) ? body.rows : []).slice(0, payroll ? PAYROLL_ROWS : 10).map((r: unknown) => (Array.isArray(r) ? r : []).map((x: unknown) => String(x ?? "").slice(0, 40)).slice(0, 80));
       if (head.filter(Boolean).length < 2) return reply(400, { ok: false, error: "No header row was sent." });
       const party = body.side === "vendor" || body.side === "customer";
       const cap = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE).catch(() => null);
@@ -218,16 +220,16 @@ export function handler(deps: Deps) {
       const client = deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 60_000 }) as unknown as TurnCtx["client"]);
       try {
         const msg: any = await (client as any).messages.create({ model: HAIKU, max_tokens: 1200,
-          system: [{ type: "text", text: party ? PARTY_SYSTEM : SHEET_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
-          messages: [{ role: "user", content: sheetPrompt(head, rows, String(body.side || "purchase")) }] });
+          system: [{ type: "text", text: payroll ? PAYROLL_SYSTEM : party ? PARTY_SYSTEM : SHEET_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
+          messages: [{ role: "user", content: payroll ? payrollPrompt(head, rows) : sheetPrompt(head, rows, String(body.side || "purchase")) }] });
         const text = (msg?.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
         const usd = priceUsd(HAIKU, msg?.usage || {});
         const added = await rpc("asst_cost_add", { p_firm: firm, p_feature: "sheet_map", p_cost_usd: usd, p_in: msg?.usage?.input_tokens || 0, p_out: msg?.usage?.output_tokens || 0,
           p_cache_read: msg?.usage?.cache_read_input_tokens || 0, p_cache_write: msg?.usage?.cache_creation_input_tokens || 0 }, SERVICE).catch(() => null);
-        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: "sheet format (" + head.length + " columns)", p_tools: [], p_in: msg?.usage?.input_tokens || 0,
+        try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: (payroll ? "salary sheet format (" : "sheet format (") + head.length + " columns)", p_tools: [], p_in: msg?.usage?.input_tokens || 0,
           p_out: msg?.usage?.output_tokens || 0, p_calls: 1, p_ms: Date.now() - t0, p_feature: "sheet_map", p_route: "sheet_map", p_models: [HAIKU], p_cache_read: msg?.usage?.cache_read_input_tokens || 0,
           p_cache_write: msg?.usage?.cache_creation_input_tokens || 0, p_cost_inr: Number(added?.inr || 0), p_fell_through: false }, SERVICE); } catch { /* the mapping still stands */ }
-        return reply(200, { ok: true, ...parseSheetMap(text, head, party ? PARTY_FIELDS : undefined), cost: { usd, inr: Number(added?.inr || 0), model: HAIKU } });
+        return reply(200, { ok: true, ...(payroll ? parsePayrollMap(text, head) : parseSheetMap(text, head, party ? PARTY_FIELDS : undefined)), cost: { usd, inr: Number(added?.inr || 0), model: HAIKU } });
       } catch (e) {
         sentry.report("sheet_map", e, { kind: "sheet_map", firm });
         return reply(502, { ok: false, kind: "other", error: "FinCom's AI could not read the format just now. Map the columns yourself, or try again." });

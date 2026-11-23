@@ -88,7 +88,10 @@ const (
 	// 2.4.4 (the owner's decision of 12-Oct-2026, item 2): a pay head's type (earning, deduction, employer's contribution),
 	// its statutory type (PF, ESI, professional tax, income tax), its income-tax component (Basic, HRA, ...) and whether
 	// the ledger is a pay head. Stored master fields, named one by one (ledFetch243 is 2.4.3's list, byte for byte)
-	ledFetch = ledFetch243 + ", PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL"
+	ledFetch244 = ledFetch243 + ", PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL"
+	// 2.5.19 (C7, the owner's approval of 23-Nov-2026): the added fields, at the end (requests2519.go ledFetch2519); the two
+	// lists still to confirm on ZZ TEST are added only with their switch on (ledFetchNow)
+	ledFetch = ledFetch244 + ledFetch2519
 	grpFetch = "GUID, MASTERID, ALTERID, NAME, PARENT"
 )
 
@@ -121,7 +124,7 @@ func ledgerChunkRequestAt(company, booksFrom string, after, upto int64) string {
 	if sv == "" {
 		return ""
 	}
-	return fcCollection(ledListID, company, sv, "Ledger", ledFetch, masterRange(after, upto))
+	return fcCollection(ledListID, company, sv, "Ledger", ledFetchNow(), masterRange(after, upto))
 }
 func groupListRequest(company string) string {
 	return fcCollection(grpListID, company, "", "Group", grpFetch, "")
@@ -141,6 +144,9 @@ type ledRow struct {
 	// 2.4.4, after the certificates in each (absent in a 2.4.3 file: ""): PAYTYPE, PAYSTATTYPE ("Not Applicable" as ""),
 	// ITCOMPONENT and FORPAYROLL ("Yes" or ""), so a ledger that is not a pay head compares as before
 	payType, payStat, itComp, forPay string
+	// 2.5.19 (C7), after the pay-head fields in each (absent in a 2.5.18 file: ""): the added fields as one JSON object
+	// text (requests2519.go ledBooks2519)
+	books string
 }
 
 func (r ledRow) arr() []any {
@@ -148,11 +154,11 @@ func (r ledRow) arr() []any {
 }
 func ledFromArr(g string, a []any) ledRow {
 	return ledRow{g, toI64(at(a, 0)), toI64(at(a, 1)), str(at(a, 2)), str(at(a, 3)), str(at(a, 4)), str(at(a, 5)), str(at(a, 6)), str(at(a, 7)), str(at(a, 8)),
-		str(at(a, 9)), str(at(a, 10)), str(at(a, 11)), str(at(a, 12)), str(at(a, 13)), str(at(a, 14)), str(at(a, 15))}
+		str(at(a, 9)), str(at(a, 10)), str(at(a, 11)), str(at(a, 12)), str(at(a, 13)), str(at(a, 14)), str(at(a, 15)), str(at(a, 16))}
 }
 
 // the pay-head fields after the certificates (the held list, the read file, the outbox)
-func (r ledRow) payArr() []any { return []any{r.payType, r.payStat, r.itComp, r.forPay} }
+func (r ledRow) payArr() []any { return []any{r.payType, r.payStat, r.itComp, r.forPay, r.books} } // 2.5.19: C7's fields after
 func digits(s string) int64    { return toI64(re(`\D`).ReplaceAllString(s, "")) }
 
 // one chunk of the ledger list: the ledgers whose MasterID is in (after, upto] (upto 0: no upper end), and the
@@ -214,7 +220,7 @@ func ledRowsOf(raw string) ([]ledRow, int64) {
 		r := ledRow{g, digits(nt(l, "MASTERID")), digits(nt(l, "ALTERID")), n, re(`^\W*Primary$`).ReplaceAllString(nt(l, "PARENT"), ""), open, gstin,
 			strings.ToUpper(strings.TrimSpace(nt(l, "INCOMETAXNUMBER"))), strings.TrimSpace(nt(l, "LEDSTATENAME")), strings.TrimSpace(nt(l, "TDSDEDUCTEETYPE")),
 			strings.TrimSpace(nt(l, "TDSRATENAME")), ledSpecial(l), ledLDC(l),
-			payField(nt(l, "PAYTYPE")), payField(nt(l, "PAYSTATTYPE")), payField(nt(l, "ITCOMPONENT")), payYes(nt(l, "FORPAYROLL"))}
+			payField(nt(l, "PAYTYPE")), payField(nt(l, "PAYSTATTYPE")), payField(nt(l, "ITCOMPONENT")), payYes(nt(l, "FORPAYROLL")), ledBooks2519(l)}
 		if r.mid > top {
 			top = r.mid
 		}
@@ -577,6 +583,11 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	if ok, err := k.natureList(company, port, st, ls, inBudget, save); !ok {
 		return false, err
 	}
+	// 2.5.19 (C1 to C4, C6; the owner's approval of 23-Nov-2026): the books' masters (few; never holding the ledger list:
+	// requests2519.go)
+	if ok, err := k.booksMasters(company, port, bf, st, ls, inBudget, save); !ok {
+		return false, err
+	}
 	// 2.4.5: the exact count first (FinComLedgerIds, rows counted, under the 2 s stop; ledcount.go): the step-5 bar's "of N".
 	// Only for the ledgers-only read Connect Tally's step 5 asks (Import ledgers, the cloud's "ledgers" wake); Update now and
 	// the nightly run read the list as before
@@ -863,6 +874,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// fourth review: one ledOutMu section, so a push never reads the outbox between the merge and its openingsAt
 	ledOutMu.Lock()
 	mergeLedOutLocked(dir, d, sendGroups, round, seen, natOfRound(ls))
+	setLedOutBooksLocked(dir, booksOfRound(ls))        // 2.5.19: the books' masters of the round
 	setLedOutOpeningsAtLocked(dir, oa, whole, unknown) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
 	ledOutMu.Unlock()
 	st["ledOpeningsAt"] = oa
@@ -1026,6 +1038,11 @@ func pushLedgerList(company, dir string) error {
 					// 2.4.4: the pay-head fields, the 15th to 18th columns (a row a 2.4.3 round left in the outbox has none:
 					// sent without them, FinCom leaves its own)
 					row = append(row, str(at(a, 13)), str(at(a, 14)), str(at(a, 15)), str(at(a, 16)))
+					if b := str(at(a, 17)); b != "" {
+						// 2.5.19 (C7): the added fields, the 19th column, an object ({gstRegType, billWise, creditPeriod,
+						// costCentres, address, pincode, country, ...}); absent: FinCom leaves its own
+						row = append(row, parseJSONLoose(b))
+					}
 				}
 			}
 			led = append(led, row)
@@ -1051,6 +1068,9 @@ func pushLedgerList(company, dir string) error {
 			if o["natures"] != nil {
 				body["natures"] = o["natures"] // 2.4.3: [[guid, MasterID, AlterID, name, [[from, section, rate, other, no-PAN rate, no-PAN other, threshold, single bill]]]]
 			}
+			if o["books"] != nil {
+				body["books"] = o["books"] // 2.5.19 (C1 to C4, C6): {voucherTypes, costCentres, costCategories, gstRegistrations, billOpenings}
+			}
 			if sk := arr(o["skipped"]); len(sk) > 0 {
 				body["skipped"] = sk // the ledgers that hang Tally: [MasterID, name, why]
 			}
@@ -1071,7 +1091,7 @@ func pushLedgerList(company, dir string) error {
 		}
 		gs, seen = gs[n:], seen[m:]
 		if first {
-			o["renamed"], o["groups"], o["skipped"], o["natures"], ren = M{}, nil, nil, nil, M{}
+			o["renamed"], o["groups"], o["skipped"], o["natures"], o["books"], ren = M{}, nil, nil, nil, nil, M{}
 			first = false
 		}
 		o["rows"], o["seen"] = rows, toAny(seen)

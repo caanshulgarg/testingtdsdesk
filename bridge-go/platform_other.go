@@ -73,8 +73,6 @@ func applyUpdate(exe string, b []byte) error {
 
 func defaultHome() string               { return "" }
 func checkCodeSignature(b []byte) error { return errNoCodeSign }
-func trayAlive(session int)             {}
-func trayQuitSession(session int)       {}
 func openFile(f string)                 { println(f) }
 func attachConsole()                    {}
 func stopCmd(args []string) int         { return 0 }

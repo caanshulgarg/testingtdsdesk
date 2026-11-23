@@ -33,6 +33,11 @@ func led255Slow(f *standTally, fast int64) {
 func led255Settle(t *testing.T, f *standTally) {
 	t.Helper()
 	time.Sleep(1600 * time.Millisecond)
+	// 2.5.19: first until the stand has finished the request the bridge stopped waiting for. On a loaded machine the
+	// stand's 800 ms request was seen to end 2.2 s after it was sent (the bridge's own log: "finished ... 1.7s after the
+	// stop"), after the fixed wait; the next turn then rightly found Tally still on it ("waiting for Tally to finish an
+	// earlier request") and the test took that for a failure. The wait is for that state itself, not a longer sleep
+	waitEarlierDone(f.port, 15*time.Second)
 	for i := 0; i < 50 && stopHeld(f.port); i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -615,4 +620,24 @@ func TestLedger255RoundDuringPushLosesNothing(t *testing.T) {
 		}
 	}
 	t.Fatalf("the new ledger never reached FinCom (%d ledger lists sent)", len(c.ledList))
+}
+
+// 2.5.19: the settle waits for the stopped request itself, however late the stand (a loaded machine) finishes it
+func TestLedger255SettleWaitsForTheStoppedRequest(t *testing.T) {
+	f := ledgerTally(t, 300, `,"RecorderStopCoolSec":1,"RecorderLimitMs":500,"LedgerHangSec":5,"TallyAbandonMaxSec":600`)
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == ledListID {
+			return 2500 * time.Millisecond // finished well after the fixed 1.6 s wait, as under load
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	if err := newRun("now", "r255w").step(zz, f.port, ""); err == nil {
+		t.Fatal("the slow chunk was not stopped")
+	}
+	led255Settle(t, f)
+	if earlierBusy(f.port) {
+		t.Fatal("settled while Tally is still on the request the bridge stopped waiting for")
+	}
 }

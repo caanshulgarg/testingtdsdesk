@@ -26,7 +26,7 @@ var ledFetch243Added = ", TDSRATENAME, TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPEC
 func TestTDS243Requests(t *testing.T) {
 	noteBooksFrom("SAMPLE CO", "20250401") // 2.5.0: the company list said its books begin on 1-Apr-2025 (booksfrom.go)
 	if ledFetch242 != "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE" ||
-		ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added { // 2.4.4: the pay-head fields after (payroll244_test.go)
+		ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added+ledFetch2519 { // 2.5.19 (C7): the added fields at the end; 2.4.4: the pay-head fields after (payroll244_test.go)
 		t.Fatalf("the ledger fields: %s", ledFetch)
 	}
 	for _, x := range []string{ledgerChangesRequest("SAMPLE CO", 5, 205), ledgerByNameRequest("SAMPLE CO", "Supplier B"), ledgerChunkRequest("SAMPLE CO", 0, 2000)} {

@@ -154,17 +154,19 @@ func TestR2512OrdinaryVouchersUnchanged(t *testing.T) {
 // byte 2.5.11's (2.4.9's measured text, testdata/batch249/b4-range.xml and b4-list.xml); the entry request
 // (FinComVoucherObject) too: 2.5.12 changes no request for a voucher-mode sale (the strip keeps what Tally sends anyway)
 func TestR2512GroupRequestAs2511(t *testing.T) {
-	if s := sha256.Sum256([]byte(batchFetchText)); hex.EncodeToString(s[:]) != "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280" || strings.Contains(batchFetchText, "INVENTORYALLOCATIONS") {
+	// 2.5.19 (C5, the owner's approval of 23-Nov-2026): ", ISPOSTDATED" at the end of FinComVoucherBatch's FETCH is the
+	// one change (r2519hist_test.go batch2518); the window request keeps 2.5.11's text
+	if s := sha256.Sum256([]byte(batchFetchText2518)); hex.EncodeToString(s[:]) != "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280" || strings.Contains(batchFetchText, "INVENTORYALLOCATIONS") || batchFetchText != batchFetchText2518+", ISPOSTDATED" {
 		t.Fatalf("the group's FETCH is not 2.5.11's: %s", batchFetchText)
 	}
-	if got := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222); got != batchTD(t, "b4-range.xml") {
+	if got := batch2518(voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222)); got != batchTD(t, "b4-range.xml") {
 		t.Fatalf("the range form is not 2.5.11's:\n%s", got)
 	}
 	want := strings.Replace(batchTD(t, "b4-list.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17", 1)
-	if got := voucherBatchListRequest("@@CO@@", "20991231", []string{"15", "17"}); got != want {
+	if got := batch2518(voucherBatchListRequest("@@CO@@", "20991231", []string{"15", "17"})); got != want {
 		t.Fatalf("the list form is not 2.5.11's:\n%s", got)
 	}
-	if w := fastBatchRequest("@@CO@@", "20991201", "20991231", 1, 2); !strings.Contains(w, "<FETCH>"+batchFetchText+"</FETCH>") {
+	if w := fastBatchRequest("@@CO@@", "20991201", "20991231", 1, 2); !strings.Contains(w, "<FETCH>"+batchFetchText2518+"</FETCH>") {
 		t.Fatalf("the window request: %s", w)
 	}
 	if strings.Contains(voucherObjectRequest("@@CO@@", "7"), "INVENTORYALLOCATIONS") {
@@ -294,7 +296,7 @@ func TestR2512Version(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	if BridgeVersion != "2.5.18" { // 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
+	if BridgeVersion != "2.5.19" { // 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.12-test-sheet.txt"); err != nil {
@@ -307,7 +309,7 @@ const allowRange2512Words = "; 2.5.12 (the owner's approval of 09-Nov-2026): als
 
 func allowListRows2511() string {
 	var o []string
-	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
+	for _, l := range strings.SplitAfter(allowListRows2518(), "\n") { // 2.5.19's rows out (r2519hist_test.go)
 		if strings.HasPrefix(l, "| "+payrollImportID+" |") {
 			continue // 2.5.18 added the payroll import (payroll2518_test.go)
 		}
@@ -334,7 +336,7 @@ func TestR2512AllowList(t *testing.T) {
 	if h := allowListHash(allowListRows2511()); h != "9a9d44d30ccaaf1d2b5dc2bda88adf01d4150fe52255dc45b7fe6a86c10dc94f" {
 		t.Fatalf("a row other than FinComDayHeads' words changed from 2.5.11 (%s)", h)
 	}
-	if sh := shapeOf(allowListSamples()[vchBatchID]); sh != "97496818a7d8" {
+	if sh := shapeOf(batch2518(allowListSamples()[vchBatchID])); sh != "97496818a7d8" { // 2.5.19: C5's ISPOSTDATED out
 		t.Fatalf("FinComVoucherBatch's shape %s", sh)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

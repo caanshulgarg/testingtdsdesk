@@ -675,3 +675,8 @@ run_hang_post_counts.py               300  TDSDESK_SITE=../app/dist-test
 # the purchase and TDS audit of 22-Nov-2026: credit notes and the year from Tally in the TDS limits, round off, a PDF's
 # pages kept on its bill, the drafts' checks in one pass, the client's other GSTINs, the inbox, 201(1A)(i), dated limits
 run_purchase_tds_audit.js             120
+# FinCom Books P1 (next-books-p1, 23-Nov-2026): migration 220 on pg_stand with made-up books (the store, the edit log, the
+# same-transaction mirror, the tie-out), the rules ported from Independent Books, and the read-only page end to end
+run_migration220.py                   600
+run_fbooks_rules.mjs                  120
+run_fbooks_ui.py                      600  TDSDESK_SITE=../app/dist-test

@@ -28,6 +28,7 @@ const paceSmallMs = 300 // the small tier's line (ms)
 const (
 	paceHeads   = "heads"   // FinComDayHeads, one day
 	paceSplit   = "split"   // FinComDayHeads, one day and one voucher type (always heavy)
+	pacePart    = "part"    // 2.5.19 (B1): FinComDayHeadsPart, one band of one day (always heavy)
 	paceRange   = "range"   // FinComDayHeads, a range of days (range2512.go)
 	paceObject  = "object"  // FinComVoucherObject, one entry
 	paceBatch   = "batch"   // FinComVoucherBatch (always heavy)
@@ -167,6 +168,9 @@ func pullNextForm(w *pullWork) string {
 	if w == nil || !w.headsDone {
 		if w != nil && w.split {
 			return paceSplit
+		}
+		if w != nil && w.bands {
+			return pacePart
 		}
 		return paceHeads
 	}
