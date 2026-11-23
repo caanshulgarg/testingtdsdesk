@@ -1,12 +1,12 @@
-"""python3 run_migration216.py - migration-216-gap-older-reading (23-Nov-2026, branch next-fix-false-errors). Staging,
+"""python3 run_migration217.py - migration-217-gap-older-reading (23-Nov-2026, branch next-fix-false-errors). Staging,
 23-Nov-2026, a client's TDS page: "Changes were made in Tally on older dates. Upload the Day Book from 01-Apr-2026 to today."
 while FinCom was reading those older days from Tally by itself (182's recount of the year's days counted before Tally's
 number now was seen, and From Tally's older days as light days), its computer's switch for older entries on.
-On a throwaway PostgreSQL (pg_stand, port 31216 unless PG216_PORT; data under TMPDIR; never a real database), built as
-run_migration182.py builds it, then 182, then 216 (twice). Made-up books only. Written before the file.
+On a throwaway PostgreSQL (pg_stand, port 31217 unless PG217_PORT; data under TMPDIR; never a real database), built as
+run_migration182.py builds it, then 182, then 217 (twice). Made-up books only. Written before the file.
 Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only, names no real database; one function, 182's arguments; its
-     grant (service_role only); runs twice; refuses (changing nothing) a tally_gap_state that is not 182's or 216's.
+     grant (service_role only); runs twice; refuses (changing nothing) a tally_gap_state that is not 182's or 217's.
   1. the gap's own days match, the period going, days of its year counted before Tally's number was seen, a computer
      reading older entries: checking (checkUntil an hour on), older kept with reading: true.
   2. (guard) every day of the year counted since that number (the recount done): older, the upload asked, as 182.
@@ -14,7 +14,7 @@ Checks:
   4. From Tally's older days (fill) not read since that number: checking; once read whole: as 182. A day marked to
      upload (a locked month) is not read by itself.
   5. (guard) no period, no fill days: 182's words exactly.
-RED_WITHOUT_216=1: the same checks without the file (1 and 4 fail; the guards pass)."""
+RED_WITHOUT_217=1: the same checks without the file (1 and 4 fail; the guards pass)."""
 import os, re, sys, json, hashlib, subprocess, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -30,8 +30,8 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
 AFTER = [os.path.join(SQLDIR, f) for f in ("migration-135-check-changes.sql", "migration-136-held-settle.sql", "migration-137-held-status-online.sql", "migration-150-gap-closed-by-days.sql",
                                            "migration-158-held-delete-fast.sql", "migration-160-gap-read-close.sql")]
 M = os.path.join(SQLDIR, "migration-182-gap-after-post.sql")
-M216 = os.environ.get("M216_FILE") or os.path.join(SQLDIR, "migration-216-gap-older-reading.sql")
-RED = os.environ.get("RED_WITHOUT_216") == "1"
+M217 = os.environ.get("M217_FILE") or os.path.join(SQLDIR, "migration-217-gap-older-reading.sql")
+RED = os.environ.get("RED_WITHOUT_217") == "1"
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -57,18 +57,18 @@ PFY = datetime.date(FY.year - 1, 4, 1)
 OWNER = "55555555-5555-5555-5555-555555555182"
 
 text = open(M).read()
-m216 = open(M216).read() if os.path.exists(M216) and not RED else ""
-ok(bool(m216) or RED, "the migration file is there (%s)" % os.path.basename(M216))
-low = m216.lower(); code = "\n".join(l.split("--")[0] for l in low.splitlines())
-if m216:
-    print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M216), hashlib.md5(m216.encode()).hexdigest(), len(m216.encode())))
-    ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", m216, re.M) is not None and m216.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "0. one transaction, lock_timeout 10 s")
+m217 = open(M217).read() if os.path.exists(M217) and not RED else ""
+ok(bool(m217) or RED, "the migration file is there (%s)" % os.path.basename(M217))
+low = m217.lower(); code = "\n".join(l.split("--")[0] for l in low.splitlines())
+if m217:
+    print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M217), hashlib.md5(m217.encode()).hexdigest(), len(m217.encode())))
+    ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", m217, re.M) is not None and m217.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "0. one transaction, lock_timeout 10 s")
     ok("delete from" not in code and not re.search(r"\b(drop|truncate|alter\s+table|insert\s+into|update\s+public)\b", code) and "create table" not in code, "0. add-only: no table, row or other change")
     ok(not re.search(r"supabase\.co|\.supabase\.|qbocskaiewaxqcvaunzc|https?://", low), "0. names no real database")
-    ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", m216))) == ["tally_gap_state"], "0. one function: tally_gap_state")
-    ok("revoke all on function public.tally_gap_state(uuid, jsonb, timestamptz) from public, anon, authenticated;" in m216 and "grant execute on function public.tally_gap_state(uuid, jsonb, timestamptz) to service_role;" in m216, "0. its grant restated (service_role)")
+    ok(sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", m217))) == ["tally_gap_state"], "0. one function: tally_gap_state")
+    ok("revoke all on function public.tally_gap_state(uuid, jsonb, timestamptz) from public, anon, authenticated;" in m217 and "grant execute on function public.tally_gap_state(uuid, jsonb, timestamptz) to service_role;" in m217, "0. its grant restated (service_role)")
     ok("security definer set search_path = public, pg_temp" in low, "0. security definer, search_path public, pg_temp")
-db = pg_stand.start(int(os.environ.get("PG216_PORT") or 31216))
+db = pg_stand.start(int(os.environ.get("PG217_PORT") or 31217))
 def psql_text(sql):
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=sql, capture_output=True, text=True)
 def j(s, uid=None, role=None):
@@ -151,10 +151,13 @@ try:
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
     r = psql_text(text)
     if r.returncode: ok(False, "182 runs: %s" % r.stderr[-300:]); raise SystemExit("cannot go on")
-    if m216:
+    if m217:
+        # the guard's md5 is 182's text as built here, and as on staging (read 23-Nov-2026, after 214 and 216: unchanged)
+        h182 = db.one("select md5(prosrc) from pg_proc where oid = 'public.tally_gap_state(uuid, jsonb, timestamptz)'::regprocedure")
+        ok(h182 == "30ccba4666af31bcb0a958b304e9f249" and ("<> '%s'" % h182) in m217, "0. the guard's md5 is 182's text (%s)" % h182)
         for i in (1, 2):
-            r = psql_text(m216)
-            ok(r.returncode == 0, "216 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
+            r = psql_text(m217)
+            ok(r.returncode == 0, "217 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
 
     def own_matched(k, period=None, counted_ago=None):
         """a made-up book whose gap's own day was read and matches Tally (182's C); optionally its period going (period:
@@ -243,11 +246,11 @@ try:
     sig = "public.tally_gap_state(uuid, jsonb, timestamptz)"
     ex = lambda rl: db.one("select has_function_privilege(%s, %s, 'execute')" % (q(rl), q(sig))) in ("t", "true")
     ok(ex("service_role") and not ex("authenticated") and not ex("anon"), "0. tally_gap_state: service_role only")
-    if m216:
-        ok(db.one("select obj_description(%s::regprocedure, 'pg_proc')" % q(sig)) == "tally gap state (migration 216)", "0. marked as 216's")
+    if m217:
+        ok(db.one("select obj_description(%s::regprocedure, 'pg_proc')" % q(sig)) == "tally gap state (migration 217)", "0. marked as 217's")
         db.sql("create or replace function public.tally_gap_state(p_book uuid, p_gap jsonb, p_gap_at timestamptz) returns jsonb language sql as $f$ select '{}'::jsonb $f$; comment on function public.tally_gap_state(uuid, jsonb, timestamptz) is null")
-        r = psql_text(m216)
-        ok(r.returncode != 0 and "is not 182's text" in r.stderr and "Nothing was changed" in r.stderr, "0. a tally_gap_state that is not 182's or 216's: refused (%s)" % r.stderr.strip()[-160:])
+        r = psql_text(m217)
+        ok(r.returncode != 0 and "is not 182's text" in r.stderr and "Nothing was changed" in r.stderr, "0. a tally_gap_state that is not 182's or 217's: refused (%s)" % r.stderr.strip()[-160:])
         ok(db.one("select prosrc from pg_proc where oid = %s::regprocedure" % q(sig)).strip() == "select '{}'::jsonb", "0. (guard) and left as it was")
 finally:
     db.stop()

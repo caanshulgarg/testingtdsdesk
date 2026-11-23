@@ -97,7 +97,7 @@ with sync_playwright() as p:
     g = bell(G(checking=True, at=iso(NOW - datetime.timedelta(minutes=5))))
     ok(g["text"] == "ZZ Gap Client: Checking with Tally\u2026 (no action needed)", "2. (guard) a gap written before 182, checked 5 minutes ago: Checking with Tally (%s)" % g["text"]); shut()
 
-    # next-fix-false-errors (migration 216): changes on older dates that FinCom reads from Tally by itself (the year's days
+    # next-fix-false-errors (migration 217): changes on older dates that FinCom reads from Tally by itself (the year's days
     # counted again, or From Tally's older days, one at a time while the computer is idle): checking, with older kept
     print("== 3. older dates FinCom is reading by itself: no upload asked")
     E("() => { S.tab = 'dash'; S.dbFrom = ''; render(); }")

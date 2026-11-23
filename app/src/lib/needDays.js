@@ -26,7 +26,7 @@ export function needDays(b, cid) {
       let n = 0; for (let d = since; d <= today; d = BridgeSeed.add(d, 1)) n++;
       const k = Number(x.missingMax || x.missing || 0);
       // next-gap-autoread (migration 160): FinCom reads Tally's Day Book of these days by itself (checking: no action needed;
-      // 182: until checkUntil, Rec.gapChecking). next-fix-false-errors (migration 216): the older days too, while FinCom
+      // 182: until checkUntil, Rec.gapChecking). next-fix-false-errors (migration 217): the older days too, while FinCom
       // reads them by itself (the year's days counted again, From Tally's older days): no upload asked meanwhile
       const checking = Rec.gapChecking(x);
       out.push({ from: since, to: today, days: n, ...(checking ? { checking: true } : {}), say: o ? o.say + (checking ? " FinCom is reading those days from Tally by itself (no action needed)." : " " + o.fix) : (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" + (checking ? "; FinCom is checking with Tally (no action needed)" : "") });

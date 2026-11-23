@@ -1,4 +1,4 @@
--- migration-216-gap-older-reading.sql (23-Nov-2026, branch next-fix-false-errors). Written, NOT run yet: the owner reads it and runs it.
+-- migration-217-gap-older-reading.sql (23-Nov-2026, branch next-fix-false-errors). Written, NOT run yet: the owner reads it and runs it.
 -- Why (staging, 23-Nov-2026, a client's TDS page): the bell and the page said "Changes were made in Tally on older dates.
 -- Upload the Day Book from 01-Apr-2026 to today." 182's tally_gap_state says so (older) as soon as the gap's own days match
 -- Tally. But FinCom reads those older days from Tally by itself: 182's recount (tally_period_next_paced: the year's days
@@ -8,7 +8,7 @@
 -- on, 234 of the year's 237 days counted before Tally's number was seen and 230 'fill' days queued: the reads were under
 -- way, and the person was told to upload a Day Book that FinCom was fetching anyway. Bridge 2.5.20 turns that switch on for
 -- every computer, so this is the common case.
--- What 216 does. tally_gap_state(book, gap, gap_at) only: 182's text with one change (marked 216). When the gap's own days
+-- What 217 does. tally_gap_state(book, gap, gap_at) only: 182's text with one change (marked 217). When the gap's own days
 -- match (older), and the check can still read and a computer reads older entries for the company (182's can and reader),
 -- and FinCom still has older days to read by itself: (a) the period 'going' with a day of its year not counted since
 -- Tally's number now was first seen (and not marked to upload), or (b) a 'fill' light day not read whole since then; the
@@ -17,8 +17,8 @@
 -- upload is asked as before. Nothing new is asked of Tally; the bridge's rules stay (each request at most 2 s, one at a
 -- time, postings first, the typing gate); the reads keep 182's idle pace.
 -- Add-only: one function replaced with the same arguments and result; grants restated (service_role only, as 182); a
--- comment marks it as 216's. Stops at the start, changing nothing, when tally_gap_state is not 182's text or 216's, or
--- 182's helpers are missing. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration216.py
+-- comment marks it as 217's. Stops at the start, changing nothing, when tally_gap_state is not 182's text or 217's, or
+-- 182's helpers are missing. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration217.py
 -- (pg_stand) and tests/run_gap_older_page.py (the page). Runs after 182 (214 or not).
 begin;
 set local lock_timeout = '10s';
@@ -29,7 +29,7 @@ declare f regprocedure := to_regprocedure('public.tally_gap_state(uuid, jsonb, t
 begin
   if f is null then
     bad := bad || 'function tally_gap_state(uuid, jsonb, timestamptz) is missing (migration 182 first)'::text;
-  elsif coalesce(obj_description(f, 'pg_proc'), '') <> 'tally gap state (migration 216)'
+  elsif coalesce(obj_description(f, 'pg_proc'), '') <> 'tally gap state (migration 217)'
         and (select md5(p.prosrc) from pg_proc p where p.oid = f) <> '30ccba4666af31bcb0a958b304e9f249' then
     bad := bad || 'function tally_gap_state(uuid, jsonb, timestamptz) is not 182''s text'::text;
   end if;
@@ -43,7 +43,7 @@ begin
     if to_regclass(h) is null then bad := bad || ('table ' || h || ' is missing'); end if;
   end loop;
   if array_length(bad, 1) > 0 then
-    raise exception 'migration 216: %. Nothing was changed.', array_to_string(bad, '; ');
+    raise exception 'migration 217: %. Nothing was changed.', array_to_string(bad, '; ');
   end if;
 end $names$;
 
@@ -90,7 +90,7 @@ begin
   fy := least(fy, coalesce(pd, fy));
   o := jsonb_build_object('from', to_char(fy, 'YYYY-MM-DD'), 'say', 'Changes were made in Tally on older dates.',
                           'fix', 'Upload the Day Book from ' || to_char(fy, 'DD-Mon-YYYY') || ' to today.');
-  -- 216: FinCom still reads older days by itself (the check can read, a computer reads older entries): (a) 182's recount,
+  -- 217: FinCom still reads older days by itself (the check can read, a computer reads older entries): (a) 182's recount,
   -- the period going with a day of its year not counted since Tally's number now was first seen (nor marked to upload);
   -- (b) From Tally's older days ('fill' light days) not read whole since then. Checking (an hour on, as above), older kept
   if coalesce(can, false) and reader and n.book_id is not null then
@@ -110,7 +110,7 @@ begin
   return jsonb_build_object('checking', false, 'older', o);
 end $function$;
 
-comment on function public.tally_gap_state(uuid, jsonb, timestamptz) is 'tally gap state (migration 216)';
+comment on function public.tally_gap_state(uuid, jsonb, timestamptz) is 'tally gap state (migration 217)';
 revoke all on function public.tally_gap_state(uuid, jsonb, timestamptz) from public, anon, authenticated;
 grant execute on function public.tally_gap_state(uuid, jsonb, timestamptz) to service_role;
 
