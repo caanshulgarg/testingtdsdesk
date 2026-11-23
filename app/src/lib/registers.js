@@ -786,12 +786,28 @@ const SheetPost = {
       if (typeof salesNoIdx !== "undefined" && salesNoIdx && typeof normInvNo === "function"){ const j = normInvNo(v.x.number); (salesNoIdx.get(j) || salesNoIdx.set(j, []).get(j)).push(v); } };
     s.list.forEach(v => { const k = normInv(v.x.number); (byNo.get(k) || byNo.set(k, []).get(k)).push(v); });
     const ofNo = n => byNo.get(normInv(n)) || [];
+    // (the owner, 23-Nov-2026) a marketplace credit note with no number of its own (a return of the invoice, read under
+    // the invoice's number): "<invoice> (CN-1)", "(CN-2)" in order of return date, not "(CN)" for all. Kept on a
+    // re-import: a return already here (the same date and total, numbered so, or "(CN)" as before) keeps its number;
+    // a new one takes the next after the highest here
+    const cnNo = new Map(), cnOf = new Map();
+    docs.forEach(d => { if (d.market && d.note === "credit" && d.no && (!d.against || d.against === d.no) && !/^cn/i.test(d.no)) (cnOf.get(d.no) || cnOf.set(d.no, []).get(d.no)).push(d); });
+    cnOf.forEach((list, base) => {
+      const re = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\(CN(?:-(\\d+))?\\)$", "i"), used = new Set();
+      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && re.test(v.x.number || ""));
+      let k = have.reduce((a, v) => Math.max(a, +((re.exec(v.x.number) || [])[1] || 0)), 0);
+      list.slice().sort((a, c) => String(a.date || "").localeCompare(String(c.date || ""))).forEach(d => {
+        const hit = have.find(v => !used.has(v) && (v.x.date || "") === (d.date || "") && Math.abs(Math.abs(num(v.x.total)) - Math.abs(num(d.total))) < 0.005);
+        if (hit) used.add(hit);
+        cnNo.set(d, hit ? hit.x.number : base + " (CN-" + (++k) + ")"); });
+    });
     docs.forEach(d => {
+      const cnMine = cnNo.get(d);
       // (the registration the invoice is issued from is never the customer's; the client's other registration, a supply
       // between its own branches, is: reviews of 2b565f7e7 and a61ffbb12)
       const own = [this.issuer(d, "sales", cid)].filter(Boolean);
       d = this.notOwn(d, own[0]);
-      const no = d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
+      const no = cnMine || d.no + (d.note === "credit" && !/^cn/i.test(d.no) ? " (CN)" : "");
       const ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
       // already here: the same number and date AND the same party (its GSTIN, else its name) AND the same total (review
       // H1 of cf58b7cc9: number and date alone let another party's invoice of that number be written over). Anything

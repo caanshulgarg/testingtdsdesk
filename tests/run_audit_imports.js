@@ -279,6 +279,22 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
   const shD = [["Name", "Created at", "Financial Status", "Total", "Taxes", "Lineitem name", "Lineitem price", "Tax 1 Name", "Tax 1 Value", "Shipping Province"], ["#1001", "2016-03-01 10:00:00 +0530", "paid", 1180, 180, "ZZ Mug", 1000, "IGST 18%", 180, "KA"]];
   tryOk(() => { const d = F.apply(F.builtin(shD[0], "sales"), shD, 0, CO, "sales"); return d.length === 1 && /before GST/.test(d[0].hold || ""); }, "a Shopify order of 1 March 2016: held, before GST began");
 
+  console.log("21. (the owner, 23-Nov-2026) marketplace credit notes without a number of their own: <invoice> (CN-1), (CN-2) by return date, kept on a re-import");
+  { const fr = (rows) => [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Return Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State"]].concat(rows);
+    const r = (d, amt) => ["OD5", "I5", "Return", "FK-055", "05/09/2026", d, -amt, -C.r2(amt * .18), -C.r2(amt * 1.18), "Karnataka"];
+    const up = (rows) => C.SheetPost.toSales(F.apply(F.builtin(fr(rows)[0], "sales"), fr(rows), 0, CO, "sales"), "c1", "fk.csv");
+    const nos = () => list.filter(v => /^FK-055/.test(v.x.number)).map(v => v.x.number + "@" + v.x.date).sort();
+    tryOk(() => { list.length = 0; const a = up([r("20/09/2026", 200), r("12/09/2026", 100)]);
+      return a.added === 2 && JSON.stringify(nos()) === JSON.stringify(["FK-055 (CN-1)@2026-09-12", "FK-055 (CN-2)@2026-09-20"]); }, "two returns of FK-055 in one report: (CN-1) the earlier, (CN-2) the later (" + JSON.stringify(nos()) + ")");
+    tryOk(() => { const b = up([r("12/09/2026", 100), r("20/09/2026", 200)]);
+      return b.added === 0 && b.again === 2 && nos().length === 2; }, "the report again: each return keeps its number, nothing added (" + JSON.stringify(nos()) + ")");
+    tryOk(() => { const c = up([r("20/09/2026", 200), r("02/10/2026", 50)]);
+      return c.added === 1 && c.again === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055 (CN-1)@2026-09-12", "FK-055 (CN-2)@2026-09-20", "FK-055 (CN-3)@2026-10-02"]); }, "a later report with a third return: (CN-3), the second kept as (CN-2) (" + JSON.stringify(nos()) + ")");
+    tryOk(() => { list.length = 0; list.push({id: "old1", x: {number: "FK-055 (CN)", date: "2026-09-12", total: 118, noteKind: "credit", customerName: "Retail customer"}, status: "posted", source: "sheet"});
+      const d = up([r("12/09/2026", 100), r("20/09/2026", 200)]);
+      return d.added === 1 && JSON.stringify(nos()) === JSON.stringify(["FK-055 (CN)@2026-09-12", "FK-055 (CN-1)@2026-09-20"]); }, "one kept before as (CN): still that one, not added again; the new return (CN-1) (" + JSON.stringify(nos()) + ")");
+    tryOk(() => { list.length = 0; up([["OD6", "I6", "Return", "FK-066", "05/09/2026", "", -100, -18, -118, "Karnataka"]]); return list.length === 1 && list[0].x.number === "FK-066 (CN-1)"; }, "a single return with no return date: (CN-1)"); }
+
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();
