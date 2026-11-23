@@ -37,6 +37,8 @@ const PayrollPage = lazy(() => import("./payroll/Payroll.jsx"));
 // Income Tax Return (next-itr, 22-Nov-2026): AY 2026-27 from the books, checked, as the official ITR JSON; a lazy chunk of
 // its own (screens/itr). Its pages are books tabs: books:itr (Data), itr-comp, itr-checks, itr-json
 const ITR = lazy(() => import("./itr/ITR.jsx"));
+// FinCom Books (next-books-p1): the client's one set of books (fb_*, migration 220), read-only; a lazy chunk (screens/fbooks)
+const FinComBooks = lazy(() => import("./fbooks/FinComBooks.jsx"));
 import { AlertLine } from "../parts/Bell.jsx";
 
 // the date of the books' last entry (yyyymmdd), worked out once for each set of entries
@@ -104,6 +106,7 @@ export default function Books() {
   if (/^corp/.test(booksTab())) return <Suspense fallback={<Loading what="Corporate" page="books" />}><Corporate /></Suspense>;
   if (booksTab() === "payroll") return <Suspense fallback={<Loading what="Payroll" page="books" />}><PayrollPage /></Suspense>;
   if (/^itr/.test(booksTab())) return <Suspense fallback={<Loading what="the income tax return" page="books" />}><ITR /></Suspense>;
+  if (booksTab() === "fb") return <Suspense fallback={<Loading what="FinCom Books" page="books" />}><FinComBooks /></Suspense>;
   // 2.4.0: on From Tally, the book's alert (lines waiting, the cloud's gap) is not said twice: the page lists those days,
   // each with its Upload (needDays); the bell keeps it
   const days = co && booksTab() === "import" && S.books && S.books.cid === co.id ? needDays(S.books, co.id) : [];

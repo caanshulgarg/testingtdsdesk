@@ -35,7 +35,7 @@ const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Complianc
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
 // the Tally ledgers as its tab, and Audit the tie-out with Tally
 const BOOKS_TITLES = { tds: "TDS", gst: "GST", import: "From Tally", ledgers: "From Tally", tieout: "Audit", reports: "Reports", lookup: "Look up",
-  letters: "Letters", mis: "MIS", mymis: "My MIS", fs: "Financial statements", audit: "Audit", recon: "Reconciliations", corp: "Corporate", itr: "Income tax return", "itr-sch": "Income tax return", "itr-comp": "Income tax return", "itr-checks": "Income tax return", "itr-json": "Income tax return", payroll: "Payroll" };
+  letters: "Letters", mis: "MIS", mymis: "My MIS", fs: "Financial statements", audit: "Audit", recon: "Reconciliations", corp: "Corporate", fb: "FinCom Books", itr: "Income tax return", "itr-sch": "Income tax return", "itr-comp": "Income tax return", "itr-checks": "Income tax return", "itr-json": "Income tax return", payroll: "Payroll" };
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 
 // Arc's page header: the breadcrumb (Clients › <client>, or Firm › <firm>) over the title, then the page's actions
