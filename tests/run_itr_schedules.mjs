@@ -209,6 +209,12 @@ eq(((cfl.TotalLossCFSummary || {}).LossSummaryDetail || {}).TotalSTCGPTILossCF, 
 eq(R3.doc.ScheduleBFLA.HP.IncBFLA.BFlossPrevYrUndSameHeadSetoff, 93600, "Schedule BFLA: house property");
 eq(R3.doc.ScheduleBFLA.STCG20Per.IncBFLA.BFlossPrevYrUndSameHeadSetoff, 50000, "Schedule BFLA: 111A");
 ok(!R3.json.coverage.some((x) => x.key === "cfl_prior"), "earlier years' rows filled with their dates: Schedule CFL no longer blocks");
+// new regime: a business loss of AY 2024-25 of 3,00,000, 1,00,000 of it from deductions 115BAC(2)(i) bars: the row shows
+// 3,00,000 brought forward, 1,00,000 adjusted, 2,00,000 to carry (115BAC(2)(ii))
+R3 = await run("ITR-3", { regime: "new", losses: { business: [{ ay: "2024", amt: 300000, barred: 100000, filed: "20240730", inTime: true }] } }, "an earlier business loss with a part barred by 115BAC");
+const row25 = (((R3.doc.ScheduleCFL || {}).LossCFCurrentAssmntYear2025) || {}).CarryFwdLossDetail || {};
+ok(row25.BrtFwdBusLoss === 300000 && row25.AdjustAccTax115BACAmt === 100000 && row25.BusLossOthThanSpecLossCF === 200000, "Schedule CFL: 3,00,000 brought forward, 1,00,000 adjusted (115BAC), 2,00,000 (" + JSON.stringify(row25) + ")");
+ok(R3.comp.setoff.bf <= 200000, "only the 2,00,000 is set off (" + R3.comp.setoff.bf + ")");
 R3 = await run("ITR-3", { regime: "new", houses: [let1], losses: { hp: [{ ay: "2023", amt: 150000 }] } }, "an earlier loss without its date of filing");
 ok(R3.json.coverage.some((x) => x.key === "cfl_prior"), "without the date of filing: asked (blocks)");
 
@@ -329,7 +335,7 @@ for (let i = 0; i < 400; i++) {
   const stR = Object.assign({}, D3.booksObj.itr["2026|state"], { regime: ["new", "old"][rnd(0, 1)], form10iea: "X", cgRows: cgr, houses: hs, salaries: sal, filingDate: ["20260720", "20261125", "20260301"][rnd(0, 2)], resident: rnd(0, 5) > 0 });
   const m = buildModel({ entity: "P", client: D3.client, imports: importsOf(files3), books: D3.books, state: stR });
   if (rnd(0, 2) === 0) m.business = Object.assign({}, m.business, { pbt: rnd(-3000000, 3000000) });
-  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000), inTime: !!rnd(0, 3) }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000), inTime: !!rnd(0, 3) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000), inTime: !!rnd(0, 3) }], business: rnd(0, 1) ? [{ ay: "2022", amt: rnd(0, 900000), inTime: !!rnd(0, 3) }] : [] };
+  if (rnd(0, 2) === 0) m.losses = { unabsorbedDep: rnd(0, 1) ? rnd(0, 800000) : 0, hp: [{ ay: ["2017", "2021", "2025"][rnd(0, 2)], amt: rnd(0, 400000), inTime: !!rnd(0, 3), barred: rnd(0, 1) ? rnd(0, 200000) : undefined }], stcl: [{ ay: ["2016", "2023"][rnd(0, 1)], amt: rnd(0, 2000000), inTime: !!rnd(0, 3) }], ltcl: [{ ay: ["2018", "2024"][rnd(0, 1)], amt: rnd(0, 3000000), inTime: !!rnd(0, 3) }], business: rnd(0, 1) ? [{ ay: "2022", amt: rnd(0, 900000), inTime: !!rnd(0, 3), barred: rnd(0, 1) ? rnd(0, 300000) : undefined }] : [] };
   const dd2 = differences(compute(m).key, check(m));
   if (!dd2.length) agree++; else if (!firstBad) firstBad = { i, dd: dd2.slice(0, 4), cgr, hs, sal, regime: stR.regime, losses: m.losses };
 }

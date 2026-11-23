@@ -82,6 +82,21 @@ function business(inp) {
   return { inc: rup(inc), dep, pres: false };
 }
 
+// what of a loss or of the unused basic exemption the special-rate income takes, in the order that costs the taxpayer
+// least: 111A (20%); the 112 income on which tax is still charged (a property the proviso to 112(1)(a) covers, up to its
+// indexed gain, and the other 112 gains at 12.5%); 112A above 1,25,000; then the 112 and 112A income that bore no tax
+// anyway. v: {a: 111A, b: 112A, c: 112}; pool: the 112 sales [{g, i, el}]; noShort: a long-term loss (never 111A)
+function absorbSpecial(v, amt, pool, noShort) {
+  let tot = 0, live = 0;
+  if (pool) for (const p of pool) if (p.g > 0) { tot += p.g; live += p.el ? Math.min(p.i > 0 ? p.i : 0, p.g) : p.g; }
+  const grab = (k, cap) => { if (cap <= 0 || amt <= 0) return; const u = amt < cap ? amt : cap; v[k] -= u; amt -= u; };
+  if (!noShort) grab("a", v.a);
+  grab("c", pool ? Math.min(v.c, live - (tot - v.c)) : v.c);
+  grab("b", v.b - 125000);
+  grab("c", v.c);
+  grab("b", v.b);
+  return amt;
+}
 // the 112 tax: with the sales behind it (rel.pool), the proviso to 112(1)(a) on what is chargeable; an amount entered as
 // it is, less the relief entered with it
 function t112Of(c, rel) {
@@ -97,10 +112,8 @@ function taxParts(inp, ti, normal, s111A, s112A, s112, rel) {
     let unused = basicOf(inp) - normal; if (unused < 0) unused = 0;
     let a = s111A, b = s112A, c = s112;
     if (inp.resident !== false) {
-      // first 111A (taxed at 20%), then 112 (12.5%), then 112A
-      let u = Math.min(unused, a); a -= u; unused -= u;
-      u = Math.min(unused, c); c -= u; unused -= u;
-      u = Math.min(unused, b); b -= u; unused -= u;
+      // the provisos to 111A(1), 112(1), 112A(2): the shortfall against the special-rate income, cheapest first
+      const v = { a, b, c }; unused = absorbSpecial(v, unused, rel && rel.pool, false); a = v.a; b = v.b; c = v.c;
     }
     t111A = rup(a * 0.2); t112 = t112Of(c, rel);
     st = t111A + t112 + rup(b > 125000 ? (b - 125000) * 0.125 : 0);
@@ -450,8 +463,9 @@ function checkOne(inp, order) {
   if (bp < 0) {
     let loss = -bp; bp = 0;
     const take = (v) => { const u = Math.min(Math.max(v, 0), loss); loss -= u; return v - u; };
-    // 71(2A): never against salary; normal-rate heads, then 111A (20%), 112, 112A
-    hp = take(hp); os = take(os); o = take(o); a = take(a); c = take(c); b = take(b);
+    // 71(2A): never against salary; normal-rate heads, then the special-rate income cheapest first
+    hp = take(hp); os = take(os); o = take(o);
+    { const v = { a, b, c }; loss = absorbSpecial(v, loss, cgx.pool, false); a = v.a; b = v.b; c = v.c; }
     cfUd = Math.min(loss, bz.dep); cfBus = lateC ? 0 : loss - cfUd;
   }
   let s = sal;
@@ -462,39 +476,42 @@ function checkOne(inp, order) {
     const take = (v) => { const u = Math.min(Math.max(v, 0), room); room -= u; return v - u; };
     // 71(3A): salary and the normal-rate heads (business last: 72 can set a loss brought forward only against it), then
     // 111A, 112, 112A
-    s = take(s); os = take(os); o = take(o); bp = take(bp); a = take(a); c = take(c); b = take(b);
+    s = take(s); os = take(os); o = take(o); bp = take(bp);
+    { const v = { a, b, c }; room = absorbSpecial(v, room, cgx.pool, false); a = v.a; b = v.b; c = v.c; }
     cfHp = hl - (room0 - room);
   }
   // brought forward
   const L = inp.losses || {};
   const bfl = (L.business || []).slice().sort((x, y) => String(x.ay) < String(y.ay) ? -1 : 1);
-  for (const x of bfl) { if (2026 - +String(x.ay).slice(0, 4) > 8 || x.inTime === false) continue; const u = Math.min(bp, n(x.amt)); bp -= u; }
+  // 115BAC(2)(ii) / 115BAA(2)(ii): under the new regime (a company under 115BAA) no set-off of the part of a loss brought
+  // forward that is attributable to the deductions those sections bar
+  const bars = ((ent === "P" || ent === "H") && inp.regime === "new") || (ent === "C" && inp.regime === "115BAA");
+  const usable = (x) => { const amt = Math.max(0, n(x.amt)), bar = bars ? Math.min(amt, Math.max(0, n(x.barred))) : 0; return amt - bar; };
+  for (const x of bfl) { if (2026 - +String(x.ay).slice(0, 4) > 8 || x.inTime === false) continue; const u = Math.min(bp, usable(x)); bp -= u; }
   // 71B (house property, eight years, against house property) and 74 (capital losses, eight years: short-term against
   // any gain, long-term against long-term)
   // section 80: no business or capital loss of a year whose return was not filed by its due date (71B is not in it)
   const live = (list, isHp) => (list || []).filter((x) => 2026 - +String(x.ay).slice(0, 4) <= 8 && (isHp || x.inTime !== false)).sort((x, y) => String(x.ay) < String(y.ay) ? -1 : 1);
   let bfHp = 0, bfSt = 0, bfLt = 0;
-  for (const x of live(L.hp, true)) { const u = Math.min(Math.max(hp, 0), Math.max(0, n(x.amt))); hp -= u; bfHp += u; }
+  for (const x of live(L.hp, true)) { const u = Math.min(Math.max(hp, 0), usable(x)); hp -= u; bfHp += u; }
   for (const x of live(L.stcl)) {
     let left = Math.max(0, n(x.amt));
-    let u = Math.min(Math.max(o, 0), left); o -= u; left -= u; bfSt += u;
-    u = Math.min(Math.max(a, 0), left); a -= u; left -= u; bfSt += u;
-    u = Math.min(Math.max(c, 0), left); c -= u; left -= u; bfSt += u;
-    u = Math.min(Math.max(b, 0), left); b -= u; left -= u; bfSt += u;
+    const u = Math.min(Math.max(o, 0), left); o -= u; left -= u; bfSt += u;
+    const v = { a, b, c }, l2 = absorbSpecial(v, left, cgx.pool, false); bfSt += left - l2; a = v.a; b = v.b; c = v.c;
   }
   for (const x of live(L.ltcl)) {
     let left = Math.max(0, n(x.amt));
-    let u = Math.min(Math.max(c, 0), left); c -= u; left -= u; bfLt += u;
-    u = Math.min(Math.max(b, 0), left); b -= u; left -= u; bfLt += u;
+    const v = { a, b, c }, l2 = absorbSpecial(v, left, cgx.pool, true); bfLt += left - l2; a = v.a; b = v.b; c = v.c;
   }
   let ud = n(L.unabsorbedDep);
-  // 32(2): any head but salary; the normal-rate heads, then 111A, 112, 112A
-  for (const k of ["bp", "hp", "os", "o", "a", "c", "b"]) {
+  // 32(2): any head but salary; the normal-rate heads, then the special-rate income cheapest first
+  for (const k of ["bp", "hp", "os", "o"]) {
     if (ud <= 0) break;
     const v = { bp, hp, os, o, c, a, b }[k]; if (v <= 0) continue;
     const u = Math.min(v, ud); ud -= u;
-    if (k === "bp") bp -= u; else if (k === "hp") hp -= u; else if (k === "os") os -= u; else if (k === "o") o -= u; else if (k === "c") c -= u; else if (k === "a") a -= u; else b -= u;
+    if (k === "bp") bp -= u; else if (k === "hp") hp -= u; else if (k === "os") os -= u; else o -= u;
   }
+  if (ud > 0) { const v = { a, b, c }; ud = absorbSpecial(v, ud, cgx.pool, false); a = v.a; b = v.b; c = v.c; }
   const spec = a + b + c;
   const gti = rup(s + hp + bp + os + o + spec);
   // deductions (Chapter VI-A), each section's limit typed here again from the Act

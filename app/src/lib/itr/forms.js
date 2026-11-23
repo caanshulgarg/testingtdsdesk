@@ -155,18 +155,23 @@ function lossSchedules(X, o) {
   const C = S.carry || {}, cy = (C.business || []).filter((x) => String(x.ay) === "2026").reduce((a, x) => a + N(x.amt), 0);
   // the earlier years' rows: each year's losses as brought forward (within eight years, and not lost under section 80
   // for a return filed late), with the date that year's return was filed; then what BFLA set off and the balance
-  const Lx = X.model.losses || {}, years = {};
+  const Lx = X.model.losses || {}, years = {}, Mx = X.model;
+  const barOn = ((Mx.entity === "P" || Mx.entity === "H") && Mx.regime === "new") || (Mx.entity === "C" && Mx.regime === "115BAA");
   const okRow = (x, k) => x && N(x.amt) > 0 && +String(x.ay).slice(0, 4) >= 2018 && +String(x.ay).slice(0, 4) <= 2025 && (k === "hp" || x.inTime !== false);
   [["business", "bus"], ["hp", "hp"], ["stcl", "stcl"], ["ltcl", "ltcl"]].forEach(([k, f]) => (Lx[k] || []).filter((x) => okRow(x, k)).forEach((x) => {
-    const y = String(x.ay).slice(0, 4), r = years[y] = years[y] || { hp: 0, bus: 0, stcl: 0, ltcl: 0, filed: "" };
-    r[f] += R(x.amt); if (x.filed && (!r.filed || x.filed < r.filed)) r.filed = String(x.filed); }));
+    const y = String(x.ay).slice(0, 4), r = years[y] = years[y] || { hp: 0, bus: 0, busBar: 0, stcl: 0, ltcl: 0, filed: "" };
+    // 115BAC(2)(ii) / 115BAA(2)(ii): the part from barred deductions is adjusted (business: its own column; house
+    // property: the balance shown net of it)
+    const bar = barOn && (f === "bus" || f === "hp") ? Math.min(R(x.amt), R(N(x.barred))) : 0;
+    if (f === "bus") { r.bus += R(x.amt); r.busBar += bar; } else r[f] += R(x.amt) - bar;
+    if (x.filed && (!r.filed || x.filed < r.filed)) r.filed = String(x.filed); }));
   const keyOf = (y) => (+y === 2018 ? "LossCFFromPrevYrToAY" : +y === 2019 ? "LossCFCurrentAssmntYear" : "LossCFCurrentAssmntYear" + (+y + 1));
-  const busF = (v) => (X.form === "ITR-6" ? { BroughtFrwrdBusLoss: R(v), AmtAdjAccOptTaxUs115BAA_115BA: 0, BroughtFrwdBusLossSetOffDrYr: R(v), LossFrmLifeInsBusUs115B: 0 } : { BrtFwdBusLoss: R(v), AdjustAccTax115BACAmt: 0, AdjustAccTax115BADAmt: 0, BusLossOthThanSpecLossCF: R(v) });
+  const busF = (v, bar) => (X.form === "ITR-6" ? { BroughtFrwrdBusLoss: R(v), AmtAdjAccOptTaxUs115BAA_115BA: R(bar), BroughtFrwdBusLossSetOffDrYr: R(v - bar), LossFrmLifeInsBusUs115B: 0 } : { BrtFwdBusLoss: R(v), AdjustAccTax115BACAmt: X.form === "ITR-3" ? R(bar) : 0, AdjustAccTax115BADAmt: 0, BusLossOthThanSpecLossCF: R(X.form === "ITR-3" ? v - bar : v) });
   const ys = Object.keys(years).filter((y) => years[y].filed);
   const prior = { hp: 0, bus: 0, stcl: 0, ltcl: 0 };
-  ys.forEach((y) => { const r = years[y]; ["hp", "bus", "stcl", "ltcl"].forEach((k) => { prior[k] += r[k]; });
+  ys.forEach((y) => { const r = years[y]; ["hp", "stcl", "ltcl"].forEach((k) => { prior[k] += r[k]; }); prior.bus += r.bus - r.busBar;
     const p = "ScheduleCFL/" + keyOf(y);
-    put(o, p, fit(X, p, { CarryFwdLossDetail: Object.assign({ DateOfFiling: r.filed.slice(0, 4) + "-" + r.filed.slice(4, 6) + "-" + r.filed.slice(6, 8), TotalHPPTILossCF: R(r.hp) }, busF(r.bus), { LossFrmSpecBusCF: 0, LossFrmSpecifiedBusCF: 0, TotalSTCGPTILossCF: R(r.stcl), TotalLTCGPTILossCF: R(r.ltcl), OthSrcLossRaceHorseCF: 0 }) })); });
+    put(o, p, fit(X, p, { CarryFwdLossDetail: Object.assign({ DateOfFiling: r.filed.slice(0, 4) + "-" + r.filed.slice(4, 6) + "-" + r.filed.slice(6, 8), TotalHPPTILossCF: R(r.hp) }, busF(r.bus, r.busBar), { LossFrmSpecBusCF: 0, LossFrmSpecifiedBusCF: 0, TotalSTCGPTILossCF: R(r.stcl), TotalLTCGPTILossCF: R(r.ltcl), OthSrcLossRaceHorseCF: 0 }) })); });
   const anyPrior = ys.length > 0;
   if (cy || N(C.hp) || N(C.stcl) || N(C.ltcl) || anyPrior) {
     const lsd = (hp, bus, stcl, ltcl) => { const d = { TotalHPPTILossCF: R(hp) }; d[X.form === "ITR-6" ? "BroughtFrwdBusLossSetOffDrYr" : "BusLossOthThanSpecLossCF"] = R(bus); d.LossFrmSpecBusCF = 0; d.LossFrmSpecifiedBusCF = 0; if (X.form === "ITR-6") d.LossFrmLifeInsBusUs115B = 0; d.TotalSTCGPTILossCF = R(stcl); d.TotalLTCGPTILossCF = R(ltcl); d.OthSrcLossRaceHorseCF = 0; return { LossSummaryDetail: d }; };

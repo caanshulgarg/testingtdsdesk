@@ -254,5 +254,68 @@ T("s80 and 80CCD2", () => {
   ok((ck.find((x) => x.id === "tds_194ia") || {}).status === "matched", "194IA: a co-owned property sold for 60 lakh in all: 1% of the own share, 30,000, matched");
 });
 
+// ---------------- the final re-review of b8126ecbc ----------------
+console.log("The basic exemption and other heads' losses: where the 112 gain is no longer taxed (proviso to 112(1)(a))");
+T("exemption and losses vs the proviso", () => {
+  // land bought 1-06-2015 (FY 2015-16, CII 254) for 27,00,000, sold 1-07-2025 for 37,00,000: gain 10,00,000; indexed
+  // cost 27,00,000 x 376/254 = 39,96,850, indexed gain a loss: the 112 tax on it is nil whatever is left of it
+  const land = { id: "L", kind: "land", acq: "20150601", sale: "20250701", value: 3700000, cost: 2700000 };
+  // 1. resident, new regime, no other income, 112A gain 10,00,000: the basic exemption 4,00,000 against 112A above its
+  // 1.25 lakh: 112A 6,00,000, tax 12.5% x 4,75,000 = 59,375 + cess 2,375 = 61,750 (against the land it saves nothing)
+  r = both(mk({ regime: "new" }, { cgRows: [land, { id: "Q", kind: "eq", acq: "20200101", sale: "20250801", value: 1100000, cost: 100000 }] }));
+  same(r, "liability", 61750, "new regime: the unused exemption against 112A, not the untaxed land: 61,750");
+  // 2. old regime, no other income: the land; unlisted shares gain 15,00,000 (112); 112A gain 7,50,000; a long-term
+  // loss 13,00,000 (other asset); a business loss 6,50,000. The long-term loss against the unlisted gain (taxed):
+  // 2,00,000 left; the business loss: 2,00,000 against it, 4,50,000 against 112A (7,50,000 -> 3,00,000); the exemption
+  // 2,50,000: 1,75,000 against 112A (-> 1,25,000, within its exemption), the rest against the land (untaxed). Tax nil
+  r = both(mk({ regime: "old", business: { pbt: -650000, adds: [], less: [] } }, { cgRows: [land, { id: "U", kind: "unlisted", acq: "20200101", sale: "20250801", value: 2500000, cost: 1000000 },
+    { id: "Q", kind: "eq", acq: "20200101", sale: "20250801", value: 850000, cost: 100000 }, { id: "G", kind: "other", acq: "20150101", sale: "20250901", value: 200000, cost: 1500000 }] }));
+  same(r, "liability", 0, "old regime: losses and the exemption where tax is still charged: nil");
+});
+// brute force: the long-term loss split every way between the 112 and 112A gains (the rest of the return as FinCom
+// works it); FinCom's own choice must cost no more than the best split found (2 rupees for rounding). Returns where a
+// rebate (87A) applies are left out (the old regime's rebate convention is documented apart).
+T("brute force", () => {
+  let seed = 4202611, worse = 0, n = 0, first = null;
+  const rnd = (a, b) => { seed = (seed * 1103515245 + 12345) % 2147483648; return a + Math.floor((seed / 2147483648) * (b - a + 1)); };
+  for (let i = 0; i < 400; i++) {
+    const regime = rnd(0, 1) ? "new" : "old", os = rnd(0, 3) ? rnd(0, 30) * 100000 : 0;
+    const rows = [{ id: "L", kind: "land", acq: ["20080601", "20150601", "20230401"][rnd(0, 2)], sale: "20250701", value: rnd(20, 90) * 100000, cost: rnd(5, 40) * 100000 },
+      { id: "U", kind: "unlisted", acq: "20200101", sale: "20250801", value: rnd(0, 30) * 100000, cost: rnd(0, 10) * 100000 },
+      { id: "Q", kind: "eq", acq: "20200101", sale: "20250801", value: rnd(1, 20) * 100000, cost: 100000 },
+      { id: "G", kind: "other", acq: "20150101", sale: "20250901", value: 100000, cost: rnd(1, 20) * 100000 }];
+    const biz = rnd(0, 1) ? { pbt: -rnd(0, 10) * 100000, adds: [], less: [] } : null;
+    const M0 = mk({ regime, os: { other: os }, business: biz || undefined }, { cgRows: rows });
+    const S0 = compute(M0);
+    if (S0.ti <= 1300000 || S0.ti > 5000000 || S0.tax.rebate) continue;
+    n++;
+    const g = M0.cgHead, gross112 = g.pool112.reduce((a, x) => a + x.gain, 0), gross112A = g.rows.filter((x) => x.bucket === "s112A" && x.net > 0).reduce((a, x) => a + x.net, 0);
+    const ltl = -g.rows.filter((x) => (x.bucket === "s112" || x.bucket === "s112A") && x.net < 0).reduce((a, x) => a + x.net, 0);
+    const use = Math.min(ltl, gross112 + gross112A);
+    let best = Infinity;
+    for (let k = 0; k <= 40; k++) {
+      const to112A = Math.min(gross112A, Math.round(use * k / 40)), to112 = Math.min(gross112, use - to112A);
+      if (to112 + to112A < use) continue;
+      const M = Object.assign({}, M0, { cgRows: null, cg: { s111A: g.s111A, other: g.stApp, s112: gross112 - to112, s112A: gross112A - to112A, pool112: g.pool112, cfStcl: 0, cfLtcl: 0 } });
+      best = Math.min(best, compute(M).liability);
+    }
+    if (S0.liability > best + 2) { worse++; if (!first) first = { i, regime, os, rows, biz, fincom: S0.liability, best }; }
+  }
+  ok(n > 100 && worse === 0, "brute force over the long-term loss's split: FinCom never pays more than the best split (" + n + " returns" + (first ? "; first worse: " + JSON.stringify(first) : "") + ")");
+});
+
+console.log("115BAC(2)(ii): the part of an earlier loss that came from deductions the new regime bars");
+T("115BAC losses", () => {
+  // house income 93,600 (rent 3,60,000 - municipal tax 12,000 = 3,48,000; 30% 1,04,400; interest 1,50,000); a house
+  // property loss of AY 2023-24 of 1,20,000, of which 50,000 came from self-occupied interest (24(b)): in the new regime
+  // that part is not set off (115BAC(2)(ii)): 70,000 set off
+  const hs = [{ kind: "L", rent: 360000, muniTax: 12000, loans: [{ interest: 150000 }] }];
+  r = both(mk({ regime: "new", losses: { hp: [{ ay: "2023", amt: 120000, barred: 50000, filed: "20230725" }] } }, { houses: hs }));
+  same(r, "bfHp", 70000, "new regime: 1,20,000 less the barred 50,000: 70,000 set off");
+  r = both(mk({ regime: "old", losses: { hp: [{ ay: "2023", amt: 120000, barred: 50000, filed: "20230725" }] } }, { houses: hs }));
+  same(r, "bfHp", 93600, "old regime: the whole loss available, 93,600 set off");
+  ok(needsOf(compute(mk({ regime: "new", losses: { hp: [{ ay: "2023", amt: 120000, filed: "20230725" }] } }, { houses: hs }))).some((n) => /115BAC/.test(n.text)), "new regime: asked what part came from barred deductions");
+});
+
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

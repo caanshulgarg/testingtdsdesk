@@ -83,6 +83,25 @@ export function partners40b(partners, pgbpBeforeRem) {
   return { interestAdd, rem, notWorking, bookProfit, limit: lim, allowed: Math.min(rem, lim), remAdd: Math.max(0, rem - lim) + notWorking };
 }
 
+// ---------------- the special-rate income: where a reduction saves the most ----------------
+// A loss of another head (71, 32(2)), a loss brought forward (74) or the unused basic exemption (provisos to 111A(1),
+// 112(1), 112A(2)) set against the special-rate income takes it cheapest-for-the-taxpayer first: 111A (20%); the 112
+// income still taxed (a property the proviso to 112(1)(a) covers up to its indexed gain, and the other 112 gains:
+// tax112); 112A above its Rs 1.25 lakh exemption; then what saves nothing: the rest of 112, 112A's exempt part (the
+// final review of b8126ecbc). h: the income by key; k: the keys of 111A, 112, 112A in h; pool: the 112 rows (heads.js);
+// longOnly: a long-term loss (74(1)(b)): never against 111A. Returns what is left of amt; rec gets what each key took
+export function takeSpecial(h, amt, k, pool, rec, longOnly) {
+  const gross = pool ? sum(pool, (x) => pos(x.gain)) : 0, useful = pool ? sum(pool, (x) => (x.elig ? Math.min(pos(x.idx), pos(x.gain)) : pos(x.gain))) : 0;
+  const take = (key, cap) => { const u = Math.min(amt, Math.max(0, cap)); if (u <= 0) return; h[key] -= u; amt -= u; if (rec) rec[key] = (rec[key] || 0) + u; };
+  if (!longOnly) take(k.a, h[k.a]);
+  take(k.c, pool ? Math.min(h[k.c], useful - (gross - h[k.c])) : h[k.c]);
+  take(k.b, h[k.b] - L.SPECIAL.s112AExempt);
+  take(k.c, h[k.c]);
+  take(k.b, h[k.b]);
+  return amt;
+}
+const HK = { a: "c111A", c: "c112", b: "c112A" };
+
 // ---------------- the heads, the set-off, the total income ----------------
 // a short-term capital loss can go against the other short-term gains or the 12.5% gains first (heads.js bucketsOf):
 // which saves more depends on the slab, so both are worked and the lower tax liability kept (S.cgAlt: the second order)
@@ -160,7 +179,8 @@ function computeOne(inp) {
   let cyBizLoss = 0, cyUnabDep = 0;
   if (h.pgbp < 0) {
     let loss = -h.pgbp; h.pgbp = 0;
-    for (const k of ["hp", "os", "cOth", "c111A", "c112", "c112A"]) { if (loss <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], loss); h[k] -= u; loss -= u; setoff.bus[k] = u; } }
+    for (const k of ["hp", "os", "cOth"]) { if (loss <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], loss); h[k] -= u; loss -= u; setoff.bus[k] = u; } }
+    loss = takeSpecial(h, loss, HK, cg.pool112, setoff.bus);
     if (loss > 0) { cyUnabDep = Math.min(loss, itDep); cyBizLoss = loss - cyUnabDep; }
     line("cyla_bp", "Business loss of the year set off against other heads (sections 70, 71)", -pgbp - loss, { sec: "sl", src: L.LOSS.src });
   }
@@ -168,7 +188,8 @@ function computeOne(inp) {
   if (h.hp < 0) {
     let loss = -h.hp; h.hp = 0;
     const cap = inp.regime === "new" ? 0 : 200000; let room = Math.min(loss, cap); const used0 = room;
-    for (const k of ["sal", "os", "cOth", "pgbp", "c111A", "c112", "c112A"]) { if (room <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], room); h[k] -= u; room -= u; setoff.hp[k] = u; } }
+    for (const k of ["sal", "os", "cOth", "pgbp"]) { if (room <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], room); h[k] -= u; room -= u; setoff.hp[k] = u; } }
+    room = takeSpecial(h, room, HK, cg.pool112, setoff.hp);
     cfHp = loss - (used0 - room);
   }
   // 4. Brought-forward losses, each within eight assessment years: 72 business loss against business income; 71B house
@@ -176,23 +197,29 @@ function computeOne(inp) {
   // against long-term gains. Then 32(2) unabsorbed depreciation (no limit) against any head but salary
   const bf = inp.losses || {};
   const afterCyla = Object.assign({}, h);
-  const bfOf = (list, heads, by) => { let used = 0; const left = [];
+  const bfOf = (list, heads, by, spec) => { let used = 0; const left = [];
     (list || []).slice().sort((a, b) => String(a.ay).localeCompare(String(b.ay))).forEach((x) => {
       if (+String(L.AY_START) - +String(x.ay).slice(0, 4) > L.LOSS.bizCarry) { left.push(Object.assign({}, x, { lapsed: true })); return; }
       // section 80: a business or capital loss is carried forward only from a return filed by its due date (a house
       // property loss, 71B, is not under section 80)
       if (x.inTime === false && heads[0] !== "hp") { left.push(Object.assign({}, x, { lapsed: true, s80: true })); return; }
-      let a = pos(x.amt);
+      // 115BAC(2)(ii) (and 115BAA(2)(ii)): in the new regime the part of a business or house property loss brought forward
+      // that came from deductions it bars (24(b) self-occupied interest, 10AA, 32(1)(iia), 35AD ...) is not set off
+      let a = pos(x.amt) - (barOn && (heads[0] === "pgbp" || heads[0] === "hp") ? Math.min(pos(x.amt), pos(x.barred)) : 0);
       for (const k of heads) { if (a <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], a); h[k] -= u; a -= u; used += u; if (by) by[k] = (by[k] || 0) + u; } }
+      if (spec && a > 0) { const a0 = a; a = takeSpecial(h, a, HK, cg.pool112, by, spec === "lt"); used += a0 - a; }
       if (a > 0) left.push({ ay: x.ay, amt: R(a) });
     });
     return { used: R(used), left }; };
+  const barOn = ((ent === "P" || ent === "H") && inp.regime === "new") || (co && inp.regime === "115BAA");
+  if (barOn && (bf.business || []).concat(bf.hp || []).some((x) => pos(x.amt) && (x.barred == null || x.barred === ""))) S.needs.push({ key: "bf_115bac", text: "Losses of earlier years: say what part of each business or house property loss came from deductions the " + (co ? "115BAA" : "new") + " regime does not allow (24(b) interest on a self-occupied house, 10AA, additional depreciation 32(1)(iia), 35AD); that part is not set off (" + (co ? "115BAA(2)(ii)" : "115BAC(2)(ii)") + "). Enter 0 if none." });
   const bfB = bfOf(bf.business, ["pgbp"]), bfH = bfOf(bf.hp, ["hp"]);
-  const bfS = bfOf(bf.stcl, ["cOth", "c111A", "c112", "c112A"], setoff.bfCg), bfL = bfOf(bf.ltcl, ["c112", "c112A"], setoff.bfCg);
+  const bfS = bfOf(bf.stcl, ["cOth"], setoff.bfCg, "all"), bfL = bfOf(bf.ltcl, [], setoff.bfCg, "lt");
   const bfUsed = bfB.used, bfLeft = bfB.left;
   setoff.bfHp = bfH.used;
   let ud = N(bf.unabsorbedDep), udUsed = 0;
-  for (const k of ["pgbp", "hp", "os", "cOth", "c111A", "c112", "c112A"]) { if (ud <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], ud); h[k] -= u; ud -= u; udUsed += u; setoff.ud[k] = u; } }
+  for (const k of ["pgbp", "hp", "os", "cOth"]) { if (ud <= 0) break; if (h[k] > 0) { const u = Math.min(h[k], ud); h[k] -= u; ud -= u; udUsed += u; setoff.ud[k] = u; } }
+  if (ud > 0) { const u0 = ud; ud = takeSpecial(h, ud, HK, cg.pool112, setoff.ud); udUsed += u0 - ud; }
   setoff.bf = bfUsed;
   if (bfUsed) line("bfla_bp", "Brought-forward business loss set off (section 72)", bfUsed, { sec: "sl", sign: -1, src: L.LOSS.src });
   if (bfH.used) line("bfla_hp", "Brought-forward house property loss set off (section 71B)", bfH.used, { sec: "sl", sign: -1, src: "Section 71B: eight assessment years, against income from house property only" });
@@ -361,8 +388,8 @@ function baseTax(inp, p) {
     const slabs = slabsFor(inp), ex = exemptOf(slabs);
     let left = Math.max(0, ex - p.normal);
     const sp = { s111A: p.s111A, s112A: p.s112A, s112: p.s112, relief: p.relief, pool: p.pool };
-    // the unused exemption first where it saves most: 111A (20%), then 112 (12.5%), then 112A (12.5% above 1.25 lakh)
-    if (inp.resident !== false) for (const k of ["s111A", "s112", "s112A"]) { const u = Math.min(left, sp[k]); sp[k] -= u; left -= u; }
+    // the unused exemption where it saves most (takeSpecial): 111A, the 112 income still taxed, 112A above 1.25 lakh, the rest
+    if (inp.resident !== false) left = takeSpecial(sp, left, { a: "s111A", c: "s112", b: "s112A" }, p.pool, null);
     const parts = specialParts(sp);
     return { normalTax: slabTax(p.normal, slabs), specialTax: parts.t111A + parts.t112 + parts.t112A, parts, relief112: parts.relief112, p112: parts.p112, rateName: inp.regime === "new" ? "new regime slab rates (115BAC)" : "old regime slab rates", src: inp.regime === "new" ? L.SRC_SLABS.new : L.SRC_SLABS.old };
   }

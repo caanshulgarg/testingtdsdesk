@@ -189,13 +189,15 @@ const LKIND = [["business", "Business loss (72)"], ["hp", "House property loss (
 const LAYS = ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"];
 function Losses({ X, set }) {
   const L = X.state.losses || {}, rows = [];
-  LKIND.forEach(([k]) => (L[k] || []).forEach((x) => rows.push({ kind: k, ay: x.ay, amt: x.amt, filed: x.filed, inTime: x.inTime })));
-  const save = (rs, ud) => { const o = { unabsorbedDep: ud === undefined ? L.unabsorbedDep : ud }; LKIND.forEach(([k]) => { o[k] = rs.filter((x) => x.kind === k).map((x) => ({ ay: x.ay, amt: x.amt, filed: x.filed, inTime: x.inTime })); }); set({ losses: o }); };
+  LKIND.forEach(([k]) => (L[k] || []).forEach((x) => rows.push({ kind: k, ay: x.ay, amt: x.amt, filed: x.filed, inTime: x.inTime, barred: x.barred })));
+  const save = (rs, ud) => { const o = { unabsorbedDep: ud === undefined ? L.unabsorbedDep : ud }; LKIND.forEach(([k]) => { o[k] = rs.filter((x) => x.kind === k).map((x) => ({ ay: x.ay, amt: x.amt, filed: x.filed, inTime: x.inTime, barred: x.barred })); }); set({ losses: o }); };
   const C = X.comp, used = (C.key || {});
-  const note = "Only losses carried forward in a return filed by its due date (section 80), within eight years. Used this year: house property " + money(used.bfHp || 0) + ", capital " + money((used.bfStcl || 0) + (used.bfLtcl || 0)) + ".";
+  const barOn = ((X.client.entity === "P" || X.client.entity === "H") && X.model.regime === "new") || (X.client.entity === "C" && X.model.regime === "115BAA");
+  const note = "Enter each year's balance as last year's return carried it forward (its Schedule CFL, closing balance), not the loss as it first arose. Eight years; a business or capital loss only from a return filed by its due date (section 80). Used this year: house property " + money(used.bfHp || 0) + ", capital " + money((used.bfStcl || 0) + (used.bfLtcl || 0)) + ".";
   return <Card k="losses" title="Losses of earlier years" note={note}>
     <Sub k="bfloss" title="Loss carried forward" rows={rows} blank={{ kind: "hp", ay: "2025", amt: "" }} on={(rs) => save(rs)} render={(x, p) => <>
-      <Sel label="Kind" v={x.kind} opts={LKIND} on={(v) => p({ kind: v })} /><Sel label="Of the year (AY)" v={x.ay} opts={LAYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ ay: v })} /><Num label="Amount left" v={x.amt} on={(v) => p({ amt: v })} />
+      <Sel label="Kind" v={x.kind} opts={LKIND} on={(v) => p({ kind: v })} /><Sel label="Of the year (AY)" v={x.ay} opts={LAYS.map((y) => [y, y + "-" + String(+y + 1).slice(2)])} on={(v) => p({ ay: v })} /><Num label="Balance carried forward (last year's CFL)" v={x.amt} on={(v) => p({ amt: v })} />
+      {barOn && (x.kind === "business" || x.kind === "hp") && <Num label="Of it, from deductions the new regime bars (24(b) self-occupied interest, 10AA, 32(1)(iia), 35AD)" v={x.barred} on={(v) => p({ barred: v })} />}
       <Day label="That year's return filed on" v={x.filed} on={(v) => p({ filed: v })} />{x.kind !== "hp" && <Sel label="Filed by its due date (section 80)" v={x.inTime === true ? "y" : x.inTime === false ? "n" : ""} opts={[["", "Choose"], ["y", "Yes"], ["n", "No: the loss is lost"]]} on={(v) => p({ inTime: v === "" ? undefined : v === "y" })} />}</>} />
     {X.model.business && <div className="itr-grid"><Num label="Unabsorbed depreciation brought forward (32(2))" k="bfud" v={L.unabsorbedDep} on={(v) => save(rows, v)} /></div>}
   </Card>;

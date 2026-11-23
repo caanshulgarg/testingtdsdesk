@@ -342,7 +342,14 @@ To confirm:
     applicable rates, 12.5%); a long-term loss goes on 112 while it still saves tax there (a covered property up to its
     indexed gain), then on 112A above its Rs 1.25 lakh exemption, then the rest; a short-term loss is set off both ways
     (the other short-term category first, or the 12.5% gains first) and the order with the lower tax liability kept, in
-    both computations. **To confirm:** the slots ignore what the basic exemption or other heads' losses later take off.
+    both computations. The losses of other heads, losses brought forward and the unused basic exemption take the
+    special-rate income in the same cheapest-first order (final review of b8126ecbc): 111A, the 112 income still taxed
+    (a covered property up to its indexed gain, other 112 gains), 112A above Rs 1.25 lakh, then the rest (tax.js
+    takeSpecial, check.js absorbSpecial); a seeded brute force over the long-term loss's split checks FinCom is never
+    dearer. In the new regime (115BAA for a company) the part of an earlier business or house property loss that came
+    from barred deductions is asked and not set off (115BAC(2)(ii)); Schedule CFL shows it in AdjustAccTax115BACAmt
+    (ITR-6: AmtAdjAccOptTaxUs115BAA_115BA). **To confirm:** a business loss is set against normal-rate income before
+    the special-rate income even where the slab rate is below 12.5%.
 16. **234C proviso (a).** Applied only when the advance tax paid after an instalment date (up to 31 March) covers the extra
     tax from the capital gains that accrued after it; the proviso for dividends is not applied yet.
 17. **ITR-3's Schedule AL is "other than those included in Part A-BS"**: FinCom asks when an AL figure equals the
