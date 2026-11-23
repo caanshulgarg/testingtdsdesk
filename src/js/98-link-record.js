@@ -16,6 +16,8 @@
 //     postToAllow follow it; clients.data postTo (and the client's Tally name) are still WRITTEN from it for older code
 //     paths (postToMirror), never read for a decision.
 // Without the table (110 not run yet), or a firm without any record: as before (tally_companies, clients.data postTo).
+// (next-fix-hangs) the names' keys, and the beats LinkRec.learnNow last worked out in this task
+const LINK_KEYS = {m: new Map(), f: null}, LINK_LEARN = {task: false, refs: [], of: null, rows: null};
 const LinkRec = {
   st: {rows: null, at: 0, p: null, missing: false, err: "", guid: {}, now: null},
   COLS: "book_id,client_id,company_guid,company_name,gstin,device_id,computer,posting_allowed,state,linked_by,linked_at,updated_by,updated_at,version,how,data_loc,data_folder,windows_user,tally_port",
@@ -24,7 +26,15 @@ const LinkRec = {
   // read, and there: a firm without any record (110 not run, or never linked: the backfill made one for every link, and
   // every link since makes one) keeps the old rules, which then say the same (nothing linked)
   ready(){ return this.on() && Array.isArray(this.st.rows) && this.st.rows.length > 0; },
-  key(n){ return (typeof ledNm === "function" ? ledNm(String(n || "")) : String(n || "")).replace(/\s+/g, " ").trim().toLowerCase(); },
+  // next-fix-hangs (FINCOM-APP-STAGING-K and -Z, 23-Nov-2026: 2.3 s drawing the Clients page, 2.7 s the Tally page): a
+  // name's key is the same words every time, so each is worked out once (kept for up to 20,000 names)
+  key(n){
+    const s = String(n || ""), K = LINK_KEYS, f = typeof ledNm === "function" ? ledNm : null;
+    if (K.f !== f){ K.m.clear(); K.f = f; }
+    let k = K.m.get(s);
+    if (k === undefined){ k = (f ? f(s) : s).replace(/\s+/g, " ").trim().toLowerCase(); if (K.m.size >= 20000) K.m.clear(); K.m.set(s, k); }
+    return k;
+  },
   // the firm's records, read again after 15 s (TLight asks every 30 s); a cloud without the table: missing, as before
   load(force){
     if (!this.on()) return Promise.resolve(null);
@@ -55,8 +65,18 @@ const LinkRec = {
     if (Object.keys(now).length) this.st.now = now;
   },
   // the beats as this page holds them now (learnt again whenever one of them changed)
+  // next-fix-hangs: nameOf asks this for every link record, and a page compares many names (LinkRec.same: ofName, then
+  // nameOf of every link), so working the key of every computer's beat out each time cost links x companies a name
+  // (2-3 s a drawing on an office PC). Within one task the beats are the same as long as the same computers and their
+  // info are there (the same objects: a beat read makes new ones, and one merged in, TLight.beatIn, a new info): the key
+  // is worked out again only when one of them changed, or in the next task
   learnNow(){
     const devs = [].concat((typeof TLight === "object" && TLight.st.devs) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices) || []);
+    const L = LINK_LEARN, refs = [];
+    devs.forEach(d => { const i = d && d.info, b = i && i.beat; refs.push(d, i, b, b && b.companies); });
+    if (L.task && L.refs.length === refs.length && L.refs.every((x, j) => x === refs[j])) return this.st.now;
+    L.refs = refs; L.of = null;
+    if (!L.task){ L.task = true; Promise.resolve().then(() => { L.task = false; L.refs = []; L.of = null; }); }
     const k = devs.map(d => { const b = (((d || {}).info || {}).beat) || {}; return (d && d.id) + "@" + (b.at || "") + ":" + [].concat(b.companies || []).map(c => c && c.name + "=" + c.guid).join(","); }).join("|");
     if (k !== this.st.devsKey){ this.st.devsKey = k; this.learn(devs); }
     return this.st.now;
@@ -73,8 +93,14 @@ const LinkRec = {
     return now.length === 1 ? now[0] : r.company_name || "";
   },
   // the record a name stands for: its own (the cloud's name), or the one whose company has that name in Tally now
-  ofName(name){ const k = this.key(name), L = this.live();
-    return L.find(r => this.key(r.company_name) === k) || L.find(r => r.company_guid && this.key(this.nameOf(r)) === k) || null; },
+  // (next-fix-hangs: within one task, the answer for a name is kept while the records and the beats are the same ones)
+  ofName(name){ const k = this.key(name);
+    this.learnNow();
+    const M = LINK_LEARN, rows = this.st.rows;
+    if (!M.of || M.rows !== rows){ M.of = new Map(); M.rows = rows; }
+    if (M.of.has(k)) return M.of.get(k);
+    const L = this.live(), r = L.find(r => this.key(r.company_name) === k) || L.find(r => r.company_guid && this.key(this.nameOf(r)) === k) || null;
+    if (M.of) M.of.set(k, r); return r; },
   isName(r, name){ const k = this.key(name); return !!r && !!k && (this.key(r.company_name) === k || this.key(this.nameOf(r)) === k); },
   // the linked company a row's name is the new name of (renamed in Tally; FinCom's cloud still keeps it under its old
   // name), or null
