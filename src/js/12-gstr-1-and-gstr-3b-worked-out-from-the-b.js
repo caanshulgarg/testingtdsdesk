@@ -34,6 +34,9 @@ Object.assign(GSTR, {
     // review of next-fix-b2cs-gstin: a B2C summary with an e-invoice: the portal pre-fills the IRN in B2B, FinCom reports it in B2CS
     const vIrn = new Map(this.vIn(ym).filter(v => v.irn).map(v => [v.id, v]));
     add("Summary entries with an e-invoice (IRN)", vIrn.size ? out.filter(r => r.b2cSum && vIrn.has(r.id)) : [], "This summary entry has an e-invoice (IRN): the portal will pre-fill it in GSTR-1 as a B2B invoice, while FinCom reports it in B2C small. Cancel the IRN in Tally or on the e-invoice portal (within 24 hours of making it), or choose Not a summary if it is one invoice.");
+    // (re-review of ffd1402d0) a marketplace invoice posted to Tally whose entry the books read since do not have: counted
+    // from Sales (once), and said, so a person checks it was not deleted in Tally
+    add("Posted to Tally but not in the books read since \u2014 check it wasn't deleted", this.goneFromBooks(ym), "FinCom posted these invoices to Tally, but the books read since have no entry of them. They are counted from Sales meanwhile. Look in Tally's Day Book: if the entry was deleted, post it again or ignore the invoice in Sales.");
     list.push(null);                              // (the document numbers' checks: checksJoin puts them here)
     add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && !r.fromHold && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
     add("Supplier GSTINs that are not valid", inn.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party, doc: r})), "The check digit or the form of the GSTIN is wrong: the bill can never match 2B. Correct the GSTIN on the supplier's ledger in Tally.");

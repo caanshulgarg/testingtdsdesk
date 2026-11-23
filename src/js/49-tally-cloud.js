@@ -546,7 +546,7 @@ const TCloud = {
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
     // bridge 2.4.2: the GST type columns (migration 72) first; a cloud without them, then without the IRN, read as before
     const read = async (extra) => {
-      const cols = [BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
+      const cols = [BookSrc.HEADS_FID, BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
       for (let i = 0; ; i++){
         try { return await this.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
         // review L2: only a missing column (42703, PGRST204, "does not exist") falls back; any other error is the error

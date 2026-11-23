@@ -353,7 +353,7 @@ export function handler(deps: Deps) {
           const outFrom = prevKept && i >= 2 ? months[i - 2] : "";
           const ref = engineItc(rows, g, [m], { books: b || undefined, kept: kRefs, outFrom });
           b = b || ref.books;
-          const cl = itcMonths({ client: String(book.client_id), co: rows.co, items: rows.items, ctx: kept.ctx, sales: rows.sales, runs: rows.runs, first: inp.first, last: inp.last, gstins: inp.gstins || [],
+          const cl = itcMonths({ client: String(book.client_id), co: rows.co, items: rows.items, ctx: kept.ctx, sales: rows.sales, salesSeen: rows.salesSeen, runs: rows.runs, first: inp.first, last: inp.last, gstins: inp.gstins || [],
             months: inp.months || {}, docs: inp.docs || [], bills: inp.bills || [], moves: inp.moves || {}, carry, out: ref.out }, g, [m]).months[0];
           const ic = itcCompare(ref.months[m], cl.result), stale = Object.keys(inp.status || {}).filter((x) => x <= m && inp.status[x] !== "fresh").sort();
           await rpc("gst_itc_parity_put", { p_book: book.book_id, p_ym: m, p_reg: g, p_engine: ENGINE, p_ok: ic.ok, p_max: ic.max, p_diffs: ic.diffs.slice(0, 500),
