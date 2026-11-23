@@ -11,7 +11,8 @@ computer); with no cloud copy nothing is sent, said plainly. Made-up data only.
   5. another bridge error (not reads off): not sent to the cloud copy, nothing posted, as before;
   6. Post one by one: the same rule (cloud copy used; none: the plain message, nothing sent);
   7. an invoice dated on a day the cloud copy does not hold (before its start, after the later of its end and the last
-     day read, or a skipped day): nothing posted, the days said; the cloud copy not asked.
+     day read, or a skipped day): held, Ready with a red note; the others checked and posted; the counts said; all held:
+     nothing sent, the copy not asked; the day read in later: posted. Post one by one the same.
   The note of an old copy is kept on each invoice checked so (its panel), not only in the message.
 Run on the React build: TDSDESK_SITE=../app/dist-test SYNC_PORT=8961 python3 run_sales_reads_off.py"""
 import os, threading, functools, http.server
@@ -33,8 +34,8 @@ NOCHECK = ("Not posted: FinCom could not check Tally for these invoice numbers (
            "and FinCom's cloud copy is not available). Nothing was sent; try again in a minute or post from another computer.")
 NOTE = "Checked against FinCom's copy of Tally, last updated "
 NOTE_END = ". Invoices entered in Tally after that were not checked."
-def nodays(days): return ("Not posted: FinCom's copy of Tally has no entries for " + days + ", so these invoice numbers could not be checked. "
-                          "Upload the Day Book for those dates, or turn on reading entries in FinCom Bridge on this computer.")
+def nodayrow(day): return ("Not posted: FinCom's copy of Tally has no entries for " + day + ", so this invoice number could not be checked. "
+                            "Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer.")
 READY = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
 GST = """() => { const mk = (b) => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; };
   return {up: mk('09AAACZ1234Q1Z'), k: mk('27AAACK5678P1Z')}; }"""
@@ -146,9 +147,9 @@ with sync_playwright() as p:
     ok(A.evaluate("() => window.__sent") == [] and last(A) == NOCOPY, "one by one, no cloud copy: nothing sent, the plain message (%s)" % last(A))
     ok(st[0]["st"] == "review", "still To review (%s)" % st)
 
-    print("7. invoice dates the cloud copy does not hold: nothing posted")
+    print("7. invoice dates the cloud copy does not hold: those held (Ready, a red note), the others checked and posted")
     A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
-    for label, held, dates, said in [
+    for label, held, dates, miss in [
         ("after the later of its end and the last day read", {"to": "2026-11-05", "doneTo": "2026-11-10", "skipped": []}, ["2026-11-08", "2026-11-12", "2026-11-14"], ["2026-11-12", "2026-11-14"]),
         ("a skipped day", {"to": "2026-11-30", "doneTo": "", "skipped": ["20261103"]}, ["2026-11-02", "2026-11-03"], ["2026-11-03"]),
         ("before its start", {"to": "2026-11-30", "doneTo": "", "skipped": []}, ["2026-03-31", "2026-04-02"], ["2026-03-31"])]:
@@ -156,16 +157,38 @@ with sync_playwright() as p:
         for i, d in enumerate(dates): A.evaluate(ADD, ["ZD/%d" % (i + 1), d, G["k"]])
         A.evaluate("(h) => { window.__held = h; }", held)
         A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
-        st = A.evaluate(STATE); t = last(A)
-        ok(A.evaluate("() => window.__sent") == [] and A.evaluate("() => window.__ccalls") == [], label + ": nothing sent, the copy not asked")
-        ok(t == nodays(A.evaluate("(ds) => ds.map(d => fmtDate(d)).join(', ')", said)), label + ": the days said (%s)" % t)
-        ok(all(x["st"] == "ready" for x in st), label + ": still Ready (%s)" % [x["st"] for x in st])
-    A.evaluate("() => { SL().list = []; window.__toasts = []; window.__sent = []; }")
-    ids = fresh(A, "ZD/9", d="2026-11-20")
+        st = A.evaluate(STATE); t = last(A); fm = A.evaluate("(ds) => ds.map(d => fmtDate(d))", miss)
+        want = ["ready" if d in miss else "posted" for d in dates]
+        ok([x["st"] for x in st] == want, label + ": the held days' invoices Ready, the others posted (%s)" % [x["st"] for x in st])
+        sent = A.evaluate("() => window.__sent")
+        ok(len(sent) == 1 and len(sent[0]) == len(dates) - len(miss) and len(A.evaluate("() => window.__ccalls")) >= 1, label + ": the others checked on the copy and sent (%s)" % sent)
+        ok(all(x["err"] == nodayrow(fm[miss.index(d)]) for x, d in zip(st, dates) if d in miss), label + ": the held invoice's red note (%s)" % [x["err"] for x in st])
+        ok(all(x["err"] == "" for x, d in zip(st, dates) if d not in miss), label + ": no red note on the posted ones")
+        ok(t.startswith("%d posted to Tally, %d held: FinCom's copy has no entries for %s" % (len(dates) - len(miss), len(miss), ", ".join(fm))), label + ": the counts said (%s)" % t)
+    A.evaluate("() => { SL().filter = 'ready'; render(); }"); A.wait_for_timeout(400)
+    ok("has no entries for" in A.inner_text("#app"), "the held invoice's red note shown on its row")
+    print("   all on days not held: nothing sent, the copy not asked")
+    fresh(A, "ZD/7", d="2026-11-20")
+    A.evaluate("() => { window.__held = {to: '2026-11-10', doneTo: '', skipped: []}; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
+    st = A.evaluate(STATE); t = last(A)
+    ok(A.evaluate("() => window.__sent") == [] and A.evaluate("() => window.__ccalls") == [], "nothing sent, the copy not asked")
+    ok(t.startswith("0 posted, 1 held: FinCom's copy has no entries for ") and st[0]["st"] == "ready" and st[0]["err"].startswith("Not posted: FinCom's copy"), "0 posted, 1 held; Ready with its note (%s)" % t)
+    print("   the Day Book uploaded for that day: posted next time, the note gone")
+    A.evaluate("() => { window.__held = {to: '2026-11-30', doneTo: '', skipped: []}; window.__toasts = []; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(600)
+    st = A.evaluate(STATE)
+    ok(st[0]["st"] == "posted" and st[0]["err"] == "", "posted, no red note (%s)" % st)
+    print("   Post one by one: a mixed batch")
+    ids = fresh(A, "ZD/8", "ZD/9")
+    A.evaluate("(id) => { SL().list.find(v => v.id === id).x.date = '2026-11-20'; }", ids[1])
     A.evaluate("(ids) => ids.forEach(id => { const v = SL().list.find(v => v.id === id); v.status = 'review'; v.refused = {n: 2, said: 'Tally created nothing'}; })", ids)
     A.evaluate("() => { window.__held = {to: '2026-11-10', doneTo: '', skipped: []}; }")
     A.evaluate("() => salesPostOneByOne()"); A.wait_for_timeout(600)
-    ok(A.evaluate("() => window.__sent") == [] and last(A).startswith("Not posted: FinCom's copy of Tally has no entries for "), "one by one: the same (%s)" % last(A))
+    st = A.evaluate(STATE); t = last(A); rows = A.evaluate("() => SL().oneByOne.rows.map(r => r.word)")
+    ok([x["st"] for x in st] == ["posted", "review"] and len(A.evaluate("() => window.__sent")) == 1, "one by one: ZD/8 posted, ZD/9 held (%s)" % st)
+    ok(st[1]["err"].startswith("Not posted: FinCom's copy of Tally has no entries for ") and any(r.startswith("Not posted: FinCom's copy") for r in rows), "one by one: the held one's note, on it and its row of the result (%s)" % rows)
+    ok(t.startswith("One by one: 1 of 2 posted, 1 held: FinCom's copy has no entries for "), "one by one: the counts said (%s)" % t)
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

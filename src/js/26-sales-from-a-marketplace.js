@@ -368,14 +368,15 @@ async function postSalesRun(){
   let sent = [];
   try {
     const asked = list.slice();
-    // (reads off here: checked against the cloud copy, said when that copy is old; none: nothing sent, src/js/26-sales-invoice.js)
-    const said = await salesCheckSafe(list), note = said ? " " + said : "";
-    list = list.filter(v => v.status === "ready");
+    // (reads off here: checked against the cloud copy, said when that copy is old; none: nothing sent; an invoice on a day
+    // the copy does not hold: held, Ready with a red note: src/js/26-sales-invoice.js)
+    const chk = await salesCheckSafe(list), note = chk.note ? " " + chk.note : "", held = chk.held ? ", " + chk.held : "";
+    list = list.filter(v => v.status === "ready" && !v.copyHeld);
     const probs = salesReadyProblems(list);
     // (a number already in Tally or posted from FinCom: skipped, listed with "Post duplicate anyway")
     s.dupSkipped = asked.filter(v => v.status !== "ready" && salesDupOf(v)).map(v => v.id);
-    list = list.filter(v => v.status === "ready");
-    if (!list.length){ s.busy = ""; saveSales(); toast((probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally.") + note); render(); return; }
+    list = list.filter(v => v.status === "ready" && !v.copyHeld);
+    if (!list.length){ s.busy = ""; saveSales(); toast((held ? "0 posted" + held + "." : probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally.") + note); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
     const tn = tallyCoName(co);
@@ -398,9 +399,9 @@ async function postSalesRun(){
     salesOverrideSpent(list);
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
+    toast(ok + " posted to Tally" + held + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
       (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + "." + note);
-    if (!bad && !queued && !refusedN) s.filter = "done";
+    if (!bad && !queued && !refusedN && !held) s.filter = "done";
     else if (refusedN && !bad && !queued) s.filter = "review";
     syncLedgersFromTally(true);
   } catch (e){ s.busy = ""; salesOverrideSpent(sent); saveSales(); toast(e.code === "check_off" ? e.message : "Posting failed: " + e.message); }
