@@ -395,15 +395,21 @@ function clientKeepChoices(data, mine, theirs){
   return data;
 }
 // Optional vouchers (bills and sales: createOptional; bank entries: bankOptional), off in every client (owner,
-// 23-Nov-2026; migration 213 turned the server's copies off, stamped <key>At). A tick stamps when it was chosen; the
-// newer stamp decides, and a side with no stamp never beats a stamped one (an old copy in another tab, on or off, never
-// undoes a deliberate choice). Neither stamped: an "on" here never turns the server's "not on" on (the old default)
-function clientOptKeep(data, mine, theirs){
+// 23-Nov-2026; migration 213 turned the server's copies off, stamped <key>At). A tick stamps when it was chosen. Against
+// the copy both sides last had (base): changed on one side only, that side's value stands (here only when ticked here,
+// a new stamp: an old copy in another tab is not a change), whatever the clocks say; changed on both, the newer stamp
+// decides and a side with no stamp never beats a stamped one. No base, neither stamped: an "on" here never turns the
+// server's "not on" on (the old default)
+function clientOptKeep(data, mine, theirs, base){
   if (!plainObj(data) || !plainObj(theirs)) return data;
   mine = plainObj(mine) ? mine : {};
+  const b = plainObj(base) ? base : null;
   ["createOptional", "bankOptional"].forEach(k => {
     const at = k + "At", m = String(mine[at] || ""), t = String(theirs[at] || "");
-    const take = m > t ? mine : t > m ? theirs : !t && data[k] === true && theirs[k] !== true ? {} : null;
+    const same = (x, y) => !!x[k] === !!y[k] && String(x[at] || "") === String(y[at] || "");
+    const take = b && same(theirs, b) ? (same(mine, b) ? null : m && m !== String(b[at] || "") ? mine : theirs)
+      : b && same(mine, b) ? theirs
+      : m > t ? mine : t > m ? theirs : !t && data[k] === true && theirs[k] !== true ? {} : null;
     if (!take || (data[k] === !!take[k] && (data[at] || "") === (take[at] || ""))) return;
     data = Object.assign({}, data, {[k]: !!take[k]});
     if (take[at]) data[at] = take[at]; else delete data[at];
@@ -447,7 +453,8 @@ async function cloudPushClient(r, sendBatch){
       return "gone";
     }
     const theirs = plainObj(cur.data) ? cur.data : {};
-    const data = Object.keys(theirs).length ? clientOptKeep(clientKeepChoices(merge3(await ClientBase.get(r.id), r.data, theirs), r.data, theirs), r.data, theirs) : r.data;
+    const base = Object.keys(theirs).length ? await ClientBase.get(r.id) : NOBASE;
+    const data = Object.keys(theirs).length ? clientOptKeep(clientKeepChoices(merge3(base, r.data, theirs), r.data, theirs), r.data, theirs, base) : r.data;
     if (sameVal(data, theirs)){ await ClientBase.set(r.id, theirs); return sameVal(data, r.data) ? r.hash : takeClientHere(r.id, theirs); }
     const out = await Cloud.api(q + "&updated_at=eq." + encodeURIComponent(cur.updated_at), {method: "PATCH", headers: {Prefer: "return=representation"}, body: row(data)});
     if (!out || !out.length) continue;                            // changed on the server in between: read and merge again
@@ -591,7 +598,8 @@ async function cloudApplyNow(rows){
         // a change made here and not yet sent is kept, laid over the server's copy (merge3); it is sent at the next save
         const here0 = S.companies[r.id], here = here0 && typeof cloudClientView === "function" ? cloudClientView(here0) : here0;
         const pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
-        const data = pending && plainObj(r.data) ? clientOptKeep(clientKeepChoices(merge3(await ClientBase.get(r.id), here, r.data), here, r.data), here, r.data) : r.data;
+        const base = pending && plainObj(r.data) ? await ClientBase.get(r.id) : NOBASE;
+        const data = pending && plainObj(r.data) ? clientOptKeep(clientKeepChoices(merge3(base, here, r.data), here, r.data), here, r.data, base) : r.data;
         S.companies[r.id] = fixCompany(clone(data));
         // this computer's own counts (STATS_HERE) stay as they were here
         const st0 = here0 && here0.stats, st1 = S.companies[r.id].stats;

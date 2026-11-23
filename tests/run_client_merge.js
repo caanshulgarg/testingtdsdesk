@@ -130,7 +130,8 @@ const push = async id => x.cloudPushClient({kind: "client", id, data: clone(ctx.
   // a pull meeting an unsent change here that still holds the old on: the server's off is taken
   server.o1.data = Object.assign(clone(server.o1.data), {createOptional: false, createOptionalAt: "2026-11-25T09:00:00.000Z"}); server.o1.updated_at = stamp();
   ctx.S.companies.o1 = Object.assign(clone(server.o1.data), {createOptional: true, createOptionalAt: "2026-11-24T09:00:00.000Z"});
-  await ctx.BankDB.set("cbase:o1", Object.assign(clone(server.o1.data), {createOptionalAt: "2026-11-25T09:00:00.000Z"}));
+  // the copy both had: off, stamped by the migration; since then ticked on here (24) and off again there (25): both changed, the newer stamp decides
+  await ctx.BankDB.set("cbase:o1", Object.assign(clone(server.o1.data), {createOptional: false, createOptionalAt: "2026-11-23T10:00:00.000Z"}));
   marks["client|o1|o1"] = "an older mark";
   await x.cloudApply([{kind: "client", id: "o1", client_id: "o1", data: clone(server.o1.data), deleted: false}]);
   ok(ctx.S.companies.o1.createOptional === false, "a pull: the server's newer off is taken over an older on held here");
@@ -177,6 +178,36 @@ const push = async id => x.cloudPushClient({kind: "client", id, data: clone(ctx.
   await ctx.BankDB.set("cbase:b1", clone(server.b1.data));                                // the base is already the server's on
   await push("b1");
   ok(server.b1.data.bankOptional === true && server.b1.data.bankOptionalAt === "2026-11-24T10:00:00.000Z", "bank: an old OFF copy (no stamp) does not wipe a deliberate ON");
+
+  // 11. re-review of 23-Nov-2026 (probe A): a slow clock. The server's copy has not changed since this tab's base (the
+  // migration's off, stamped 10:00 by the server's clock); the person ticks it on here on a PC 15 minutes slow (stamp
+  // 09:50). Only this side changed: the tick is saved, whatever the clocks say
+  const MIG2 = "2026-11-23T10:00:00.000Z";
+  server.k1 = {data: {id: "k1", name: "ZZ Skew", createOptional: false, createOptionalAt: MIG2}, updated_at: stamp()};
+  await ctx.BankDB.set("cbase:k1", server.k1.data);
+  ctx.S.companies.k1 = Object.assign(clone(server.k1.data), {createOptional: true, createOptionalAt: "2026-11-23T09:50:00.000Z"});
+  await push("k1");
+  ok(server.k1.data.createOptional === true && server.k1.data.createOptionalAt === "2026-11-23T09:50:00.000Z", "A: a deliberate tick on a slow clock, the server unchanged since the base: saved " + JSON.stringify([server.k1.data.createOptional, server.k1.data.createOptionalAt]));
+  // the same on the pull path: the server unchanged since the base, a tick here not sent yet
+  marks["client|k1|k1"] = "an older mark";
+  ctx.S.companies.k1 = Object.assign(clone(server.k1.data), {createOptional: false, createOptionalAt: "2026-11-23T09:40:00.000Z"});
+  await ctx.BankDB.set("cbase:k1", clone(server.k1.data));
+  await x.cloudApply([{kind: "client", id: "k1", client_id: "k1", data: clone(server.k1.data), deleted: false}]);
+  ok(ctx.S.companies.k1.createOptional === false && ctx.S.companies.k1.createOptionalAt === "2026-11-23T09:40:00.000Z", "A (pull): an unsent untick on a slow clock is kept when the server has not changed it");
+  // 12. probe B: the undo (server back to on) meets a tab that still holds the migrated off/stamp, unchanged here, with
+  // another change to send: the undo stays (this side did not change the setting)
+  server.u1 = {data: {id: "u1", name: "ZZ Undo", createOptional: false, createOptionalAt: MIG2, roundOff: "R"}, updated_at: stamp()};
+  await ctx.BankDB.set("cbase:u1", clone(server.u1.data));
+  server.u1.data = Object.assign(clone(server.u1.data), {createOptional: true, createOptionalAt: null}); server.u1.updated_at = stamp();   // an undo of old
+  ctx.S.companies.u1 = {id: "u1", name: "ZZ Undo", createOptional: false, createOptionalAt: MIG2, roundOff: "R2"};
+  await push("u1");
+  ok(server.u1.data.createOptional === true && server.u1.data.roundOff === "R2", "B: the undo survives a save from a tab holding the migrated copy, whose own change goes " + JSON.stringify(server.u1.data));
+  server.u2 = {data: {id: "u2", name: "ZZ Undo 2", createOptional: false, createOptionalAt: MIG2}, updated_at: stamp()};
+  await ctx.BankDB.set("cbase:u2", clone(server.u2.data));
+  server.u2.data = Object.assign(clone(server.u2.data), {createOptional: true, createOptionalAt: "2026-11-23T12:00:00.000Z"}); server.u2.updated_at = stamp();   // migration 213's undo (stamped)
+  ctx.S.companies.u2 = {id: "u2", name: "ZZ Undo 2", createOptional: false, createOptionalAt: MIG2, roundOff: "R3"};
+  await push("u2");
+  ok(server.u2.data.createOptional === true && server.u2.data.createOptionalAt === "2026-11-23T12:00:00.000Z", "B: migration 213's stamped undo survives too");
 
   console.log(fails ? fails + " FAILED" : "all passed");
   process.exit(fails ? 1 : 0);
