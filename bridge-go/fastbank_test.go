@@ -5,7 +5,7 @@ package main
 // minutes. The owner then: "tally should not freeze at all". Bank lines on such a Tally now go in bigger parts (10 at
 // most, PostQuietBankMax) only while nobody has touched the keyboard or mouse for PostQuietSec (30 s); while someone
 // is active a part is never bigger than the old pace gives (one voucher on such a Tally), and nothing waits (postings
-// first). Each quiet request PostSlowMaxMs (10 s) at most; a Tally whose time grows with each voucher is paced as before.
+// first). Each quiet request PostSlowMaxMs (8 s) at most; a Tally whose time grows with each voucher is paced as before.
 // Made-up data.
 
 import (
@@ -101,21 +101,31 @@ func TestFastBankEscapesOneAPart(t *testing.T) {
 	}
 }
 
-// a Tally whose time is all a voucher's own (2.5 s each, no fixed cost): bigger parts save nothing, so after one
-// probe of 2 the parts stay one each, as before
+// a Tally whose time is all a voucher's own (2.5 s each, no fixed cost): bigger parts save nothing, so the parts stay
+// one each, as before; the "per voucher" verdict is checked again by a probe of 2 (5 s, under the 8 s most) at most
+// paceReprobes times for the company, ever, across jobs
 func TestFastBankPerVoucherTallyUnchanged(t *testing.T) {
 	reviewPaceStart(t, "")
 	fastBankQuiet(t, true)
-	q := newPostQueueFor("ZZ LINEAR CO", "g-lin", nil, fastBankVch("ln", 30))
-	sizes, _ := fastBankRun(t, q, func(n int) float64 { return 2.5 * float64(n) })
-	for i, n := range sizes {
-		if n > 2 || (i >= 3 && n != 1) {
-			t.Fatalf("a per-voucher Tally got parts %v", fastBankHead(sizes))
+	twos := 0
+	for j := 0; j < 3; j++ {
+		q := newPostQueueFor("ZZ LINEAR CO", "g-lin", nil, fastBankVch(fmt.Sprintf("l%d", j), 40))
+		sizes, _ := fastBankRun(t, q, func(n int) float64 { return 2.5 * float64(n) })
+		for i, n := range sizes {
+			if n > 2 {
+				t.Fatalf("a per-voucher Tally got parts %v", fastBankHead(sizes))
+			}
+			if n == 2 && !(j == 0 && i == 0) {
+				twos++
+			}
 		}
 	}
+	if twos > 1+paceReprobes {
+		t.Fatalf("a per-voucher Tally probed %d times (want %d at most, ever)", twos, 1+paceReprobes)
+	}
 	// a fast Tally (20 ms a line): under the 1350 ms target as before
-	q = newPostQueueFor("ZZ FAST CO", "g-fast", nil, fastBankVch("fs", 400))
-	sizes, _ = fastBankRun(t, q, func(n int) float64 { return 0.02 * float64(n) })
+	q := newPostQueueFor("ZZ FAST CO", "g-fast", nil, fastBankVch("fs", 400))
+	sizes, _ := fastBankRun(t, q, func(n int) float64 { return 0.02 * float64(n) })
 	for _, n := range sizes {
 		if float64(n)*0.02 > 1.35+1e-9 {
 			t.Fatalf("a fast Tally's part predicted over the target: %d", n)
@@ -136,10 +146,10 @@ func TestFastBankBillsUnchanged(t *testing.T) {
 	}
 }
 
-// the most a slow request may take: PostSlowMaxMs, 10000 by default, held to 2000..10000
+// the most a slow request may take: PostSlowMaxMs, 8000 by default (the owner: Tally should not freeze), held to 2000..10000
 func TestFastBankSlowMaxHeld(t *testing.T) {
 	reviewPaceStart(t, "")
-	if v := postSlowMaxSec(); math.Abs(v-10) > 1e-9 {
+	if v := postSlowMaxSec(); math.Abs(v-8) > 1e-9 {
 		t.Fatalf("default %v", v)
 	}
 	setCfg("PostSlowMaxMs", 60000)
@@ -368,5 +378,130 @@ func TestFastBankActiveAfterQuietRun(t *testing.T) {
 			t.Fatalf("someone active after a quiet run: a part of %d (%.1f s)", n, slow(n))
 		}
 		q.done(r, slow(len(r.items)), nil)
+	}
+}
+
+// --- the re-review of 3d2750b1a, written before the fixes
+
+// blocker: a single 16 s outlier as the only one-voucher part never gives the long budget on a Tally of 300 ms a voucher
+// (any part of any size in 2 s or less: the budget stays at the 1350 ms target / 2 s)
+func TestFastBankOutlierSingleNoLongBudget(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	key := companyKey("ZZ OUTLIER CO") + "|g-out"
+	postPacePart(key, true, 1, 16000)
+	postPacePart(key, true, 4, 1200)
+	postPaceNote(key, true, 300, 300, 4)
+	q := newPostQueueFor("ZZ OUTLIER CO", "g-out", nil, fastBankVch("ou", 80))
+	sizes, _ := fastBankRun(t, q, func(n int) float64 { return 0.3 * float64(n) })
+	for _, n := range sizes {
+		if n > 4 {
+			t.Fatalf("a 300 ms a voucher Tally after a 16 s outlier: a part of %d (%.1f s; sizes %v)", n, 0.3*float64(n), fastBankHead(sizes))
+		}
+	}
+}
+
+// the probe of 2 under the 8 s most: allowed when one voucher x 1.3 fits (a 4.6 s book: 6 s); a probe over 8 s marks the
+// company per-voucher in the file, never probed again, even after a restart: one over-long request a company, ever
+func TestFastBankProbeOverMaxOnceEver(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	// the 4.6 s book: the probe goes (one voucher 4.6 s, x 1.3 = 6 s)
+	key := companyKey("ZZ BOOK46 CO") + "|g-46"
+	postPaceNote(key, true, 4600, 4600, 1)
+	q := newPostQueueFor("ZZ BOOK46 CO", "g-46", nil, fastBankVch("b4", 40))
+	sizes, _ := fastBankRun(t, q, func(n int) float64 { return 4.5 + 0.1*float64(n) })
+	if len(sizes) < 3 || sizes[1] != 2 {
+		t.Fatalf("a 4.6 s book with the 8 s most: no probe of 2 (sizes %v)", fastBankHead(sizes))
+	}
+	// a Tally of 5 s a voucher, all its own: the probe (10 s) runs over 8 s once, then never again
+	key = companyKey("ZZ PERVCH CO") + "|g-pv"
+	postPaceNote(key, true, 5000, 5000, 1)
+	over := 0
+	run := func(prefix string) []int {
+		q := newPostQueueFor("ZZ PERVCH CO", "g-pv", nil, fastBankVch(prefix, 20))
+		s, _ := fastBankRun(t, q, func(n int) float64 {
+			if 5*float64(n) > 8 {
+				over++
+			}
+			return 5 * float64(n)
+		})
+		return s
+	}
+	run("pa")
+	postPaceFlush()
+	postPaceReset()
+	if !postPaceGet(key, true).PerVch {
+		t.Fatal("the probe over 8 s was not kept as per-voucher in the file")
+	}
+	run("pb")
+	if over != 1 {
+		t.Fatalf("%d requests over 8 s for one company (want exactly 1, ever)", over)
+	}
+}
+
+// no-answer: the next job is capped at half the part that got no answer (kept in the file), lifting slowly after good
+// parts at the cap
+func TestFastBankNoAnswerCapKept(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	slow := func(n int) float64 { return 4.5 + 0.1*float64(n) }
+	q := newPostQueueFor("ZZ NOANS2 CO", "g-n2", nil, fastBankVch("n2", 300))
+	got := 0
+	for k := 0; k < 12; k++ {
+		r := q.next()
+		got = len(r.items)
+		q.done(r, slow(got), nil)
+	}
+	if got != 10 {
+		t.Fatalf("did not reach 10: %d", got)
+	}
+	r := q.next()
+	q.done(r, 60, fmt.Errorf("import: %w", errTimeout))
+	postPaceFlush()
+	postPaceReset()
+	q = newPostQueueFor("ZZ NOANS2 CO", "g-n2", nil, fastBankVch("n3", 400))
+	var sizes []int
+	for k := 0; k < 60 && q.left(); k++ {
+		r := q.next()
+		n := len(r.items)
+		sizes = append(sizes, n)
+		if k < 8 && n > 5 {
+			t.Fatalf("the next job climbed past the cap of 5: %v", sizes)
+		}
+		q.done(r, slow(n), nil)
+	}
+	most := 0
+	for _, n := range sizes {
+		most = maxI(most, n)
+	}
+	if most <= 5 {
+		t.Fatalf("the cap never lifted after good parts: %v", sizes)
+	}
+}
+
+// a slow spell (a fit of 7 s a request + 1 s a voucher) then Tally fast again: the kept fit's fixed cost is taken again
+// from the parts now, so the parts grow back instead of staying at one for good
+func TestFastBankRecoversAfterSlowSpell(t *testing.T) {
+	reviewPaceStart(t, "")
+	fastBankQuiet(t, true)
+	key := companyKey("ZZ SPELL CO") + "|g-sp"
+	postPacePart(key, true, 1, 8000)
+	postPacePart(key, true, 2, 9000) // a fit of 7 s a request + 1 s a voucher
+	for i := 0; i < paceHistMax; i++ {
+		postPacePart(key, true, 1, 8000) // the slow spell goes on in parts of one: the fit above is the one kept
+	}
+	postPaceNote(key, true, 8000, 8000, 1)
+	q := newPostQueueFor("ZZ SPELL CO", "g-sp", nil, fastBankVch("sp", 600))
+	sizes, _ := fastBankRun(t, q, func(n int) float64 { return 4.5 + 0.1*float64(n) })
+	if len(sizes) < 30 {
+		t.Fatalf("too few parts: %v", sizes)
+	}
+	most := 0
+	for _, n := range sizes[:30] {
+		most = maxI(most, n)
+	}
+	if most < 8 {
+		t.Fatalf("after a slow spell the parts did not grow back: %v", fastBankHead(sizes))
 	}
 }
