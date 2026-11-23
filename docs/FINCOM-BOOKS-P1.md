@@ -156,6 +156,12 @@ to a transaction-local table keyed by txid, written only by the posting function
 | The failed entry was tried again in every chunk | it waits for `fb_mirror_errors.retry_at` (3 minutes, then doubling, at most an hour; `tries` counted); it stays noted, so the book counts as behind and turns "Not in step" after 10 minutes | 12 (round 4) |
 | The masters were re-mirrored every chunk while any error was open | the masters are compared once when a sweep starts (a change may have been missed), not for a failing entry | 12 (round 4) |
 
+Re-review of round 4: the backoff's exponent is capped (`3 minutes × 2^min(tries, 5)`, at most an hour; before, tries
+36 overflowed the interval and the book's catch-up failed for good; tested at tries 40); an entry noted again (put right
+in Tally) has its retry time cleared, so the next run tries it; the runner's start book turns by one a minute, so no book is
+always last; a book's failed run keeps one open 'run' error, counted; `tries` and `retry_at` are added to an older table
+only when missing (no lock on a re-run).
+
 **Note:** `fb_audit_log.seq` can have gaps. A chunk that fails is rolled back and retried in halves; the sequence values
 its edit-log rows took are not given back (`poison.py`: 669 values for 410 rows). This is expected: the chain links each
 row to the one before it by hash, not by consecutive numbers, and it verifies.

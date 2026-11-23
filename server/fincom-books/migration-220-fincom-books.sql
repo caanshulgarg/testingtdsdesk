@@ -71,7 +71,7 @@ begin
       'fb_mirror_voucher', 'fb_mirror_openings', 'fb_mirror_masters', 'fb_mirror_catchup', 'fb_mirror_catchup_all', 'fb_enroll', 'fb_tieout', 'fb_tieout_all',
       'fb_tieout_ask', 'fb_filing_warning', 'fb_opening_signoff', 'fb_source_figures_put', 'fb_audit_verify', 'fb_selfcheck', 'fb_selfcheck_all',
       'fb_status', 'fb_tb', 'fb_ledger', 'fb_ledgers', 'fb_daybook', 'fb_closing', 'fb_copy_window', 'fb_copy_openings',
-      'fb_audit_eid', 'fb_vouchers_open_trg', 'fb_mirror_triage', 'fb_mirror_catchup_run', 'fb_audit_client_info', 'fb_behind_since', 'fb_mirror_failed', 'fb_mirror_one', 'fb_mirror_list'] loop
+      'fb_audit_eid', 'fb_vouchers_open_trg', 'fb_mirror_triage', 'fb_mirror_catchup_run', 'fb_audit_client_info', 'fb_behind_since', 'fb_mirror_failed', 'fb_mirror_one', 'fb_mirror_list', 'fb_mirror_run_failed'] loop
     if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = f and coalesce(obj_description(p.oid, 'pg_proc'), '') <> mark) then bad := bad || ('function ' || f); end if;
   end loop;
   -- the mirror's trigger names on the copy's landing tables, each one: a trigger of that name must be ours
@@ -357,6 +357,16 @@ create table if not exists public.fb_mirror_errors (
   id bigint generated always as identity primary key, book_id uuid, at timestamptz not null default now(), kind text not null, key text not null default '',
   error text not null, resolved_at timestamptz,
   tries int not null default 1, retry_at timestamptz);   -- an entry the catch-up cannot mirror: tried again at retry_at (3, 6, 12 ... minutes, at most an hour)
+-- (a table made by an earlier draft of this migration gets the two columns; checked first, so a re-run takes no lock)
+do $col$
+begin
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'fb_mirror_errors' and column_name = 'tries') then
+    alter table public.fb_mirror_errors add column if not exists tries int not null default 1;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'fb_mirror_errors' and column_name = 'retry_at') then
+    alter table public.fb_mirror_errors add column if not exists retry_at timestamptz;
+  end if;
+end $col$;
 -- the mirror's work list: what the copy changed and FinCom Books has not mirrored yet (first_at: since when; seq: bumped
 -- each time it is noted again, so the catch-up never drops a note made while it was mirroring that entry)
 create table if not exists public.fb_mirror_dirty (
@@ -903,20 +913,26 @@ begin
     select exists (select 1 from fb_books where mirror_on) into any_on;
     if any_on then
       if tg_op = 'INSERT' then
-        insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, 'v', x.guid from nt x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
-          on conflict (book_id, kind, key) do update set seq = excluded.seq;
+        with n as (insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, 'v', x.guid from nt x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
+          on conflict (book_id, kind, key) do update set seq = excluded.seq returning d.book_id, d.kind, d.key)
+        -- noted again (put right in the source?): an entry waiting for its retry time is tried at the next run
+        update fb_mirror_errors e set retry_at = null from n where e.resolved_at is null and e.retry_at is not null and e.kind = 'catchup' and e.book_id = n.book_id and e.key = n.kind || ':' || n.key;
       elsif tg_op = 'DELETE' then
-        insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, 'v', x.guid from ot x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
-          on conflict (book_id, kind, key) do update set seq = excluded.seq;
+        with n as (insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, 'v', x.guid from ot x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
+          on conflict (book_id, kind, key) do update set seq = excluded.seq returning d.book_id, d.kind, d.key)
+        -- noted again (put right in the source?): an entry waiting for its retry time is tried at the next run
+        update fb_mirror_errors e set retry_at = null from n where e.resolved_at is null and e.retry_at is not null and e.kind = 'catchup' and e.book_id = n.book_id and e.key = n.kind || ':' || n.key;
       else
         -- only the entries whose rows really changed (the rows of each entry compared as a whole, before and after)
-        insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, 'v', x.guid
+        with n as (insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, 'v', x.guid
           from (select coalesce(n.book_id, o.book_id) as book_id, coalesce(n.guid, o.guid) as guid
                   from (select z.book_id, z.guid, md5(string_agg(z::text, '|' order by z::text)) as h from nt z group by 1, 2) n
                   full join (select z.book_id, z.guid, md5(string_agg(z::text, '|' order by z::text)) as h from ot z group by 1, 2) o on o.book_id = n.book_id and o.guid = n.guid
                  where n.h is distinct from o.h) x
           join fb_books b on b.source_book_id = x.book_id and b.mirror_on
-          on conflict (book_id, kind, key) do update set seq = excluded.seq;
+          on conflict (book_id, kind, key) do update set seq = excluded.seq returning d.book_id, d.kind, d.key)
+        -- noted again (put right in the source?): an entry waiting for its retry time is tried at the next run
+        update fb_mirror_errors e set retry_at = null from n where e.resolved_at is null and e.retry_at is not null and e.kind = 'catchup' and e.book_id = n.book_id and e.key = n.kind || ':' || n.key;
       end if;
     end if;
     perform set_config('lock_timeout', lt, true);
@@ -942,19 +958,25 @@ begin
     select exists (select 1 from fb_books where mirror_on) into any_on;
     if any_on then
       if tg_op = 'INSERT' then
-        insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, k, x.name from nt x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
-          on conflict (book_id, kind, key) do update set seq = excluded.seq;
+        with n as (insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, k, x.name from nt x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
+          on conflict (book_id, kind, key) do update set seq = excluded.seq returning d.book_id, d.kind, d.key)
+        -- noted again (put right in the source?): an entry waiting for its retry time is tried at the next run
+        update fb_mirror_errors e set retry_at = null from n where e.resolved_at is null and e.retry_at is not null and e.kind = 'catchup' and e.book_id = n.book_id and e.key = n.kind || ':' || n.key;
       elsif tg_op = 'DELETE' then
-        insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, k, x.name from ot x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
-          on conflict (book_id, kind, key) do update set seq = excluded.seq;
+        with n as (insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, k, x.name from ot x join fb_books b on b.source_book_id = x.book_id and b.mirror_on
+          on conflict (book_id, kind, key) do update set seq = excluded.seq returning d.book_id, d.kind, d.key)
+        -- noted again (put right in the source?): an entry waiting for its retry time is tried at the next run
+        update fb_mirror_errors e set retry_at = null from n where e.resolved_at is null and e.retry_at is not null and e.kind = 'catchup' and e.book_id = n.book_id and e.key = n.kind || ':' || n.key;
       else
-        insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, k, x.name
+        with n as (insert into fb_mirror_dirty as d (book_id, kind, key) select distinct b.book_id, k, x.name
           from (select coalesce(n.book_id, o.book_id) as book_id, coalesce(n.name, o.name) as name
                   from (select z.book_id, z.name, md5(z::text) as h from nt z) n
                   full join (select z.book_id, z.name, md5(z::text) as h from ot z) o on o.book_id = n.book_id and o.name = n.name
                  where n.h is distinct from o.h) x
           join fb_books b on b.source_book_id = x.book_id and b.mirror_on
-          on conflict (book_id, kind, key) do update set seq = excluded.seq;
+          on conflict (book_id, kind, key) do update set seq = excluded.seq returning d.book_id, d.kind, d.key)
+        -- noted again (put right in the source?): an entry waiting for its retry time is tried at the next run
+        update fb_mirror_errors e set retry_at = null from n where e.resolved_at is null and e.retry_at is not null and e.kind = 'catchup' and e.book_id = n.book_id and e.key = n.kind || ':' || n.key;
       end if;
     end if;
     perform set_config('lock_timeout', lt, true);
@@ -1024,11 +1046,18 @@ end $f$;
 create or replace function public.fb_mirror_failed(p_book uuid, p_kind text, p_key text, p_err text) returns void language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
 begin
   insert into fb_mirror_dirty (book_id, kind, key) values (p_book, p_kind, p_key) on conflict do nothing;
-  update fb_mirror_errors e set tries = e.tries + 1, error = left(p_err, 500), retry_at = now() + least(power(2, e.tries) * interval '3 minutes', interval '1 hour')
+  update fb_mirror_errors e set tries = e.tries + 1, error = left(p_err, 500), retry_at = now() + least(interval '3 minutes' * power(2, least(e.tries, 5)), interval '1 hour')
    where e.book_id = p_book and e.kind = 'catchup' and e.key = p_kind || ':' || p_key and e.resolved_at is null;
   if not found then
     insert into fb_mirror_errors (book_id, kind, key, error, retry_at) values (p_book, 'catchup', p_kind || ':' || p_key, left(p_err, 500), now() + interval '3 minutes');
   end if;
+end $f$;
+
+-- a catch-up run that failed as a whole for a book: one open row per book, counted (not a new row every 3 minutes)
+create or replace function public.fb_mirror_run_failed(p_book uuid, p_err text) returns void language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
+begin
+  update fb_mirror_errors e set tries = e.tries + 1, error = left(p_err, 500) where e.book_id = p_book and e.kind = 'catchup' and e.key = 'run' and e.resolved_at is null;
+  if not found then insert into fb_mirror_errors (book_id, kind, key, error) values (p_book, 'catchup', 'run', left(p_err, 500)); end if;
 end $f$;
 
 -- since when a book is behind the copy: its oldest note, or its oldest open 'missed' row (null = up to date)
@@ -1162,7 +1191,7 @@ begin
       budget := budget - coalesce((r ->> 'done')::int, 0);
       out := out || jsonb_build_object('book', b.book_id, 'r', r);
     exception when others then
-      insert into fb_mirror_errors (book_id, kind, key, error) values (b.book_id, 'catchup', 'run', left(sqlerrm, 500));
+      perform fb_mirror_run_failed(b.book_id, sqlerrm);
     end;
   end loop;
   return out;
@@ -1176,7 +1205,9 @@ declare act uuid[]; nxt uuid[]; id uuid; budget int := p_max; r jsonb; d int; sh
 begin
   perform public.fb_mirror_triage();
   commit;
-  select array_agg(k.book_id order by k.state = 'setting_up' desc, k.book_id) into act from public.fb_books k where k.mirror_on;
+  -- books being built first; the rest in an order that turns by one book a minute, so no book is always last
+  select array_agg(z.book_id order by z.su desc, (z.rn + floor(extract(epoch from clock_timestamp()) / 60)::bigint) % z.cnt) into act
+    from (select k.book_id, k.state = 'setting_up' as su, row_number() over (order by k.book_id) as rn, count(*) over () as cnt from public.fb_books k where k.mirror_on) z;
   -- round-robin: each pass gives every book still busy an equal share of what is left of the run (50 to 500 entries);
   -- a book drops out when a chunk mirrors nothing or it is up to date; every call costs at least 1, so a run always ends
   while budget > 0 and coalesce(array_length(act, 1), 0) > 0 loop
@@ -1188,7 +1219,7 @@ begin
         r := public.fb_mirror_catchup(id, share);
         d := coalesce((r ->> 'done')::int, 0);
       exception when others then
-        insert into public.fb_mirror_errors (book_id, kind, key, error) values (id, 'catchup', 'run', left(sqlerrm, 500));
+        perform public.fb_mirror_run_failed(id, sqlerrm);
         r := null; d := 0;
       end;
       commit;
@@ -1747,7 +1778,7 @@ begin
               'fb_vtype_base', 'fb_cc_id', 'fb_mirror_voucher', 'fb_mirror_openings', 'fb_mirror_masters', 'fb_mirror_catchup', 'fb_mirror_catchup_all', 'fb_enroll',
               'fb_tieout', 'fb_tieout_all', 'fb_tieout_ask', 'fb_filing_warning', 'fb_opening_signoff', 'fb_source_figures_put', 'fb_audit_verify', 'fb_selfcheck',
               'fb_selfcheck_all', 'fb_status', 'fb_tb', 'fb_ledger', 'fb_ledgers', 'fb_daybook', 'fb_closing', 'fb_copy_window', 'fb_copy_openings',
-              'fb_audit_eid', 'fb_vouchers_open_trg', 'fb_mirror_triage', 'fb_mirror_catchup_run', 'fb_audit_client_info', 'fb_behind_since', 'fb_mirror_failed', 'fb_mirror_one', 'fb_mirror_list') loop
+              'fb_audit_eid', 'fb_vouchers_open_trg', 'fb_mirror_triage', 'fb_mirror_catchup_run', 'fb_audit_client_info', 'fb_behind_since', 'fb_mirror_failed', 'fb_mirror_one', 'fb_mirror_list', 'fb_mirror_run_failed') loop
     execute format('comment on routine %s is %L', f.oid::regprocedure, 'fincom books (migration 220)');
     execute format('revoke all on routine %s from public, anon, authenticated, service_role', f.oid::regprocedure);
     if f.proname = any(members_fns) then execute format('grant execute on routine %s to authenticated', f.oid::regprocedure); end if;

@@ -547,18 +547,36 @@ try:
     t = time.time(); run(); dt = time.time() - t
     okf = db.one("select count(*) from fb_vouchers where book_id = '%s' and narration = 'R4 ok (made up)'" % first); oks = db.one("select count(*) from fb_vouchers where book_id = '%s' and narration = 'R4 ok (made up)'" % second)
     pe = db.rows("select tries, retry_at > now() as later from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'v:%s' and resolved_at is null" % (first, gl1[7]))
-    ok(okf == "19" and oks == "12" and len(pe) == 1 and pe[0]["tries"] == "1" and pe[0]["later"] == "t" and dt < 30,
-       "12. round 4: one run with a poison entry in the first book: the first book's 19 good and the second book's 12 are mirrored; the poison was tried once and waits (%s, %s, %s, %.1f s; %s)" % (okf, oks, pe, dt,
+    ok(okf == str(len(gl1) - 1) and oks == str(len(gl2)) and len(pe) == 1 and pe[0]["tries"] == "1" and pe[0]["later"] == "t" and dt < 30,
+       "12. round 4: one run with a poison entry in the first book: all the first book's good entries and all the second book's are mirrored; the poison was tried once and waits (%s, %s, %s, %.1f s; %s)" % (okf, oks, pe, dt,
        db.rows("select v.source_ref, v.narration, v.status, (select count(*) from fb_mirror_dirty d where d.key = v.source_ref) noted from fb_vouchers v where v.book_id = '%s' and v.source_ref in (%s) and v.narration <> 'R4 ok (made up)'" % (first, ",".join("'%s'" % g for g in gl1)))))
     run()
     ok(db.one("select tries from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'v:%s' and resolved_at is null" % (first, gl1[7])) == "1"
        and db.one("select count(*) from fb_audit_log where entity = 'fb_ledgers'") == m0, "12. round 4: the next run skips it until its retry time, and does not re-mirror the masters for it")
     st4 = json.loads(one(OWN, "select fb_status('%s')" % ("c1" if first == BK else "c4")))["books"][0]
     ok(st4["counts"]["waiting"] == 1 and st4["behind_since"], "12. round 4: the poison stays noted, so the book counts as behind (late after 10 minutes)")
-    db.sql("alter table fb_vouchers drop constraint rv_poison; update fb_mirror_errors set retry_at = now() - interval '1 second' where resolved_at is null")
+    # round 4 re-review: a failing entry tried 40 times (about 31 hours of retries): the backoff never overflows
+    db.sql("update fb_mirror_errors set tries = 40, retry_at = now() - interval '1 second' where book_id = '%s' and key = 'v:%s' and resolved_at is null" % (first, gl1[7]))
     run()
-    ok(db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (first, gl1[7])) == "POISON (made up)" and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0",
-       "12. round 4: once it can be mirrored, the retry mirrors it and clears the error")
+    pe = db.rows("select tries, retry_at <= now() + interval '61 minutes' as capped from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'v:%s' and resolved_at is null" % (first, gl1[7]))
+    ok(pe and pe[0]["tries"] == "41" and pe[0]["capped"] == "t" and db.one("select count(*) from fb_mirror_errors where key = 'run' and resolved_at is null") == "0",
+       "12. round 4: tries 40 -> 41, the next try at most an hour away; the book's catch-up does not fail (%s)" % pe)
+    # round 4 re-review (2): the entry put right in Tally is noted again: its wait is cleared, and the next run mirrors it
+    ingest("update tally_vouchers set narration = 'R4 fixed in Tally (made up)', alter_id = alter_id + 1 where book_id = '%s' and guid = '%s';" % (tbf, gl1[7]), catch=False)
+    ok(db.one("select retry_at is null from fb_mirror_errors where book_id = '%s' and key = 'v:%s' and resolved_at is null" % (first, gl1[7])) == "t", "12. round 4: noted again after a fix in Tally: its retry time is cleared")
+    run()
+    ok(db.one("select narration from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (first, gl1[7])) == "R4 fixed in Tally (made up)" and db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0",
+       "12. round 4: the next run mirrors it and clears the error")
+    db.sql("alter table fb_vouchers drop constraint rv_poison")
+    # round 4 re-review (4): a book whose catch-up fails as a whole keeps ONE open 'run' error (counted), not a new row every run
+    db.sql("alter table fb_mirror_state add constraint rv_run check (mirrored_at is null) not valid")
+    ingest("update tally_vouchers set narration = narration || ' r' where book_id = '%s' and guid = '%s';" % (TB1, gs[3]), catch=False)
+    run(); run()
+    rr = db.rows("select tries from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'run' and resolved_at is null" % BK)
+    db.sql("alter table fb_mirror_state drop constraint rv_run")
+    ok(len(rr) == 1 and rr[0]["tries"] == "2", "12. round 4: two failed runs of a book: one open 'run' error, tries 2 (%s)" % rr)
+    run()
+    ok(db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0", "12. round 4: the next good run clears it")
     # the timer's runner commits book by book
     db.sql("call fb_mirror_catchup_run(5000)")
     ok(True, "12. fb_mirror_catchup_run runs (a procedure: one transaction per book and chunk)")
