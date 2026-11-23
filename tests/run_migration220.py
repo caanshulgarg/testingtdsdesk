@@ -561,6 +561,17 @@ try:
     pe = db.rows("select tries, retry_at <= now() + interval '61 minutes' as capped from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'v:%s' and resolved_at is null" % (first, gl1[7]))
     ok(pe and pe[0]["tries"] == "41" and pe[0]["capped"] == "t" and db.one("select count(*) from fb_mirror_errors where key = 'run' and resolved_at is null") == "0",
        "12. round 4: tries 40 -> 41, the next try at most an hour away; the book's catch-up does not fail (%s)" % pe)
+    # final check (3): the same day sent again unchanged (lines deleted and inserted again, same AlterID) keeps the wait
+    ingest("create temp table zz_l as select * from tally_lines where book_id = '%s' and guid = '%s'; delete from tally_lines where book_id = '%s' and guid = '%s'; insert into tally_lines select * from zz_l; drop table zz_l;" % (tbf, gl1[7], tbf, gl1[7]), catch=False)
+    ok(db.one("select retry_at is not null from fb_mirror_errors where book_id = '%s' and key = 'v:%s' and resolved_at is null" % (first, gl1[7])) == "t",
+       "12. final check (3): the same entry sent again unchanged: its retry time stays (the backoff holds)")
+    # final check (4): the trigger never waits for the catch-up's lock on the error row (skip locked): no 200 ms wait, no 'missed'
+    eid = db.one("select id from fb_mirror_errors where book_id = '%s' and key = 'v:%s' and resolved_at is null" % (first, gl1[7]))
+    db.sql("update fb_mirror_errors set retry_at = now() + interval '3 minutes' where id = %s" % eid)
+    a = bg("begin; select id from fb_mirror_errors where id = %s for update; select pg_sleep(3); commit;" % eid); time.sleep(0.7)
+    t = time.time(); ingest("update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = '%s';" % (tbf, gl1[7]), catch=False); dt = time.time() - t; a.stdout.read(); a.wait()
+    ok(dt < 0.5 and db.one("select count(*) from fb_mirror_errors where kind = 'missed' and resolved_at is null") == "0",
+       "12. final check (4): the error row locked by a catch-up: the copy's write does not wait (%.2f s) and starts no sweep" % dt)
     # round 4 re-review (2): the entry put right in Tally is noted again: its wait is cleared, and the next run mirrors it
     ingest("update tally_vouchers set narration = 'R4 fixed in Tally (made up)', alter_id = alter_id + 1 where book_id = '%s' and guid = '%s';" % (tbf, gl1[7]), catch=False)
     ok(db.one("select retry_at is null from fb_mirror_errors where book_id = '%s' and key = 'v:%s' and resolved_at is null" % (first, gl1[7])) == "t", "12. round 4: noted again after a fix in Tally: its retry time is cleared")
@@ -575,6 +586,13 @@ try:
     rr = db.rows("select tries from fb_mirror_errors where book_id = '%s' and kind = 'catchup' and key = 'run' and resolved_at is null" % BK)
     db.sql("alter table fb_mirror_state drop constraint rv_run")
     ok(len(rr) == 1 and rr[0]["tries"] == "2", "12. round 4: two failed runs of a book: one open 'run' error, tries 2 (%s)" % rr)
+    # final check (2): the book's next catch-up call that works clears the 'run' error, even while the book is still busy
+    db.sql("alter table fb_vouchers add constraint rv_poison2 check (narration not like 'POISON2%')")
+    ingest("update tally_vouchers set narration = 'POISON2 (made up)', alter_id = alter_id + 1 where book_id = '%s' and guid = '%s';" % (TB1, gs[4]), catch=False)
+    run()
+    ok(db.one("select count(*) from fb_mirror_errors where book_id = '%s' and key = 'run' and resolved_at is null" % BK) == "0" and db.one("select count(*) from fb_mirror_dirty where book_id = '%s'" % BK) != "0",
+       "12. final check (2): a catch-up call that works clears the book's 'run' error although an entry is still waiting")
+    db.sql("alter table fb_vouchers drop constraint rv_poison2; update fb_mirror_errors set retry_at = now() - interval '1 second' where resolved_at is null")
     run()
     ok(db.one("select count(*) from fb_mirror_errors where resolved_at is null") == "0", "12. round 4: the next good run clears it")
     # the timer's runner commits book by book

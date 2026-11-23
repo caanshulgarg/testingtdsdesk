@@ -162,6 +162,12 @@ in Tally) has its retry time cleared, so the next run tries it; the runner's sta
 always last; a book's failed run keeps one open 'run' error, counted; `tries` and `retry_at` are added to an older table
 only when missing (no lock on a re-run).
 
+Final check before applying: the runner's start book turns once per 3-minute run (not per minute); a book's 'run'
+error is cleared by its next catch-up call that works, even while entries still wait; an entry's wait is cleared only when
+it is noted with an AlterID other than the one it failed with (`fb_mirror_errors.src_alter`), or when its rows really
+changed, so the same day sent again unchanged keeps the backoff; the trigger skips an error row the catch-up has locked
+(`for update skip locked`), so a copy write never waits for it.
+
 **Note:** `fb_audit_log.seq` can have gaps. A chunk that fails is rolled back and retried in halves; the sequence values
 its edit-log rows took are not given back (`poison.py`: 669 values for 410 rows). This is expected: the chain links each
 row to the one before it by hash, not by consecutive numbers, and it verifies.
