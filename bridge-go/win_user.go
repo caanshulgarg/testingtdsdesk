@@ -91,7 +91,7 @@ func userLockHeld() bool {
 }
 
 // "Stop": set by the setup and the uninstaller (FinComBridge.exe stop --per-user); the supervisor, the worker and the
-// tray all end. "TrayQuit": set by Quit in the tray, so the supervisor does not bring the icon back until the next start.
+// tray all end. "TrayQuit": set by Quit in the tray ("Hide this icon"); 2.5.19: the icon comes back 10 minutes later (trayquit2519.go).
 func userEvent(what string) windows.Handle {
 	h, _ := windows.CreateEvent(nil, 1, 0, userObj(what)) // manual reset: every process waiting on it sees it
 	return h

@@ -894,6 +894,7 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	if skipped > 0 {
 		writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s of another date (%s) in Tally's list skipped; the day's own %d taken", it.Company, liveDay(it.Day), skipped, map[bool]string{true: "y", false: "ies"}[skipped == 1], liveDay(bad), len(rows)))
 	}
+	vchMidNote(it.Company, rows) // 2.5.19 (N4): the highest entry number seen, for the first band of a heavy day
 	for _, h := range rows {
 		if len(w.heads) >= pullHeadsMax() {
 			pullMarkUpload(w, "toomany", "")

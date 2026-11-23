@@ -192,13 +192,6 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 	return true
 }
 
-func minI64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (b *bigTally) record(sr simReq) {
 	sr.simMs = float64(sr.rows) * tallyPerRowMs // (2.4.5's FinComLedgerIds is recorded at its own row cost, above)
 	b.mu.Lock()

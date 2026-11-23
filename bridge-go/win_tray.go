@@ -559,7 +559,7 @@ func (t *tray) menu() {
 	add(14, "Send install log to FinCom", mfString)
 	add(25, "Clear notifications", mfString) // 2.3.5: every current one cleared, never shown again for the same problem
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
-	add(9, "Quit (hide this icon)", mfString)
+	add(9, "Hide this icon (reading continues; the icon comes back in 10 minutes)", mfString)
 	var pt struct{ x, y int32 }
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 	pSetForegroundWindow.Call(t.hwnd)

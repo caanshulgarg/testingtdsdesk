@@ -239,7 +239,6 @@ func newPostJob(pl M) (M, error) {
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Sending again only what FinCom released", ""
-			delete(v, "resentLooked") // 2.5.19 (E): handed back again: its re-sent entries are looked for again
 			if !startJob(id, dir, v) {
 				return jobView(dir), nil // audit fix: its worker runs already
 			}
@@ -280,7 +279,6 @@ func newPostJob(pl M) (M, error) {
 			_ = os.Remove(filepath.Join(dir, "cancel"))
 			delete(v, "stoppedBy")
 			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Retrying", ""
-			delete(v, "resentLooked") // 2.5.19 (E): handed back again: its re-sent entries are looked for again
 			if !startJob(id, dir, v) {
 				return jobView(dir), nil // audit fix: its worker runs already
 			}
@@ -902,11 +900,14 @@ func jobWorker(dir string) {
 	}
 	// 2.5.19 (E, the owner's option a): an entry FinCom had handed out before is looked for in Tally (FinComTag, its
 	// date) before the first part; an ordinary posting asks nothing more (resent2519.go)
-	if ids := resentIDs(pl); len(ids) > 0 && !truthy(p["resentLooked"]) {
-		left, rs := resentLookFirst(port, company, todo, ids)
+	// review B1: the look is this worker run's only (never kept in progress.json): a job resumed after a stop, or handed
+	// back, looks again; and again in the part loop below whenever FinCom's lease had to be taken anew
+	delete(p, "resentLooked") // (a progress.json of an earlier build of this branch)
+	resent := resentIDs(pl)
+	if len(resent) > 0 {
+		left, rs := resentLookFirst(port, company, todo, resent)
 		results = append(results, rs...)
 		todo = left
-		p["resentLooked"] = true
 	}
 	// what cannot be sent at all (no valid date, not a voucher or master) is said now
 	var masters, vouchers []M
@@ -950,9 +951,32 @@ func jobWorker(dir string) {
 		if !waitRecord() { // 2.5.15 item 4
 			return
 		}
+		hadLease := leaseHeldPost(asked)
 		if !waitLease(asked, setStatus, pause) {
 			cancelled()
 			return
+		}
+		// 2.5.19 (E, review B1): the lease was let go and taken anew: another computer may have posted meanwhile, so the
+		// re-sent entries not sent yet are looked for in Tally again before anything more goes
+		if len(resent) > 0 && !hadLease && leaseHeldPost(asked) {
+			pending := pq.pending()
+			left, rs := resentLookFirst(port, company, pending, resent)
+			if len(rs) > 0 {
+				keep := map[string]bool{}
+				for _, it := range left {
+					keep[str(it["id"])] = true
+				}
+				var gone []M
+				for _, it := range pending {
+					if !keep[str(it["id"])] {
+						gone = append(gone, it)
+					}
+				}
+				pq.drop(gone)
+				results = append(results, rs...)
+				save()
+				continue
+			}
 		}
 		// 2.5.15 item 1 (the owner's approval of 13-Nov-2026): a posting taken from FinCom's queue asks FinCom, before each
 		// part goes to Tally, whether it is still this bridge's and not stopped, cancelled or settled (post_ok, read only,

@@ -401,6 +401,15 @@ func postPaceReset() {
 	postPace.mu.Unlock()
 }
 
+// 2.5.19 (E): the vouchers still to send (as the job's items: id, kind, xml)
+func (q *postQueue) pending() []M {
+	var o []M
+	for _, it := range append(append([]M{}, q.bills...), q.bank...) {
+		o = append(o, M{"id": str(it["id"]), "kind": "voucher", "xml": str(it["xml"])})
+	}
+	return o
+}
+
 // audit fix: entries taken off the queue without being sent (refused on the record under postGate)
 func (q *postQueue) drop(items []M) {
 	gone := map[string]bool{}

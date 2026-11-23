@@ -17,6 +17,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -42,12 +43,53 @@ func pullBandsBegin(w *pullWork) bool {
 		return false // no span known: 2.5.16's way (one voucher type at a time, if on)
 	}
 	n := maxI64(partMinBand, span/16)
+	// the code review's N4: AltVchId can be far above the highest entry number (it counts every alteration); when an
+	// entry number of the company is known, the first band is cut to a sixteenth of that
+	if top := vchMidTop(w.it.Company); top > 0 && top < span {
+		n = minI64(n, maxI64(partMinBand, top/16))
+	}
 	pull.mu.Lock()
 	w.bands, w.bandA, w.bandN, w.bandSpan, w.bandsN, w.bandOpen = true, 1, n, span, 0, n >= span
 	w.heads = map[string]pullHead{}
 	pull.mu.Unlock()
-	writeLog(fmt.Sprintf("Older entries of %s: %s: the day's list took Tally over 2 s; read again in pieces of entry numbers (1 to %d)", w.it.Company, liveDay(w.it.Day), span))
+	writeLog(fmt.Sprintf("Older entries of %s: %s: the day's list took Tally over 2 s; read again in pieces of entry numbers (1 to %d; the highest entry number seen %d; the first piece %d)", w.it.Company, liveDay(w.it.Day), span, vchMidTop(w.it.Company), n))
 	return true
+}
+
+// --- the highest voucher MasterID this bridge has seen for each company in the day lists (N4), this run only
+var vchTop = struct {
+	sync.Mutex
+	m map[string]int64
+}{m: map[string]int64{}}
+
+func vchMidNote(company string, rows []pullHead) {
+	var top int64
+	for _, h := range rows {
+		if m := toI64(h.Mid); m > top {
+			top = m
+		}
+	}
+	if top <= 0 {
+		return
+	}
+	vchTop.Lock()
+	if top > vchTop.m[companyKey(company)] {
+		vchTop.m[companyKey(company)] = top
+	}
+	vchTop.Unlock()
+}
+
+func vchMidTop(company string) int64 {
+	vchTop.Lock()
+	defer vchTop.Unlock()
+	return vchTop.m[companyKey(company)]
+}
+
+func minI64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // the band being asked now: [a, b], b 0 for the last (open-ended)
@@ -168,6 +210,7 @@ func pullBandStep(w *pullWork, port int) (bool, bool) {
 			return true, false
 		}
 	}
+	vchMidNote(it.Company, rows)
 	for _, h := range rows {
 		if len(w.heads) >= pullHeadsMax() {
 			pullMarkUpload(w, "toomany", "")

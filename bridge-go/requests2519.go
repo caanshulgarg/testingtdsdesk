@@ -270,20 +270,48 @@ func vchTypeRowsOf(raw string) ([]any, int64) {
 	return out, top
 }
 
-// C3: [guid, MasterID, AlterID, name, parent, category, employee group]; a payroll centre (FORPAYROLL Yes) is dropped here
+// C3: [guid, MasterID, AlterID, name, parent, category, employee group]. Dropped here, before anything is kept, logged or
+// sent: a payroll centre (FORPAYROLL Yes), an employee group (ISEMPLOYEEGROUP Yes) and every centre under one, at any
+// depth (the security review's I2: a second guard, should a Tally not mark an employee FORPAYROLL). Employees come from
+// FinComEmployees as before. (A centre is not dropped for its cost category: payroll often uses the Primary Cost
+// Category, which every other centre shares.)
 func costCentreRowsOf(raw string) ([]any, int64) {
-	var out []any
+	type cc struct {
+		g, n, parent, cat string
+		mid, alt          int64
+		pay, grp          bool
+	}
+	var all []cc
 	var top int64
 	for _, c := range xmlDoc(raw).All("COSTCENTRE") {
-		n, g, mid := strings.TrimSpace(nameOf(c)), cleanGUID(nt(c, "GUID")), digits(nt(c, "MASTERID"))
-		if mid > top {
-			top = mid
+		r := cc{cleanGUID(nt(c, "GUID")), strings.TrimSpace(nameOf(c)), strings.TrimSpace(re(`^\W*Primary$`).ReplaceAllString(nt(c, "PARENT"), "")), nt(c, "CATEGORY"),
+			digits(nt(c, "MASTERID")), digits(nt(c, "ALTERID")), yes(nt(c, "FORPAYROLL")), yes(nt(c, "ISEMPLOYEEGROUP"))}
+		if r.mid > top {
+			top = r.mid
 		}
-		if n == "" || g == "" || yes(nt(c, "FORPAYROLL")) {
+		all = append(all, r)
+	}
+	parent, off := map[string]string{}, map[string]bool{}
+	for _, r := range all {
+		parent[strings.ToLower(r.n)] = strings.ToLower(r.parent)
+		if r.pay || r.grp {
+			off[strings.ToLower(r.n)] = true
+		}
+	}
+	under := func(n string) bool {
+		for i, p := 0, strings.ToLower(n); p != "" && i < 50; i, p = i+1, parent[p] {
+			if off[p] {
+				return true
+			}
+		}
+		return false
+	}
+	var out []any
+	for _, r := range all {
+		if r.n == "" || r.g == "" || r.pay || r.grp || under(r.parent) {
 			continue
 		}
-		out = append(out, []any{g, mid, digits(nt(c, "ALTERID")), tdsText(n, 200), tdsText(re(`^\W*Primary$`).ReplaceAllString(nt(c, "PARENT"), ""), 200),
-			tdsText(nt(c, "CATEGORY"), 200), yes(nt(c, "ISEMPLOYEEGROUP"))})
+		out = append(out, []any{r.g, r.mid, r.alt, tdsText(r.n, 200), tdsText(r.parent, 200), tdsText(r.cat, 200), r.grp})
 	}
 	return out, top
 }
@@ -414,22 +442,23 @@ type booksSpec struct {
 	chunk         int // MasterIDs a request; 0: one request
 	build         func(company, bf string, after, upto int64) string
 	rows          func(raw string) ([]any, int64)
+	daily         bool // the code review's N7: read at most once a day (the opening bills: many requests, rarely changed)
 }
 
 var booksSpecs = []booksSpec{
-	{"voucherTypes", vchTypesID, "the voucher types", 2000, func(c, _ string, a, z int64) string { return vchTypesRequest(c, a, z) }, vchTypeRowsOf},
-	{"costCentres", costCentresID, "the cost centres", 2000, func(c, _ string, a, z int64) string { return costCentresRequest(c, a, z) }, costCentreRowsOf},
-	{"costCategories", costCatsID, "the cost categories", 0, func(c, _ string, _, _ int64) string { return costCatsRequest(c) }, costCatRowsOf},
-	{"gstRegistrations", gstRegsID, "the GST registrations", 0, func(c, _ string, _, _ int64) string { return gstRegsRequest(c) }, gstRegRowsOf},
-	{"billOpenings", billOpenID, "the opening bills", 500, func(c, bf string, a, z int64) string { return billOpenRequest(c, bf, a, z) }, billOpenRowsOf},
+	{"voucherTypes", vchTypesID, "the voucher types", 2000, func(c, _ string, a, z int64) string { return vchTypesRequest(c, a, z) }, vchTypeRowsOf, false},
+	{"costCentres", costCentresID, "the cost centres", 2000, func(c, _ string, a, z int64) string { return costCentresRequest(c, a, z) }, costCentreRowsOf, false},
+	{"costCategories", costCatsID, "the cost categories", 0, func(c, _ string, _, _ int64) string { return costCatsRequest(c) }, costCatRowsOf, false},
+	{"gstRegistrations", gstRegsID, "the GST registrations", 0, func(c, _ string, _, _ int64) string { return gstRegsRequest(c) }, gstRegRowsOf, false},
+	{"billOpenings", billOpenID, "the opening bills", 500, func(c, bf string, a, z int64) string { return billOpenRequest(c, bf, a, z) }, billOpenRowsOf, true},
 }
 
 func (k *keepRun) booksMasters(company string, port int, bf string, st, ls M, inBudget func() bool, save func()) (bool, error) {
 	for _, sp := range booksSpecs {
 		dk := "bm_" + sp.key
 		for !truthy(ls[dk+"Done"]) {
-			if str(st[dk+"Off"]) == BridgeVersion {
-				ls[dk+"Done"], ls[dk+"Skip"] = true, true
+			if str(st[dk+"Off"]) == BridgeVersion || (sp.daily && str(st[dk+"Day"]) == tallyDate(nowFn()) && !truthy(ls[dk+"Began"])) {
+				ls[dk+"Done"], ls[dk+"Skip"] = true, true // (a daily kind read today already: FinCom keeps what it has)
 				break
 			}
 			if !inBudget() || k.holdNow() != "" {
@@ -486,10 +515,14 @@ func (k *keepRun) booksMasters(company string, port int, bf string, st, ls M, in
 			}
 			rows, top := sp.rows(raw)
 			ls[dk] = append(arr(ls[dk]), rows...)
+			ls[dk+"Began"] = true
 			ls["reqs"] = toInt(ls["reqs"]) + 1
 			if tail {
 				ls[dk+"Done"] = true
 				delete(st, dk+"Miss")
+				if sp.daily {
+					st[dk+"Day"] = tallyDate(nowFn())
+				}
 			} else {
 				ls[dk+"After"] = upto
 				if top > bound {

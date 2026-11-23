@@ -8,8 +8,11 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -174,7 +177,10 @@ func r2519MastersAnswer(f *standTally) {
 			x = `<VOUCHERTYPE NAME="Sales - Delhi"><GUID>vt-1</GUID><MASTERID> 41</MASTERID><ALTERID> 7</ALTERID><PARENT>Sales</PARENT><NUMBERINGMETHOD>Automatic</NUMBERINGMETHOD><ISACTIVE>Yes</ISACTIVE><AFFECTSSTOCK>No</AFFECTSSTOCK><ISOPTIONAL>No</ISOPTIONAL><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE></VOUCHERTYPE>`
 		case costCentresID:
 			x = `<COSTCENTRE NAME="Branch East"><GUID>cc-1</GUID><MASTERID> 51</MASTERID><ALTERID> 8</ALTERID><PARENT>&#4; Primary</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>No</FORPAYROLL><ISEMPLOYEEGROUP>No</ISEMPLOYEEGROUP></COSTCENTRE>` +
-				`<COSTCENTRE NAME="Asha Rao"><GUID>cc-2</GUID><MASTERID> 52</MASTERID><ALTERID> 9</ALTERID><PARENT>Office Staff</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><ISEMPLOYEEGROUP>No</ISEMPLOYEEGROUP></COSTCENTRE>`
+				`<COSTCENTRE NAME="Asha Rao"><GUID>cc-2</GUID><MASTERID> 52</MASTERID><ALTERID> 9</ALTERID><PARENT>Office Staff</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><ISEMPLOYEEGROUP>No</ISEMPLOYEEGROUP></COSTCENTRE>` +
+				// the security review's I2: an employee group, and an employee under it that a Tally did not mark FORPAYROLL
+				`<COSTCENTRE NAME="Office Staff"><GUID>cc-3</GUID><MASTERID> 53</MASTERID><ALTERID> 9</ALTERID><PARENT>&#4; Primary</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>No</FORPAYROLL><ISEMPLOYEEGROUP>Yes</ISEMPLOYEEGROUP></COSTCENTRE>` +
+				`<COSTCENTRE NAME="Ravi Menon"><GUID>cc-4</GUID><MASTERID> 54</MASTERID><ALTERID> 9</ALTERID><PARENT>Office Staff</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>No</FORPAYROLL><ISEMPLOYEEGROUP>No</ISEMPLOYEEGROUP></COSTCENTRE>`
 		case costCatsID:
 			x = `<COSTCATEGORY NAME="Primary Cost Category"><GUID>ck-1</GUID><MASTERID> 3</MASTERID><ALTERID> 3</ALTERID><ALLOCATEREVENUE>Yes</ALLOCATEREVENUE><ALLOCATENONREVENUE>No</ALLOCATENONREVENUE></COSTCATEGORY>`
 		case billOpenID:
@@ -260,8 +266,18 @@ func TestR2519MastersReadSendsTheBooksMasters(t *testing.T) {
 	if _, has := books["gstRegistrations"]; has {
 		t.Fatal("GST registrations sent while unconfirmed")
 	}
-	if strings.Contains(jsonText(body), "Asha Rao") {
+	if strings.Contains(jsonText(body), "Asha Rao") || strings.Contains(jsonText(body), "Ravi Menon") || strings.Contains(jsonText(body), "Office Staff") {
 		t.Fatal("a payroll centre went with the books masters")
+	}
+}
+
+// N7: the opening bills at most once a day (a second masters round the same day leaves them: FinCom keeps its own)
+func TestR2519BillOpeningsOnceADay(t *testing.T) {
+	f, _ := r2519Round(t)
+	n := f.n(billOpenID)
+	runNow(t, "now")
+	if f.n(billOpenID) != n || f.n(vchTypesID) < 2 {
+		t.Fatalf("the opening bills asked again the same day: %d then %d (voucher types %d)", n, f.n(billOpenID), f.n(vchTypesID))
 	}
 }
 
@@ -730,9 +746,173 @@ func TestR2519ResentLookDateChecked(t *testing.T) {
 	c.mu.Unlock()
 	cloudPostTake()
 	time.Sleep(300 * time.Millisecond)
-	waitJob(t, "job-e3-000001")
-	if f.tagged("TDSDesk:r41") != 2 {
-		t.Fatalf("a mark on another date stopped the posting (%d in Tally)", f.tagged("TDSDesk:r41"))
+	p := waitJob(t, "job-e3-000001")
+	// the code review's B2: an answer holding an entry of another date says Tally did not apply the date: the look
+	// failed for that date, and the entry is not sent (the one in Tally may well be it)
+	if f.tagged("TDSDesk:r41") != 1 {
+		t.Fatalf("sent on a look whose date was not applied (%d in Tally)", f.tagged("TDSDesk:r41"))
+	}
+	if !r2519Result(p, "r41", "checkFailed", "notSent") {
+		t.Fatalf("r41's result: %v", p["results"])
+	}
+}
+
+func r2519Result(p M, id string, flags ...string) bool {
+	for _, r := range arr(p["results"]) {
+		o := obj(r)
+		if str(o["id"]) != id {
+			continue
+		}
+		for _, f := range flags {
+			if o[f] != true {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// a resent job of one entry, taken from FinCom's queue
+func r2519Resent(t *testing.T, c *standCloud, job, id, xml string) M {
+	t.Helper()
+	c.mu.Lock()
+	c.takeJobs = []M{{"id": job, "company": zz, "payload": M{"vouchers": []any{M{"id": id, "xml": xml}}}, "resendOnly": []any{id}}}
+	c.mu.Unlock()
+	cloudPostTake()
+	time.Sleep(300 * time.Millisecond)
+	return waitJob(t, job)
+}
+
+// B2: an answer cut short (its envelope not closed) is a look that failed, never "no entries"
+func TestR2519ResentLookCutShort(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id != tagCheckID {
+			return false
+		}
+		_, _ = w.Write([]byte(`<ENVELOPE><BODY><DATA><COLLECTION>`))
+		return true
+	}
+	f.mu.Unlock()
+	p := r2519Resent(t, c, "job-e6-000001", "r81", finVoucher("r81", fgParty, "R-81", td, "81.00"))
+	if f.tagged("TDSDesk:r81") != 0 || !r2519Result(p, "r81", "checkFailed", "notSent") {
+		t.Fatalf("sent on a cut answer: %d in Tally, %v", f.tagged("TDSDesk:r81"), p["results"])
+	}
+}
+
+// N2 (E.3.4): a date whose look failed twice: its entries are held for a person (plain words), never sent unchecked
+func TestR2519ResentLookFailedTwiceHeld(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == tagCheckID {
+			return 2600 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	x := finVoucher("r82", fgParty, "R-82", td, "82.00")
+	p := r2519Resent(t, c, "job-e7-000001", "r82", x)
+	if r2519Result(p, "r82", "needsReview") {
+		t.Fatal("held for a person after one failed look")
+	}
+	p = r2519Resent(t, c, "job-e7-000002", "r82", x)
+	if f.tagged("TDSDesk:r82") != 0 || !r2519Result(p, "r82", "needsReview", "notSent") {
+		t.Fatalf("the second failed look: %d in Tally, %v", f.tagged("TDSDesk:r82"), p["results"])
+	}
+	for _, r := range arr(p["results"]) {
+		if o := obj(r); str(o["id"]) == "r82" && !strings.Contains(str(o["message"]), "release it in FinCom") {
+			t.Fatalf("not plain words for a person: %v", o["message"])
+		}
+	}
+}
+
+// N1: a re-sent entry with nothing to look for (no FinCom mark) is held for a person, never sent unchecked; and the
+// look's 2 s stop stays whatever RecorderLimitMs says
+func TestR2519ResentNoMarkHeld(t *testing.T) {
+	if left, rs := resentLookFirst(1, zz, []M{{"id": "r83", "kind": "voucher", "xml": "<VOUCHER><DATE>20261123</DATE></VOUCHER>"}}, map[string]bool{"r83": true}); len(left) != 0 || len(rs) != 1 || rs[0]["needsReview"] != true {
+		t.Fatalf("an entry with no mark: left %v, results %v", left, rs)
+	}
+	setCfg("RecorderLimitMs", 0)
+	defer setCfg("RecorderLimitMs", nil)
+	if resentLimitMs() != 2000 {
+		t.Fatalf("the look's stop with RecorderLimitMs 0: %d", resentLimitMs())
+	}
+	// N1: the ids keyed as a release matches them
+	if ids := resentIDs(M{"released": []any{M{"id": "r84"}}}); !resentOne(ids, "r84", finVoucher("r84", fgParty, "R-84", "20261123", "1.00")) {
+		t.Fatal("a released id not matched")
+	}
+}
+
+// I1: at most 7 dates looked at for one posting; the entries of further dates are held for a person
+func TestR2519ResentDatesCapped(t *testing.T) {
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	var va, only []any
+	for i := 0; i < 9; i++ {
+		id := fmt.Sprintf("r9%d", i)
+		va = append(va, M{"id": id, "xml": finVoucher(id, fgParty, "R-9"+fmt.Sprint(i), tallyDate(time.Now().AddDate(0, 0, -i)), "9.00")})
+		only = append(only, id)
+	}
+	n0 := f.n(tagCheckID)
+	c.mu.Lock()
+	c.takeJobs = []M{{"id": "job-e8-000001", "company": zz, "payload": M{"vouchers": va}, "resendOnly": only}}
+	c.mu.Unlock()
+	cloudPostTake()
+	time.Sleep(300 * time.Millisecond)
+	p := waitJob(t, "job-e8-000001")
+	if f.n(tagCheckID)-n0 != 7 {
+		t.Fatalf("%d dates looked at", f.n(tagCheckID)-n0)
+	}
+	held := 0
+	for _, r := range arr(p["results"]) {
+		if o := obj(r); o["needsReview"] == true && o["notSent"] == true {
+			held++
+		}
+	}
+	if held != 2 {
+		t.Fatalf("%d entries held for a person, want 2: %v", held, p["results"])
+	}
+}
+
+// B1: a job stopped after its look and resumed: the entry posted elsewhere meanwhile is found by a new look, never
+// posted again on the old one (the look is never kept with the job)
+func TestR2519ResumedJobLooksAgain(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	x := finVoucher("r85", fgParty, "R-85", td, "85.00")
+	x, _ = stampFinComID(x, "r85")
+	id := "job-e9-000001"
+	dir, err := jobDir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(dir, 0o755)
+	// as a job leaves it when the bridge stopped after the look and before the part: the look recorded as done
+	_ = saveJSONBak(filepath.Join(dir, "payload.json"), M{"company": zz, "guid": "co-guid-1", "fromCloud": true, "checkFirst": []any{"r85"},
+		"items": []any{M{"id": "r85", "kind": "voucher", "xml": x}}, "released": []any{}})
+	_ = writeProgress(dir, M{"ok": true, "id": id, "status": "interrupted", "company": zz, "total": 1, "done": 0, "results": []any{}, "resentLooked": true, "reqs": []any{}})
+	// meanwhile posted from another computer
+	f.add(td, fgParty, "R-85", "TDSDesk:r85 | posted from another computer", "-85.00")
+	n0 := f.n(tagCheckID)
+	if _, err := resumePostJob(id); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	waitJob(t, id)
+	if f.tagged("TDSDesk:r85") != 1 || f.n(tagCheckID) == n0 {
+		t.Fatalf("resumed: %d in Tally, %d looks", f.tagged("TDSDesk:r85"), f.n(tagCheckID)-n0)
 	}
 }
 
@@ -860,3 +1040,121 @@ func TestR2519ResentLookGate(t *testing.T) {
 }
 
 var _ = regexp.MustCompile
+
+// B1: the lease let go between two parts and taken anew: the re-sent entries not sent yet are looked for again (the
+// second was posted from another computer while this one waited)
+func TestR2519LeaseRetakenLooksAgain(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200,"PostBatchBills":1,"PostPaceOff":true,"LeaseSec":1`+c.cfg())
+	first := true
+	f.mu.Lock()
+	f.importAt = func(id, body string) (bool, time.Duration) {
+		if first {
+			first = false
+			f.add(td, fgParty, "R-87", "TDSDesk:r87 | posted from another computer", "-87.00")
+			return true, 1500 * time.Millisecond // the lease (1 s) runs out meanwhile
+		}
+		return true, 0
+	}
+	f.mu.Unlock()
+	va := []any{M{"id": "r86", "xml": finVoucher("r86", fgParty, "R-86", td, "86.00")}, M{"id": "r87", "xml": finVoucher("r87", fgParty, "R-87", td, "87.00")}}
+	n0 := f.n(tagCheckID)
+	c.mu.Lock()
+	c.takeJobs = []M{{"id": "job-e10-00001", "company": zz, "payload": M{"vouchers": va}, "resendOnly": []any{"r86", "r87"}}}
+	c.mu.Unlock()
+	cloudPostTake()
+	time.Sleep(300 * time.Millisecond)
+	p := waitJob(t, "job-e10-00001")
+	if f.tagged("TDSDesk:r86") != 1 || f.tagged("TDSDesk:r87") != 1 {
+		t.Fatalf("r86 %d, r87 %d in Tally; %d looks; %v", f.tagged("TDSDesk:r86"), f.tagged("TDSDesk:r87"), f.n(tagCheckID)-n0, p["results"])
+	}
+	if !r2519Result(p, "r87", "already") {
+		t.Fatalf("r87's result: %v", p["results"])
+	}
+}
+
+// N8: the open last band stopped at 2 s is asked again closed, in half, and the bands still cover the day end to end;
+// entries numbered above the span (AltVchId) come in the open band
+func TestR2519OpenBandStoppedThenClosed(t *testing.T) {
+	f, x, m := r2519BandDay(t)
+	pullDay(f, "20250831", 2500, "Sales", "Receipt") // above the span of 2,000
+	r2519Bands(f, false)
+	var once sync.Once
+	f.mu.Lock()
+	prev := f.slow
+	f.slow = func(id, body string) time.Duration {
+		d := time.Duration(0)
+		if id == dayPartID && !strings.Contains(body, "&lt;=") {
+			once.Do(func() { d = 2500 * time.Millisecond })
+		}
+		if d > 0 {
+			return d
+		}
+		return prev(id, body)
+	}
+	f.mu.Unlock()
+	r2516Person(t, 70)
+	applyPeriodDays(pullList("20250831"))
+	pullRun(t, 5)
+	retryReset()
+	pullRun(t, 40)
+	retryReset()
+	pullRun(t, 40)
+	bands := r2516Bodies(f, dayPartID)
+	next, opens, closedAfterOpen := int64(1), 0, false
+	for i, b := range bands {
+		mm := reDayPart.FindStringSubmatch(b)
+		if mm[2] == "" {
+			opens++
+			if i == len(bands)-1 {
+				break
+			}
+			if toI64(mm[1]) != next {
+				t.Fatalf("the open band from %s, want %d", mm[1], next)
+			}
+			continue // stopped: asked again closed from the same start
+		}
+		if toI64(mm[1]) != next {
+			t.Fatalf("band %d from %s, want %d: %v", i, mm[1], next, bands)
+		}
+		if opens == 1 {
+			closedAfterOpen = true
+		}
+		next = toI64(mm[2]) + 1
+	}
+	if opens != 2 || !closedAfterOpen {
+		t.Fatalf("the open band stopped then closed: %v", bands)
+	}
+	if m.n["20250831"] != 6 || len(x.dayStops) != 0 {
+		t.Fatalf("the day: %v entries, stops %v", m.n, x.dayStops)
+	}
+}
+
+// N4: with a known highest entry number far below AltVchId, the first band is cut to a sixteenth of it
+func TestR2519FirstBandByHighestEntry(t *testing.T) {
+	f, _, _ := r2519BandDay(t)
+	altMu.Lock()
+	companyAlts[companyKey(zz)] = 64000
+	altMu.Unlock()
+	vchMidNote(zz, []pullHead{{Mid: "3200"}})
+	r2519Bands(f, false)
+	r2516Person(t, 70)
+	applyPeriodDays(pullList("20250831"))
+	pullRun(t, 5)
+	retryReset()
+	pullRun(t, 3)
+	bands := r2516Bodies(f, dayPartID)
+	if len(bands) == 0 || reDayPart.FindStringSubmatch(bands[0])[2] != "200" {
+		t.Fatalf("the first band: %v", bands)
+	}
+}
+
+// the security review's I4: the tray's Quit says plainly what it does now (reading goes on; the icon comes back)
+func TestR2519TrayQuitWords(t *testing.T) {
+	src := readText("win_tray.go")
+	if !strings.Contains(src, `"Hide this icon (reading continues; the icon comes back in 10 minutes)"`) || strings.Contains(src, `"Quit (hide this icon)"`) {
+		t.Fatal("the tray's Quit words")
+	}
+}
