@@ -610,6 +610,10 @@ const MarketRead = {
       // a cancellation with no sale of it in this report, or a return cancelled with no return in it: asked, never booked by itself
       if (!x.note && x.total < 0) x.hold = x.hold || "A cancellation with no sale of " + x.no + " in this report: is it a credit note against an invoice booked before? Set its type";
       if (x.note && x.total > 0) x.hold = x.hold || "A return cancelled with no return of " + x.no + " in this report: set its type";
+      // (release review 23-Nov-2026) a date before GST began (1 July 2017) or after 2035: held, as SheetFmt.apply holds a
+      // register's row (Market.date itself reads any year 1990-2099, for the other readers)
+      if (x.date && x.date < "2017-07-01") x.hold = x.hold || "The date " + x.date + " is before GST began (1 July 2017): check the date or the report";
+      else if (x.date > "2035-12-31") x.hold = x.hold || "The date " + x.date + " is years ahead: check the date or the report";
     });
     return out;
   },

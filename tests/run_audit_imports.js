@@ -270,6 +270,15 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
   tryOk(() => C.TDSPanFix.sheetLines([["Company Name", "Ledger Code", "PAN"], ["ZZ Party One Pvt Ltd", "LC001", "ABCDE1234F"]]) === "ZZ Party One Pvt Ltd\tABCDE1234F"
     && C.TDSPanFix.sheetLines([["Name", "PAN No", "Ledger Code"], ["ZZ P", "ABCDE1234F", "LC1"]]) === "ZZ P\tABCDE1234F", "the PAN book: 'Company Name' is the name column (company holds 'pan'), not the code");
 
+  console.log("20. the release review (23-Nov-2026): a marketplace report's dates before GST or years ahead are held, as a register's");
+  const azD = [["Invoice Number", "Invoice Date", "Transaction Type", "Order Id", "Ship To State", "Invoice Amount", "Tax Exclusive Gross", "Igst Tax"],
+    ["AMZ-31", "05/09/2015", "Shipment", "O-31", "KARNATAKA", 1180, 1000, 180], ["AMZ-32", "05/09/2036", "Shipment", "O-32", "KARNATAKA", 1180, 1000, 180], ["AMZ-33", "05/09/2026", "Shipment", "O-33", "KARNATAKA", 1180, 1000, 180]];
+  tryOk(() => { const d = F.apply(F.builtin(azD[0], "sales"), azD, 0, CO, "sales"), a = by(d, "AMZ-31")[0], b = by(d, "AMZ-32")[0], c = by(d, "AMZ-33")[0];
+    return a && a.date === "2015-09-05" && /before GST/.test(a.hold || "") && /check the date/.test(a.hold || "") && b && /years ahead/.test(b.hold || "") && /check the date/.test(b.hold || "") && c && !c.hold; },
+    "an Amazon report: AMZ-31 of 05/09/2015 held (before GST began, check the date), AMZ-32 of 2036 held (years ahead), AMZ-33 of 2026 not");
+  const shD = [["Name", "Created at", "Financial Status", "Total", "Taxes", "Lineitem name", "Lineitem price", "Tax 1 Name", "Tax 1 Value", "Shipping Province"], ["#1001", "2016-03-01 10:00:00 +0530", "paid", 1180, 180, "ZZ Mug", 1000, "IGST 18%", 180, "KA"]];
+  tryOk(() => { const d = F.apply(F.builtin(shD[0], "sales"), shD, 0, CO, "sales"); return d.length === 1 && /before GST/.test(d[0].hold || ""); }, "a Shopify order of 1 March 2016: held, before GST began");
+
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();
