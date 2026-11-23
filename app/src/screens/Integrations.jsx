@@ -9,6 +9,7 @@
 //   Busy                  coming soon (disabled).
 // Who may do what: every member sees it; only the firm's owner connects, links, reconnects or disconnects (the function
 // refuses anyone else too); the owner or staff may ask for a read now.
+import "../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 import { Plug, BookOpen, CircleDashed, ArrowLeft, RefreshCw } from "lucide-react";
 import Button from "../parts/Button.jsx";

@@ -121,7 +121,7 @@ export async function build(ExcelJS, d) {
   const IR = (k, n) => Q(SH.inreg) + "$" + IL(k) + "$" + n;
   d.rows.forEach((x, j) => {
     const r = j + 2, v = [];
-    v[RC.key] = x.key; v[RC.status] = x.status + (x.fixed ? " · " + x.fixed : ""); v[RC.party] = x.party; v[RC.gstin] = x.gstin; v[RC.no] = x.no || x.bookNo; v[RC.date] = day(x.date);
+    v[RC.key] = x.key; v[RC.status] = x.status + (x.fixed ? " · " + x.fixed : "") + (x.na ? " · " + x.na : ""); v[RC.party] = x.party; v[RC.gstin] = x.gstin; v[RC.no] = x.no || x.bookNo; v[RC.date] = day(x.date);
     v[RC.bm] = x.bm; v[RC.tm] = x.tm; v[RC.bTax] = tot(x.bTax); v[RC.pTax] = tot(x.pTax); v[RC.dec] = x.dec; v[RC.takeIn] = x.takeIn; v[RC.elig] = x.elig || ""; v[RC.note] = x.note; v[RC.kind] = x.kind;
     v[RC.def] = x.def; v[RC.def2] = x.def2; v[RC.defE] = x.defE || ""; v[RC.line] = x.line || "4A5";
     ["booksM", "lower", "full", "later", "defAmt", "blkM"].forEach((k) => H.forEach((h, i) => { v[RC[k] + i] = +((x[k] || {})[h]) || 0; }));

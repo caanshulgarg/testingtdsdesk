@@ -3,8 +3,11 @@
 // (src/js/33). The records are CustIMS (33); changes go through custImsAdd, custImsSet, custImsRemove, custImsLetter.
 //
 // State: S.custImsQ (the number being looked for).
+import "../../../../src/js/99-screen-parts.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import ListTable from "../../parts/ListTable.jsx";
+import { installCustIms } from "../../lib/custImsLetter.js";
+installCustIms();   // CustIMS.letter and CustIMS.customers (moved out of the engine)
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));

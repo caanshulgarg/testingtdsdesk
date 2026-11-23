@@ -3,6 +3,7 @@
 // viewVendorRecon (src/js/42). The matching is VR / runVendorRecon (42); the form goes through vrSet and vrFile.
 //
 // State: S.vrec (ledger, from, to, the file, busy, res: the result).
+import "../../../src/js/99-screen-parts.js";
 import { useRef } from "react";
 import "../lib/vendorRecon.js";
 import { BusyCard } from "../parts/Reading.jsx";

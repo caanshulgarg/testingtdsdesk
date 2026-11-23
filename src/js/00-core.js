@@ -53,7 +53,6 @@ const GST_DEFAULTS = {cgst:"Input CGST", sgst:"Input SGST", igst:"Input IGST"};
 const DEFAULT_FIRM = {firmName:"", rules:{}};
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/;
-const DB_LIMIT = 5000;
 const APP_VERSION = "30 Sep 2026 · build 199 (posting queue: post from any computer, the Tally computer posts when Tally is free; posted entries go to the cloud without reading Tally again)";
 // the bridge setup file's fingerprint, put in by build.py: a new setup file is never served from an old cache
 const BRIDGE_SETUP_SHA = "{{BRIDGE_SETUP_SHA}}";
@@ -175,6 +174,21 @@ function ldcUsed(party, cert, cid, skip){
 }
 function rules(){ return RULE_DEFAULTS.map(r => Object.assign({}, r, (S.firm.rules || {})[r.id] || {})); }
 function ruleOf(id){ return rules().find(r => r.id === id) || rules().find(r => r.id === "none"); }
+// a bill dated before the limits and rates in force now (audit of 22-Nov-2026: a bill of 10-Mar-2025 was tested against
+// FY 2025-26's limits). Finance Act 2025, from 1-Apr-2025: 194J ₹30,000 → ₹50,000, 194H ₹15,000 → ₹20,000, 194A (others)
+// ₹5,000 → ₹10,000, 194-I ₹2,40,000 a year → ₹50,000 a month, 194T new (none before). Finance (No. 2) Act 2024, from
+// 1-Oct-2024: 194H 5% → 2%, 194-IB 5% → 2%, 194-O 1% → 0.1%. Only a limit or rate left at its default is changed (one set
+// under Rates and limits is the firm's own)
+const RULE_OLD = [["20241001", {commission: {rateInd: 5, rateOth: 5}, rent_individual: {rateInd: 5, rateOth: 5}, ecommerce: {rateInd: 1, rateOth: 1}}],
+  ["20250401", {professional: {limit: 30000}, technical: {limit: 30000}, commission: {limit: 15000}, interest: {limit: 5000},
+    rent_building: {limit: 240000, basis: "annual"}, rent_machinery: {limit: 240000, basis: "annual"}, partner: {basis: "never"}}]];
+function ruleOn(r, d){
+  const t = String(d || "").replace(/-/g, "").slice(0, 8), def = RULE_DEFAULTS.find(z => z.id === r.id) || {};
+  let o = r;
+  RULE_OLD.forEach(([to, m]) => { const c = /^\d{8}$/.test(t) && t < to && m[r.id];
+    if (c) Object.keys(c).forEach(k => { if (r[k] === def[k] && o[k] !== c[k]){ if (o === r) o = Object.assign({}, r, {dated: "Limits and rates as they were on the bill's date (" + fmtDate(d) + ")."}); o[k] = c[k]; } }); });
+  return o;
+}
 function D(cid){ return S.data[cid || S.coId] || {parties:{}, entries:{}, loaded:false}; }
 function CO(cid){ return S.companies[cid || S.coId]; }
 

@@ -32,7 +32,8 @@ fails, errors, cons = [], [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-LINE = "Older entries: in Tally open Day Book, choose the period (Alt+F2), E: Export → File Format (F8): XML or JSON, then drop the file here."
+# (audit 22-Nov-2026: the export keys as everywhere: Alt+E → Current, F8, E)
+LINE = "Older entries: in Tally open Day Book, press Alt+F2 for the period, then Alt+E (Export) → Current, F8 (File Format): XML or JSON, and E to export; then drop the file here."
 T = datetime.datetime.utcnow().strftime("%Y-%m-%d")
 AT1042, AT1542 = T + "T05:12:00Z", T + "T10:12:00Z"
 IST = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)

@@ -8,7 +8,9 @@
 const fs = require("fs"), crypto = require("crypto"), {load, openBlob, HTML, DATA, CACHE} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX", "FAR"];
 const src = fs.readFileSync(HTML, "utf8");
-const names = NAMES.concat(/\nconst AuditWP\b/.test(src) ? ["AuditWP", "GSTCMP", "AS26"].filter(n => n === "AuditWP" || new RegExp("\\nconst " + n + "\\b").test(src)) : []);
+const names = NAMES.concat(/\nconst AuditWP\b/.test(src) ? ["AuditWP", "GSTCMP", "AS26"].filter(n => n === "AuditWP" || new RegExp("\\nconst " + n + "\\b").test(src)) : [])
+  // the 3CD draft (Audit.form3cd) is with the Audit screen's file (src/js/77-audit.js AuditRep)
+  .concat(/\nconst AuditRep\b/.test(src) ? ["AuditRep"] : []);
 const {ctx, x} = load(HTML, names);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 (async () => {

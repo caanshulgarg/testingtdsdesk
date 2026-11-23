@@ -46,6 +46,16 @@ for (const which of ["company", "firm"]){
   let rc = ""; try { rc = execFileSync("python3", ["-W", "ignore", path.join(__dirname, "reports_recalc.py"), file], {encoding: "utf8", timeout: 300000}); } catch (e){ rc = String(e.stdout || e.message); }
   const counts = [...rc.matchAll(/(\d+) formulas, (\d+) differ/g)].map(m => [Number(m[1]), Number(m[2])]);
   ok(counts.length >= 1 && counts.every(([n, d]) => n > 50 && d === 0), "5. the Excel recalculated independently: " + rc.split("\n").filter(l => /formulas/.test(l)).map(l => l.replace(/^\S+ /, "")).join("; "));
+  // (review of 22-Nov-2026) a head whose Tally group's name holds * (made up: "Salary*" beside "Salary"): matched exactly
+  if (which === "company" && cm.pay.length >= 2){
+    const c2 = JSON.parse(JSON.stringify(cm)), [h1, h2] = c2.pay;
+    const n1 = h1.head, n2 = h2.head; h1.head = "Salary"; h2.head = "Salary*";
+    c2.lines.forEach(x => { if (x.head === n1) x.head = "Salary"; else if (x.head === n2) x.head = "Salary*"; });
+    const f2 = path.join(OUT, "reports-cash-star.xlsx"); fs.writeFileSync(f2, X.cashMisExcel(c2));
+    let r2 = ""; try { r2 = execFileSync("python3", ["-W", "ignore", path.join(__dirname, "reports_recalc.py"), f2], {encoding: "utf8", timeout: 300000}); } catch (e){ r2 = String(e.stdout || e.message); }
+    const c3 = [...r2.matchAll(/(\d+) formulas, (\d+) differ/g)].map(m => [Number(m[1]), Number(m[2])]);
+    ok(c3.length >= 1 && c3.every(([n, d]) => d === 0), "5. a head named \"Salary*\" beside \"Salary\": each adds only its own lines when recalculated: " + r2.split("\n").filter(l => /formulas/.test(l)).map(l => l.replace(/^\S+ /, "")).join("; "));
+  }
   ok(/@bottom-right\{content:counter\(page\) " \/ " counter\(pages\)\}/.test(html) && html.includes("Reconciliation to the accrual profit"), "5. the print (PDF) view, with the reconciliation");
 }
 console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

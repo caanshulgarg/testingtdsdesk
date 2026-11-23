@@ -46,28 +46,6 @@ const TDSCH = {
     // 194J and its parts (194JA technical, 194JB professional) are paid under one code by many
     return /^194J/.test(a) && /^194J/.test(b) && (a === "194J" || b === "194J");
   },
-  /* ---------- Tally bill-wise ---------- */
-  // the deductions a payment voucher pays bill-wise: its TDS-ledger lines' Agst Ref names, met with the New Ref the
-  // deduction put on the same ledger
-  billIndex(){
-    const b = S.books || {}, idx = {};
-    (b.vouchers || []).forEach(v => (v.ent || []).forEach(e => {
-      if (!(e.a > 0) || !e.b || Books.ledgerOf(e.l).kind !== "tds_payable") return;
-      e.b.forEach(([name, type]) => { if (/new/i.test(type || "") && name) (idx[e.l + "\u0001" + String(name).trim().toUpperCase()] = idx[e.l + "\u0001" + String(name).trim().toUpperCase()] || []).push(v.id + "|" + e.l); });
-    }));
-    return idx;
-  },
-  billLinks(v, idx){
-    const out = [];
-    if (!v) return out;
-    (v.ent || []).forEach(e => {
-      if (!(e.a < 0) || !e.b || Books.ledgerOf(e.l).kind !== "tds_payable") return;
-      e.b.forEach(([name, type]) => { if (/agst/i.test(type || "") && name) (idx[e.l + "\u0001" + String(name).trim().toUpperCase()] || []).forEach(id => { if (!out.includes(id)) out.push(id); }); });
-    });
-    return out;
-  },
-  // how many deductions a Tally payment voucher pays bill-wise (shown beside it before it is a challan)
-  billCount(vid){ const v = ((S.books || {}).vouchers || []).find(x => x.id === vid); return this.billLinks(v, this.billIndex()).length; },
   /* ---------- proposals ---------- */
   // next-challan-match (17-Oct-2026): the proposals that were here (section and month, Tally bill-wise) are the one
   // matcher's rules a to d now (TDSMatch.suggest, src/js/86, and server/_shared/tdsmatch.js)
@@ -126,6 +104,7 @@ const TDSCH = {
   MON: {JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12},
   // a date as the portal writes it (05-May-2026, 05/05/2026, 2026-05-05, an Excel day number) -> yyyymmdd
   date8(v){
+    if (v instanceof Date) return Market.date(v).replace(/-/g, "");
     if (typeof v === "number" && v > 20000 && v < 80000){ const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000); return d.toISOString().slice(0, 10).replace(/-/g, ""); }
     const s = String(v || "").trim();
     let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -151,7 +130,8 @@ const TDSCH = {
   // one challan from what was read; null when it has no BSR, date or serial
   make(x){
     const k = x.cin ? this.cin(x.cin) : null;
-    const bsr = String(x.bsr || (k && k.bsr) || "").replace(/\D/g, ""), serial = String(x.serial || (k && k.serial) || "").replace(/\D/g, "");
+    // a BSR code is 7 digits: one Excel saved as a number has lost its leading zeros (0510308 as 510308): put back
+    const bsr = String(x.bsr || (k && k.bsr) || "").replace(/\D/g, "").replace(/^\d{4,6}$/, b => b.padStart(7, "0")), serial = String(x.serial || (k && k.serial) || "").replace(/\D/g, "");
     const date = this.date8(x.date) || (k && k.date) || "";
     if (bsr.length !== 7 || !serial || !date) return null;
     const tax = this.money2(x.tax), sur = this.money2(x.surcharge), cess = this.money2(x.cess), interest = this.money2(x.interest), fee = this.money2(x.fee),
@@ -166,55 +146,6 @@ const TDSCH = {
     if (fee) c.fee = fee;
     if (pen || others) c.others = r2(pen + others);
     return c;
-  },
-  // the Payment History table (CSV or Excel), as rows of cells
-  fromTable(aoa){
-    const H = [["cin", /^cin\b|challan identification/i], ["bsr", /bsr/i], ["serial", /challan\s*(serial|no|number)|^serial/i], ["date", /date\s*of\s*deposit|deposit\s*date|tender\s*date|payment\s*date|paid\s*on|^date/i],
-      ["minor", /minor\s*head|type\s*of\s*payment/i], ["section", /nature\s*of\s*payment|section|^nature/i], ["surcharge", /surcharge/i], ["cess", /cess/i],
-      ["interest", /interest/i], ["penalty", /penalty/i], ["fee", /fee|234e/i], ["others", /^others?$/i], ["total", /total/i], ["tax", /^(basic\s*)?(income\s*)?tax(\s*amount)?(\s*\(.*\))?$/i]];
-    const at = aoa.findIndex(r => (r || []).some(x => /bsr|^cin\b/i.test(String(x || "").trim())));
-    if (at < 0) return [];
-    const head = aoa[at].map(x => String(x || "").trim()), col = {};
-    head.forEach((h, i) => { const hit = H.find(([k, re]) => !(k in col) && re.test(h)); if (hit) col[hit[0]] = i; });
-    return aoa.slice(at + 1).map(r => {
-      const x = {};
-      Object.keys(col).forEach(k => { x[k] = (r || [])[col[k]]; });
-      return this.make(x);
-    }).filter(Boolean);
-  },
-  // a challan receipt PDF's text (the e-filing portal's e-Pay Tax receipt, or a bank's counterfoil)
-  fromText(text){
-    const t = String(text || "").replace(/₹/g, "Rs. ");
-    const get = (re) => { const m = t.match(re); return m ? m[1].trim() : ""; };
-    const amt = (label) => get(new RegExp("(?:^|\\n)\\s*(?:[A-F]\\s+)?" + label + "[^\\n\\d]*?([\\d,]+\\.\\d{2}|[\\d,]+)", "i"));
-    const x = {
-      cin: get(/\bCIN\s*(?:No\.?)?\s*[:\-]?\s*([0-9 ]{20,24})/i), bsr: get(/BSR\s*code\s*[:\-]?\s*(\d{7})/i),
-      serial: get(/Challan\s*(?:Serial\s*)?(?:No\.?|Number)\s*[:\-]?\s*(\d{1,6})\b/i),
-      date: get(/(?:Date\s*of\s*Deposit|Tender\s*Date|Deposit\s*Date)\s*[:\-]?\s*([0-9]{1,2}[-\/. ][A-Za-z0-9]{2,9}[-\/. ,]+\d{4})/i),
-      minor: get(/Minor\s*Head\s*[:\-]?\s*([^\n]*)/i), section: get(/(?:Nature\s*of\s*Payment|Section)\s*[:\-]?\s*([^\n]*)/i),
-      tax: amt("Tax(?!\\s*Breakup)(?!\\s*Applicable)"), surcharge: amt("Surcharge"), cess: amt("(?:Education\\s*)?Cess"), interest: amt("Interest"),
-      penalty: amt("Penalty"), fee: amt("Fee(?:\\s*under\\s*section\\s*234E)?"), total: amt("Total(?:\\s*\\([^)]*\\))?")
-    };
-    if (x.cin) x.cin = x.cin.replace(/\s/g, "").slice(0, 20);
-    const c = this.make(x);
-    return c ? [c] : [];
-  },
-  async readFile(f){
-    const name = String(f.name || "").toLowerCase();
-    if (/\.pdf$/.test(name) || f.type === "application/pdf"){
-      const pdf = await getPdf(f); let text = "";
-      for (let i = 1; i <= Math.min(pdf.numPages, 6); i++){ try { text += pageTextLines(await (await pdf.getPage(i)).getTextContent()) + "\n"; } catch (e){} }
-      // a PDF of many receipts: each page on its own
-      const pages = text.split(/(?=Challan\s*Receipt|ITNS\s*No)/i).filter(s => /BSR|CIN/i.test(s));
-      return [].concat(...(pages.length ? pages : [text]).map(s => this.fromText(s)));
-    }
-    if (/\.csv$|\.txt$/.test(name) && !/\.xlsx?$/.test(name)){
-      const text = await f.text();
-      return this.fromTable(this.csv(text));
-    }
-    await ensureXlsx();
-    const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), {type: "array"});
-    return [].concat(...wb.SheetNames.map(s => this.fromTable(XLSX.utils.sheet_to_json(wb.Sheets[s], {header: 1, raw: true, defval: ""}))));
   },
   csv(text){
     const rows = []; let row = [], cell = "", q = false;
@@ -263,19 +194,4 @@ const TDSCH = {
     const d = s => { const t = TDS.ymd(s); return Date.UTC(num(t.slice(0, 4)), num(t.slice(4, 6)) - 1, num(t.slice(6, 8))); };
     return Math.round((d(a) - d(b)) / 86400000);
   },
-  async upload(files){
-    const list = Array.from(files || []);
-    if (!list.length || !S.books) return null;
-    let read = [], bad = [];
-    for (const f of list){
-      try { const got = await this.readFile(f); if (got.length) read = read.concat(got); else bad.push(f.name); } catch (e){ bad.push(f.name); }
-    }
-    const r = this.add(read);
-    const props = typeof TDSMatch === "object" && S.tdsFy && S.tdsQ ? TDSMatch.suggestNow(S.tdsView === "return" ? S.tdsForm || "26Q" : "26Q", S.tdsFy, S.tdsQ) : [], exact = props.filter(p => /exact/.test(p.words)).length;
-    toast((r.added ? r.added + " challan" + (r.added === 1 ? "" : "s") + " added" : "No new challan") + (r.updated ? ", " + r.updated + " filled in" : "") +
-      (r.linked ? ", " + r.linked + " matched to Tally payments" : "") + (r.placed ? ", " + r.placed + " with matches suggested on " + (r.placed === 1 ? "its return" : "their returns") : "") + "." + (props.length ? " " + props.length + " suggestion" + (props.length === 1 ? "" : "s") + " to confirm on Challans" + (exact ? " (" + exact + " exact)" : "") + "." : "") +
-      (bad.length ? " Nothing read from " + bad.slice(0, 3).join(", ") + (bad.length > 3 ? " and " + (bad.length - 3) + " more" : "") + "." : ""));
-    render();
-    return Object.assign({read: read.length, bad}, r);
-  }
 };

@@ -1,8 +1,74 @@
 // The Tally page's owner actions (were TCloud's in src/js/49-tally-cloud.js; moved here by next-fast-open, 20-Oct-2026,
 // to keep legacy.js within its 600 KB budget). Only the Tally page (app/src/screens/Tally.jsx) calls them; they are put on
 // TCloud when that page's code loads, and use legacy.js's globals (TCloud, Cloud, TCloudUp, askConfirm, esc, toast, render).
-/* global TCloud, Cloud, TCloudUp, askConfirm, esc, toast, render */
+/* global TCloud, Cloud, TCloudUp, askConfirm, esc, toast, render, num */
 const acts = {
+  // (moved from src/js/49-tally-cloud.js by the audit of 22-Nov-2026, as they were)
+  // an owner switches a bridge to changes only (it never takes a posting) or back -> tally_bridge_changes_only
+  async changesOnly(r, on){
+    if (on){
+      const a = await askConfirm({title: "Changes only for " + this.bridgeWords(r) + "?", ok: "Changes only",
+        body: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
+      if (!a || !a.ok) return;
+    }
+    await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
+      (on ? "Changes only: " : "Posting allowed again: ") + this.bridgeWords(r) + ".");
+  },
+  // Fix 2b: an owner releases a bridge's identity: the next computer that reports the id gets it (kept with who, when, why)
+  async releaseIdentity(r){
+    const a = await askConfirm({title: "Release the identity of " + this.bridgeWords(r) + "?", ok: "Release it",
+      body: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the release)</span><input id="releaseWhy" maxlength="300" placeholder="e.g. the computer was set up again"></label></div>',
+      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the identity is released."});
+    if (!a || !a.ok) return;
+    await this.control("tally_bridge_reset", {p_bridge: r.id, p_why: a.data.why}, "The identity of " + this.bridgeWords(r) + " is released; the next computer that reports it gets it.");
+  },
+  // an owner links a member to the bridge they post through (r null: unlinked) -> tally_member_bridge_link
+  async linkMember(uid, r){
+    const m = ((typeof Cloud === "object" && Cloud.st.members) || []).find(x => x.user_id === uid), who = (m && (m.name || m.email)) || "The member";
+    await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
+      r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
+  },
+  // round 15 (F3): the posting settings of a computer, saved by an owner -> tally_device_post_settings(p_device, p_post_only
+  // (names; [] = any company), p_bills, p_bank (1..500)); the bridge applies them at its next heartbeat (info.beat.postOnly,
+  // postBatchBills, postBatchBank, settingsAt). Checked here first: the words stay on the line, nothing is sent
+  postSettingsCheck(v){
+    const n = k => { const x = Math.floor(num(v[k])); return x >= 1 && x <= 500 ? x : null; };
+    if (!n("bills")) return "Bills per request must be a number from 1 to 500.";
+    if (!n("bank")) return "Bank lines per request must be a number from 1 to 500.";
+    return "";
+  },
+  postSettingsNames(text){ const seen = new Set(); return String(text || "").split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen.has(x.toUpperCase()) && seen.add(x.toUpperCase())).slice(0, 20); },
+  // v.only0 is the names box as the editor opened: left as it was, p_post_only goes as null (the row's list, and an
+  // installer-set PostOnly, stay); emptied from a named list, the owner is asked first (review of 2.1.8, must-fix)
+  async postSettings(dev, v){
+    const why = this.postSettingsCheck(v);
+    if (why) return why;
+    const names = this.postSettingsNames(v.only), was = this.postSettingsNames(v.only0), touched = JSON.stringify(names) !== JSON.stringify(was);
+    if (touched && !names.length && was.length){
+      const a = await askConfirm({title: "Posting to any company from this computer?", ok: "Yes, any company", danger: true,
+        body: "<p>" + esc(dev.name || "This computer") + " now posts only to " + esc(was.join(", ")) + ". With the list empty, FinCom Bridge there posts into whichever Tally company a client is set to, and the list set by its installer goes.</p>"});
+      if (!a || !a.ok) return "Nothing sent: the list stays as it was.";
+    }
+    await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
+      "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
+    return "";
+  },
+  // round 19: an owner switches the trial tools of one computer on or off -> tally_device_trial_tools(p_device, p_on)
+  // (migration 46; owner only there too); the bridge applies it at its next heartbeat (within 30 seconds)
+  async trialTools(dev, on){
+    await this.control("tally_device_trial_tools", {p_device: dev.id, p_on: !!on},
+      "Trial tools " + (on ? "on" : "off") + " for " + (dev.name || "the computer") + "; the bridge applies it within 30 seconds.");
+  },
+  // round 20 (d.3): an owner picks where a computer's changes come from -> tally_device_recorder_source(p_device,
+  // p_source) (migration 47; owner only there too); the bridge takes it from its next heartbeat's answer
+  RECORDER_SOURCES: [["addon", "the add-on"], ["alterid", "Tally’s change list"], ["both", "both"]],
+  async recorderSource(dev, src){
+    const w = (this.RECORDER_SOURCES.find(x => x[0] === src) || [])[1];
+    if (!w) return;
+    await this.control("tally_device_recorder_source", {p_device: dev.id, p_source: src},
+      "Changes on " + (dev.name || "the computer") + " now come from " + w + "; the bridge takes it within 30 seconds.");
+  },
   // the owner's rule of 05-Oct-2026 (migration 54): new versions go to every computer by themselves; an owner HOLDS a
   // version (no bridge takes it; a reason is required, kept with who and when), lets it go again, rolls every bridge back
   // to an earlier version (until cleared), and clears that rollback

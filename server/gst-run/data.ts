@@ -35,6 +35,8 @@ export function unpack(p: any) {
   const L: string[] = (p && p.ledgers) || [], heads: any[] = [], lines: any[] = [], bills: any[] = [];
   ((p && p.heads) || []).forEach((x: any[]) => {
     const h: any = {}; COLS.forEach((c, i) => { h[c] = x[i]; }); heads.push(h);
+    // (migration 210) the FinCom id after the lines and bills, when the cloud gives it
+    if (x.length > COLS.length + 2 && x[COLS.length + 2]) h.fincom_id = String(x[COLS.length + 2]);
     (x[COLS.length] || []).forEach((l: any[]) => lines.push({ guid: h.guid, ledger: L[l[0]], amount: l[1], hsn: l[2], rate: l[3] }));
     (x[COLS.length + 1] || []).forEach((b: any[]) => bills.push({ guid: h.guid, ledger: L[b[0]], name: b[1], type: b[2], amount: b[3], credit_days: b[4] }));
   });
@@ -62,6 +64,44 @@ export async function load(rest: Rest, rpc: (fn: string, a: Record<string, unkno
     const dec = (await rest("/rest/v1/gst_2b_decisions?select=pair_id,decision&" + w).catch(() => [])) || [];
     runs[g + "|" + fy] = { id: run.id, status: run.status, at: run.done_at || run.queued_at, result: run.result, decisions: Object.fromEntries(dec.map((r: any) => [r.pair_id, r.decision])) };
   }
-  return { client, co, book, heads, lines, bills, made: made || null, fromPrep: !!made, ledgers, groups, items, sales: sales.map((r: any) => r.data).filter(Boolean), runs, unpackMs };
+  const salesData = sales.map((r: any) => r.data).filter(Boolean);
+  return { client, co, book, heads, lines, bills, made: made || null, fromPrep: !!made, ledgers, groups, items, sales: salesData, salesSeen: await salesSeen(rest, bk, salesData), runs, unpackMs };
+}
+// (re-review of ffd1402d0) which marketplace invoices of Sales the book's entries show (GSTR.inBooks: an invoice in the
+// books is counted as its entry, else from Sales): the entries carrying their FinCom ids (tally_vouchers.fincom_id,
+// migration 37, read by the bridge from the whole narration), and, for one found already in Tally (intally), the sales of
+// its number (Tally's own, tallyMatch, when known) with each one's total (its largest line: the party's). The month step
+// has no entries of its own to look in.
+// (final review of 157da641f) a read that fails is an error: the run fails and the app works the month out itself (as
+// "nothing seen" it would count a posted invoice twice); every marketplace invoice but an ignored one is asked about, in
+// any status (one still "ready" whose tagged entry is already in the book is counted once, as the app counts it), 200 at
+// a time, 4 requests at once
+const SEEN_BATCH = 200, SEEN_AT_ONCE = 4;
+async function inBatches(xs: string[], fn: (part: string[]) => Promise<void>) {
+  const parts: string[][] = [];
+  for (let i = 0; i < xs.length; i += SEEN_BATCH) parts.push(xs.slice(i, i + SEEN_BATCH));
+  for (let i = 0; i < parts.length; i += SEEN_AT_ONCE) await Promise.all(parts.slice(i, i + SEEN_AT_ONCE).map(fn));
+}
+export async function salesSeen(rest: Rest, bk: string, sales: any[]) {
+  const ms = sales.filter((v: any) => v && v.source === "market" && v.status !== "ignored" && v.id);
+  const fids: string[] = [], heads: any[] = [];
+  const q = (xs: string[]) => xs.map((x) => enc('"' + String(x).replace(/"/g, "") + '"')).join(",");
+  const list = (r: any) => { if (!Array.isArray(r)) throw new Error("the cloud copy's entries could not be read"); return r; };
+  const ids = ms.map((v: any) => String(v.id));
+  const tin = ms.filter((v: any) => v.status === "intally");
+  const nos = Array.from(new Set(tin.map((v: any) => String(((v.tallyMatch || {}).number) || (v.x || {}).number || "").trim()).filter(Boolean)));
+  await inBatches(ids, async (part) => {
+    list(await rest("/rest/v1/tally_vouchers?select=fincom_id&" + bk + "&deleted_at=is.null&fincom_id=in.(" + q(part) + ")")).forEach((x: any) => { if (x && x.fincom_id) fids.push(String(x.fincom_id)); });
+  });
+  const found: any[] = [];
+  await inBatches(nos, async (part) => {
+    list(await rest("/rest/v1/tally_vouchers?select=guid,vno,day,vtype&" + bk + "&deleted_at=is.null&vno=in.(" + q(part) + ")")).forEach((x: any) => { if (x && x.vno && x.guid) found.push(x); });
+  });
+  const tot: Record<string, number> = {};
+  await inBatches(found.map((x) => String(x.guid)), async (part) => {
+    list(await rest("/rest/v1/tally_lines?select=guid,amount&" + bk + "&guid=in.(" + q(part) + ")")).forEach((l: any) => { const a = Math.abs(Number(l && l.amount) || 0); if (l && l.guid && a > (tot[l.guid] || 0)) tot[l.guid] = a; });
+  });
+  found.forEach((x) => heads.push({ vno: x.vno, day: x.day, vtype: x.vtype, total: Math.round((tot[x.guid] || 0) * 100) / 100 }));
+  return { fids, heads };
 }
 export { fyOf };

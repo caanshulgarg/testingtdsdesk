@@ -6,17 +6,12 @@
 // Tickets live in the firm account (Supabase: support_* functions, bucket support-files). A firm sees only its own
 // tickets and never support's internal notes; the functions check that, not this screen.
 const SUP = {
-  MODULES: ["Purchase bills", "Bank", "Sales", "Inbox", "TDS", "GST", "GST API", "Tally connection", "Accounts, MIS, audit", "Firm account and billing", "Other"],
-  CATS: [["question", "Question / how to"], ["problem", "Something is wrong"], ["request", "New feature or change"], ["data", "Data or figures look wrong"], ["billing", "Plan, credit, billing"]],
-  PRI: [["low", "Low", "a question, no hurry"], ["medium", "Medium", "work slowed"], ["high", "High", "work stopped for a client"], ["urgent", "Urgent", "a due date today or tomorrow"]],
-  ST: {new: "New", open: "Open", waiting: "Awaiting firm", resolved: "Resolved", closed: "Closed"},
   // what the screen was doing: errors and messages shown lately, kept only in this tab
   recent: [],
   note(kind, msg){ this.recent.push({kind, msg: String(msg || "").slice(0, 300), at: new Date().toISOString()}); if (this.recent.length > 8) this.recent.shift(); },
   st(){ S.sup = S.sup || {tab: "guide", list: null, filter: "open", q: "", gq: "", art: "", files: [], rfiles: [], dq: "", dpri: "", dfirm: "", dstat: "active"}; return S.sup; },
   admin(){ return !!(S.account && S.account.superadmin); },
   on(){ return typeof Cloud === "object" && Cloud.on() && !!S.account; },
-  code(t){ return t.code || ("T-" + t.num); },
   active(t){ return ["new", "open", "waiting"].includes(t.status); },
   // the screen, the client and what went wrong lately, taken when Help is opened from somewhere
   context(){
@@ -24,14 +19,6 @@ const SUP = {
     const where = S.view === "company" ? [S.tab === "books" ? "books → " + (typeof booksTab === "function" ? booksTab() : "") + (typeof booksTab === "function" && booksTab() === "gst" ? " → " + (S.gstPart || "") : typeof booksTab === "function" && booksTab() === "tds" ? " → " + (S.tdsView || "") : "") : S.tab].filter(Boolean).join("") : "home → " + (S.homeTab || "clients");
     return {screen: where, view: S.view || "", tab: S.tab || "", client: co ? co.name : "", gstin: co ? (co.gstin || "") : "", build: APP_VERSION,
       browser: (typeof navigator !== "undefined" ? navigator.userAgent : "").replace(/\s*\(KHTML.*$/, "").slice(0, 160), at: new Date().toISOString(), recent: this.recent.slice(-6)};
-  },
-  moduleOf(c){
-    if (!c) return "Other";
-    if (c.view === "company"){
-      if (c.tab === "books") return /gst/.test(c.screen) ? "GST" : /tds/.test(c.screen) ? "TDS" : "Accounts, MIS, audit";
-      return ({bank: "Bank", bankset: "Bank", bankrules: "Bank", sales: "Sales", invoices: "Purchase bills", export: "Tally connection", done: "Purchase bills", clientInbox: "Inbox", gstset: "GST", settings: "Other"})[c.tab] || "Other";
-    }
-    return /tally/.test(c.screen) ? "Tally connection" : /inbox/.test(c.screen) ? "Inbox" : "Other";
   },
   // SLA: late past the resolve-by time; at risk in the last quarter of the window, or when the first answer is overdue
   sla(t, now){
@@ -42,8 +29,6 @@ const SUP = {
     if (now > due - (due - made) / 4 || (!t.first_response_at && now > rsp)) return "risk";
     return "track";
   },
-  ago(iso){ const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)); return m < 60 ? m + "m" : m < 48 * 60 ? Math.round(m / 60) + "h" : Math.round(m / 1440) + "d"; },
-  when(iso){ return fmtDateTime(iso); },
   async load(quiet){
     const s = this.st();
     if (!this.on()) return;
@@ -52,50 +37,6 @@ const SUP = {
     // next-speed-redraw: the quiet re-read (the Help count, a timer) with the background's drawing (soonRender, src/js/01)
     if (quiet) soonRender(); else render();
   },
-  async open(id){
-    const s = this.st(); if (s.open !== id){ s.rtext = ""; s.rfiles = []; } s.open = id; s.detail = null; render();
-    try { s.detail = await Cloud.rpc("support_get", {p_ticket: id}); } catch (e){ toast(e.message); s.open = null; }
-    render();
-  },
-  // files go under the firm's folder: for support answering, the ticket's firm
-  async upload(files, firm){
-    const c = Cloud.cfg(), out = [];
-    for (const f of files){
-      if (f.size > 10 * 1024 * 1024){ toast(f.name + " is over 10 MB and was left out."); continue; }
-      const safe = String(f.name || "file").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80), path = firm + "/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + "-" + safe;
-      const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
-      const put = () => fetch(url, {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token, "Content-Type": f.type || "application/octet-stream"}, body: f});
-      await Cloud.fresh().catch(() => {});
-      let r = await put(); if (r.status === 401){ await Cloud.refreshToken(); r = await put(); }
-      if (!r.ok) throw new Error("Could not upload " + f.name + " (" + r.status + ").");
-      out.push({path, name: f.name, size: f.size, type: f.type || ""});
-    }
-    return out;
-  },
-  async download(path, name){
-    const c = Cloud.cfg(), url = c.url.replace(/\/+$/, "") + "/storage/v1/object/support-files/" + path.split("/").map(encodeURIComponent).join("/");
-    const get = () => fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}});
-    await Cloud.fresh().catch(() => {});
-    let r = await get(); if (r.status === 401){ await Cloud.refreshToken(); r = await get(); }
-    if (!r.ok) throw new Error("The file could not be fetched (" + r.status + ").");
-    const blob = await r.blob(), a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = name || "file"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  },
-  mail(ticket, event){ Cloud.fn("support-mail", {ticket, event}).then(r => { const s = this.st(); s.mailNote = r && r.sent ? "" : (r && r.reason) || ""; }).catch(() => {}); },
-  async create(d){
-    const s = this.st();
-    const files = await this.upload(s.files || [], Cloud.st.firm);
-    const t = await Cloud.rpc("support_new", {p_subject: d.subject, p_module: d.module, p_category: d.category, p_priority: d.priority, p_body: d.body, p_context: d.withCtx ? S.helpCtx || this.context() : {}, p_files: files});
-    this.mail(t.id, "new");
-    return t;
-  },
-  async reply(body, internal){
-    const s = this.st(), t = s.detail;
-    const files = await this.upload(s.rfiles || [], t.firm_id);
-    await Cloud.rpc("support_reply", {p_ticket: t.id, p_body: body, p_files: files, p_internal: !!internal});
-    if (!internal) this.mail(t.id, "reply");
-  },
-  async set(p){ const t = this.st().detail; await Cloud.rpc("support_set", Object.assign({p_ticket: t.id, p_status: null, p_priority: null, p_assignee: null}, p)); },
   counts(){
     const l = (this.st().list || []);
     return this.admin() ? l.filter(t => t.status === "new" || (t.status === "open" && t.last_by === "firm")).length : l.filter(t => t.status === "waiting").length;
@@ -180,49 +121,6 @@ const GUIDE = {
   }
 
 };
-
-/* ---------- the screen is app/src/screens/Help.jsx; what its buttons and boxes do ---------- */
-// typed or chosen: the guide's search (the best article opens), the ticket searches, the reply, the desk's filters
-function supType(k, v, now){
-  const s = SUP.st(); s[k] = v;
-  if (k === "gq"){ const r = GUIDE.search(v); if (r[0]) s.art = r[0].k; }
-  if (k === "rtext" && !now){ FinComReact.redraw(); return; }
-  render();
-}
-function supDraft(k, v, now){ const s = SUP.st(); (s.draft = s.draft || {})[k] = v; if (now) render(); else FinComReact.redraw(); }
-function supTab(id){ const s = SUP.st(); s.tab = id; s.open = null; s.newOpen = false; render(); if (id !== "guide" && SUP.on()) SUP.load(true); }
-function supArt(k, go){ const s = SUP.st(); s.art = k; if (go){ s.newOpen = false; s.tab = "guide"; } render(); }
-function supFilter(f){ SUP.st().filter = f; render(); }
-function supDstat(k){ SUP.st().dstat = k; render(); }
-function supFiles(which, files){ const s = SUP.st(); s[which] = (s[which] || []).concat(files).slice(0, 8); render(); }
-function supFdel(which, i){ SUP.st()[which].splice(i, 1); render(); }
-function supDl(path, name){ SUP.download(path, name).catch(err => toast(err.message)); }
-async function supSet(k, v){ const s = SUP.st(); try { await SUP.set({[k]: v}); await SUP.open(s.open); SUP.load(true); toast("Saved."); } catch (err){ toast(err.message); render(); } }
-async function supAct(a){
-  const s = SUP.st();
-  if (a === "new"){ s.newOpen = true; s.open = null; s.draft = null; s.files = []; if (!S.helpCtx) S.helpCtx = SUP.context(); render(); return; }
-  if (a === "cancel"){ s.newOpen = false; s.draft = null; s.files = []; render(); return; }
-  if (a === "back"){ s.open = null; s.detail = null; render(); return; }
-  if (a === "reload"){ SUP.load(false); return; }
-  if (a === "submit"){
-    const dr = s.draft || {};
-    if (String(dr.subject || "").trim().length < 3){ toast("Give the ticket a subject."); return; }
-    if (String(dr.body || "").trim().length < 5){ toast("Describe what happened."); return; }
-    s.busy = true; render();
-    try { const tk = await SUP.create(dr); s.newOpen = false; s.draft = null; s.files = []; s.tab = "tickets"; s.busy = false; S.helpCtx = null; toast("Ticket " + SUP.code(tk) + " raised. FinCom support will answer here."); await SUP.load(true); SUP.open(tk.id); }
-    catch (err){ s.busy = false; toast("Not raised: " + err.message); render(); }
-    return;
-  }
-  if (a === "send"){
-    const body = String(s.rtext || "").trim(), internal = !!s.rint;
-    if (!body && !(s.rfiles || []).length){ toast("Write a reply or attach a file."); return; }
-    s.busy = true; render();
-    try { await SUP.reply(body, internal); s.rfiles = []; s.rtext = ""; s.rint = false; s.busy = false; await SUP.open(s.open); SUP.load(true); toast(internal ? "Note added." : "Sent."); }
-    catch (err){ s.busy = false; toast("Not sent: " + err.message); render(); }
-    return;
-  }
-  if (a === "resolve" || a === "reopen"){ try { await SUP.set({p_status: a === "resolve" ? "resolved" : "open"}); await SUP.open(s.open); SUP.load(true); } catch (err){ toast(err.message); } }
-}
 
 if (typeof document !== "undefined"){
   // what went wrong lately goes with a ticket: errors, and the messages shown at the foot of the screen

@@ -240,16 +240,6 @@ function bankGroups(){
   });
   return Array.from(m.values()).sort((a, b2) => b2.n - a.n || (b2.out + b2.inn) - (a.out + a.inn));
 }
-function applyGroup(key, ledger){
-  const b = B();
-  const l = exactLedger(ledger);
-  if (!l){ toast(ledger ? "\u201c" + ledger + "\u201d is not a Tally ledger. Choose one from the list, or create it." : "Choose a ledger first."); return; }
-  const rows = b.rows.filter(r => r.dec.key === key && ["attention", "suggested", "ready"].includes(r.state));
-  if (!rows.length) return;
-  setLedgerFor(rows, l, "set");
-  if (b.undo) b.undo.label = rows[0].dec.name || key;
-  render();
-}
 // the bar at the bottom of the bank screen: React (app/src/screens/Bank.jsx)
 // Creating a ledger that is not yet in Tally
 async function openCreateLedger(name, rowId, targetFk, opts){
@@ -493,8 +483,6 @@ const Trash = {
     } catch (e){}
     return data;
   },
-  // the line under a Restore item: what, when, by whom, why
-  say(x){ return x.label + " \u00b7 removed " + fmtDateTime(x.at) + (x.by ? " by " + x.by : "") + (x.reason ? " \u00b7 " + x.reason : "") + (x.server ? "" : " \u00b7 kept in this browser only"); }
 };
 function askConfirm(o){
   return new Promise(done => {
@@ -684,7 +672,6 @@ function bankRowAct(a, id){
 // the React bank screen (app/src/screens/Bank.jsx)
 function bankTabGo(k){ const b = B(); b.focus = null; b.filter = k; b.limit = 100; b.sticky.clear(); b.sel.clear(); render(); }
 function bankSetGrouped(on){ const b = B(); b.grouped = on; b.limit = 100; b.sel.clear(); render(); }
-function bankSearch(q){ const b = B(); b.q = q; b.sticky.clear(); FinComReact.redraw(); later("bq", render, 250); }
 // a line's ledger, typed or picked; returns false when it is not a Tally ledger (the box goes back to the line's ledger)
 function bankSetLedger(id, v){
   const b = B(), r = bankRow(id); if (!r) return true;
@@ -698,16 +685,6 @@ function bankSetLedger(id, v){
   if (l !== r.ledger || r.state !== "ready"){ setRowLedger(r, l); saveBank({rows: true}); render(); }
   return true;
 }
-// tick a line; with Shift, every line between it and the one ticked before
-function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
-// a client's bank settings and rules (app/src/parts/BankSettings.jsx): the settings shown or not, a standard entry's
-// ledger, an automation choice, and a rule changed, paused, deleted (asked first), moved or copied to other clients
-// the checks over a statement (app/src/parts/BankChecks.jsx): show only some lines, tick an entry to delete from Tally
-function bankFocusGo(title, ids, note){ bankFocus(title, [].concat(ids || []), note || ""); render(); window.scrollTo({top: 0, behavior: "smooth"}); }
-function reconPick(i, on){ if (!S.recon) return; if (on) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); }
-function bankSettingsShow(on){ B().showSettings = on; render(); }
-function bankStdLedger(k, v){ const b = B(), co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[k] = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-function bankOptSet(k, on){ const co = CO(); co[k] = on; Store.saveCompany(co); render(); }
 function ruleAct(what, id){
   if (what === "copy"){ const r = clientRules().find(x => x.id === id); if (r) copyRulesTo([r]); return; }
   const inClient = clientRules().some(x => x.id === id);
@@ -918,16 +895,6 @@ function bulkLedgerFrom(inp){
   acClose();
   bulkAction("ledger", l);
 }
-// a figure typed into GSTR-3B (4(B)(2), 4(D)(1)), from app/src/screens/gst/Returns.jsx: what = "rev2.igst", …; kept for the GSTIN and month
-function gst3bSet(what, val){
-  const b = S.books, k = (S.gstReg || "") + "|" + S.gstYm, [grp, hd] = what.split(".");
-  b.gst3b = Object.assign({}, b.gst3b); b.gst3b[k] = Object.assign({}, b.gst3b[k]); b.gst3b[k][grp] = Object.assign({}, b.gst3b[k][grp], {[hd]: val === "" ? "" : num(val)});
-  saveBooks(); render();
-}
-// amendments (app/src/screens/gst/Workings.jsx): how an earlier month's document is reported now, and a filed copy
-// marked as never filed
-function amendSetAct(id, act){ const b = S.books; b.amendFix = Object.assign({}, b.amendFix, {[id]: act}); saveBooks(); render(); }
-function filedSetNotFiled(key, on){ const f = (S.books.filed || {})[key]; if (f){ f.notFiled = !!on; saveBooks(); render(); } }
 // advances: what the user corrects about one receipt (rate, not an advance, is an advance, the month it was billed)
 function advFix(id, key, val){
   const b = S.books; b.advFix = b.advFix || {};
@@ -936,9 +903,6 @@ function advFix(id, key, val){
   if (Object.keys(f).length) b.advFix[id] = f; else delete b.advFix[id];
   saveBooks(); render();
 }
-// rule 43: a capital good's name, date put to use, credit, use, registration, date sold
-function assetSet(id, k, v){ const a = (S.books.assets || []).find(x => x.id === id); if (a){ a[k] = /^(igst|cgst|sgst|cess)$/.test(k) ? r2(num(v)) : v; saveBooks(); render(); } }
-function assetRemove(id){ S.books.assets = (S.books.assets || []).filter(a => a.id !== id); saveBooks(); render(); }
 // GSTR-9 and 9C's typed figures (gst9Where, gst9Typed, gst9cSet) are src/js/08, with the GST screen
 // a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
 // kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed.
@@ -971,35 +935,8 @@ function lmSet(name, key, val, pre){
 function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }
 function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
-// the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
-// or note (kept with the books)
-// Financial statements (app/src/screens/books/FinStatements.jsx, its Details): the format (a format chosen by hand stays
-// chosen; otherwise it follows the client's entity type, FS.cfg), the year, the stock typed when Tally does not keep it
-function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v, kindSet: true}); S.fsRun = null; saveBooks(); render(); }
-function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
-function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
-// MIS (app/src/screens/books/Mis.jsx): its period and quick picks, the tab, how often it runs by itself, a supplier
-// marked MSME (the run is worked out again), a month of the budget
-// the period chosen is kept for the client in this browser (smart moves round 1)
-function misRangeSet(key, v){ const x = misRangeQuick("ytd", S.books); S.misRange = Object.assign({from: Audit.iso(x.from), to: Audit.iso(x.to)}, S.misRange, {[key]: v}); Smart.keep("mis", S.misRange); render(); }
-function misQuickGo(k){ const x = misRangeQuick(k, S.books); S.misRange = {from: Audit.iso(x.from), to: Audit.iso(x.to)}; Smart.keep("mis", S.misRange); render(); }
 function misTabGo(id){ S.misTab = id; S.misQ = ""; S.misF = ""; render(); }
-// (the run on its own looked at again with the new setting: MIS.maybeRun, next-fix-mis-rework)
-function misFreqSet(v){ const b = S.books; b.misCfg = Object.assign({}, b.misCfg, {freq: v}); saveBooks(); MIS.maybeRun(); render(); }
 function misMsmeSet(party, v){ const b = S.books; b.msme = Object.assign({}, b.msme, {[party]: v}); const r = (b.mis || {}).last; saveBooks(); if (r) MIS.runSoon(b, {from: r.from, to: r.to, how: r.how}); render(); }
-function misBudSet(h2, mm, v){ const b = S.books, fy = Audit.fyStart(mm + "01").slice(0, 4); b.budget = b.budget || {}; b.budget[fy] = b.budget[fy] || {}; b.budget[fy][h2] = Object.assign({}, b.budget[fy][h2], {[mm]: v === "" ? "" : num(v)}); saveBooks(); render(); }
-function auditRangeSet(key, v){ const dr = Audit.defaultRange(S.books); S.auditRange = Object.assign({from: Audit.iso(dr.from), to: Audit.iso(dr.to)}, S.auditRange, {[key]: v}); }
-function auditFreqSet(v){ const b = S.books; b.auditCfg = Object.assign({}, b.auditCfg, {freq: v}); saveBooks(); render(); }
-function auditFindingSet(id, key, v){
-  const au = S.books.audit = S.books.audit || {st: {}};
-  au.st = au.st || {}; const cur = Object.assign({s: "open"}, au.st[id]);
-  if (key === "s") cur.s = v; else cur.note = v;
-  cur.at = new Date().toISOString(); au.st[id] = cur; if (typeof Audit === "object" && Audit.quietSave) Audit.quietSave(); else saveBooks(); render();
-}
-// related parties: a ledger added (from the list or a guess), its relation, removed
-function relAdd(name){ const b = S.books; if (!(b.auditRel || []).some(x => x.name === name)) b.auditRel = (b.auditRel || []).concat([{name, relation: ""}]); saveBooks(); render(); }
-function relSet(name, relation){ const x = (S.books.auditRel || []).find(z => z.name === name); if (x){ x.relation = relation; saveBooks(); render(); } }
-function relRemove(name){ const b = S.books; b.auditRel = (b.auditRel || []).filter(x => x.name !== name); saveBooks(); render(); }
 // what the user corrects on the Advances and Reversal screens
 function gstFixChange(t){
   const d = t.dataset, b = S.books;
@@ -1062,29 +999,6 @@ async function tallyCloudSend(b, part, f, wait, who, step, held){
     return false;
   }
   finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
-}
-// Send again (Books > From Tally): the file this page still holds (or this browser's own copy of it); else it is chosen again
-async function tallySendAgain(i){
-  const b = S.books, p = b && ((b.meta || {}).parts || [])[i];
-  if (!p) return;
-  const cid = b.cid || S.coId, k = p.wait || ("tcup:" + cid + ":" + p.from + "-" + p.to);
-  if (!TCloudUp.on()){ toast("Sign in to the firm account first: then Send again."); return; }
-  if (TCloudUp.live.has(k)){ toast((p.file || "This day book") + " is being sent now."); return; }
-  let x = null; try { x = await IDBStore.get(k); } catch (e){}
-  const f = TCloudUp.files[k] || (x && x.blob);
-  if (!f){
-    p.cloud = "not sent: this page no longer holds " + (p.file || "the file") + " (it was reloaded); choose it again";
-    p.again = false; render();
-    toast("Choose " + (p.file || "the Day Book") + " again: this page no longer holds it.");
-    tallyPickFor(tallyDate(p.from), tallyDate(p.to));
-    return;
-  }
-  const who = (x && x.who) || {client: cid, company: BridgeSeed.company()};
-  TCloudUp.keep(cid, f, {from: p.from, to: p.to});
-  const held = !(x && x.blob) && f.size <= DayCut.PIECE ? TCloudUp.hold(cid, f, {from: p.from, to: p.to}, who).catch(() => {}) : null;
-  p.wait = k; b.busy = "Sending " + (p.file || "the day book") + " to FinCom’s cloud…"; render();
-  await tallyCloudSend(b, p, f, k, who, m => { b.busy = m; softRender(); }, held);
-  b.busy = ""; await saveBooks(null, b); render();
 }
 // build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
 // opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown).
@@ -1241,7 +1155,7 @@ async function tallyFileKind(f){
   }
   const kind = vch ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
   if (!kind && /<ENVELOPE[\s>]/i.test(head) && /<SVCURRENTCOMPANY>|<TALLYMESSAGE[\s>]|<IMPORTDATA>|<TALLYREQUEST>|Day ?Book/i.test(head))
-    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Format XML or JSON, and upload that file."};
+    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press Alt+F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Current, F8 (File Format): XML or JSON, and E to export; upload that file."};
   if (!kind) return {kind, why: f.name + " is not a file FinCom can read: it is not a Tally Day Book, ledger masters or trial balance saved as XML or JSON. In TallyPrime open the report, then Alt+E (Export) \u2192 Format XML or JSON, and upload that file. If it is a Day Book, send the file to FinCom support so we can see why."};
   if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
   return {kind};
@@ -1345,18 +1259,6 @@ async function tallyFiles(files){
   }
   u.busy = false; render();
 }
-// the trial balance asked about on the page: as opening balances, or to check the books against
-async function tbAskUse(how){
-  const a = S.tbAsk; if (!a || a.cid !== S.coId) return;
-  const on = String(a.on || "").replace(/-/g, "");
-  const r = how === "open" ? await bringTbFile(a.f, on, {toast: false}) : await checkTbFile(a.f, on, {toast: false});
-  if (r.refused && /date/.test(r.refused) && !/^\d{8}$/.test(on)){ toast(r.refused); return; }
-  S.tbAsk = null;
-  S.tallyUp = {cid: S.coId, at: Date.now(), busy: false, lines: [{kind: "tb", name: a.name, ok: !r.refused, text: r.refused ? "The trial balance was not taken: " + r.refused : r.text}]};
-  render();
-}
-// a day (or the dates between two files) that needs its Day Book: the one file box, for those dates only (yyyy-mm-dd)
-function tallyPickFor(from, to){ S.dbFrom = from || ""; S.dbTo = to || from || ""; render(); const i = document.getElementById("tallyIn"); if (i){ i.value = ""; i.click(); } }
 function booksChange(t){
   if (t.id === "tallyIn"){
     const files = Array.from(t.files || []); t.value = "";

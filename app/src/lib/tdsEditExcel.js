@@ -85,13 +85,22 @@ Object.assign(TDSEdit, {
     const numOf = (v) => (typeof v === "number" ? v : String(v).trim() === "" ? NaN : Number(String(v).replace(/[₹,\s]/g, "")));
     for (let y = 1; y <= R.e.r; y++){
       const id = String(val(y, "FinCom id") || "").trim();
-      if (!id) continue;                                  // the totals row, a blank line
+      // the totals row, a blank line; a row added by hand (no FinCom id, but a deductee, PAN or amount) is said, never
+      // taken: a missed deduction is booked in the books (next-fix-audit-imports)
+      if (!id){ const d = String(val(y, "Deductee") || "").trim(), any = ["PAN", "Amount paid", "TDS"].some(k => String(val(y, k) == null ? "" : val(y, k)).trim() !== "");
+        if (any && !/^total$/i.test(d)) out.refused.push({id: "", line: y + 1, who: d || "line " + (y + 1), field: "row", value: "", why: "a row added in Excel is not brought in: book the deduction in the books, then export again"});
+        continue; }
       const r = byId[id];
       if (!r){ out.unmatched.push({line: y + 1, id}); continue; }
       out.rows++;
       const who = r.party + " (" + (r.voucher || fmtDate(tallyDate(TDS.ymd(r.date)))) + ")";
       const ch = (field, from, to) => out.changes.push({id, line: y + 1, who, field, from, to});
       const no = (field, value, why) => out.refused.push({id, line: y + 1, who, field, value: String(value), why});
+      // the date and the deductee are read only: a change to them is said, never taken
+      // (by the day it is: Excel may keep 19-Sep-2026 as a date of its own once the file is saved there)
+      const dt = val(y, "Date"), dn = val(y, "Deductee"), dIso = typeof dt === "number" ? XLSX.SSF.format("yyyy-mm-dd", dt) : Market.date(dt);
+      if (dt !== undefined && String(dt).trim() !== "" && dIso.replace(/-/g, "") !== TDS.ymd(r.date).slice(0, 8)) no("date", dIso || dt, "the date is read only here: change it in the books");
+      if (dn !== undefined && String(dn).trim() !== String(r.party || "").trim()) no("party", dn, "the deductee is read only here: change it in the books");
       // PAN
       let pan = val(y, "PAN");
       if (pan !== undefined){ pan = String(pan).trim().toUpperCase(); if (pan === "PANNOTAVBL") pan = "";

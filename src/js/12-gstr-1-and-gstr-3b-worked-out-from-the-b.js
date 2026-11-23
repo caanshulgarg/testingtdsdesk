@@ -34,6 +34,9 @@ Object.assign(GSTR, {
     // review of next-fix-b2cs-gstin: a B2C summary with an e-invoice: the portal pre-fills the IRN in B2B, FinCom reports it in B2CS
     const vIrn = new Map(this.vIn(ym).filter(v => v.irn).map(v => [v.id, v]));
     add("Summary entries with an e-invoice (IRN)", vIrn.size ? out.filter(r => r.b2cSum && vIrn.has(r.id)) : [], "This summary entry has an e-invoice (IRN): the portal will pre-fill it in GSTR-1 as a B2B invoice, while FinCom reports it in B2C small. Cancel the IRN in Tally or on the e-invoice portal (within 24 hours of making it), or choose Not a summary if it is one invoice.");
+    // (re-review of ffd1402d0) a marketplace invoice posted to Tally whose entry the books read since do not have: counted
+    // from Sales (once), and said, so a person checks it was not deleted in Tally
+    add("Posted to Tally but not in the books read since \u2014 check it wasn't deleted", this.goneFromBooks(ym), "FinCom posted these invoices to Tally, but the books read since have no entry of them. They are counted from Sales meanwhile. Look in Tally's Day Book: if the entry was deleted, post it again or ignore the invoice in Sales.");
     list.push(null);                              // (the document numbers' checks: checksJoin puts them here)
     add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && !r.fromHold && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
     add("Supplier GSTINs that are not valid", inn.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party, doc: r})), "The check digit or the form of the GSTIN is wrong: the bill can never match 2B. Correct the GSTIN on the supplier's ledger in Tally.");
@@ -273,14 +276,17 @@ Object.assign(GSTR, {
   threeBJson(ym, reg, t0){
     const t = t0 || this.threeB(ym, reg);
     const gstin = (GSTR.gstins(S.books) || []).find(x => !reg || x.slice(0, 2) === reg) || "";
+    // (review of ad4be74c3) the portal takes no negative figure in 3.1: a head's negative is set off and carried as negative
+    // liability (GSTR.setOff), a negative 3.1(b), (c), (e) value carried to the next return (GSTR.carry31)
+    const p0 = v => Math.max(0, r2(v)), sup0 = (txval, iamt, camt, samt, csamt) => ({txval: p0(txval), iamt: p0(iamt), camt: p0(camt), samt: p0(samt), csamt: p0(csamt)});
     const sup = (txval, iamt, camt, samt, csamt) => ({txval: r2(txval), iamt: r2(iamt), camt: r2(camt), samt: r2(samt), csamt: r2(csamt)});
     const out = {gstin, ret_period: ym.slice(4, 6) + ym.slice(0, 4),
       sup_details: {
-        osup_det: sup(t.net.taxable, t.net.igst, t.net.cgst, t.net.sgst, t.net.cess),
-        osup_zero: sup(t.zero.taxable, t.zero.igst, 0, 0, t.zero.cess),
-        osup_nil_exmp: {txval: r2(t.nil.taxable)},
-        isup_rev: sup(t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess),
-        osup_nongst: {txval: r2(t.nongst.taxable)}
+        osup_det: sup0(t.net.taxable, t.net.igst, t.net.cgst, t.net.sgst, t.net.cess),
+        osup_zero: sup0(t.zero.taxable, t.zero.igst, 0, 0, t.zero.cess),
+        osup_nil_exmp: {txval: p0(t.nil.taxable)},
+        isup_rev: sup0(t.rcmOut.taxable, t.rcmOut.igst, t.rcmOut.cgst, t.rcmOut.sgst, t.rcmOut.cess),
+        osup_nongst: {txval: p0(t.nongst.taxable)}
       },
       itc_elg: {itc_avl: [
         {ty: "IMPG", iamt: r2(t.impGoods.igst), camt: 0, samt: 0, csamt: r2(t.impGoods.cess)},

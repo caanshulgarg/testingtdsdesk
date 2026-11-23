@@ -9,7 +9,7 @@
 //   5. the Excel and the Word are marked DRAFT
 //   6. with AuditWP present (the audit helper's 77-audit.js), its results are used and the counts agree
 const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX",
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "AuditRep", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "gfN", "Parties", "FS", "GSTSet", "GSTF", "GSTQ", "D", "FSX",
   // tds-layout (14-Oct-2026): the section codes' table, the challan register and the late-deduction interest the TDS rows read
   "TDS_SEC_CODES", "TDSReg", "TDSInt", "TDSFiled", "TDSCH", "BOOKS_KEYS", "uid", "lsGet", "lsSet", "istParts", "p2ist", "istDay", "istToday",
   // round 69: the audit's TDS not deducted is TDSWatch.missed (src/js/66)
@@ -35,18 +35,25 @@ const unzip = (buf) => { const out = {}; let i = 0; const b = Buffer.from(buf); 
   x.LedMaster.refresh(b);
   b.auditRel = FIXTURE ? [{name: "Hemant Zaverchand (Loan)", relation: "Director"}, {name: "Nirmala Quereshi (Loan)", relation: "Relative of a director"}] : [];
   const fy = "2025";
+  // (review of 22-Nov-2026) the draft leaves the Audit tab's last run, its history and items as they were
+  const last0 = JSON.stringify((b.audit || {}).last || null), hist0 = ((b.audit || {}).history || []).length;
   const r = x.FSX.taxAuditFromBooks(fy), d = r.d3, C = no => d.clauses.find(c => c.no === no), F = id => r.run.findings.find(f => f.id === id);
   console.log("  shared checks from: " + r.src);
+  ok(JSON.stringify((b.audit || {}).last || null) === last0 && ((b.audit || {}).history || []).length === hist0, "0. the 3CD draft does not write over the Audit tab's last run or its history");
   const cnt = id => (F(id) || {count: 0}).count;
   // 1. the counts
   const viaWp = !!x.AuditWP;
   ok(C("21(d)").rows.length >= 1 && C("21(d)").rows.length === (viaWp ? r.counts.wp_cash40A3 : cnt("cash40A3")) && C("21(d)").src === "books", "1. 21(d) 40A(3): " + C("21(d)").rows.length + " rows = the audit's cash40A3 count");
-  ok(C("31(a)").rows.length >= 1 && C("31(b)").rows.length >= 1 && C("31(a)").rows.length === cnt("cashLoans:269SS") && C("31(b)").rows.length === cnt("cashLoans:269T"), "1. 31(a) 269SS " + C("31(a)").rows.length + ", 31(b) 269T " + C("31(b)").rows.length + " = the audit's counts");
+  // (review of 22-Nov-2026) 269T repayments are clause 31(c) of Form 3CD; 31(b) is specified sums taken (269SS)
+  ok(C("31(a)").rows.length >= 1 && C("31(c)").rows.length >= 1 && C("31(a)").rows.length === cnt("cashLoans:269SS") && C("31(c)").rows.length === cnt("cashLoans:269T") && !C("31(b)").rows.length, "1. 31(a) 269SS " + C("31(a)").rows.length + ", 31(c) 269T " + C("31(c)").rows.length + " = the audit's counts");
   ok(C("31(ba)").rows.length >= 1 && C("31(ba)").rows.length === cnt("cash269ST"), "1. 31(ba) 269ST: " + C("31(ba)").rows.length + " = the audit's count");
   // round 69: TDS not deducted is a finding per party, section and year (TDSWatch.missed); 21(b) lists the entries behind them
   const tm = r.run.findings.filter(f => f.check === "tdsMissed"), tmRows = tm.flatMap(f => f.rows);
-  ok(C("21(b)").rows.length === tmRows.length && x.r2(C("21(b)").rows.reduce((a, z) => a + z[1], 0)) === x.r2(tmRows.reduce((a, z) => a + z.amount, 0)), "1. 21(b) 40(a)(ia): " + C("21(b)").rows.length + " entries of " + tm.length + " parties, the same amount as the audit's TDS-not-deducted findings");
-  ok(C("22").rows.length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] === "43B(h) MSME").length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] === "statutory dues").length === cnt("balances:43B"), "1. 22 and 26: 43B(h) " + cnt("msme43Bh") + " bills, 43B " + cnt("balances:43B") + " dues = the audit's counts");
+  // (the owner, 23-Nov-2026) the amount is each finding's base, the part its TDS does not cover (its bills when none is
+  // covered), with 30% of it inadmissible under 40(a)(ia); with AuditWP too (it listed every bill of a party partly covered)
+  const baseOf = (f) => f.base != null ? f.base : f.rows.reduce((a, z) => a + z.amount, 0), s21 = x.r2(C("21(b)").rows.reduce((a, z) => a + z[1], 0));
+  ok(C("21(b)").rows.length >= tm.length && s21 === x.r2(tm.reduce((a, f) => a + baseOf(f), 0)) && x.r2(C("21(b)").rows.reduce((a, z) => a + z[2], 0)) === x.r2(s21 * 0.3), "1. 21(b) 40(a)(ia): " + C("21(b)").rows.length + " lines of " + tm.length + " parties, " + s21 + " = the audit's TDS-not-deducted findings' bases, 30% inadmissible");
+  ok(C("22").rows.length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] === "43B(h) MSME").length === cnt("msme43Bh") && C("26").rows.filter(z => z[2] !== "43B(h) MSME").length === cnt("balances:43B"), "1. 22 and 26: 43B(h) " + cnt("msme43Bh") + " bills, 43B " + cnt("balances:43B") + " dues = the audit's counts");
   const c34 = C("34(a)");
   ok(c34.rows.length > 0 && c34.rows.every(z => Math.abs(z[1] - z[2]) < 0.01), "1. 34(a): " + c34.rows.length + " sections from FinCom's TDS");
   // 2. turnover and clause 44
@@ -75,6 +82,6 @@ const unzip = (buf) => { const out = {}; let i = 0; const b = Buffer.from(buf); 
   }
   const r2 = x.FSX.taxAuditFromBooks(fy), C2 = no => r2.d3.clauses.find(c => c.no === no);
   ok(/77-audit/.test(r2.src) && C2("21(d)").rows.length === r2.counts.wp_cash40A3 && C2("31(ba)").rows.length === r2.counts.wp_cash269ST && C2("22").rows.length === r2.counts.wp_msme43Bh, "6. with AuditWP: its results fill 21(d), 31, 22, 26 and 21(b); counts equal its checks (" + r2.src + ")");
-  ok(C2("21(d)").rows.length === C("21(d)").rows.length && C2("31(ba)").rows.length === C("31(ba)").rows.length && C2("22").rows.length === C("22").rows.length && C2("21(b)").rows.length === C("21(b)").rows.length, "6. and the same answers as without it: one computation of each check");
+  ok(C2("21(d)").rows.length === C("21(d)").rows.length && C2("31(ba)").rows.length === C("31(ba)").rows.length && C2("22").rows.length === C("22").rows.length && C2("21(b)").rows.length === C("21(b)").rows.length && JSON.stringify(C2("21(b)").rows) === JSON.stringify(C("21(b)").rows), "6. and the same answers as without it: one computation of each check");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

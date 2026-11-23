@@ -33,7 +33,8 @@ const Bridge = {
   },
   // /ping?n= at an address (nothing secret is sent), with whether it proved itself: key -> proven (the key's proof, bound
   // to its id and this port); code -> pairProven (the pairing code's proof, bound to its id and this port as well)
-  async probeUrl(base, ms, key, code){
+  // slow(): called when the address did not answer within ms (Bridge.scan asks it again with longer)
+  async probeUrl(base, ms, key, code, slow){
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 1500), n = this.nonce(), port = this.urlPort(base);
     try {
       const r = await fetch(base.replace(/\/+$/, "") + "/ping?n=" + n, {cache: "no-store", signal: ctl.signal});
@@ -52,9 +53,9 @@ const Bridge = {
       else if (code && typeof j.pairProof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.pairProven = j.pairProof === await this.hmac(digits, n + j.bridgeId + port);
       if (code && pc && !o.pairProven && j.pairV === 2 && j.pairWindow === true && typeof j.bridgeId === "string" && Number(j.port) === port && /^[0-9a-f]{32}$/.test(String(j.pairSalt || ""))) o.spake = true;
       return o;
-    } catch (e){ return null; } finally { clearTimeout(t); }
+    } catch (e){ if (slow && ctl.signal.aborted) slow(); return null; } finally { clearTimeout(t); }
   },
-  async probe(port, ms, key, code){ return this.probeUrl("http://127.0.0.1:" + port, ms, key, code); },
+  async probe(port, ms, key, code, slow){ return this.probeUrl("http://127.0.0.1:" + port, ms, key, code, slow); },
   // this user's bridge among 9100..9199: only one that proves itself (with the key held, or with the pairing code given);
   // among those the one paired with (its id), else the bridge linked to the signed-in member, else the first
   async find(code){
@@ -67,9 +68,14 @@ const Bridge = {
     // bridge 2.5.16: then the port FinCom's cloud heard from this member's own bridge (its beat), before the range
     const cp = !code && c.key && !(one && one.proven && one.sameSession === true) && typeof TCloud === "object" && TCloud.myBridgePort ? TCloud.myBridgePort() : 0;
     if (cp && cp !== at) one = await this.probe(cp, 1500, c.key);
-    const found = one && one.proven && one.sameSession === true ? [one] : (await this.capped(this.PORTS, this.RANGE_AT_ONCE, p => this.probe(p, 1500, c.key, code))).filter(Boolean);
+    // next-speed-2 (the speed plan, #6): pairing within a minute of a look asks only the ports that answered it; nothing
+    // usable among them: the whole range, as before
+    const usable = b => (code ? (b.pairProven || b.spake) : b.proven) && b.sameSession !== false;
+    const ans = this.answered, reuse = code && ans && Date.now() - ans.at < 60000 && ans.ports.length ? ans.ports : null;
+    let found = one && one.proven && one.sameSession === true ? [one] : reuse ? await this.scan(reuse, c.key, code) : null;
+    if (!found || !found.some(usable)) found = await this.scan(this.PORTS, c.key, code);
     // bridge 2.5.3: one answering sameSession false runs for another Windows session (never this browser's); true: this one's
-    const ok = found.filter(b => (code ? (b.pairProven || b.spake) : b.proven) && b.sameSession !== false);
+    const ok = found.filter(usable);
     const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
     const pick = ok.find(b => b.sameSession === true) || (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
     this.foundAt = Date.now();
@@ -81,6 +87,32 @@ const Bridge = {
     return pick ? brief(pick) : null;
   },
   RANGE_AT_ONCE: 16,
+  // next-speed-2 (the speed plan, #6): the ports in rounds of RANGE_AT_ONCE, 700 ms a port; this login's own bridge (proved
+  // with the key, sameSession true) ends the look: no further port is asked, the ones already asked are waited for (250 ms
+  // at most: a port holding the line does not hold the look), and the lowest port among them wins (two own bridges of one login: the same pick as when every port was asked in order). A port that did not answer in
+  // time is asked once more, all of them together, with 2.5 s (a busy bridge; was one round of 1.5 s a port). What
+  // answered, by port; the ports that answered are kept a minute for pairing (find)
+  FAST_MS: 700, SLOW_MS: 2500,
+  async scan(ports, key, code){
+    const found = [], slow = [], own = b => !code && b && b.proven && b.sameSession === true;
+    const pass = (ps, ms, at) => new Promise(done => {
+      let i = 0, live = 0, over = false, stop = false;
+      const end = () => { if (!over){ over = true; done(); } };
+      const next = () => {
+        if (over) return;
+        if (stop || i >= ps.length){ if (!live) end(); return; }
+        const p = ps[i++]; live++;
+        Promise.resolve().then(() => this.probe(p, ms, key, code, () => slow.push(p))).catch(() => null)
+          .then(b => { live--; if (b && !over){ found.push(b); if (own(b) && !stop){ stop = true; setTimeout(end, 250); } } next(); });
+      };
+      for (let k = 0; k < Math.min(at, ps.length); k++) next();
+      if (!ps.length) end();
+    });
+    await pass(ports, this.FAST_MS, this.RANGE_AT_ONCE);
+    if (slow.length && !found.some(own)){ const again = slow.splice(0); await pass(again, this.SLOW_MS, again.length); }
+    if (ports === this.PORTS) this.answered = {at: Date.now(), ports: found.map(b => b.port)};
+    return found.sort((a, b) => a.port - b.port);
+  },
   async capped(xs, n, f){
     const out = new Array(xs.length); let i = 0;
     await Promise.all(Array.from({length: Math.min(n, xs.length)}, async () => { while (i < xs.length){ const k = i++; out[k] = await Promise.resolve().then(() => f(xs[k])).catch(() => null); } }));
@@ -1148,7 +1180,7 @@ async function postBankToTally(ids){
   const movedBack = b.rows.filter(r => readyBefore.has(r.id) && ["attention", "suggested"].includes(r.state)).length;
   // checked again: a line marked Possible repeat that became ready during the awaits above is not sent
   let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && !bankRepOpen(r) && !(r.notTally && !r.userSet));
-  const failed = [];
+  const failed = [], xmlOf = new Map();
   rows = rows.filter(r => {
     // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)
     if (isOwnBank(r, r.ledger)){ dropOwnBank(r); failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: OWN_BANK}); return false; }
@@ -1166,6 +1198,15 @@ async function postBankToTally(ids){
     }
     r.ledger = exactLedger(r.ledger);
     if (r.tdsAtPay) r.tdsLedger = exactLedger(r.tdsLedger || bankLedgers(co).tds);
+    // re-review of the bank audit: a voucher that does not add up (a split with TDS at payment, a split other than the
+    // amount) is held back on its own line, to Needs you; it never stops the others going (bankVoucherXml throws on it)
+    let why = typeof bankLineProblem === "function" ? bankLineProblem(r) : "";
+    if (!why) try { xmlOf.set(r.id, bankVoucherXml(r, acc, co)); } catch (e){ why = e.message; }
+    if (why){
+      r.postError = why; r.state = "attention"; r.why = [why.replace(/^[^:]*: /, "") + "."];
+      failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: why});
+      return false;
+    }
     return true;
   });
   if (!rows.length){
@@ -1182,7 +1223,7 @@ async function postBankToTally(ids){
     const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       // round 15: bank: true tells bridge 2.1.8 to batch these by its bank-lines-per-request setting (bills carry nothing)
-      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co), bank: true})),
+      vouchers: rows.map(r => ({id: r.id, xml: xmlOf.get(r.id), bank: true})),
       // 30-Oct-2026: lines a check with Tally released (src/js/96): the bridge on this computer lets each go once more
       // (it looks in Tally for it first); the cloud's queue judges releases itself
       released: postReleased(rows)}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
@@ -1504,15 +1545,6 @@ async function setAutoNumbering(){
       : "Tally did not change the voucher types: " + (bad.map(x => plainMsg(x.message)).join("; ") || "no reply") + ".");
   } catch (e){ toast("Could not reach Tally: " + e.message); }
   render();
-}
-/* ---------- settings ---------- */
-// the Tally Bridge settings (app/src/screens/Tally.jsx): an address, key or following typed; a Tally company linked to a
-// client; one Tally chosen (a port) or back to automatic
-function bridgeSet(k, v){ Bridge.setCfg({[k]: typeof v === "string" ? v.trim() : v}); if (k !== "follow"){ Bridge.lastOpenKey = null; startBridgePolling(); } render(); }
-function bridgePin(port){
-  port = num(port); Bridge.setCfg({port: port || 0}); Bridge.lastOpenKey = null;
-  if (S.bank){ S.bank.syncedAt = {}; S.bank.ledgers.importedAt = ""; }
-  Bridge.refresh().then(() => { toast(port ? "FinCom now uses only the Tally on port " + port + "." : "FinCom picks your Tally automatically."); bridgeTick(false); render(); });
 }
 async function saveBridgeSetup(){
   let t = null;

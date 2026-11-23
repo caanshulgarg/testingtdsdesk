@@ -29,8 +29,9 @@ export async function readFile(file, kind) {
   } else if (/\.(xlsx|xls|csv)$/.test(low)) {
     if (typeof ensureXlsx === "function") await ensureXlsx();
     if (!window.XLSX) throw new Error("The Excel reader could not be loaded just now. Try again in a moment.");
-    const wb = window.XLSX.read(new Uint8Array(buf), { type: "array" });
-    r = FinPyBs.fromRows(wb.SheetNames.map((n) => ({ name: n, rows: window.XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: "" }) })));
+    // (xlsxBook, xlsxRows: src/js/20; a date cell as a date, so a year heading of 31-03-2026 is found: next-fix-audit-imports)
+    const wb = xlsxBook(buf, { cellDates: true });
+    r = FinPyBs.fromRows(wb.SheetNames.map((n) => ({ name: n, rows: xlsxRows(wb.Sheets[n]) })));
     src = /\.csv$/.test(low) ? "csv" : "xlsx";
   } else throw new Error("Give the balance sheet as Excel (.xlsx, .xls), CSV or PDF.");
   if (!r.lines.some((z) => z.amt != null)) throw new Error(r.why || "FinCom could not find a figure in this file.");

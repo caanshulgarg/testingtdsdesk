@@ -1231,11 +1231,13 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
   const out: Record<string, unknown> = {}, info: Record<string, unknown> = {};
   try {
     const now = Date.now(), at = new Date(now).toISOString();
-    const [st, rs, rl] = await Promise.all([
+    // (next-speed: the owner's rollbacks asked with the other three, side by side; read only when the releases were)
+    const [st, rs, rl, rbq] = await Promise.all([
       db.from("tally_read_stops").select("id, device_id, reason, stopped_at").eq("firm_id", firm).eq("action", "stop").is("cleared_at", null),
       // a resume is passed on for a week (a computer off for longer reads again when it comes back only if it was not stopped)
       db.from("tally_read_stops").select("id, device_id, stopped_at").eq("firm_id", firm).eq("action", "resume").gt("stopped_at", new Date(now - 7 * 86400000).toISOString()),
-      db.from("tally_bridge_releases").select("*").eq("firm_id", firm)]);
+      db.from("tally_bridge_releases").select("*").eq("firm_id", firm),
+      db.from("tally_bridge_rollbacks").select("version, set_at").eq("firm_id", firm).is("cleared_at", null)]);
     const mine = (r: any) => !r?.device_id || r.device_id === dev.id;
     if (!st.error && !rs.error) {
       // the newest stop for this computer or for all of the firm's
@@ -1261,7 +1263,6 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
       const blocked = (r: any) => !!(r.held_at || r.withdrawn_at);
       const held = [...new Set(rows.filter(blocked).map((r: any) => String(r.version)))].sort(newer);
       const free = rows.filter((r: any) => !blocked(r)).sort((a: any, b: any) => newer(b.version, a.version))[0];
-      const rbq = await db.from("tally_bridge_rollbacks").select("version, set_at").eq("firm_id", firm).is("cleared_at", null);
       const rb = rbq.error ? null : (rbq.data || []).filter((x: any) => VERSION.test(String(x?.version || ""))).sort((a: any, b: any) => String(b.set_at || "").localeCompare(String(a.set_at || "")))[0];
       out.release = rb ? { version: rb.version, allowed: true, rollback: true } : { newest: true, allowed: true, held, ...(free ? { version: free.version } : {}) };
     }
@@ -2154,7 +2155,7 @@ let gapIdleMissing = 0;                              // migration 182 (tally_gap
 // Fail safe: a beat without pickups, periodPull or the last request's time is never idle. Today's bridge keeps its own
 // typing gate on top (DayPullIdleSec, 60 s by default)
 const TYPING_STALE_MS = 120000;
-function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null } {
+function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; typingAt: string | null; quietMs: number } {
   const t = (v: unknown) => typeof v === "string" && !isNaN(Date.parse(v)) ? Date.parse(v) : NaN;
   const key = (v: unknown) => typeof v === "string" ? v.trim().toLowerCase().split(/\s+/).join(" ") : "";     // (the bridge's companyKey)
   const pick = Array.isArray(b?.pickups) ? b.pickups : null;
@@ -2176,7 +2177,9 @@ function lightIdle(b: any, prevInfo: any, now = Date.now()): { idle: boolean; ty
   const typingAt = at > 0 ? new Date(at).toISOString() : null;
   const ms = Number(b?.reqs?.last?.ms), known = !!pick && !!cos && b?.reqs?.last && Number.isFinite(ms) && ms >= 0;
   const quiet = at > 0 ? now - at : Infinity;
-  return { idle: !!known && !b?.paused && b?.tallyState !== "busy" && quiet >= (ms <= 300 ? 5000 : 60000), typingAt };
+  const idle = !!known && !b?.paused && b?.tallyState !== "busy" && quiet >= (ms <= 300 ? 5000 : 60000);
+  // next-speed: how long Tally has been left alone, only when idle (0 otherwise): the older entries' pace (periodPace)
+  return { idle, typingAt, quietMs: idle ? quiet : 0 };
 }
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }, idle = false): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
@@ -4825,18 +4828,25 @@ Deno.serve(sentry.wrap(async (req) => {
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
   // post_ok is read only and answered within its budget: none of the writes below (the beats keep last_seen)
+  // next-speed (the speed plan, #3): a beat writes them while its first look-ups (only reads, which never read them) are
+  // asked, side by side (seenWrite, awaited there before anything else is written); every other call waits for them here
+  let seenWrite: Promise<void> = Promise.resolve();
   if (!isPostOk) {
-    // FinCom Bridge 2.5.12 (migration 154): a computer whose bridge was updated tries every held entry of the firm again
-    if (body.version && dev.version && String(body.version).slice(0, 40) !== String(dev.version)) {
-      const { error } = await db.rpc("tally_period_held_release", { p_firm: firm, p_version: String(body.version).slice(0, 40) });
-      if (error && !missingFn(String(error.message || ""))) fail("period_held_release", error);
-    }
-    if (body.kind === "hello" && body.info && typeof body.info === "object") {
-      // kept beside the heartbeat and history (it used to replace them)
-      const i = body.info, prev = (dev.info && typeof dev.info === "object") ? dev.info : {};
-      seen.info = { ...prev, computer: String(i.computer || "").slice(0, 60), user: String(i.user || "").slice(0, 60) };
-    }
-    await db.from("tally_devices").update(seen).eq("id", dev.id);
+    seenWrite = (async () => {
+      // FinCom Bridge 2.5.12 (migration 154): a computer whose bridge was updated tries every held entry of the firm again
+      if (body.version && dev.version && String(body.version).slice(0, 40) !== String(dev.version)) {
+        const { error } = await db.rpc("tally_period_held_release", { p_firm: firm, p_version: String(body.version).slice(0, 40) });
+        if (error && !missingFn(String(error.message || ""))) fail("period_held_release", error);
+      }
+      if (body.kind === "hello" && body.info && typeof body.info === "object") {
+        // kept beside the heartbeat and history (it used to replace them)
+        const i = body.info, prev = (dev.info && typeof dev.info === "object") ? dev.info : {};
+        seen.info = { ...prev, computer: String(i.computer || "").slice(0, 60), user: String(i.user || "").slice(0, 60) };
+      }
+      await db.from("tally_devices").update(seen).eq("id", dev.id);
+    })();
+    seenWrite.catch(() => {});     // (its error is met where it is awaited, never an unhandled one)
+    if (body.kind !== "beat") await seenWrite;
   }
 
   try {
@@ -4855,12 +4865,17 @@ Deno.serve(sentry.wrap(async (req) => {
         const beatAt = new Date().toISOString();
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
-        const [speedBooks, pickups, co] = await Promise.all([
+        // next-speed (the speed plan, #3): the computer's last_seen written (seenWrite, above) and Stop reading / the version
+        // it may install (bridgeControl, below: its own reads, and the pilot's evidence) beside these reads, which need neither
+        const [speedBooks, pickups, co, ctl] = await Promise.all([
           speedBooksFor(firm, b),
           // bridge 2.5.10: the days as the bridge took them (pickupsOf); none from an older bridge
           pickupsOf(b, prevInfo, me.id, (c: string) => bookForBeat(firm, c)),
           // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
-          changesOnly(dev, me.id)]);
+          changesOnly(dev, me.id),
+          // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
+          bridgeControl(dev, firm, me, prevInfo),
+          seenWrite]);
         // migration 203 (the final review): the beat names the bridge that sent it, so a posting's words are read only from
         // its own bridge's beat (tally_post_elsewhere_why)
         const beat = { at: beatAt, bridge: me.id, tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
@@ -4938,8 +4953,6 @@ Deno.serve(sentry.wrap(async (req) => {
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         if (pickups.length) (beat as any).pickups = pickups;
         if (co) (me.entry as any).changesOnly = true;
-        // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
-        const ctl = await bridgeControl(dev, firm, me, prevInfo);
         // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
         const ug = gateTrack(prevInfo, beat, Date.now());
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
@@ -5085,8 +5098,11 @@ Deno.serve(sentry.wrap(async (req) => {
         const periodStopped = !!beat.paused || !!beat.readStopped || !!(info as any).readStop;
         // review 245 R15 (L5): at most one list of days every 5 s a computer (an empty list while stopped is never held)
         // next-fast-entries (periodpace.js): a bridge whose beat says its fast read is on (FastEntries) is handed up to 30 days
-        // by day too; every other bridge as before (3 by day, 30 at night)
-        const pace = periodPace(periodNight, b);
+        // by day too; every other bridge as before (3 by day, 30 at night). next-speed (the speed plan, #1): by day a bridge whose
+        // Tally has been left alone a minute or more (lightIdle quiet) is handed more only when its beat says it takes a wide
+        // list by day (periodpace.js wideByDay: today only FastEntries; a default bridge reads at most 3 by day, so more
+        // would be stamped handed out and never read)
+        const pace = periodPace(periodNight, b, quiet.quietMs);
         const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bRead, periodStopped, pace.max, pace.night, fastOn(b), { dev, bridge: me.id, shared: gate.shared }, quiet.idle) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)

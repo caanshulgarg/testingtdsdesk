@@ -6,6 +6,8 @@
 import { useEffect, useMemo, useState } from "react";
 import "./itr.css";
 import "../../lib/finGlobals.js";
+// the 3CD draft the checks read (Audit.form3cd) comes with the Audit screen's file (src/js/77-audit.js), not in legacy.js
+import "../../../../src/js/77-audit.js";
 import { makeStore, appDeps, fileIn, AY_KEY } from "../../lib/itr/store.js";
 import { LABEL } from "../../lib/itr/imports.js";
 import { importsOf, buildModel, buildProfile, formsFor } from "../../lib/itr/model.js";
@@ -17,8 +19,9 @@ import { gstData, pfBooks, clientOf } from "../../lib/itr/appData.js";
 import { makeJson, report, VERSION } from "../../lib/itr/json.js";
 import { SCHEMA_FILES } from "../../lib/itr/forms.js";
 import { rows as sheetRows, money, openPdf, workbook } from "../../lib/itr/sheet.js";
+import Schedules from "./Schedules.jsx";
 
-const STEPS = [["itr", "Data"], ["itr-comp", "Computation"], ["itr-checks", "Checks"], ["itr-json", "JSON"]];
+const STEPS = [["itr", "Data"], ["itr-sch", "Schedules"], ["itr-comp", "Computation"], ["itr-checks", "Checks"], ["itr-json", "JSON"]];
 const STATUS = { matched: ["Matched", "ok"], difference: ["Difference", "bad"], missing: ["Missing data", "warn"], needs: ["Needs you", "warn"] };
 const redraw = () => { try { if (typeof render === "function") render(); } catch (e) { /* the next drawing shows it */ } };
 const go = (t) => goClient("books:" + t);
@@ -106,6 +109,7 @@ export default function ITR() {
       })}
     </nav>
     {step === "itr" ? <DataStep X={X} refresh={refresh} />
+      : step === "itr-sch" ? <Schedules X={X} refresh={refresh} schema={sch.schema || null} />
       : step === "itr-comp" ? <CompStep X={X} />
       : step === "itr-checks" ? <ChecksStep X={X} refresh={refresh} />
       : <JsonStep X={X} json={json} sch={sch} g={g} refresh={refresh} />}
@@ -136,13 +140,14 @@ function DataStep({ X, refresh }) {
       <label className={"itr-drop" + (busy ? " busy" : "")} data-itr-drop="">
         <input type="file" multiple accept=".json,.txt,.csv,.pdf" data-itr-file="" onChange={(e) => { const l = [...e.target.files]; e.target.value = ""; if (l.length) bring(l); }} />
         <span className="itr-drop-t">{busy ? "Reading…" : "Bring in files"}</span>
-        <span className="itr-note">AIS, TIS, 26AS, pre-filled JSON, PF ECR and challans, ESI challans. FinCom tells which is which.</span>
+        <span className="itr-note">AIS, TIS, 26AS, pre-filled JSON, Form 16, PF ECR and challans, ESI challans. FinCom tells which is which.</span>
       </label>
       {said.length > 0 && <ul className="itr-said" data-itr-said="">{said.map((s, i) => <li key={i} data-ok={s.ok ? "1" : "0"}><b>{s.name}</b> {s.text}
         {s.confirm && <span> <button className="linkbtn" data-itr-confirm="" onClick={async () => { const r = await X.store.bring(s.confirm, AY_KEY, { confirmed: true }); setSaid(said.map((z, j) => j === i ? { name: z.name, ok: r.ok, text: r.text, ask: r.ask } : z)); refresh(); }}>{"Yes, it is " + (X.client.name || "this client") + "'s"}</button></span>}
         {s.ask && <span> {s.ask.text} <button className="linkbtn" data-itr-yes={s.ask.key} onClick={() => { X.store.setState({ [s.ask.key]: s.ask.value }); setSaid(said.map((z, j) => j === i ? Object.assign({}, z, { ask: null, text: z.text + " Remembered." }) : z)); refresh(); }}>Yes, it is</button></span>}</li>)}</ul>}
       <div className="itr-files">
         {KINDS.map(([k, label]) => { const f = fileOf(k); return <FileRow key={k} k={k} label={label} f={f} open={open === k} onOpen={() => setOpen(open === k ? "" : k)} onDrop={() => { X.store.drop(f.id); refresh(); }} />; })}
+        <F16Row list={X.files.filter((f) => f.kind === "form16")} open={open === "form16"} onOpen={() => setOpen(open === "form16" ? "" : "form16")} />
         <MonthRow label="PF ECR" list={months("ecr")} k="ecr" open={open === "ecr"} onOpen={() => setOpen(open === "ecr" ? "" : "ecr")} />
         <MonthRow label="PF challans" list={months("pfchallan")} k="pfchallan" open={open === "pfchallan"} onOpen={() => setOpen(open === "pfchallan" ? "" : "pfchallan")} />
         <MonthRow label="ESI challans" list={months("esic")} k="esic" open={open === "esic"} onOpen={() => setOpen(open === "esic" ? "" : "esic")} />
@@ -164,6 +169,17 @@ function FileRow({ k, label, f, open, onOpen, onDrop }) {
       <p className="itr-note">{"PAN " + (f.pan || "") + " · AY " + f.ay + "-" + String(+f.ay + 1).slice(2) + (f.stored ? " · stored" : " · not stored (signed out)") + (f.assumed ? " · layout to confirm on the first real file" : "")}</p>
       <button className="linkbtn" data-itr-remove={k} onClick={onDrop}>Remove</button>
     </div>}
+  </div>;
+}
+// Form 16: one per employer (TAN); taken into Schedule S on Schedules
+function F16Row({ list, open, onOpen }) {
+  return <div className="itr-file" data-itr-kind="form16" data-in={list.length ? "1" : "0"}>
+    <button className="itr-file-main" onClick={onOpen} aria-expanded={open} disabled={!list.length}>
+      <span className="itr-dot" data-tone={list.length ? "ok" : "none"} /><span className="itr-file-l">Form 16</span>
+      <span className="itr-file-r">{list.length ? list.length + " employer" + (list.length === 1 ? "" : "s") : "None"}</span>
+    </button>
+    {open && <div className="itr-file-more" data-itr-read="form16"><table className="itr-mini"><tbody>{list.map((f) => <tr key={f.id}><td>{(f.data.employer || "") + " (" + (f.data.tan || "") + ")"}</td><td className="n">{money(f.data.s171 + f.data.s172 + f.data.s173)}</td><td className="n">{"TDS " + money(f.data.tds)}</td></tr>)}</tbody></table>
+      <p className="itr-note">Layout to confirm on the first real file. Take it into Schedule S on Schedules.</p></div>}
   </div>;
 }
 function MonthRow({ label, list, k, open, onOpen }) {
@@ -199,6 +215,7 @@ function ReturnCard({ X, refresh }) {
       {ent === "C" && st.regime === "normal" && <div className="itr-grid"><label className="itr-field"><span>Book profit under 115JB (with the Explanation 1 adjustments)</span><input inputMode="numeric" data-itr-bp="" value={st.bookProfit ?? ""} onChange={(e) => set({ bookProfit: e.target.value === "" ? "" : +e.target.value, bookProfitOk: false })} /></label>
         <label className="itr-field itr-tick"><input type="checkbox" data-itr-bp-ok="" checked={!!st.bookProfitOk} onChange={(e) => set({ bookProfitOk: e.target.checked })} /><span>The book profit is confirmed</span></label></div>}
       {ent === "C" && <Yn label="Follows Ind AS" k="indAs" X={X} set={set} />}
+      {ent === "C" && (X.state.profile || {}).indAs === true && <Yn label="Preference shares are irredeemable (equity under Ind AS 32)" k="prefEquity" X={X} set={set} />}
       {ent === "C" && <Yn label="Listed company" k="listed" X={X} set={set} />}
       {ent !== "P" || X.form !== "ITR-4" ? <Yn label="Every loan and advance given is for the business" k="loansForBusiness" X={X} set={set} /> : null}
       {st.audit && <Auditor X={X} set={set} />}

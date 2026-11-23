@@ -18,7 +18,7 @@ const PAN_RE = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/;
 const TAN_RE = /\b([A-Z]{4}[0-9]{5}[A-Z])\b/;
 const GSTIN_RE = /\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/;
 const MON = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
-export const LABEL = { ais: "AIS", tis: "TIS", as26: "Form 26AS", prefill: "Pre-filled data", ecr: "PF ECR", pfchallan: "PF challan", esic: "ESI challan" };
+export const LABEL = { ais: "AIS", tis: "TIS", as26: "Form 26AS", prefill: "Pre-filled data", ecr: "PF ECR", pfchallan: "PF challan", esic: "ESI challan", form16: "Form 16" };
 
 const num = (s) => {
   if (typeof s === "number") return isFinite(s) ? s : null;
@@ -59,6 +59,11 @@ function section(code) {
 export function category(code, desc) {
   const c = String(code || "").toUpperCase(), d = String(desc || "").toLowerCase();
   if (/GST|GSTR/.test(c) || /gst turnover|gstr-?3b|gstr-?1/.test(d)) return "gst";
+  // salary (TDS 192) and the capital-gain lines: sale of securities and mutual fund units (SFT-17), sale of immovable
+  // property (SFT-12, TDS 194IA): checked against Schedules S and CG (verify.js)
+  if (/^TDS-?192\b|^TDS-?192$/.test(c) || /^salary/.test(d)) return "salary";
+  if (/194-?IA/.test(c) || (/SFT-?0?12/.test(c) && /sal|sale/i.test(c + " " + d)) || /sale of (immovable|land|building|property)/.test(d)) return "cgprop";
+  if ((/SFT-?0?17/.test(c) && /sal|sale|redemption/i.test(c + " " + d)) || /sale of (securities|units|shares)|redemption of units/.test(d)) return "cgsale";
   if (/^TDS-?194A?$|^TDS-?194A\b|SFT-?00[5]|SFT-?016/.test(c) || /interest/.test(d)) return "interest";
   if (/^TDS-?194$|SFT-?015/.test(c) || /dividend/.test(d)) return "dividend";
   if (/194I|194-?IB/.test(c) || /\brent\b/.test(d)) return "rent";
@@ -90,6 +95,7 @@ export function detect(name, content) {
   if (/Electronic Challan cum Return|ECR Statement|\bUAN\b.*EPF Wages/i.test(head) && /\bUAN\b/i.test(head)) return "ecr";
   if (/Employees'? State Insurance|\bESIC\b/i.test(head) && /Challan/i.test(head)) return "esic";
   if (/TRRN/i.test(head) && /(Provident Fund|EPFO|A\/C\s*No|Account No)/i.test(head)) return "pfchallan";
+  if (/FORM\s*NO\.?\s*16\b/i.test(head) && /section\s*203|section\s*192|Gross Salary/i.test(text)) return "form16";
   if (/Form\s*26AS|Annual Tax Statement/i.test(head) || (/Permanent Account Number/i.test(head) && /Tax Deducted at Source/i.test(text))) return "as26";
   if (/Taxpayer Information Summary/i.test(head)) return "tis";
   if (/Annual Information Statement/i.test(head)) return "ais";
@@ -104,14 +110,42 @@ export function read(name, content) {
   const c = json || content;
   if (json && typeof json === "object" && (json.encrypted || json.EncryptedData || json.encData)) return { error: { code: "encrypted", text: "This JSON is locked by the portal. Open it in the portal's offline utility, or download the unlocked JSON or the PDF." } };
   const kind = detect(name, c);
-  if (!kind) return { error: { code: "unknown", text: "FinCom could not tell what this file is. Bring in an AIS, TIS, 26AS, pre-filled JSON, PF ECR or challan, or ESI challan." } };
+  if (!kind) return { error: { code: "unknown", text: "FinCom could not tell what this file is. Bring in an AIS, TIS, 26AS, pre-filled JSON, Form 16, PF ECR or challan, or ESI challan." } };
   if (kind === "itrjson") return { error: { code: "itr", text: "This is an income tax return JSON. Last year's ITR is brought in on Statements › Fixed assets." } };
-  const fn = { ais: json ? aisJson : aisText, tis: json ? tisJson : tisText, as26: as26Text, prefill: prefillJson, ecr: ecrText, pfchallan: pfChallanText, esic: esicText }[kind];
+  const fn = { ais: json ? aisJson : aisText, tis: json ? tisJson : tisText, as26: as26Text, prefill: prefillJson, ecr: ecrText, pfchallan: pfChallanText, esic: esicText, form16: form16Text }[kind];
   const text = typeof c === "string" ? c : c && c.lines ? c.lines.join("\n") : "";
   const out = fn(json || text, name);
   if (out.error) return out;
   return Object.assign({ kind, label: LABEL[kind], assumed: true }, out, { ayLabel: ayLabel(out.ay) });
 }
+
+// ---- Form 16 (TRACES; Part A and Part B, PDF as text lines or the text): the employer, TAN, the employee's PAN, the
+// AY, the salary under 17(1) / 17(2) / 17(3), the section 10 exemptions, the section 16 deductions and the TDS. Read by
+// the lines' labels (the layout of rule 31(1)(a), Form No. 16 as amended), not by position. One per employer (TAN).
+function form16Text(t) {
+  const lines = textLines(t), all = lines.join("\n");
+  const amt = (re) => { for (const ln of lines) { if (re.test(ln)) { const m = ln.match(/(-?[\d,]+\.\d{2}|-?[\d,]{2,})\s*$/); if (m) return num(m[1]) || 0; } } return null; };
+  const pick = (re) => { for (const ln of lines) { const m = ln.match(re); if (m) return m[1].trim(); } return ""; };
+  const emp = pick(/PAN of the Employee[^A-Z]*([A-Z]{5}[0-9]{4}[A-Z])/i) || pick(/Employee.*?\b([A-Z]{5}[0-9]{4}[A-Z])\b/);
+  const tan = pick(/TAN of the Deductor[^A-Z]*([A-Z]{4}[0-9]{5}[A-Z])/i) || (all.match(TAN_RE) || [])[1] || "";
+  const am = all.match(/Assessment Year\s*[:\^]?\s*(20\d{2}\s*-\s*\d{2,4})/i), y = am ? yearsFrom(am[1], true) : null;
+  const employer = pick(/Name and address of the Employer[^A-Za-z]*(?:\/Specified Bank)?\s+([^,]+)/i);
+  const s171 = amt(/salary as per provisions contained in section 17\(1\)/i), s172 = amt(/perquisites under section 17\(2\)/i), s173 = amt(/in lieu of salary under section 17\(3\)/i);
+  const exHra = amt(/house rent allowance under section 10\(13A\)/i), exLta = amt(/travel concession or assistance under section 10\(5\)/i), exGrat = amt(/gratuity under section 10\(10\)/i), exLeave = amt(/leave salary encashment under section 10\(10AA\)/i);
+  const std = amt(/standard deduction under section 16\(ia\)/i), ent = amt(/entertainment allowance under section 16\(ii\)/i), ptax = amt(/tax on employment under section 16\(iii\)/i);
+  const chargeable = amt(/income chargeable under the head .?salaries/i);
+  // TDS: Part A's total line ("Total (Rs.) <amount paid> <tax deducted> <tax deposited>") or the net tax payable
+  let tds = null; const tl = lines.find((ln) => /^Total\s*\(Rs/i.test(ln));
+  if (tl) { const ns = tl.match(/-?[\d,]+\.\d{2}/g) || []; if (ns.length >= 2) tds = num(ns[1]); }
+  if (tds == null) tds = amt(/net tax payable/i);
+  const optOut = /opting out of taxation u\/s 115BAC/i.test(all) ? (/115BAC\(1A\)\?\s*(Yes|No)/i.exec(all) || [])[1] || "" : "";
+  if (!emp) return { error: { code: "no_pan", text: "No employee's PAN was found in this Form 16." } };
+  const ex = [["10(13A)", exHra], ["10(5)", exLta], ["10(10)", exGrat], ["10(10AA)", exLeave]].filter(([, v]) => v).map(([sec, a]) => ({ sec, amt: a }));
+  const data = { employer, tan, s171: s171 || 0, s172: s172 || 0, s173: s173 || 0, exempt: ex, std: std || 0, ent: ent || 0, ptax: ptax || 0, chargeable, tds: tds || 0, oldRegime: /^yes$/i.test(optOut), optOut };
+  return { pan: emp, ay: y ? y.ay : "", fy: y ? y.fy : "", name: "", key: "form16|" + (tan || "x"), data,
+    read: { sections: summarize([{ name: "Salary (17(1) + 17(2) + 17(3))", count: 1, total: N0(s171) + N0(s172) + N0(s173) }, { name: "Exempt under section 10", count: ex.length, total: ex.reduce((a, x) => a + x.amt, 0) }, { name: "TDS (Part A)", count: 1, total: tds || 0 }]) } };
+}
+const N0 = (v) => +v || 0;
 
 // ---- AIS JSON: any nesting; an information line is an object with an amount and an information code or description
 function walkLines(j, push) {

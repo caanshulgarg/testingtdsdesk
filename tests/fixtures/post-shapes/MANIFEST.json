@@ -25,9 +25,14 @@
     "OWN_BANK",
     "vchTypeOf",
     "billVt",
-    "salesVt"
+    "salesVt",
+    "bankSalesOf",
+    "bankSalesAlloc",
+    "salesAgainstOf",
+    "billReg",
+    "vchGstReg"
   ],
-  "sha256": "81e4dd052a87ae376e841d007d4a22017021b6dd96f2d4cb4080b0e50b17e2bd",
+  "sha256": "f1ddca2cb7316700332b7cdd0661a9a227b2b50825eeb91b7f04955b7e1d6dd6",
   "files": [
     "purchase-bill.xml",
     "journal.xml",
@@ -36,6 +41,8 @@
     "bank-batch.xml",
     "new-ledger.xml",
     "new-customer.xml",
-    "voucher-type-numbering.xml"
+    "voucher-type-numbering.xml",
+    "purchase-bill-multi-gstin.xml",
+    "sales-invoice-multi-gstin.xml"
   ]
 }

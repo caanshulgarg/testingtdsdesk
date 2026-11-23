@@ -72,8 +72,14 @@ const CloudPost = {
     if (!(r && r.none && dup.size) && (!r || !r.ok)) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
     const own = r.none ? "" : id, jobOf = x => dup.has(x) ? dup.get(x).job : own, rows = new Map();
     ids.forEach(x => { if (jobOf(x)){ rows.set(jobOf(x), null); postMarkNew(cid, [x], jobOf(x)); } });
+    // (re-review 22-Nov-2026: an automatic run is told only its own posting, the new id when every entry is held by an
+    // earlier one: that one may be someone's posting by hand, and Undo must see it as held, never cancel it as the run's)
+    const mine = own || id;
     id = own || dup.values().next().value.job;
-    try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, cid, at: Date.now(), n: ids.length})); } catch (e){}
+    if (typeof AutoPost === "object" && AutoPost.jobSeen) AutoPost.jobSeen(cid, ids, mine);
+    try { lsSet("tdsdesk:cloudpost", JSON.stringify({id, own: mine, cid, at: Date.now(), n: ids.length, ids: ids.slice(0, 500)})); } catch (e){}
+    // audit 22-Nov-2026 (low 1): the slot is cleared only while it still holds this posting (a later one took it over)
+    const slotDel = () => { try { const m = JSON.parse(lsGet("tdsdesk:cloudpost") || "null"); if (!m || m.id === id) lsDel("tdsdesk:cloudpost"); } catch (e){} };
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
     const t0 = Date.now(), fin = j => !!j && ["done", "failed", "cancelled"].includes(j.status), far = j => /^Queued: posts/.test((j && j.message) || "");
     // waiting for Tally: the cloud's own words when it is queued for no computer (migration 185), else the company and
@@ -110,10 +116,10 @@ const CloudPost = {
         for (let n = 0; n < 400; n++){
           await sleep(n < 10 ? 2000 : 5000);
           let k; try { k = await this.row(id); } catch (e){ continue; }
-          if (k && !k.checking){ try { lsDel("tdsdesk:cloudpost"); } catch (e){} try { onChecked && onChecked({results: resultsOf(k)}); } catch (e){} return; }
+          if (k && !k.checking){ slotDel(); try { onChecked && onChecked({results: resultsOf(k)}); } catch (e){} return; }
         }
       })();
-    } else if (fin(j)){ try { lsDel("tdsdesk:cloudpost"); } catch (e){} }
+    } else if (fin(j)) slotDel();
     return {ok: true, company: j.company || payload.company, results, checking: !!j.checking, viaCloud: true, job: {id, status: j.status, message: j.message}};
   }
 };
@@ -148,20 +154,27 @@ const CloudJobs = {
   async load(force){
     // read at most once a minute, also after a failure (the page draws again after each try); the list changes by itself
     // when FinCom's cloud says a posting changed (Live, migration-26)
+    // (audit 22-Nov-2026, tally-sync 3: a forced read asked while one is going is read again after it, never dropped)
+    if (this.busy && force) this.again = true;
     if (typeof TCloud !== "object" || !TCloud.on() || this.busy || (!force && Date.now() - this.at < 60000)) return;
-    this.busy = true;
+    this.busy = true; this.again = false;
     try {
       const cols = "id,client_id,company,status,done,n,message,results,created_by,created_at,updated_at,attempts";
       // each entry's state (items) from migration-24 on; the entries' ids and dismissing from migration-26 on; the
       // bridge's timing of the posting (round 15, B4: {reqs: [{n, seconds, …}], secondsTotal}) from migration 43 on
       const dis = ",items,entry_ids,dismissed_at,dismissed_by,dismiss_note,dismiss_auto", more = [dis + ",timing", dis, ",items", ""];
       for (let i = 0; ; i++){
-        try { this.list = await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc"); this.dismissOk = i <= 1; break; }
+        // (a posting made between two pages shifts the next page by one: each posting once, the first read)
+        try { const seen = new Set(); this.list = (await TCloud.restAll("tally_post_jobs?select=" + cols + more[i] + "&order=created_at.desc,id.desc")).filter(j => !seen.has(j.id) && seen.add(j.id)); this.dismissOk = i <= 1; break; }
         catch (e){ if (i < more.length - 1 && /items|entry_ids|dismiss|timing|column/i.test(String(e && e.message))) continue; throw e; }
       }
       this.err = ""; this.at = Date.now();
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
     this.busy = false;
+    if (this.again){ this.again = false; return this.load(true); }
+    this.after();
+  },
+  after(){
     this.autoDismiss();
     // round 17a: the entries a finished posting put in Tally, marked on each client loaded here (never sent again)
     if (this.list && typeof postReconcile === "function") [...new Set(this.list.map(j => j.client_id))].forEach(cid => { if (S.data[cid] && S.data[cid].loaded) { try { postReconcile(cid); } catch (e){ console.error(e); } } });
@@ -171,8 +184,25 @@ const CloudJobs = {
       this.soonT = setTimeout(() => this.load(true), 15000);
     render();
   },
-  // a change to a posting, from the live connection: read again (a burst of changes is read once)
-  changed(){ clearTimeout(this.chT); this.chT = setTimeout(() => this.load(true), 800); },
+  // a change to a posting, from the live connection: read again (a burst of changes is read once). Audit 22-Nov-2026
+  // (tally-sync 5): every change read the firm's whole history again (results and items of every posting ever made, on
+  // every open browser, for each request of a posting). Now the row that came (d.record, the whole row) is put in the
+  // list in its place; the whole list is read only when the row did not come whole (too big: d.errors) or no list is here
+  changed(d){
+    const r = d && d.record, cols = this.list && this.list[0];
+    if (r && r.id && cols && !(d.errors && d.errors.length) && !this.busy && d.type !== "DELETE"){
+      const keep = Object.keys(cols), row = {}, i = this.list.findIndex(j => j.id === r.id);
+      keep.forEach(k => { if (k in r) row[k] = r[k]; });
+      // (re-review 22-Nov-2026: Realtime leaves unchanged large columns, results and items, out of an UPDATE's record: a
+      // posting already here keeps its own values of those, the columns that came are taken)
+      if (keep.every(k => k in r) || (i >= 0 && d.type === "UPDATE")){
+        this.list = i >= 0 ? this.list.map((j, n) => n === i ? Object.assign({}, j, row) : j) : [row].concat(this.list);
+        clearTimeout(this.chT); this.chT = setTimeout(() => this.after(), 800);
+        return;
+      }
+    }
+    clearTimeout(this.chT); this.chT = setTimeout(() => this.load(true), 800);
+  },
   // Retry: the same posting again under its id; entries already in Tally are found by FinCom's tag, not posted twice.
   // Round 14c: a bill of it deleted in FinCom since (C5a): refused here, no call; any refusal is kept on the row
   // (refused[job id], shown by Post.jsx beside Retry), not said in a toast alone (C3)

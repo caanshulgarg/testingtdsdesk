@@ -22,10 +22,14 @@ const FinSt = (() => {
   // only: "co" (companies) or "nc" (firms, LLPs, proprietors and other non-corporate entities)
   const NOTES = [
     {key: "3", title: "Share capital", st: "BS", sign: -1, only: "co", groups: [["sc", "Issued, subscribed and fully paid up", "EQ", [["3A", "Equity shares, fully paid up"], ["3B", "Preference shares, fully paid up"]]]]},
-    {key: "3", title: "Partners' capital accounts", st: "BS", sign: -1, only: "nc", groups: [["cap", "", "EQ", [["3P", "Capital accounts"], ["3Q", "Current accounts"], ["3R", "Less: drawings"]]]]},
+    {key: "3", title: "Partners' capital accounts", st: "BS", sign: -1, only: "nc", groups: [["cap", "", "EQ", [["3P", "Capital accounts"], ["3Q", "Current accounts"], ["3R", "Less: drawings"],
+      // what the Profit & Loss A/c ledger was debited with in the year for the profit credited to the partners: FinCom's own line
+      ["3S", "Less: profit of the year already credited to the partners' accounts", {sys: true}]]]]},
     {key: "4", title: "Reserves and surplus", st: "BS", sign: -1, groups: [["res", "", "EQ", [["4B", "Securities premium"], ["4C", "General reserve"], ["4D", "Other reserves"]]], ["sur", "Surplus in the statement of profit and loss", "EQ", [["4A", "Balance at the beginning of the year"],
       // the profit of the year before the period chosen (statements for a part of the year): FinCom's own line, never a ledger's
-      ["4E", "Profit for the earlier part of the year", {sys: true}]]]]},
+      ["4E", "Profit for the earlier part of the year", {sys: true}],
+      // what the Profit & Loss A/c ledger was debited (or credited) with in the year: transfers to reserves, dividends
+      ["4F", "Appropriations in the year (transfers to reserves, dividends)", {sys: true}]]]]},
     {key: "30", title: "Long-term borrowings", st: "BS", sign: -1, groups: [["ltb", "", "NCL", [["30A", "Term loans from banks (secured)"], ["30B", "Loans from related parties and others"]]]]},
     {key: "31", title: "Deferred tax liabilities (net)", st: "BS", sign: -1, groups: [["dtl", "", "NCL", [["31A", "Deferred tax liabilities (net)"]]]]},
     {key: "32", title: "Other long-term liabilities", st: "BS", sign: -1, groups: [["oltl", "", "NCL", [["32A", "Other long-term liabilities"]]]]},
@@ -271,6 +275,9 @@ const FinSt = (() => {
   function stockOn(ymd, x){
     const f = x.f, st = x.st || {}, t = (f.stockAt || {})[ymd];
     if (x.integrated){ const at = x.balAt(ymd); return {v: R2(Object.keys(at).filter(isStockLed).reduce((s, l) => s - N(at[l]), 0)), src: "tally", label: "Tally: the Stock-in-hand ledgers"}; }
+    // the Stock-in-Hand ledgers' opening balance in Tally (no entry moves them): the stock on the day before FinCom's copy
+    // begins, that day only (review of 22-Nov-2026; any other day: read from Tally, typed or uploaded)
+    if (x.ledOpen && ymd === x.ledOpen.d) return {v: x.ledOpen.v, src: "tally", label: "Tally: the Stock-in-Hand ledgers' opening balance"};
     const fromTally = stockFromTally(ymd, f), typedLater = t && t.v != null && t.v !== "" && fromTally && t.at && Date.parse(t.at) > Date.parse(fromTally.got);
     if (fromTally && !typedLater) return fromTally;
     const typed = () => ({v: R2(N(t.v)), src: "typed", label: "typed by " + (t.by || "someone") + (t.at ? " on " + DMY(String(t.at).slice(0, 10).replace(/-/g, "")) : ""), by: t.by, at: t.at});
@@ -311,11 +318,11 @@ const FinSt = (() => {
     // a year earlier from the copy, or none; compared with the last full year: as the full year
     const pyFrom = String(N(fy) - 1) + "0401", typed = (f.pyTb || {})[fy], upl = pyUpload(fy), same = !P.full && P.cmp !== "fy";
     const copyFrom = same && P.pyFrom < pyFrom ? P.pyFrom : pyFrom, hasCopy = (b.tb && b.tb.from <= copyFrom) || MIS.covered(copyFrom);
-    let pySrc = "opening", pyBal = null;
+    let pySrc = "opening", pyBal = null, pyStart = null;
     if (same){
       const pb = hasCopy ? Audit.balances(copyFrom, P.pyTo) : null;
       if (pb && pb.ok){
-        pySrc = "copy"; pyBal = pb; const pc = pb.at(P.pyTo), po = pb.at(Audit.dayBefore(pyFrom)), pp = pb.at(Audit.dayBefore(P.pyFrom));
+        pySrc = "copy"; pyBal = pb; const pc = pb.at(P.pyTo), po = pb.at(Audit.dayBefore(pyFrom)), pp = pb.at(Audit.dayBefore(P.pyFrom)); pyStart = po;
         Array.from(new Set(Object.keys(pc).concat(Object.keys(po), Object.keys(pp)))).forEach(l => { const rv = isRev(l); R(l).py = R2(rv ? -(N(pc[l]) - N(pp[l])) : -N(pc[l]));
           if (rv){ bfPy += -N(po[l]); slPy += -(N(pp[l]) - N(po[l])); } });
         (((f.adj || {})[periodKey(String(N(fy) - 1), {preset: "custom", from: P.pyFrom, to: P.pyTo})]) || []).forEach(a => { if (!N(a.amt)) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
@@ -324,7 +331,7 @@ const FinSt = (() => {
     else {
       const pb = hasCopy ? Audit.balances(pyFrom, Audit.dayBefore(fyFrom)) : null;
       if (pb && pb.ok){
-        pySrc = "copy"; pyBal = pb; const pOpen = pb.at(Audit.dayBefore(pyFrom));
+        pySrc = "copy"; pyBal = pb; const pOpen = pb.at(Audit.dayBefore(pyFrom)); pyStart = pOpen;
         Array.from(new Set(all.concat(Object.keys(pOpen)))).forEach(l => { const rv = isRev(l); R(l).py = R2(rv ? -(N(open[l]) - N(pOpen[l])) : -N(open[l])); if (rv) bfPy += -N(pOpen[l]); });
         (((f.adj || {})[String(N(fy) - 1)]) || []).forEach(a => { if (!N(a.amt) || (a.carry && !inTally(prevY))) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
       } else if (upl && upl.usePy !== false) pySrc = "upload";
@@ -334,16 +341,36 @@ const FinSt = (() => {
     // start there; last year's balance sheet as the PY: the PPE schedule starts from FinCom's own gross block and depreciation)
     const hasOp = !P.full || pySrc === "upload";
     if (hasOp) Object.values(rows).forEach(r => { r.op = isRev(r.ledger) ? 0 : R2(-N(pOpen[r.ledger])); });
+    // (review of 22-Nov-2026) the Profit & Loss A/c ledger (Tally's primary ledger): its balance at the start of the year is
+    // the surplus brought forward (4A); what was posted to it in the year appropriates the year's profit: credited to the
+    // partners (a firm, 3S) or moved to a reserve or paid as a dividend (a company, 4F). The whole closing balance was 4A,
+    // so a firm's profit credited to the partners was counted twice in capital and shown as a negative surplus. A ledger
+    // coded by hand stays as coded
+    const plMv = [];
+    Object.values(rows).forEach(r => { const l = r.ledger;
+      if (isRev(l) || !/^profit\s*&\s*loss a\/c$/i.test(String(l).trim()) || (f.map || {})[l]) return;
+      const o = R2(N(openBs[l])), mv = R2(r.cy - o), py0 = pyStart ? R2(-N(pyStart[l])) : null, pmv = py0 == null ? 0 : R2(r.py - py0);
+      if (Math.abs(mv) < 0.005 && Math.abs(pmv) < 0.005) return;
+      plMv.push([mv, pmv, hasOp ? R2(N(r.op) - o) : null]); r.cy = o; if (py0 != null) r.py = py0; if (hasOp) r.op = o; });
     const out = [], K = codes(kind);
     const syn = (ledger, code, cy, py, op) => { if (!(Math.abs(cy) >= 0.005 || Math.abs(py) >= 0.005 || (hasOp && Math.abs(N(op == null ? cy : op)) >= 0.005))) return null;
       const r = Object.assign({ledger, group: "", py: R2(py), cy: R2(cy), adj: 0, final: R2(cy), code, codeSrc: "suggested", side: CODES[code].side, synthetic: true}, hasOp ? {op: R2(op == null ? cy : op)} : {});
       out.push(r); return r; };
+    plMv.forEach(([mv, pmv, op]) => syn(kind === "co" ? "Appropriations posted to the Profit & Loss A/c in the year" : "Profit credited to the partners through the Profit & Loss A/c in the year", kind === "co" ? "4F" : "3S", mv, pmv, op));
     // stock, when Tally does not keep it: the closing stock (39A), the change (42A: opening at the start of the period less
     // closing), the opening stock of the year in the surplus (4A), and the change before the period in the profit earlier in
     // the year (4E). A figure not known is nil, and the Checks tab says which is missing
-    const integrated = all.some(l => isStockLed(l) && Math.abs(N(close[l])) >= 1) || all.some(l => isStockLed(l) && Math.abs(N(open[l])) >= 1), warn = [];
+    // (review of 22-Nov-2026) a Stock-in-Hand ledger's balance is the stock only when entries move it: FinCom's copy holds the
+    // openings and the entries, never the closing value Tally works out (from the stock items, or typed in the ledger), so
+    // a balance no entry moves is only the opening of the copy. Then the stock is as read from Tally, typed or uploaded,
+    // and the ledger's balance goes to the surplus with the opening stock (4A), where the year's opening is taken out
+    const stockL = all.filter(isStockLed), moved = stockL.length > 0 && (b.vouchers || []).some(v => v.date <= to && !v.opt && !v.cancel && (v.ent || []).some(e => isStockLed(e.l) && Math.abs(N(e.a)) >= 0.005));
+    const integrated = moved && (stockL.some(l => Math.abs(N(close[l])) >= 1) || stockL.some(l => Math.abs(N(open[l])) >= 1)), warn = [];
+    const stockStatic = !moved ? stockL.filter(l => !(f.map || {})[l]) : [];
     const A = Audit.dayBefore(fyFrom), Bd = P.full ? A : Audit.dayBefore(from), Cd = to;
-    const sx = {f, st: c.stock || {}, integrated, balAt: d => bal.at(d), fyOpen: A, fyClose: P.fyTo, upl, upInv: upInvOf(upl)};
+    const c0 = String((b.tb && b.tb.from) || (b.meta || {}).from || ""), z0 = stockL.length && !moved && c0 ? bal.at(Audit.dayBefore(c0)) : null;
+    const lo = z0 ? {d: Audit.dayBefore(c0), v: R2(stockL.reduce((s2, l) => s2 - N(z0[l]), 0))} : null;
+    const sx = {f, st: c.stock || {}, integrated, balAt: d => bal.at(d), fyOpen: A, fyClose: P.fyTo, upl, upInv: upInvOf(upl), ledOpen: lo && Math.abs(lo.v) >= 0.005 ? lo : null};
     const sA = stockOn(A, sx), sB = Bd === A ? sA : stockOn(Bd, sx), sC = stockOn(Cd, sx);
     const stock = {integrated, dates: {A, B: Bd, C: Cd}, A: sA, B: sB, C: sC, missing: [], upInv: sx.upInv, from, to, tally: (f.stockTally || {})[from + "-" + to] || null};
     if (!integrated && [sA, sB, sC].some(z => z.v != null)){
@@ -374,7 +401,9 @@ const FinSt = (() => {
       if (!r.cy && !r.py && !r.adj && !r.op) return;
       // the balance that tells a ledger's side: the year's closing, else last year's; with no last year in the PY column
       // (an uploaded balance sheet, or a part of the year with none), its balance at the start of the year
-      r.final = R2(r.cy + r.adj); const k = codeOf(r.ledger, r.final || r.py || (hasOp ? N(openBs[r.ledger]) || N(r.op) : 0), kind, f.map || {}, up);
+      // (a Stock-in-Hand ledger no entry moves: in the surplus, where the opening stock is taken out; above)
+      r.final = R2(r.cy + r.adj); const k = stockStatic.includes(r.ledger) ? {code: "4A", codeSrc: "suggested", why: "a Stock-in-Hand ledger no entry moves: its balance is the opening of FinCom's copy, not the stock"}
+        : codeOf(r.ledger, r.final || r.py || (hasOp ? N(openBs[r.ledger]) || N(r.op) : 0), kind, f.map || {}, up);
       out.push(Object.assign(r, k.code && !K[k.code] ? {code: "", codeSrc: "none"} : k)); r.side = r.code ? CODES[r.code].side : "";
     });
     syn(BF, "4A", bfCy, bfPy);
@@ -599,7 +628,7 @@ const FinSt = (() => {
       x.obb = RND(-d2("11", "obb"), dec); x.invest = RND(-(d2("36") + d2("37")), dec); x.intRec = RND(Ln("14", "14A") + Ln("14", "14D") - dl("12", "12E"), dec);
       x.inv = SUM([x.capex, x.sale, x.obb, x.invest, x.intRec]);
       x.equity = kind === "co" ? RND(d2("3") + d2("4", "res"), dec) : RND(d2("3") - p.pat + d2("4"), dec);
-      x.surplus = kind === "co" ? RND(line("4", "4A", "cy") + line("4", "4E", "cy") - G("4", "sur", OB), dec) : 0;
+      x.surplus = kind === "co" ? RND(line("4", "4A", "cy") + line("4", "4E", "cy") + line("4", "4F", "cy") - G("4", "sur", OB), dec) : 0;
       x.borrow = RND(d2("30") + d2("33"), dec); x.finPaid = RND(-p.fin, dec);
       x.fin = SUM([x.equity, x.surplus, x.borrow, x.finPaid]);
       x.net = SUM([x.op, x.inv, x.fin]); x.open = G("11", "cce", OB); x.close = RND(x.open + x.net, dec); x.perNote = G("11", "cce", "cy"); x.diff = RND(x.close - x.perNote, dec);
@@ -704,13 +733,28 @@ const FinSt = (() => {
   }
 
   // ---------- tax by regime ----------
-  function taxOn(ti, rg, inp){
-    const sur = (t, s) => R2(t * s), slabs = [[400000, 0], [800000, 0.05], [1200000, 0.10], [1600000, 0.15], [2000000, 0.20], [2400000, 0.25], [Infinity, 0.30]];
+  // the slab rates of section 115BAC(1A) (the new regime, the default from FY 2023-24) by financial year, and the rebate of
+  // section 87A for a resident individual: the whole tax up to the limit, and above it no more tax than the income above
+  // the limit (the proviso's marginal relief). FY 2025-26 on (Finance Act 2025): 4/8/12/16/20/24 lakh, rebate to 12 lakh;
+  // FY 2024-25 (Finance (No. 2) Act 2024): 3/7/10/12/15 lakh, rebate to 7 lakh; FY 2023-24 (Finance Act 2023): 3/6/9/12/15
+  // lakh, rebate to 7 lakh. An earlier year: not worked out (the old regime was the default; the tax is typed). Review of
+  // 22-Nov-2026: the FY 2025-26 slabs and the 12 lakh rebate were used for every year and every entity, with no relief
+  function slabOf(fy){
+    const y = N(fy), L = 100000, mk = (cuts, rates, reb) => ({reb, bands: cuts.map((c, i) => [c * L, rates[i]]).concat([[Infinity, 0.30]])});
+    if (y >= 2025) return mk([4, 8, 12, 16, 20, 24], [0, 0.05, 0.10, 0.15, 0.20, 0.25], 12 * L);
+    if (y === 2024) return mk([3, 7, 10, 12, 15], [0, 0.05, 0.10, 0.15, 0.20], 7 * L);
+    if (y === 2023) return mk([3, 6, 9, 12, 15], [0, 0.05, 0.10, 0.15, 0.20], 7 * L);
+    return null;
+  }
+  function taxOn(ti, rg, inp, fy, ent){
+    const sur = (t, s) => R2(t * s), sl = slabOf(fy == null ? "2025" : fy), ind = (ent == null ? "P" : ent) === "P";
+    if (!/^(115BAA|firm|normal)$/.test(rg) && !sl) return {tax: 0, sur: 0, cess: 0, unknown: true};
     const base = i => {
       if (rg === "115BAA") return i * 0.22;
       if (rg === "firm") return i * 0.30;
       if (rg === "normal") return i * (inp.small400 === false ? 0.30 : 0.25);
-      let t = 0, lo = 0; slabs.forEach(([hi, r]) => { if (i > lo) t += (Math.min(i, hi) - lo) * r; lo = hi; }); return i <= 1200000 ? 0 : t;   // 115BAC, rebate u/s 87A to Rs 12 lakh
+      let t = 0, lo = 0; sl.bands.forEach(([hi, r]) => { if (i > lo) t += (Math.min(i, hi) - lo) * r; lo = hi; });
+      return !ind ? t : i <= sl.reb ? 0 : Math.min(t, i - sl.reb);
     };
     const steps = rg === "115BAA" ? [[0, 0.10]] : rg === "firm" ? [[1e7, 0.12]] : rg === "normal" ? [[1e7, 0.07], [1e8, 0.12]] : [[5e6, 0.10], [1e7, 0.15], [2e7, 0.25]];
     const rateAt = i => steps.reduce((r, [t, s]) => i > t ? s : r, 0);
@@ -733,7 +777,7 @@ const FinSt = (() => {
       lines.push(x); V[key] = x.v; return x.v;
     };
     const to = fyDates(fy).to, priorTo = fyDates(String(N(fy) - 1)).to;
-    const msme = at => { try { const r = Audit.checks.msme43Bh(Audit, [], {to: at, from: fyDates(at.slice(0, 4) - 1).from}); return r ? R2(r.amount) : 0; } catch (e){ return 0; } };
+    const msme = at => { try { const r = Audit.checks.msme43Bh(Audit, [], {to: at, from: fyDates(at.slice(0, 4) - 1).from}); return R2([].concat(r || []).filter(f => !f.key).reduce((s, f) => s + f.amount, 0)); } catch (e){ return 0; } };
     const pbt = R2(-T.rows.filter(r => isPL(r) && CODES[r.code].note !== "22").reduce((s, r) => s + r.final, 0));
     L("pbt", "Net profit before tax as per the statement of profit and loss", "A", pbt, {codes: "all P&L codes except 22A-22C"});
     const intT = byName(/INTEREST\b.*\b(TDS|TCS|INCOME TAX)\b|\b(TDS|TCS)\b.*\bINTEREST/), gstI = byName(/INTEREST\b.*\b(GST|IGST|CGST|SGST)\b|\b(GST|IGST|CGST|SGST)\b.*\bINTEREST/), pen = byName(/PENALT|\bFINES?\b|LATE FEE|COMPOUNDING/, /INTEREST/);
@@ -762,8 +806,9 @@ const FinSt = (() => {
     const gti = L("gti", "Gross total income", "C", pgbp + ifos);
     const ded = L("ded", "Deductions under Chapter VI-A", "C", 0);
     const ti = L("ti", "Total income (rounded off u/s 288A)", "C", Math.max(0, RND(gti - ded, -1)));
-    const t = taxOn(ti, rg, inp);
-    L("tax", rg === "115BAA" ? "Income-tax @ 22% (section 115BAA)" : rg === "firm" ? "Income-tax @ 30%" : rg === "normal" ? "Income-tax @ " + (inp.small400 === false ? "30%" : "25%") : "Income-tax at the slab rates (section 115BAC)", "D", t.tax);
+    const ent = FS.entityOf().code || "", t = taxOn(ti, rg, inp, fy, ent);
+    L("tax", rg === "115BAA" ? "Income-tax @ 22% (section 115BAA)" : rg === "firm" ? "Income-tax @ 30%" : rg === "normal" ? "Income-tax @ " + (inp.small400 === false ? "30%" : "25%")
+      : t.unknown ? "Income-tax at the slab rates: not worked out for a year before FY 2023-24; type it" : "Income-tax at the slab rates (section 115BAC(1A))" + (ent === "P" ? ", after the rebate u/s 87A for a resident individual" : ""), "D", t.tax);
     L("sur", "Surcharge", "D", t.sur); L("cess", "Health and education cess @ 4%", "D", t.cess);
     const total = L("taxTotal", "Tax liability", "D", RND(V.tax + V.sur + V.cess, 0));
     const mv = re => R2(T.rows.filter(r => r.code === "12B" && re.test(r.ledger)).reduce((s, r) => s + Math.max(0, r.cy - r.py), 0));
@@ -771,8 +816,9 @@ const FinSt = (() => {
     L("payable", "Tax payable / (refundable)", "D", RND(total - tds - adv, -1));
     const plPbt = d.pl.pbt.cy * unit, tolRs = 2 * inp.tol * unit + 0.011, cpv = R2(plPbt - V.pbt);
     const checks2 = [{key: "pbt", label: "P&L profit before tax (in rupees) - the computation's", value: Math.abs(cpv) <= tolRs ? 0 : cpv},
-      {key: "provision", label: "Current tax in the P&L - tax computed (0 once the provision is booked)", value: RND(RS("22A") - total, 0)}];
-    return {regime: rg, ay: (N(fy) + 1) + "-" + String(N(fy) + 2).slice(2), lines, itdep: itd, checks: checks2};
+      {key: "provision", label: "Current tax in the P&L - tax computed (0 once the provision is booked)", value: RND(RS("22A") - total, 0)}].concat(t.unknown && !(edits.tax && edits.tax.v != null && edits.tax.v !== "") ?
+      [{key: "slab", label: "The slab tax is not worked out for a year before FY 2023-24: type it on the tax line (1 until typed)", value: 1}] : []);
+    return {regime: rg, fy, ent, ay: (N(fy) + 1) + "-" + String(N(fy) + 2).slice(2), lines, itdep: itd, checks: checks2};
   }
 
   // ---------- what the page changes (each kept in b.fs, synced with the books) ----------
@@ -814,7 +860,7 @@ const FinSt = (() => {
   function pyTbSet(fy, led){ const f = fsOf(); f.pyTb = Object.assign({}, f.pyTb); if (led) f.pyTb[fy] = led; else delete f.pyTb[fy]; save(); }
   function ppeAdjSet(fy, code, o){ const f = fsOf(); f.ppeAdj = Object.assign({}, f.ppeAdj); f.ppeAdj[fy] = Object.assign({}, f.ppeAdj[fy], {[code]: o}); save(); }
 
-  return {CODES, NOTES, PPE, INT, BLOCKS, UNITS, RND, codes, suggest, refine, codeOf, tb, build, inputs, regime, taxDep, taxOn, comp, checks,
+  return {CODES, NOTES, PPE, INT, BLOCKS, UNITS, RND, codes, suggest, refine, codeOf, tb, build, inputs, regime, taxDep, taxOn, slabOf, comp, checks,
     mapSet, migrate, adjAdd, adjSet, adjDel, adjDelId, compEdit, regimeSet, inputsSet, taxDepSet, pyTbSet, ppeAdjSet,
     periods, periodOf, periodKey, periodGet, periodSet, stockSet, bsLineOf, DMY, yearBack};
 })();

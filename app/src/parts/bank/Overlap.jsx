@@ -8,6 +8,7 @@
 //   - kept aside as repeats: Bring back (nothing is ever deleted);
 //   - a line marked "Possible repeat — check" (RepMark, in the line's particulars): Keep it / It's a repeat;
 //   - the join: "₹X difference between <date> and <date>", and the days no statement holds.
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 import { BankOverlap } from "../../lib/bankOverlap.js";
 import NoticeLine from "../NoticeLine.jsx";
@@ -57,6 +58,7 @@ export function OverlapPanel({ st }) {
   return <>
     {j && j.diff && <NoticeLine sev="warn" data-join-gap="" text={j.diff.words + ": this statement’s opening " + money(st.opening) + " does not follow on from the closing " + money(j.prev.closing) + " of " + stmtLabel(j.prev) + "."} how="Some entries between the two statements may be missing, or one statement was read wrongly. Upload the statement for the days in between, or check the balances against the bank." />}
     {j && j.gap && <NoticeLine sev={j.diff ? "warn" : "info"} data-join-days="" text={j.gap.words + " (between " + stmtLabel(j.prev) + " and this one)."} />}
+    {j && j.maybeGap && <NoticeLine sev="info" data-join-days="" text={j.maybeGap.words + ", between " + stmtLabel(j.prev) + " and this one."} />}
     {st.dupRows > 0 && (st.dupIds || []).length > 0 && <NoticeLine sev="info" data-dup-note="" text={(st.dupSay ? st.dupSay + " already uploaded: " : "Already uploaded: ") + entries(st.dupRows) + (st.dupRows === 1 ? " kept as it is" : " kept as they are") + ", not added again."}>
       <button type="button" className="linkbtn" data-dup-see="" aria-expanded={b.dupOpen === st.id ? "true" : "false"} onClick={() => { b.dupOpen = b.dupOpen === st.id ? null : st.id; render(); }}>{b.dupOpen === st.id ? "Hide them" : "See them"}</button></NoticeLine>}
     {b.dupOpen === st.id && <Skipped st={st} />}

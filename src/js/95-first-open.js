@@ -86,7 +86,7 @@ const FirstOpen = {
       if (BookSrc.wins(h.alter_id, v)) return true;
       return !!v && !v.tdsx && v.alt != null && v.alt !== "" && h.tds_tally_alter_id != null && h.tds_tally_alter_id !== "" && alt(v.alt) === alt(h.alter_id) && alt(h.tds_tally_alter_id) === alt(h.alter_id);
     }).map(h => String(h.guid));
-    const B = "&book_id=eq." + encodeURIComponent(bk.book), cols = [BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
+    const B = "&book_id=eq." + encodeURIComponent(bk.book), cols = [BookSrc.HEADS_FID, BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
     const read = async (extra) => {
       for (let i = 0; ; i++){
         try { return await TCloud.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
@@ -94,7 +94,8 @@ const FirstOpen = {
       }
     };
     let heads = [];
-    for (let i = 0; i < want.length; i += 40) heads = heads.concat(await read("&guid=in.(" + want.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")"));
+    // (next-speed-2: 4 chunks of 40 at a time, TCloud.byChunks)
+    heads = heads.concat(...await TCloud.byChunks(want, c => read("&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")));
     return {heads, seen: t.newest, changes: heads.length > 0, daysAt: bk.daysAt || "", fullAt: new Date().toISOString()};
   },
   // the progress line on the Books pages, changed in place (a full drawing of the TDS page for each day would cost more

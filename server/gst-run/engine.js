@@ -33,7 +33,7 @@ import * as E from "../_shared/gst3b.js";
 import { gst3bPrint } from "../_shared/gst3bprint.js";
 
 // the revision of the function around the engine (data.ts, handler.ts): moved by hand with tests/gst_cloud_rev.json
-export const REV = "171.8";
+export const REV = "171.20";
 
 const G = globalThis;
 // what the app's program has around the engine: names.js (put at its head by build.py too)
@@ -69,6 +69,7 @@ export function books(rows) {
   // the app's tplFor, which reads the firm's other clients)
   b.map = E.Books.mapLedgers(b.vouchers, b.map || {});
   try { E.LedMaster.refresh(b); } catch (e) { /* as the app: a refresh that fails leaves the guesses */ }
+  const seen = seenOf(rows.salesSeen); if (seen) b.salesSeen = seen;
   return b;
 }
 
@@ -87,7 +88,7 @@ export function boxes(t) {
 // the engine's own text: a result worked out by another engine is worked out again
 export const ENGINE = (() => {
   let s = REV + "|" + books.toString() + boxes.toString() + step.toString() + gst3bPrint.toString() + ctxOf.toString() + contextOf.toString() + shares.toString() + engineSums.toString()
-    + itcRow.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString();
+    + itcRow.toString() + seenOf.toString() + sumRows.toString() + addSum.toString() + shareSrc.toString() + monthBook.toString() + itcMonths.toString() + engineItc.toString();
   const add = (v) => { if (typeof v === "function") s += v.toString(); else if (v && typeof v === "object") Object.keys(v).sort().forEach((k) => { const x = v[k]; s += k + (typeof x === "function" ? x.toString() : typeof x === "object" && x && !(x instanceof Map) && !(x instanceof WeakMap) ? JSON.stringify(x) : ""); }); };
   Object.keys(E).sort().forEach((k) => add(E[k]));
   Object.keys(names).sort().forEach((k) => add(names[k]));
@@ -186,9 +187,14 @@ function ctxBooks(ctx, rows) {
 // each ledger's part of a context (its settings, its groups up to the top, its GSTIN, the party switch): a new context
 // moves the entries on the ledgers whose part changed, and the entries whose place of supply typed changed. all: the
 // state moved (every entry)
+// Audit 22-Nov-2026 (speed-db 3): the kept context comes back from Postgres jsonb, which keeps an object's keys in its
+// own order (shorter first), while ctxOf writes them alphabetically; compared as text, every ledger of every book looked
+// moved, and the nightly parity marked every entry due and worked every share out again. Each part is now written with
+// its keys sorted at every level (keyText), so only a real change moves a ledger
+export const keyText = (v) => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, q) => { o[q] = x[q]; return o; }, {}) : x);
 export function ctxDiff(a, c) {
   if (!a) return { all: true, ledgers: [], guids: [] };
-  const part = (x, n) => JSON.stringify([(x.map || {})[n] || null, E.ledGroupPath(x, n), (x.gstins || {})[n] || ""]);
+  const part = (x, n) => keyText([(x.map || {})[n] || null, E.ledGroupPath(x, n), (x.gstins || {})[n] || ""]);
   const names = new Set([].concat(Object.keys(a.map || {}), Object.keys(c.map || {}), Object.keys(a.under || {}), Object.keys(c.under || {}), Object.keys(a.gstins || {}), Object.keys(c.gstins || {})));
   const moved = [...names].filter((n) => part(a, n) !== part(c, n));
   // a supplier that came into or left the GSTINs Tally types ISD (isdTyped): its ledgers move (their entries and 2B rows)
@@ -204,7 +210,7 @@ export function ctxDiff(a, c) {
   moved.forEach((n) => (byClean.get(E.ledClean(n)) || []).forEach((k) => out.add(k)));
   const ledgers = [...out].sort();
   const ids = new Set([].concat(Object.keys(a.gstPosFix || {}), Object.keys(c.gstPosFix || {})));
-  const guids = [...ids].filter((i) => JSON.stringify((a.gstPosFix || {})[i] || null) !== JSON.stringify((c.gstPosFix || {})[i] || null)).sort();
+  const guids = [...ids].filter((i) => keyText((a.gstPosFix || {})[i] || null) !== keyText((c.gstPosFix || {})[i] || null)).sort();
   return { all: String(a.stateOf || "") !== String(c.stateOf || ""), ledgers, guids };
 }
 // a batch's shares (rows: {client, heads, lines, bills} of gst_share_rows; ctx: ctxOf of the whole book) ->
@@ -250,7 +256,7 @@ function itcRow(guid, x) {
 }
 // today's engine on a month, in the shape of gst_month's rows (reg, sec, k1, k2, k3 -> n and the figures): 3.1 and 3.2
 // from GSTR.sec31 (threeBm's own), GSTR-1 from GSTR.one; the marketplace sales kept in Sales are left out (they are not
-// entries of the book: notes.market says how many there are). b: books() of the whole book, S set by the caller
+// entries of the book: notes.market says how many there are; one posted to Tally is in the book as its entry). b: books() of the whole book, S set by the caller
 const FIG = ["taxable", "igst", "cgst", "sgst", "cess", "qty"];
 export function engineSums(ym, reg) {
   const out = new Map(), put = (sec, k1, k2, k3, o, keepN) => {
@@ -323,7 +329,7 @@ export function engineMonth(rows, ym, reg, o) {
     const S = { books: null, coId: rows.client, companies: { [rows.client]: co }, sales: { cid: rows.client, list: [] }, gstYm: ym };
     G.S = S; G.CO = (cid) => S.companies[cid || S.coId];
     const b = o.books || books(rows); S.books = b;
-    return { sums: engineSums(ym, reg), books: b, market: (rows.sales || []).filter((v) => v && v.source === "market" && v.status !== "ignored" && String((v.x || {}).date || "").replace(/-/g, "").slice(0, 6) === ym).length };
+    return { sums: engineSums(ym, reg), books: b, market: (rows.sales || []).filter((v) => v && v.source === "market" && v.status !== "ignored" && !E.GSTR.inBooks(v) && String((v.x || {}).date || "").replace(/-/g, "").slice(0, 6) === ym).length };
   } finally {
     Object.assign(G, was);
     Object.keys(was).forEach((k) => { if (was[k] === undefined) delete G[k]; });
@@ -339,7 +345,7 @@ export function engineMonth(rows, ym, reg, o) {
 // order (gst_itc_month). The engine reads these through S.books.shareSrc (GSTR.months, threeBm's base and its
 // outward month-level parts, GST2B.run's documents, GSTF's bills and the suppliers' ledgers, GSTRev's turnover and common
 // credit, GSTR.creditIn's credit carried in). inp:
-//   {client, co, items (client_book_items), ctx (gst_share_ctx), sales (records), runs ({"<gstin>|<fy>": run}),
+//   {client, co, items (client_book_items), ctx (gst_share_ctx), sales (records), salesSeen (data.ts), runs ({"<gstin>|<fy>": run}),
 //    first, last (the book's first and last month), gstins (the registrations its entries carry), months ({ym: gst_month
 //    rows, every registration}), docs ([gst_itc_doc rows]), moves ({ledger: [[ym, amount]]}), carry ({ym: {igst, cgst,
 //    sgst, cess}} the credit a month carried out, as kept), out ({ym: {adv, amd, cust}}: the outward side's month-level
@@ -408,6 +414,14 @@ export function shareSrc(inp) {
     carry(prev) { return carry[prev] ? { pay: { carry: Object.assign({}, carry[prev]) } } : null; },
   };
 }
+// (re-review of ffd1402d0) the marketplace invoices the cloud copy's entries show (data.ts salesSeen) as GSTR.booksSeen
+// reads them: the FinCom ids, and each sale's number and date (GSTR.saleNoKey) with its total; none read: null
+export function seenOf(x) {
+  if (!x || (!(x.fids || []).length && !(x.heads || []).length)) return null;
+  // (final review of 157da641f: any voucher type, "Tax Invoice" too; the read asked for those numbers only, and GSTR.inBooks
+  // takes one only with the invoice's amount)
+  return { fids: (x.fids || []).map(String), nos: (x.heads || []).filter((h) => h && h.vno).map((h) => ({ k: E.GSTR.saleNoKey(h.vno, h.day), total: Number(h.total) || 0 })) };
+}
 // the books the month step reads: the client's work as books() puts it, the context (ledger list, groups, GSTINs, places
 // of supply typed) over it, no entries, and shareSrc
 function monthBook(inp) {
@@ -420,6 +434,7 @@ function monthBook(inp) {
   Object.assign(b, { map: c.map || {}, under: c.under || {}, groups: c.groups || {}, gstins: c.gstins || {}, gstPosFix: c.gstPosFix || {}, isdTyped: c.isdTyped || [] });
   if (c.stateOf) b.stateOf = c.stateOf;
   b.meta = Object.assign({}, b.meta || {}, { bills: 1, gstins: (inp.gstins || []).slice().sort() });
+  const seen = seenOf(inp.salesSeen); if (seen) b.salesSeen = seen;
   b.shareSrc = shareSrc(inp);
   return b;
 }

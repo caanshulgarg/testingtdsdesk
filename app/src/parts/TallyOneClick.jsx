@@ -17,6 +17,7 @@ import { connectNow, findTally, getCompanies, typePort, bridgeTakesPort, keyRefu
 import { FL } from "./TallyFirstLink.jsx";
 import "./tallyOneClick.css";
 import { soonDraw } from "../lib/soonDraw.js";
+import { TALLY_CONN } from "../lib/tallyPort.js";
 
 // the card's state (module state, drawn with render())
 export const OC = { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: 0, p: null };
@@ -40,7 +41,7 @@ export async function run(which, fn) {
 }
 export async function doConnect(force) {
   const r = await run("c", () => connectNow({ force }));
-  if (r && r.st === "ok") { OC.refused = false; FL.st = FL.st === "code" ? "linking" : FL.st; await run("f", findTally); if (OC.f && OC.f.st === "found") await run("g", getCompanies); }
+  if (r && r.st === "ok") { OC.refused = false; HERE.refused = false; FL.st = FL.st === "code" ? "linking" : FL.st; await run("f", findTally); if (OC.f && OC.f.st === "found") await run("g", getCompanies); }
 }
 export const doFind = () => run("f", findTally);
 // Refresh: this browser's bridge asked again (its companies open), and the cloud's computers and companies read again
@@ -97,7 +98,7 @@ export function PortBox() {
   const go = async () => { const r = await run("p", () => typePort(p)); if (r && (r.st === "ok" || r.st === "pinned")) run("f", findTally); };
   const auto = async () => { setP(""); await run("p", () => typePort(0)); run("f", findTally); };
   return <div className="oc-port" data-oc-port="">
-    <label htmlFor="ocPort">Tally’s port, if you know it (TallyPrime: F1 → Settings → Connectivity)</label>
+    <label htmlFor="ocPort">{"Tally’s port, if you know it (TallyPrime: " + TALLY_CONN + ")"}</label>
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <input id="ocPort" data-oc-port-in="" inputMode="numeric" maxLength={5} placeholder="9000" value={p} onChange={(e) => setP(e.target.value.replace(/\D/g, "").slice(0, 5))} />
       <button className="btn small" data-oc-port-use="" disabled={!p || !!OC.busy} onClick={go}>{OC.busy === "p" ? "Trying the port…" : "Use this port"}</button>

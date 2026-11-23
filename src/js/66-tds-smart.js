@@ -41,30 +41,6 @@ const TDSFiled = {
     if (t && !/^\d{15}$/.test(t)) return "The token (or RRR) number is 15 digits, as on the acknowledgement.";
     return "";
   },
-  async mark(fy, q, form, on, token){
-    const why = this.problem(fy, q, on, token);
-    if (why){ toast(why); return false; }
-    const d = TDS.ymd(on), iso = d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8), t = String(token || "").replace(/\s/g, "");
-    const name = TDS.formShort(form, fy) + ", " + q + " " + fy, fee = TDS.lateFee(fy, q, d, form), corr = typeof TDSReg === "object" && TDSReg.corrOpen(fy, q, form);
-    const ok = await askConfirm({title: "Mark " + name + " filed?",
-      body: "Filed on <b>" + esc(fmtDate(iso)) + "</b>" + (t ? ", token " + esc(t) : ", no token number given") + ".<br>" +
-        "The year's grid shows it filed, and the late fee is worked out to this date" + (fee && fee.days > 0 ? " (<b>₹" + INR.format(fee.fee) + "</b>, " + fee.days + " days late)" : " (none: filed by the due date)") + "." +
-        (this.closedOf(fy, q) ? "" : "<br>Settings › Closed periods gets this date for " + q + " " + fy + ", so FinCom warns before an entry of the quarter is posted.") +
-        (typeof TDSDrift === "object" ? "<br>A copy of the quarter's entries is kept, so a change made in Tally later is spotted." : "") +
-        (corr ? "<br><b>A correction is open for this return.</b> Marking it filed closes the correction (the trail records it), and its challan allocations are locked again." : ""),
-      ok: corr ? "Mark filed and close the correction" : "Mark filed"});
-    if (!ok || !ok.ok) return false;
-    // the quarter's date is FinCom's to fill: none yet, or the one this return's earlier mark filled (marked again)
-    const b = S.books, cp0 = this.closedOf(fy, q), prev = (b.tdsFiled || {})[this.key(fy, q, form)], fill = !cp0 || !!(prev && prev.closedFilled && TDS.ymd(prev.on) === TDS.ymd(cp0)); b.tdsFiled = Object.assign({}, b.tdsFiled);
-    b.tdsFiled[this.key(fy, q, form)] = Object.assign({on: iso, token: t, at: new Date().toISOString(), by: typeof whoAmI === "function" ? whoAmI() : ""}, fill ? {closedFilled: true} : {});
-    if (typeof TDSDrift === "object") TDSDrift.keep(fy, q, form);
-    // tds-layout (14-Oct-2026): its challan allocations are locked from now (TDSReg, src/js/79); a correction open for it was
-    // asked about above and is closed by filing it (closeCorrection: the trail says so, and each allocation is locked)
-    if (typeof TDSReg === "object"){ if (corr) TDSReg.closeCorrection(fy, q, form); else TDSReg.lockReturn(fy, q, form); }
-    try { auditEvent("tds_return_filed", Object.assign({form, fy, q, on: iso, token: t}, corr ? {correctionClosed: true} : {}), S.coId); } catch (e){}
-    saveBooks(); if (fill) this.quarterDate(fy, q, true); toast(name + " marked filed on " + fmtDate(iso) + "."); render();
-    return true;
-  },
   // the quarter's date under Settings › Closed periods (one for every form of the quarter; ClosedP.why reads it): one FinCom
   // filled follows the returns of the quarter still marked filed (another form's date when this one's mark is taken off;
   // cleared when none is left); one typed there by a person is never changed. The company record is written once, after
@@ -115,8 +91,11 @@ const TDSRate = {
     if (/DIRECTOR/.test(u)) return "director";
     if (/PROFESSIONAL|PROFF?\b|LEGAL|AUDIT|ADVOCATE|RETAINER|CONSULT|ARCHITECT|DOCTOR|MEDICAL FEE|CHARTERED/.test(u)) return "professional";
     if (/(RENT|HIRE|LEASE).*(PLANT|MACHIN|EQUIPMENT)|(PLANT|MACHIN|EQUIPMENT).*(RENT|HIRE|LEASE)/.test(u)) return "rent_machinery";
-    if (/RENT|LEASE|LAND|BUILDING|GODOWN|WAREHOUSE|PREMISES|FURNITURE/.test(u)) return "rent_building";
-    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING/.test(u)) return "contractor";
+    // rent as a word (not "Current", "Rentokil"); then the contract words, before what a contract may be done on (audit of
+    // 22-Nov-2026: "Building Repairs & Maintenance", "Land Development Contract" were read as rent, 194-I)
+    if (/\b(RENT(S|ALS?)?|LEASE)\b/.test(u)) return "rent_building";
+    if (/CONTRACT|LABOUR|JOB\s*WORK|MANPOWER|TRANSPORT|FREIGHT|CARTAGE|REPAIR|MAINTENANCE|ADVERT|PRINTING|CATERING|SECURITY|HOUSEKEEPING|PEST\s*CONTROL/.test(u)) return "contractor";
+    if (/\b(LAND|BUILDINGS?|GODOWN|WAREHOUSE|PREMISES|FURNITURE)\b/.test(u)) return "rent_building";
     return "";
   },
   // a deduction's payment type: the expense ledgers of its entry first (their nature in Tally, then their names), then the
@@ -281,8 +260,12 @@ const TDSSep = {
     }
     return false;
   },
+  // A TDS entry of its own whose own lines fit the rate (the payment: party Dr 60,000, bank Cr 54,000, TDS Cr 6,000) is
+  // matched too, to a bill booked before it without TDS: the tax was due on that bill's date (credit or payment, whichever
+  // is earlier: 194-I/194C/194J), so 201(1A)(i) interest runs from it and the return's date of payment or credit is the
+  // bill's (audit of 22-Nov-2026). Such a row is changed only when a bill without TDS is found for it
   link(rows){
-    const todo = rows.filter(r => r.sep && !(r.paid > 0) && r.tds > 0 && r.party);
+    const todo = rows.filter(r => r.sep && r.tds > 0 && r.party);
     if (!todo.length) return rows;
     const byId = {}, idx = this.bills();
     ((S.books || {}).vouchers || []).forEach(v => { byId[v.id] = v; });
@@ -305,12 +288,25 @@ const TDSSep = {
         for (let k = 2; !hit.length && k <= months.length; k++){ const g = cand.filter(bl => months.slice(0, k).includes(bl.date.slice(0, 6))); if (fits(g.reduce((s, bl) => s + bl.left, 0))) hit = g; }
         if (hit.length) how = "month";
       }
+      // a payment that says what it paid (r.paid: the party debited) takes from its bills only that much, the oldest first,
+      // and only from bills with something left (a bill paid in instalments, TDS cut in each, review of 22-Nov-2026);
+      // once the bills are used up it keeps its own amount
+      const pre = r.paid > 0;
+      if (pre) hit = hit.filter(bl => !bl.own && bl.left > 0.5);
+      const fresh = hit.filter(bl => !bl.own);
+      if (pre && !fresh.length) return;
       if (!hit.length){ r.covers = exp ? r2(r.tds * 100 / exp) : 0; return; }   // matched to no bill: what its TDS covers at the rate
       hit.sort((a, c) => a.date.localeCompare(c.date));
-      const fresh = hit.filter(bl => !bl.own), paid = r2(fresh.reduce((s, bl) => s + bl.left, 0));
-      fresh.forEach(bl => { bl.left = 0; });
+      let paid = 0;
+      const want = pre ? r.paid : Infinity, took = new Set();
+      fresh.slice().sort((a, c) => a.date.localeCompare(c.date)).forEach(bl => { const t = r2(Math.min(bl.left, Math.max(0, want - paid))); if (t > 0) took.add(bl); paid = r2(paid + t); bl.left = r2(bl.left - t); });
+      if (pre){ hit = hit.filter(bl => took.has(bl)); paid = r.paid; }
       r.credit = hit[0].date; r.bill = hit.map(bl => bl.no).filter(Boolean).join(", "); r.bills = hit.map(bl => ({vid: bl.vid, date: bl.date, no: bl.no, amount: bl.amount}));
       r.paid = paid; r.rateFrom = "bill (" + how + ")";
+      // several bills: the date of credit is the first's; where that one was within the limit on its own, TDS fell due only
+      // when the year's total crossed it (194C(5)/194J/194-I: the limits; 201(1A)(i) runs from then): a person checks it
+      const R = hit.length > 1 && typeof RULE_DEFAULTS === "object" ? RULE_DEFAULTS.find(z => z.old && TDS.sec(z.old) === sec && z.basis !== "never" && !z.form) : null, lim = R ? num(R.single || R.limit) : 0;
+      if (hit.length > 1 && (!lim || hit[0].amount <= lim)) r.creditCheck = true;
       // what was paid for: the bill's expense ledger (professional or technical, building or machinery)
       const kind = hit.map(bl => bl.ledgers.map(l => TDSRate.kindOf((((S.books || {}).ledInfo || {})[l] || {}).tdsNature) || TDSRate.kindOf(l)).find(Boolean)).find(Boolean);
       if (kind) r.pay = kind;

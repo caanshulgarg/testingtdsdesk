@@ -286,7 +286,7 @@ function blockRun(block, def, data, C, pr, ly) {
       const meta = RATIOS.find((x) => x[0] === k) || [k, k, ""];
       // each figure with what it is worked out from (parts: the numerator, the denominator, how), for the Excel's formulas
       const parts = {};
-      rows.push({ key: rowKey("ratio", k), label: meta[1], unit: meta[2], parts, val: (c) => { const q = {}, v = ratioOf(k, c.pfrom || c.from, c.pto || c.to, data, C, q); parts[c.pfrom ? "ly" : c.key] = q; return v; }, src: { ratio: k } });
+      rows.push({ key: rowKey("ratio", k), label: meta[1], unit: meta[2], parts, val: (c) => { const q = {}, v = ratioOf(k, c.pfrom || c.from, c.pto || c.to, data, C, q); parts[c.pfrom ? (c.kind === "period" ? "ly:" + c.key : "ly") : c.key] = q; return v; }, src: { ratio: k } });
     });
     unitKind = "ratio";
   }
@@ -312,14 +312,16 @@ function blockRun(block, def, data, C, pr, ly) {
   }
   if (block.cols.compare === "ly" && !lyOk) notes.push("Last year is not in these books (they start on " + dateLabel(data.booksFrom) + "), so it is not shown.");
   // top N and Others, largest first by the period's figure (customers and suppliers keep MIS's order)
-  let lines = out, others = null, total = null;
+  let lines = out, others = null, total = null, restOf = null;
   if (additive && block.rows.top > 0 && !block.rows.items.length) {
     const sorted = lines.slice().sort((a, b) => Math.abs(N(b.cells.t)) - Math.abs(N(a.cells.t)) || a.label.localeCompare(b.label));
     lines = sorted.slice(0, block.rows.top);
     const rest = sorted.slice(block.rows.top);
     if (rest.length && block.rows.others) others = { key: "others", label: "Others (" + rest.length + ")", kind: "others", cells: sumCells(rest), src: mergeSrc(rest), colAdd };
+    // (review of 22-Nov-2026) the rows not shown, with no Others row: still in the total; the Excel adds them on a row of its own
+    else if (rest.length) restOf = { key: "rest", label: "The other " + rest.length + " rows (not shown; in the total)", kind: "rest", cells: sumCells(rest), colAdd };
   }
-  if (additive) total = { key: "total", label: "Total", kind: "total", cells: sumCells(out), src: mergeSrc(out), colAdd };
+  if (additive) total = { key: "total", label: "Total", kind: "total", cells: sumCells(out), src: mergeSrc(out), colAdd, rest: restOf };
   if (by === "ageing" && data.ageing && data.ageing[block.rows.side]) {
     const S = data.ageing[block.rows.side].sum;
     total.cells = Object.assign({ t: S.owe, und: S.und }, Object.fromEntries(S.nb.map((v, i) => ["b" + i, v])));

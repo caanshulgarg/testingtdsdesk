@@ -75,9 +75,37 @@ export async function demo(form = "ITR-3") {
   return { client: { id: "demo1", name, pan, entity: ent }, clients, booksObj, books, gst, tds, firm: "demo-firm" };
 }
 
+// the same client with the schedules filled (next-itr-schedules): a Form 16 brought in, two employers' worth of salary,
+// a let-out and a self-occupied house, sales of shares, a fund and a plot, the AIS's sale lines, Schedule AL
+export async function withSchedules(D) {
+  const st = D.booksObj.itr["2026|state"];
+  const t = readFileSync(join(FX, "form16-demo.txt"), "utf8").replace(/ZZZPX9999Z/g, D.client.pan);
+  const store = makeStore({ books: () => D.booksObj, save: async () => {}, clients: () => D.clients, open: () => ({ id: "demo1", name: D.client.name, pan: D.client.pan }), firm: () => "demo-firm", user: () => "Owner",
+    now: () => "2026-11-21T10:00:00.000Z", sha: async (b) => createHash("sha256").update(b).digest("hex"), upload: async () => ({ ok: true }), remove: async () => {} });
+  const r = await store.bring({ name: "Form16-DELD99999D.txt", bytes: new TextEncoder().encode(t), text: t, type: "text/plain" }, "2026", { confirmed: true });
+  if (!r.ok) throw new Error("form16: " + r.text);
+  const ais = D.booksObj.itr["2026|ais"];
+  ais.data.rows.push({ code: "TDS-192", desc: "Salary", src: "DEMO EMPLOYER PVT LTD", srcId: "DELD99999D", amount: 1250000, tax: 90000, cat: "salary", sec: "192" },
+    { code: "SFT-017(SAL)", desc: "Sale of securities and units of mutual fund", src: "DEMO DEPOSITORY", amount: 560000, tax: 0, cat: "cgsale", sec: "" },
+    { code: "SFT-012(SAL)", desc: "Sale of immovable property", src: "DEMO SUB-REGISTRAR", amount: 6000000, tax: 0, cat: "cgprop", date: "20251115", sec: "" },
+    { code: "TDS-194I(b)", desc: "Rent on land or building", src: "DEMO TENANT LLP", srcId: "DELD77777D", amount: 360000, tax: 36000, cat: "rent", sec: "194I" });
+  Object.assign(st, { regime: D.client.entity === "P" ? "old" : st.regime, form10iea: "ACK-DEMO-1",
+    salaries: [{ id: "s1", employer: "DEMO EMPLOYER PVT LTD", tan: "DELD99999D", nature: "OTH", s171: 1200000, s172: 50000, s173: 0, basicDa: 600000, exempt: [{ sec: "10(13A)", amt: 0 }], hra: { metro: true, received: 240000, rent: 300000 }, ptax: 2400, tds: 90000, src: "Form 16",
+      addr: { line: "9 SAMPLE ROAD", city: "NEW DELHI", state: "07", pin: "110001" } }],
+    houses: [{ id: "h1", kind: "L", share: 100, rent: 360000, muniTax: 12000, addr: { line: "1 DEMO ROAD", city: "NEW DELHI", state: "07", pin: "110001" }, tenants: [{ name: "DEMO TENANT LLP", pan: "ZZZFT1111T" }],
+      loans: [{ from: "B", bank: "DEMO BANK", account: "HL001", date: "20180401", total: 2000000, outstanding: 1200000, interest: 150000 }] },
+      { id: "h2", kind: "S", share: 100, addr: { line: "2 DEMO LANE", city: "NEW DELHI", state: "07", pin: "110002" }, loans: [{ from: "B", bank: "DEMO BANK", account: "HL002", date: "20200101", total: 5000000, outstanding: 4000000, interest: 240000 }] }],
+    cgRows: [{ id: "c1", kind: "eq", desc: "DEMO LISTED EQUITY", isin: "INE000A01010", qty: 1000, acq: "20170510", sale: "20250620", value: 300000, cost: 100000, fmv2018: 160000, exempt: [], improve: [] },
+      { id: "c2", kind: "eq", desc: "DEMO EQUITY FUND", acq: "20250110", sale: "20250805", value: 260000, cost: 200000, exempt: [], improve: [] },
+      { id: "c3", kind: "land", desc: "DEMO PLOT", acq: "20100601", sale: "20251115", value: 6000000, sdv: 6400000, cost: 2000000, expenses: 100000, improve: [{ fy: "2015", amt: 500000 }], exempt: [], buyers: [{ name: "DEMO BUYER", pan: "ZZZPB4444B", share: 100 }], addr: { line: "PLOT 7 DEMO VIHAR", city: "GURUGRAM", state: "06", pin: "122001" } }] });
+  return D;
+}
+
 if (process.argv[1] && process.argv[1].endsWith("itr_demo.mjs")) {
   const out = process.argv[2] || join(HERE, "out", "itr-demo.json");
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, JSON.stringify(await demo(process.argv[3] || "ITR-3")));
+  const D = await demo(process.argv[3] || "ITR-3");
+  if (process.argv[4] === "schedules") await withSchedules(D);
+  writeFileSync(out, JSON.stringify(D));
   console.log("wrote " + out);
 }

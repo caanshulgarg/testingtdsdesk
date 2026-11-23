@@ -12,6 +12,7 @@
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, challanAdd, … (src/js/27).
 // next-room-2: the deductions-only Excel read back and applied (TDSEdit.read, applyAll), not in the app's first file
+import "../../../src/js/99-screen-parts.js";
 import "../lib/tdsEditExcel.js";
 import SrcTag, { srcWords } from "../parts/SrcTag.jsx";
 import { useRef, useState } from "react";

@@ -338,8 +338,6 @@ const LedPage = {
   checkOf(b, n){ const it = ((b.ledCheck || {}).items || {})[n], s = it && it.s; return s && s.what && s.conf !== "low" ? s : null; },
   // one entry that uses the ledger (the check's samples): type, number, date, amount
   example(b, n){ const it = ((b.ledCheck || {}).items || {})[n], x = it && it.use && (it.use.samples || [])[0]; return x || null; },
-  exampleSay(x){ if (!x) return ""; const d = /^\d{8}$/.test(String(x.date || "")) ? fmtDate(tallyDate(x.date)) : fmtDate(String(x.date || "").slice(0, 10));
-    return [x.type, x.no].filter(Boolean).join(" ") + " · " + d + " · " + money(x.amt); },
   // the main table: one row a GST or TDS ledger (what the map reads as GST or TDS, or a tax-like ledger it has no answer
   // for), and a ledger only the check found that it reads as GST or TDS
   line(b, n){
@@ -353,111 +351,20 @@ const LedPage = {
     (c.names || []).forEach(n => { if (!map[n]){ const s = this.checkOf(b, n); if (s && this.taxW(s.what)) names.add(n); } });
     return Array.from(names).sort((x, y) => x.localeCompare(y)).map(n => this.line(b, n));
   },
-  // the other ledgers (not tax), most used first: one can be marked as tax with Change
-  others(b){
-    const main = new Set(this.main(b).map(r => r.n));
-    return Object.entries(b.map || {}).filter(([n]) => !main.has(n)).sort((x, y) => (y[1].n || 0) - (x[1].n || 0) || x[0].localeCompare(y[0])).map(([n]) => this.line(b, n));
-  },
   // "Confirm all": the ledgers used in entries (n > 0), not confirmed, whose answer is the check's too
   agreeing(b){ return this.main(b).filter(r => r.has && !r.ok && r.used > 0 && r.agree).map(r => r.n); },
-  // "Please check": a confirmed ledger the check reads otherwise; a confirmed name-guess no entry uses yet, which would
-  // count as tax once used (confirmed before 2.4.1 in a batch, not on its own row, and Tally's master does not say GST or
-  // TDS). "Keep mine" puts one away (m.kept) until the check reads it otherwise again
-  review(b){
-    const out = [], info = b.ledInfo || {};
-    Object.entries(b.map || {}).sort((x, y) => x[0].localeCompare(y[0])).forEach(([n, m]) => {
-      if (!m.ok) return;
-      const s = this.checkOf(b, n), mine = this.says(this.ans(m)), k = m.kept || {};
-      if (s && m.what && !this.same(s, m)){ const cs = this.says(s); if (k.check !== cs) out.push({n, kind: "differs", m, mine, check: s, checkSays: cs, ex: this.example(b, n)}); return; }
-      if (this.taxW(m.what) && !((m.n || 0) > 0) && !/^(row|change|check|agree)$/.test(m.okHow || "") && !/^(GST|TDS|TCS)$/i.test(String((info[n] || {}).taxType || "")) && !m.kept)
-        out.push({n, kind: "unused", m, mine, check: s, checkSays: s ? this.says(s) : "", ex: null});
-    });
-    return out;
-  },
   // what each ledger was before a change (for Undo): a copy with its own history (prev), the last 5 steps kept, so an
   // Undo puts back exactly what was there and a second Undo goes one step further back
   bare(m){ const c = JSON.parse(JSON.stringify(m || {})); let x = c; for (let i = 0; i < 4 && x && x.prev; i++) x = x.prev; if (x && x.prev) delete x.prev; return c; },
   before(b, names){ return [].concat(names).map(n => [n, b.map && b.map[n] ? this.bare(b.map[n]) : null]); },
   dirty(b){ b.mapV = (b.mapV || 0) + 1; b.reco = null; if (typeof GSTR === "object") GSTR._carry = null; if (typeof GST2B === "object") GST2B._memo = null; },
-  // each its own step, saved at once (never a draft), with Undo
-  step(b, text, names, fn){
-    const was = this.before(b, names);
-    Drafts.direct(() => { b.map = b.map || {}; fn(was); this.dirty(b); saveBooks(); }, {bypass: true});
-    S.ledUndo = {cid: b.cid, text, list: was};
-    render();
-  },
   confirmAgree(b){
     const names = this.agreeing(b); if (!names.length) return 0;
     this.confirm(b, names, "agree");
     S.ledUndo = Object.assign({}, S.ledUndo, {text: names.length === 1 ? "1 ledger confirmed." : names.length + " ledgers confirmed."});
     return names.length;
   },
-  keepMine(b, n){
-    const m = (b.map || {})[n]; if (!m) return;
-    const s = this.checkOf(b, n), cs = s && !this.same(s, m) ? this.says(s) : "unused";
-    this.step(b, "Kept as you confirmed: " + n + ".", [n], (was) => { m.kept = {by: whoAmI(), at: new Date().toISOString(), check: cs}; m.prev = was[0][1]; });
-  },
-  useCheck(b, n){
-    const s = this.checkOf(b, n); if (!s) return;
-    this.step(b, "Changed to the check’s answer: " + n + ".", [n], (was) => {
-      const m = b.map[n] = b.map[n] || {n: 0};
-      LedMaster.applyWhat(m, s.what);
-      if (LedMaster.isGst(s.what)){ m.tax = s.tax || m.tax; m.side = s.side || m.side; if (s.rate) m.gstRate = s.rate; }
-      if (LedMaster.isTds(s.what)){ m.section = s.section || ""; if (s.rate) m.rate = s.rate; }
-      m.why = (s.ev || []).map(e => LedCheck.SRC[e.src] + ": " + e.say).join("; ");
-      LedMaster.confirm(b, [n], true); m.okHow = "check"; delete m.kept; m.prev = was[0][1];
-      const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = m.okAt; it.okBy = m.okBy; }
-    });
-  },
-  // put ledgers back as they were (Undo); a ledger that was not in the map is taken out of it again
-  restore(b, list){
-    Drafts.direct(() => {
-      const items = (b.ledCheck || {}).items || {};
-      list.forEach(([n, prev]) => {
-        const used = ((b.map || {})[n] || {}).n || 0;
-        if (prev) b.map[n] = Object.assign(JSON.parse(JSON.stringify(prev)), {n: used}); else delete b.map[n];
-        if (items[n]) items[n].state = prev && prev.ok ? "confirmed" : "pending";
-      });
-      this.dirty(b); saveBooks();
-    }, {bypass: true});
-  },
-  // a confirmed row's own Undo: what it was before it was confirmed or changed (kept on the ledger); one confirmed before
-  // 2.4.1 is only not confirmed any more
-  undoRow(b, n){
-    const m = (b.map || {})[n]; if (!m) return;
-    const prev = m.prev !== undefined ? m.prev : Object.assign(this.bare(m), {ok: false, okAt: undefined, okBy: undefined, okHow: undefined, prev: undefined});
-    this.restore(b, [[n, prev]]);
-    if (S.ledUndo && (S.ledUndo.list || []).some(x => x[0] === n)) S.ledUndo = null;
-    render();
-  },
-  undoLast(b){ const u = S.ledUndo; if (!u || u.cid !== b.cid) return; S.ledUndo = null; this.restore(b, u.list || []); toast("Undone."); render(); },
-  // two ledgers with one GSTIN; a PAN that is not the one inside the ledger's GSTIN. From the masters read and the
-  // bridge's ledger list; "Fine as it is" (b.ledOk) puts one away
-  conflicts(b, cid){
-    const all = {}, ok = b.ledOk || {}, out = [];
-    const add = (n, g, p) => { if (!n) return; const x = all[n] = all[n] || {n, gstin: "", pan: ""}; g = String(g || "").toUpperCase().trim(); p = String(p || "").toUpperCase().trim(); if (g && !x.gstin) x.gstin = g; if (p && !x.pan) x.pan = p; };
-    Object.entries(b.ledInfo || {}).forEach(([n, i]) => add(n, i && i.gstin, i && i.pan));
-    Object.entries(b.gstins || {}).forEach(([n, g]) => add(n, g, ""));
-    Object.entries(b.pans || {}).forEach(([n, p]) => add(n, "", p));
-    if (typeof Ledgers === "object" && cid) Ledgers.list(cid).forEach(l => { if (l) add(l.name, l.gstin, l.pan); });
-    const own = new Set([].concat((typeof GSTR === "object" && GSTR.gstins ? GSTR.gstins(b) : []) || [], [((CO(cid) || {}).gstin || "")]).map(g => String(g || "").toUpperCase()));
-    const by = {};
-    Object.values(all).forEach(x => { if (GSTIN_RE.test(x.gstin) && !own.has(x.gstin)) (by[x.gstin] = by[x.gstin] || []).push(x.n); });
-    Object.keys(by).sort().forEach(g => { const ns = by[g].sort((x, y) => x.localeCompare(y)); if (ns.length < 2 || ok["gstin:" + g]) return;
-      out.push({key: "gstin:" + g, kind: "gstin", names: ns, text: "GSTIN " + g + " is on " + ns.length + " ledgers: " + ns.join(", ") + ". If they are one party, merge them in Tally; if not, correct the GSTIN in Tally."}); });
-    Object.values(all).sort((x, y) => x.n.localeCompare(y.n)).forEach(x => {
-      if (!GSTIN_RE.test(x.gstin) || !PAN_RE.test(x.pan) || x.gstin.slice(2, 12) === x.pan || ok["pan:" + x.n]) return;
-      out.push({key: "pan:" + x.n, kind: "pan", names: [x.n], text: x.n + ": PAN " + x.pan + " is not the PAN inside its GSTIN " + x.gstin + " (" + x.gstin.slice(2, 12) + "). Correct it in Tally; the TDS returns use the PAN."}); });
-    return out;
-  },
-  fine(b, key){ Drafts.direct(() => { (b.ledOk = b.ledOk || {})[key] = {by: whoAmI(), at: new Date().toISOString()}; saveBooks(); }, {bypass: true}); render(); },
   // a confirmed ledger now used differently: kept as confirmed, with its use now (the warning goes)
   // release-240 review M5: saved at once, as fine() (its own confirm step, not a draft)
   keepUse(b, n){ const it = ((b.ledCheck || {}).items || {})[n]; if (it) Drafts.direct(() => { it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); saveBooks(); }, {bypass: true}); render(); },
-  // "2 min ago", "3 h ago", "on 07-Oct-2026 10:05"
-  ago(at){
-    const t = Date.parse(String(at || "")); if (!t) return "";
-    const min = Math.max(0, Math.round((Date.now() - t) / 60000));
-    return min < 1 ? "just now" : min < 60 ? min + " min ago" : min < 24 * 60 ? Math.floor(min / 60) + " h ago" : "on " + fmtDateTime(t);
-  }
 };

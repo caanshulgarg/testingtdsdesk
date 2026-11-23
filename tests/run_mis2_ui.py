@@ -26,10 +26,10 @@ with sync_playwright() as p:
     pg.click('nav[aria-label="MIS"] button:text-is("Cash flow")'); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
     ok("From operations" in t and "Net change in cash and bank" in t and "The next 13 weeks" in t, "cash flow and 13 weeks")
-    if FIXTURE:   # tests/fixtures/books/EXPECTED.md: GST paid -86,600, input IGST paid from the bank -3,600, net 38,050; week 1 in 5,59,800
+    if FIXTURE:   # tests/fixtures/books/EXPECTED.md: GST paid -86,600, input IGST paid from the bank -3,600, net 38,050; week 1 in 5,00,800 (bills over 180 days late kept apart)
         ok("-86,600.00" in t and "-3,600.00" in t and "38,050.00" in t, "fixture: GST paid 86,600 and input GST 3,600 on lines of their own; net change 38,050")
         # week 1 out is checked in run_fixture_books.js (here the TDS ledgers are not confirmed, so no TDS is expected at all)
-        ok(pg.evaluate("S.books.mis.last.p2.fc.weeks[0].inn") == 559800, "fixture: week 1 in 5,59,800")
+        ok(pg.evaluate("S.books.mis.last.p2.fc.weeks[0].inn") == 500800, "fixture: week 1 in 5,00,800")
     pg.locator("td > button.linkbtn").first.click(); pg.wait_for_timeout(400)
     ok(pg.locator("#app td.note").count() > 0, "a cash flow line opens to its ledgers")
     pg.click('#misFc tbody tr:first-child button.linkbtn'); pg.wait_for_timeout(400)

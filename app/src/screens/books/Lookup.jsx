@@ -5,6 +5,7 @@
 // lkMonth, lkOpen, lkSrc, and typing through lkType (src/js/44).
 //
 // State: S.lk (kind, led, grp, from, to, asOn, q, typ, side, ask, heard, src, busy, res: the answer, open: entries opened).
+import "../../../../src/js/99-screen-parts.js";
 import { Component, Fragment, useEffect, useState } from "react";
 // hotfix 11-Nov-2026 (Look up "Cannot read properties of undefined (reading 'map')" on a client's real books): a part that
 // cannot be drawn says so in plain words, with Clear, and the rest of the page stays

@@ -36,7 +36,10 @@ export async function workbook(ExcelJS, res, o = {}) {
     V(ws, "A1", b.title, { b: true, sz: 13 }); V(ws, "A2", (res.company ? res.company + " · " : "") + res.name + " · " + res.periodLabel, { sz: 9 }); F(ws, "A3", "Inputs!$B$7", unitLine(u), { i: true, sz: 9 }, false);
     ws.getColumn(1).width = 38;
     const isRatio = b.by === "ratio", show = b.cols.filter((c) => c.kind !== "pct"), pctCols = b.cols.filter((c) => c.kind === "pct");
-    const lines = b.rows.concat(b.total ? [b.total] : []), R0 = 6, last = R0 + lines.length - 1;
+    // (review of 22-Nov-2026) top N with no Others row: the rows not shown on a hidden row of their own, so the Total's SUM,
+    // its % change and every % of total are those of every row, as on the screen
+    const rest = b.total && b.total.rest ? [b.total.rest] : [];
+    const lines = b.rows.concat(rest, b.total ? [b.total] : []), R0 = 6, last = R0 + lines.length - 1;
     // the columns shown, then (a column apart) the rupees each is worked out from
     const dispCol = {}, rawCol = {}; let ci = 1;
     show.forEach((c) => { dispCol[c.key] = COL(ci++); }); pctCols.forEach((c) => { dispCol[c.key] = COL(ci++); });
@@ -50,6 +53,7 @@ export async function workbook(ExcelJS, res, o = {}) {
     lines.forEach((r, k) => {
       const rr = R0 + k, isTot = r.kind === "total";
       V(ws, "A" + rr, r.label, { b: isTot || r.bold });
+      if (r.kind === "rest") ws.getRow(rr).hidden = true;
       if (isRatio) {
         // a ratio: the figure as a formula on its numerator and denominator (rupees), beside it
         show.forEach((c, i) => {

@@ -296,7 +296,10 @@ try {
   tbk.under["Stock in Hand"] = "Stock-in-Hand"; tbk.tb.led["Stock in Hand"].parent = "Stock-in-Hand"; tbk.fs = {};
   PB.save("2025", prInv, {by: "test"});
   const st2 = FinSt.build("2025", {unit: 1, dec: 2});
-  ok(st2.stock.integrated && st2.stock.A.src === "tally" && st2.stock.A.v === 195000, "Tally keeps stock: its Stock-in-hand ledger is the source (" + st2.stock.A.v + ")");
+  // (review of 22-Nov-2026) no entry moves the Stock-in-Hand ledger: its balance is the copy's opening, the stock of that
+  // day only (the year's opening here); the closing stock is asked for, not taken as the same 1,95,000
+  ok(!st2.stock.integrated && st2.stock.A.src === "tally" && st2.stock.A.v === 195000, "Tally's Stock-in-hand ledger is the source of the opening stock (" + st2.stock.A.v + ")");
+  ok(st2.stock.C.v == null && (st2.checks.find(c => c.key === "stockMissing") || {}).label === "Stock not known: Closing stock (as on 31-Mar-2026)", "the closing stock is asked for, not taken from the ledger's opening");
   ok((st2.checks.find(c => c.key === "stockOpen") || {}).value === -5000, "the check: opening stock 1,95,000 (Tally) vs last year's balance sheet 2,00,000: -5,000");
 } catch (e){ console.error(e); fails++; }
 console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

@@ -4,6 +4,8 @@
 import { useState } from "react";
 import ReadBadge from "./ReadBadge.jsx";
 import Button from "./Button.jsx";
+// the reading queue's buttons (jobAction: src/js/99, kept out of legacy.js)
+import "../../../src/js/99-bill-suppliers.js";
 
 export function BusyCard({ title, detail, done, total }) {
   const pct = total ? Math.round(Math.min(1, done / total) * 100) : null;

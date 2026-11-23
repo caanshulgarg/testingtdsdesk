@@ -28,11 +28,8 @@ const FC = {
     if (k === "lastfy") return {from: (fy - 1) + "0401", to: fy + "0331"};
     return {from: fs, to: a};
   },
-  PRESETS: [["month", "This month"], ["lastmonth", "Last month"], ["quarter", "This quarter"], ["lastquarter", "Last quarter"], ["ytd", "Year to date"], ["fy", "This year"], ["lastfy", "Last year"]],
-  fyLabel(from){ const y = num(String(from).slice(0, 4)); return y + "-" + String(y + 1).slice(2); },
   // an amount with debit positive, shown the way Tally does
   drcr(x){ x = r2(x || 0); return Math.abs(x) < 0.005 ? "0.00" : INR.format(Math.abs(x)) + (x > 0 ? " Dr" : " Cr"); },
-  amt(x){ return Math.abs(r2(x || 0)) < 0.005 ? "" : INR.format(r2(x)); },
   when(d){ return fmtDate(tallyDate(d)); },
   span(from, to){ return this.when(from) + " to " + this.when(to); },
   // every ledger known for the client: in the masters, the balances, or the vouchers
@@ -60,16 +57,26 @@ const FC = {
   inGroup(l, g){ const G = String(g || "").toLowerCase(); return this.path(l).some(x => x.toLowerCase() === G); },
   top(l){ const p = this.path(l); return p[p.length - 1] || "Not in a group"; },
   monthLabel(ym){ return typeof GSTR === "object" ? GSTR.label(ym) : ym; },
-  shortMonth(ym){ const m = num(String(ym).slice(4, 6)); return ["", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"][((m + 8) % 12) + 1]; },
   go(tab, extra){
     Object.assign(S, extra || {});
     S.tab = "books"; S.booksTab = tab; S.step = null; S.drawerOpen = false;
     render(); window.scrollTo(0, 0);
   },
+  // a table as a sheet, a date shown as text (dd-Mon-yyyy, dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd) put in as Excel's own date
+  // (review of 22-Nov-2026: text dates sorted and filtered as words); any other text stays text
+  sheet(rows){
+    const dt = v => { if (typeof v !== "string") return v; let m = /^(\d{2})([-/])(\d{2}|[A-Z][a-z]{2})\2(\d{4})$/.exec(v), y, mo, d;
+      if (m){ d = +m[1]; mo = /\d/.test(m[3]) ? m[3] - 1 : MONTHS3.indexOf(m[3]); y = +m[4]; } else if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v))){ y = +m[1]; mo = m[2] - 1; d = +m[3]; } else return v;
+      const t = new Date(y, mo, d); return mo >= 0 && t.getMonth() === mo && t.getDate() === d ? t : v; };
+    return XLSX.utils.aoa_to_sheet(rows.map(r => Array.isArray(r) ? r.map(dt) : r), {cellDates: true, dateNF: "dd-mm-yyyy"});
+  },
   async excel(name, sheets){
     await ensureXlsx();
-    const wb = XLSX.utils.book_new();
-    sheets.forEach(([n, rows]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), String(n).replace(/[\\/?*[\]:]/g, " ").slice(0, 31)));
+    const wb = XLSX.utils.book_new(), seen = new Set();
+    // (review of 22-Nov-2026) a name used already, as Excel compares them: " 2", " 3" within 31 characters (SheetJS refused it)
+    sheets.forEach(([n, rows]) => { const b = String(n).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Sheet"; let k = b, i = 1;
+      while (seen.has(k.toLowerCase())) k = b.slice(0, 31 - String(++i).length - 1) + " " + i;
+      seen.add(k.toLowerCase()); XLSX.utils.book_append_sheet(wb, this.sheet(rows), k); });
     saveFile(String((CO() || {}).name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-" + name.replace(/[^A-Za-z0-9]+/g, "-") + ".xlsx", new Blob([XLSX.write(wb, {bookType: "xlsx", type: "array"})], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }
 };
@@ -565,21 +572,11 @@ const LK = {
     printView(co.name + " " + r.title, "<style>@page{size:A4 portrait;margin:12mm}</style>" + html);
   }
 };
-// Look up (app/src/screens/books/Lookup.jsx): what its buttons and boxes do
-function lkType(k, v){ const x = LK.st(); x[k] = k === "from" || k === "to" || k === "asOn" ? FC.d8(v) : v; FinComReact.redraw(); }
-function lkSrc(src){ LK.st().src = src; render(); }
-function lkKind(k){ const x = LK.st(); x.kind = k; x.res = null; x.heard = ""; if (x.typ && !LK.types().includes(x.typ)) x.typ = ""; if (x.kind === "bills" && x.led && !(Audit.isDebtor(x.led) || Audit.isCreditor(x.led))) x.led = ""; render(); }
-function lkPer(k){ const x = LK.st(), p = FC.period(k); x.from = p.from; x.to = p.to; LK.run("auto"); }
-function lkRec(i){ const x = LK.st(), r = LK.recent()[i]; if (r){ Object.assign(x, r); x.heard = ""; LK.run("auto"); } }
 // a ledger clicked anywhere (an entry, a group, the trial balance, a letter): its account for the same dates
 function lkLed(l){
   const x = LK.st(), p = x.res && x.res.from ? {from: x.res.from, to: x.res.to} : x.res && x.res.asOn ? {from: Audit.fyStart(x.res.asOn), to: x.res.asOn} : {from: x.from, to: x.to};
   Object.assign(x, {kind: "ledger", led: l, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("auto");
 }
-function lkMonth(ym){ const x = LK.st(), y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("auto"); }
-// the books end before the dates asked: their last year instead ("Show 2025-26")
-function lkShowFy(fyStart){ const x = LK.st(); x.from = fyStart; x.to = (num(fyStart.slice(0, 4)) + 1) + "0331"; x.asOn = x.to; LK.run("auto"); }
-function lkOpen(id){ const x = LK.st(); x.open[id] = !x.open[id]; render(); }
 // a question in plain words (also from the dashboard's question box)
 function lkAsk(q){
   const x = LK.st(); x.ask = q = q || "";

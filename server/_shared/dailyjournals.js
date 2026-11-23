@@ -156,7 +156,8 @@ export function setoffMin(liab, rcm, credit, opening) {
 // the legal order checked on a set-off (the app's or the plain one): what is wrong, or ""
 export function setoffLegal(pay, liab, rcm, credit, opening) {
   const u = (f, t) => P(((pay.use || {})[f] || {})[t]);
-  const avail = (h) => Math.max(0, P(num((credit || {})[h]) + num((opening || {})[h]))), owe = (h) => Math.max(0, P((liab || {})[h]));
+  // (next-fix-audit-gst: the tax owed is less what 6.1 adjusts of an earlier month's negative liability, pay.negAdj)
+  const avail = (h) => Math.max(0, P(num((credit || {})[h]) + num((opening || {})[h]))), owe = (h) => Math.max(0, P((liab || {})[h]) - P(((pay || {}).negAdj || {})[h]));
   if (u("cgst", "sgst") || u("sgst", "cgst")) return "CGST and SGST credit crossed";
   if (["igst", "cgst", "sgst"].some((h) => u("cess", h) || u(h, "cess"))) return "Cess crossed with another head";
   for (const h of H) {
@@ -197,11 +198,12 @@ export function gstMonths(E, months) {
     if (type !== "monthly") { out.push({ reg, ym, skip: type }); continue; }
     try {
       const t = E.GSTR.threeB(ym, reg), J = E.GSTF.journal(ym, reg);
-      const nil = H.every((h) => !P((t.net || {})[h]) && !P((t.netItc || {})[h]) && !P((t.rcmOut || {})[h]));
+      // a nil return for the late fee: no tax payable (Notification 19/2021-CT), whatever the credit (next-fix-audit-gst)
+      const nil = nil3bOf(t);
       const it = rec.r3b ? E.GSTF.interest(ym, reg, t) : null, fee = rec.r3b ? E.GSTF.lateFee(ym, reg, "r3b", nil) : null;
       const pick = (o) => JSON.parse(JSON.stringify(o || {}));
       out.push({ reg, ym, filed: String(rec.r3b || "").replace(/-/g, ""), due: String(E.GSTF.due(ym, "r3b", reg) || "").replace(/-/g, ""), arn: rec.r3bArn || "", kept: !!rec.snap, snapPay: rec.snap ? pick(rec.snap.pay) : null,
-        t: { net: pick(t.net), rcmOut: pick(t.rcmOut), netItc: pick(t.netItc), opening: pick(t.opening), pay: pick(t.pay) },
+        t: { net: pick(t.net), zero: pick(t.zero), rcmOut: pick(t.rcmOut), netItc: pick(t.netItc), opening: pick(t.opening), pay: pick(t.pay) },
         journal: { lines: pick(J.lines), missing: J.missing || [], date: J.date, narr: J.narr, cashL: J.cashL, balanced: !!J.balanced },
         interest: it ? { total: r2(it.total), days: it.days } : null, fee: fee ? { fee: r2(fee.fee || 0), days: fee.days || 0, unknown: !!fee.unknown } : null,
         portalInt: rec.portalInt != null ? num(rec.portalInt) : null, portalFee: rec.portalFee3 != null ? num(rec.portalFee3) : null,
@@ -210,6 +212,14 @@ export function gstMonths(E, months) {
   }
   return out;
 }
+// 6.1's tax payable by head, other than reverse charge: 3.1(a), with 3.1(b)'s IGST and cess (exports and SEZ supplies with
+// payment of tax), set off and paid with it under sections 49(4), 49(5) and 49A with rule 88A (the owner, 23-Nov-2026), as
+// GSTR.setOff (server/_shared/gst3b.js) takes them; a month the night carried without 3.1(b) is its 3.1(a)
+// (review of ad4be74c3: the set-off's own pay.due when the 3B has it: a 3.1(b) box shown nil keeps its tax there)
+export const due61 = (t) => { const o = {}, d = (t.pay || {}).due; for (const h of H) o[h] = d ? r2(num(d[h])) : r2(num((t.net || {})[h]) + (h === "igst" || h === "cess" ? num((t.zero || {})[h]) : 0)); return o; };
+// a nil GSTR-3B for the late fee: no tax payable (Notification 19/2021-CT) in 3.1(a), 3.1(b) (IGST and cess on exports
+// or SEZ supplies with payment, re-review) or 3.1(d), whatever the credit (as app/src/lib/gst3bNil.js)
+export const nil3bOf = (t) => H.every((h) => ["net", "zero", "rcmOut"].every((k) => P((t[k] || {})[h]) <= 0));
 // what a ledger of the set-off journal is: "out:cgst", "in:igst", "rcm:igst", "cash"
 function roleOfGst(map, l, cashL) {
   if (l === cashL) return "cash";
@@ -246,7 +256,11 @@ export function setoffOne(m, inp, others) {
   const feeAmt = m.portalFee != null ? r2(m.portalFee) : m.fee && m.fee.unknown ? null : m.fee && m.fee.fee > 0 ? null : 0;
   if (!J.lines.length && !intAmt && !feeAmt && intAmt !== null && feeAmt !== null) return null;                          // nothing to set off
   // 2. the books changed since the 3B was kept as filed
-  if (m.snapPay && !samePay(m.snapPay, t.pay)) return you("Set-off " + label + ": the books changed since the 3B was filed. Look at the 3B first.");
+  // (review of ad4be74c3) a 3B kept as filed before 3.1(b)'s IGST and cess were in FinCom's set-off (the owner, 23-Nov-2026)
+  // differs for that alone: said, so the CA checks the filed 3B rather than the books
+  const z31b = H.some((h) => (h === "igst" || h === "cess") && Math.abs(num((t.zero || {})[h])) >= 0.005 && Math.abs(num((m.snapPay.due || {})[h]) - num((t.pay.due || {})[h])) >= 0.005);
+  if (m.snapPay && !samePay(m.snapPay, t.pay)) return you("Set-off " + label + ": " + (z31b ? "this 3B was kept as filed before FinCom counted 3.1(b)'s IGST and cess (exports and SEZ supplies with tax) in the set-off, so its figures differ now. Check the 3B as filed on the portal and keep it as filed again."
+    : "the books changed since the 3B was filed. Look at the 3B first."));
   if ((J.missing || []).length) return you("Set-off " + label + ": no " + J.missing.join(", ") + " in FinCom's GST ledgers. Set it in GST settings.");
   if (intAmt === null) return you("Set-off " + label + ": interest of about " + inr(m.interest.total) + " (" + m.interest.days + " days late). Type the portal's figure on the GST page.");
   if (feeAmt === null) return you("Set-off " + label + ": a late fee is due. Type the portal's figure on the GST page.");
@@ -273,8 +287,9 @@ export function setoffOne(m, inp, others) {
   if (miss.length) return { finding: you("Set-off " + label + ": pick the " + miss.map(([r]) => ROLES[r].what).join(" and ") + " ledger", [], { waits: true }).finding, picks: picksNeeded(miss) };
   const lines = merge(lines0.concat(intAmt ? [{ ledger: ledI.ledger, dr: intAmt }, { ledger: J.cashL, cr: intAmt }] : [], feeAmt ? [{ ledger: ledF.ledger, dr: feeAmt }, { ledger: J.cashL, cr: feeAmt }] : []));
   // 5. two ways: the plain set-off from the 3B's own figures, and its journal
-  const least = setoffMin(t.net, t.rcmOut, t.netItc, t.opening), plain = t.pay;
-  const legal = setoffLegal(t.pay, t.net, t.rcmOut, t.netItc, t.opening);
+  const due = due61(t), owed = {}; for (const h of H) owed[h] = num(due[h]) - num(((t.pay || {}).negAdj || {})[h]);
+  const least = setoffMin(owed, t.rcmOut, t.netItc, t.opening), plain = t.pay;
+  const legal = setoffLegal(t.pay, due, t.rcmOut, t.netItc, t.opening);
   const appCash = H.reduce((s, h) => s + P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]), 0);
   const want = {};
   const add = (k, p) => { if (p) want[k] = (want[k] || 0) + p; };
@@ -291,7 +306,7 @@ export function setoffOne(m, inp, others) {
   // 6. the trace: each head, the credit used and the cash
   const ev = [{ t: "gst3b", ref: "3b:" + m.reg + ":" + m.ym, label: "GSTR-3B " + label + (m.filed ? " · filed " + dmon(m.filed) + (m.arn ? " · ARN …" + String(m.arn).slice(-6) : "") : " · kept as filed") }];
   for (const h of H) {
-    const owe = Math.max(0, P(t.net[h])), used = H.reduce((s, f) => s + P((t.pay.use[f] || {})[h]), 0), cash = P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]);
+    const owe = Math.max(0, P(owed[h])), used = H.reduce((s, f) => s + P((t.pay.use[f] || {})[h]), 0), cash = P(t.pay.cash[h]) - P((t.pay.rcmCash || {})[h]);
     if (owe || used || cash) ev.push({ t: "gst3b", ref: "3b:" + h, label: h.toUpperCase() + " tax " + inr(R(owe)) + " = credit " + inr(R(used)) + " + cash " + inr(R(cash)) });
     if (P((t.pay.rcmCash || {})[h])) ev.push({ t: "gst3b", ref: "3b:rcm:" + h, label: "Reverse charge " + h.toUpperCase() + " " + inr(t.pay.rcmCash[h]) + ", paid in cash" });
   }

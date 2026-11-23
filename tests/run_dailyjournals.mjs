@@ -44,6 +44,21 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
   ok(JSON.stringify(r2.out) === JSON.stringify(r.out), "the same night twice: the same findings and entries");
 }
 {
+  // (the owner, 23-Nov-2026) an export with payment of IGST (3.1(b)): its IGST 9,000 is set off and paid with 3.1(a)'s
+  // (sections 49 and 49A, rule 88A): IGST 18,000 = IGST credit 5,400 + cash 12,600; CGST and SGST 5,400 each in cash
+  const exp = { day: 11, type: "Export Sales", party: "Overseas Buyer Co", lines: [["Overseas Buyer Co", -59000], ["Sales", 50000], ["IGST OUTPUT", 9000]], head: { gstin: "", pos: "" } };
+  const r = night(gstRows(Object.assign({}, base, { more: [exp] }))), e = entry(r, "gst_setoff")[0], m = r.gst[0];
+  ok(m && m.t.zero && m.t.zero.igst === 9000, "the month's 3.1(b) carries the export's IGST 9,000 to the night (" + JSON.stringify(m && m.t.zero) + ")");
+  ok(e && e.ready && e.checks.every((c) => c.ok), "3.1(b) IGST: a ready set-off journal, every check passed (" + (e ? e.checks.filter((c) => !c.ok).map((c) => c.k + ": " + c.why).join("; ") : one(r, "setoff_due").map((f) => f.facts.title).join("; ")) + ")");
+  ok(e && line(e, "IGST OUTPUT").dr === 18000 && line(e, "IGST INPUT").cr === 5400 && line(e, CASH).cr === 25200, "IGST output 18,000 debited (3.1(a) 9,000 + 3.1(b) 9,000), IGST input 5,400 and cash 25,200 credited");
+  ok(e && e.evidence.some((x) => /IGST tax ₹18,000 = credit ₹5,400 \+ cash ₹12,600/.test(x.label)), "the trace: IGST tax 18,000 = credit 5,400 + cash 12,600");
+  // (review of ad4be74c3) a 3B kept as filed before 3.1(b)'s tax was in the set-off (its 6.1 had 3.1(a)'s IGST 9,000 only):
+  // Needs you says why it differs now
+  const old = night(gstRows(Object.assign({}, base, { more: [exp], rec: { cashLedger: CASH, snap: { pay: { use: { igst: { igst: 5400 } }, cash: { igst: 3600, cgst: 5400, sgst: 5400 }, rcmCash: {}, due: { igst: 9000, cgst: 5400, sgst: 5400, cess: 0 } } } } })));
+  const tt = (one(old, "setoff_due")[0] || { facts: {} }).facts.title || "";
+  ok(!entry(old, "gst_setoff").length && /3\.1\(b\)/.test(tt) && /before/.test(tt), "kept as filed before 3.1(b)'s IGST joined the set-off: Needs you says so (" + tt + ")");
+}
+{
   const r = night(gstRows(Object.assign({}, base, { rec: {} })));
   ok(!entry(r, "gst_setoff").length && one(r, "setoff_due")[0].state === "you" && /Ledgers in Tally|Not in Tally/.test(one(r, "setoff_due")[0].facts.title), "a missing ledger (the cash ledger not in Tally): Needs you, no entry");
 }
@@ -54,7 +69,7 @@ const base = { ym: "202610", intra: 100000, inter: 50000, buyIntra: 40000, buyIn
 {
   const r = night(gstRows({ ym: "202610", intra: 10000, credit: 30000, buyIntra: 5000, rec: { cashLedger: CASH } }));
   const m = r.gst[0];
-  ok(m && m.t.net.cgst < 0 && !entry(r, "gst_setoff").length && !one(r, "setoff_due").length, "more credit notes than sales (a negative liability): no tax to pay, no journal");
+  ok(m && m.t.pay.carry.neg && m.t.pay.carry.neg.cgst > 0 && !entry(r, "gst_setoff").length && !one(r, "setoff_due").length, "more credit notes than sales (a negative liability): no tax to pay, no journal");
   ok(J.setoffMin(m.t.net, m.t.rcmOut, m.t.netItc, m.t.opening).cash === 0, "the independent least cash: a negative liability is no tax");
 }
 {

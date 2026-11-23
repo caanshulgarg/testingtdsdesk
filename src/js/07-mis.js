@@ -33,7 +33,8 @@ const MIS = {
   // such steps at once
   *eachV(V, f){ for (let i = 0; i < V.length; i++){ f(V[i]); if (i % 5000 === 4999) yield; } },
   runSteps(it){ let r; while (!(r = it.next()).done); return r.value; },
-  cfg(b){ return Object.assign({freq: "monthly", msmeDays: 45}, (b && b.misCfg) || {}); },
+  // (MSMED Act section 15: never more than 45 days)
+  cfg(b){ const c = Object.assign({freq: "monthly"}, (b && b.misCfg) || {}); c.msmeDays = Math.min(45, num(c.msmeDays) || 45); return c; },
   ym(d){ return String(d).slice(0, 6); },
   monthsOf(from, to){ const out = []; let y = num(from.slice(0, 4)), m = num(from.slice(4, 6)); while (String(y) + String(m).padStart(2, "0") <= to.slice(0, 6)){ out.push(String(y) + String(m).padStart(2, "0")); m++; if (m > 12){ m = 1; y++; } } return out; },
   shift(d, years, days){ const t = new Date(Audit.iso(d) + "T00:00:00"); if (years) t.setFullYear(t.getFullYear() + years); if (days) t.setDate(t.getDate() + days); return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); },
@@ -458,9 +459,11 @@ const MIS = {
     let ym = this.shift(today, 0, -100).slice(0, 6);
     for (let i = 0; i < 6; i++, ym = GSTR.nextYm(ym)){
       const nx = GSTR.nextYm(ym), mo = +ym.slice(4, 6), lab = GSTR.label(ym);
-      add(mo === 3 ? nx.slice(0, 4) + "0430" : nx + "07", "TDS and TCS deposit for " + lab);
-      if ([6, 9, 12, 3].includes(mo)){ const q = {6: "Q1", 9: "Q2", 12: "Q3", 3: "Q4"}[mo], d = mo === 3 ? nx.slice(0, 4) + "0531" : mo === 12 ? nx.slice(0, 4) + "0131" : ym.slice(0, 4) + String(mo + 1).padStart(2, "0") + "31";
-        add(d, "TDS and TCS returns for " + q + " " + GSTF.fyOf(ym)); }
+      // TDS: the 7th, March's on 30 April (rule 30(2)); returns on the 31st after the quarter, 31 May for Q4 (rule 31A).
+      // TCS: the 7th for every month, March too (rule 37CA); Form 27EQ on the 15th after the quarter, 15 May for Q4 (rule 31AA)
+      add(mo === 3 ? nx.slice(0, 4) + "0430" : nx + "07", "TDS deposit for " + lab); add(nx + "07", "TCS deposit for " + lab);
+      if ([6, 9, 12, 3].includes(mo)){ const q = {6: "Q1", 9: "Q2", 12: "Q3", 3: "Q4"}[mo] + " " + GSTF.fyOf(ym), d = mo === 3 ? nx.slice(0, 4) + "0531" : mo === 12 ? nx.slice(0, 4) + "0131" : ym.slice(0, 4) + String(mo + 1).padStart(2, "0") + "31";
+        add(d, "TDS returns for " + q); add(d.slice(0, 6) + "15", "TCS return (Form 27EQ) for " + q); }
       if (reg){
         const t = typeof GSTSet === "object" ? GSTSet.typeOf(ym, reg) : "monthly";
         if (t === "monthly"){ add(GSTF.due(ym, "r1", reg), "GSTR-1 for " + lab); add(GSTF.due(ym, "r3b", reg), "GSTR-3B and tax for " + lab); }
@@ -798,7 +801,10 @@ Object.assign(MIS, {
   // 13 weeks ahead from the end of the period, by fixed rules
   forecast(to, recv, pay, bal){
     const start = this.shift(to, 0, 1), W = 13, weeks = Array.from({length: W}, (_, i) => ({i, from: this.shift(start, 0, i * 7), to: this.shift(start, 0, i * 7 + 6), inn: 0, out: 0, items: []}));
-    const put = (d, amt, what, who, why) => { let w = this.weekOf(start, d); if (w < 0) w = 0; if (w >= W) return; const x = weeks[w]; if (amt > 0) x.inn = r2(x.inn + amt); else x.out = r2(x.out - amt); x.items.push({d: d < start ? start : d, amt: r2(amt), what, who, why}); };
+    // a bill more than 180 days past when the party usually settles is doubtful: kept apart (old), not counted in week 1
+    // (review of 22-Nov-2026: a bill 400 days overdue was taken as collected in week 1)
+    const old = {inn: 0, out: 0, n: 0}, late = (d, amt) => { if (Audit.days(d, start) <= 180) return false; old.n++; if (amt > 0) old.inn = r2(old.inn + amt); else old.out = r2(old.out - amt); return true; };
+    const put = (d, amt, what, who, why) => { let w = this.weekOf(start, d); if (w < 0 && /^(Collections|Payments to suppliers)$/.test(what) && late(d, amt)) return; if (w < 0) w = 0; if (w >= W) return; const x = weeks[w]; if (amt > 0) x.inn = r2(x.inn + amt); else x.out = r2(x.out - amt); x.items.push({d: d < start ? start : d, amt: r2(amt), what, who, why}); };
     const rd = this.payDays("r", to), pd = this.payDays("p", to), msme = this.msme(), md = this.cfg(S.books).msmeDays;
     // each party's open bills net of its receipts on account and advances (MIS.netOpen, as the ageing): what is
     // expected from a party never exceeds its ledger balance (review of 02-Oct-2026)
@@ -834,7 +840,9 @@ Object.assign(MIS, {
     });
     // tax on fixed dates: GST on the 20th, TDS on the 7th, from the last months in the books
     const lastM = this.monthsOf(this.shift(to, 0, -89), to).slice(-3);
-    const gst = lastM.map(mm => { try { return r2(this.gst3b(mm).reduce((a, t) => a + Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess)), 0)); } catch (e){ return 0; } });
+    // the 3B working's cash (after the set-off by head and the credit carried forward), as compliance() takes it
+    const s4 = x => ["igst", "cgst", "sgst", "cess"].reduce((a, k) => a + num((x || {})[k]), 0);
+    const gst = lastM.map(mm => { try { return r2(this.gst3b(mm).reduce((a, t) => a + (t.pay && t.pay.cash ? s4(t.pay.cash) : Math.max(0, s4(t.net) - s4(t.netItc)) + (t.pay && t.pay.rcmCash ? s4(t.pay.rcmCash) : 0)), 0)); } catch (e){ return 0; } });
     const tds = lastM.map(mm => TDS.rows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0) + TDS.salaryRows().filter(r => this.ym(r.date) === mm).reduce((s2, r) => s2 + r.tds, 0));
     for (let k = 0; k < 4; k++){
       const d = new Date(Audit.iso(start) + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() + k);
@@ -848,7 +856,7 @@ Object.assign(MIS, {
     let run = bal != null ? bal : null;
     weeks.forEach(w => { w.net = r2(w.inn - w.out); if (run != null){ w.open = run; run = r2(run + w.net); w.close = run; } w.items.sort((a, c) => a.d.localeCompare(c.d) || a.what.localeCompare(c.what) || String(a.who).localeCompare(String(c.who))); });
     const lows = weeks.filter(w => w.close != null).sort((a, c) => a.close - c.close);
-    return {start, weeks, opening: bal, low: lows[0] || null, rd: rd["\u0000all"], pd: pd["\u0000all"]};
+    return {start, weeks, opening: bal, low: lows[0] || null, rd: rd["\u0000all"], pd: pd["\u0000all"], old};
   },
   // ratios: from the flows always; from the balance sheet when Tally's balances are here
   ratios(r, balTo){
@@ -866,18 +874,19 @@ Object.assign(MIS, {
       // Accounts tab places it (FS.place: a debit balance under liabilities is an asset, a credit under assets a
       // liability), and assets and liabilities are taken as positive amounts; a ratio that still comes out negative or
       // with nothing to divide by is "not meaningful", never a negative number
-      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0};
+      const A = Audit, CA = {}, CL = {}, at = {ca: 0, cl: 0, stock: 0, debt: 0, eq: 0, pl: 0};
       ["ci", "inv", "tr", "cash", "stla", "oca"].forEach(k => { CA[k] = 1; }); ["stb", "tp", "ocl", "stp"].forEach(k => { CL[k] = 1; });
       Object.entries(balTo).forEach(([l, v]) => {
         v = num(v); if (Math.abs(v) < 0.005) return;
-        if (typeof FS === "undefined" || FS.nature(l).rev) return;
+        if (typeof FS === "undefined") return;
+        if (FS.nature(l).rev){ at.pl += v; return; }
         const k = FS.place(l, v, "co");
         if (CA[k]){ at.ca += -v; if (k === "inv") at.stock += -v; }
         else if (CL[k]) at.cl += v;
         if (k === "ltb" || k === "stb") at.debt += v;
         if (k === "share" || k === "reserves" || k === "capital") at.eq += v;
       });
-      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + r.pl.pat.t);
+      const ca = r2(at.ca), cl = r2(at.cl), liquid = r2(at.ca - at.stock), debt = r2(at.debt), eq = r2(at.eq + at.pl);
       const NM = "not meaningful", times = (a, c) => !(c > 0) || a < 0 ? NM : Math.round(a / c * 100) / 100;
       out.push(["Current ratio", times(ca, cl), "times", "current assets " + INR.format(ca) + " \u00f7 current liabilities " + INR.format(cl)], ["Quick ratio", times(liquid, cl), "times", "without stock"],
         ["Debt to equity", !(eq > 0) || debt < 0 ? NM : Math.round(debt / eq * 100) / 100, "times", "borrowings \u00f7 capital and reserves"],
@@ -898,7 +907,7 @@ Object.assign(MIS, {
         if (Books.isSale(v)){ const a = Books.lines(v).taxable * (/CREDIT NOTE/i.test(v.type) ? -1 : 1); sales = r2(sales + a); m[ym].s = r2(m[ym].s + a); }
         else if (Books.isPurchase(v)){ const a = Books.lines(v).taxable * (/DEBIT NOTE/i.test(v.type) ? -1 : 1); purch = r2(purch + a); m[ym].p = r2(m[ym].p + a); }
       });
-      const gst = months.map(mm => { try { const t = this.keep("3b" + mm + rg, () => GSTR.threeBm(mm, rg)); return r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess))); } catch (e){ return 0; } });
+      const gst = months.map(mm => { try { const t = this.keep("3b" + mm + rg, () => GSTR.threeBm(mm, rg)); return r2(Math.max(0, t.net.igst + t.net.cgst + t.net.sgst + t.net.cess + num((t.zero || {}).igst) + num((t.zero || {}).cess) - (t.netItc.igst + t.netItc.cgst + t.netItc.sgst + t.netItc.cess))); } catch (e){ return 0; } });
       return {reg: rg, gstin: ((S.books.meta || {}).gstins || []).find(g => g.slice(0, 2) === rg), sales, purch, m, gstPay: r2(gst.reduce((a, x) => a + x, 0)), months};
     });
   },
@@ -945,18 +954,27 @@ Object.assign(MIS, {
 Object.assign(Audit.checks, {
   // section 43B(h): what is owed to a micro or small enterprise beyond the agreed time is allowed only when paid
   msme43Bh(A, V, ctx){
+    // section 43B(h) came in with the Finance Act 2023, from FY 2023-24 (AY 2024-25): not for an earlier year
+    if (ctx.to < "20230401") return null;
     // (ctx.ageP: the same bills, worked out in steps before the checks by Audit.runIn)
-    const msme = MIS.msme(), days = MIS.cfg(S.books).msmeDays, ag = ctx.ageP || MIS.ageing(ctx.to, "p", null), rows = [];
+    // the time allowed (MSMED Act section 15): 15 days from acceptance, or the days agreed in writing, never over 45. Not
+    // set under MIS settings: 45 is used for the finding, and the bills between 16 and 45 days are asked about
+    const msme = MIS.msme(), set = num((S.books.misCfg || {}).msmeDays), days = set > 0 ? Math.min(45, set) : 45, ag = ctx.ageP || MIS.ageing(ctx.to, "p", null), rows = [], ask = [];
     ag.rows.forEach(p => {
       if (!/micro|small/i.test(msme[p.party] || "")) return;
-      (p.open || []).filter(x => x.age > days).forEach(x => rows.push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.left,
+      (p.open || []).forEach(x => (x.age > days ? rows : !set && x.age > 15 ? ask : []).push({vid: "", date: x.date, no: x.ref, type: msme[p.party], party: p.party, amount: x.left,
         note: x.age + " days unpaid on " + fmtDate(tallyDate(ctx.to))}));
     });
-    if (!rows.length) return null;
-    return {area: "bal", sev: "high", clause: "3CD 22, 26; section 43B(h)", title: "Micro and small suppliers unpaid beyond " + days + " days",
-      problem: rows.length + " bills of " + new Set(rows.map(r => r.party)).size + " MSME suppliers are unpaid beyond the time the MSMED Act allows.",
+    const out = [], t = (r, n) => n + " bills of " + new Set(r.map(x => x.party).filter(Boolean)).size + " MSME suppliers";
+    if (rows.length) out.push({area: "bal", sev: "high", clause: "3CD 22, 26; section 43B(h)", title: "Micro and small suppliers unpaid beyond " + days + " days",
+      problem: t(rows, rows.length) + " are unpaid beyond the time the MSMED Act allows.",
       impact: "What is unpaid on 31 March beyond the time allowed (15 days, or up to 45 days by agreement) is not allowed as an expense for the year (section 43B(h)); interest under section 16 of the MSMED Act, at three times the bank rate, is also not allowed (clause 22).",
-      amount: rows.reduce((s, r) => s + r.amount, 0), suggestion: "Pay these suppliers before the year ends. What stays unpaid is added back in the computation and allowed in the year it is paid. Check each supplier's Udyam type: traders are outside this rule.", je: null, rows};
+      amount: rows.reduce((s, r) => s + r.amount, 0), suggestion: "Pay these suppliers before the year ends. What stays unpaid is added back in the computation and allowed in the year it is paid. Check each supplier's Udyam type: traders are outside this rule.", je: null, rows});
+    if (ask.length) out.push({key: "days", area: "bal", sev: "medium", clause: "3CD 22, 26; section 43B(h)", title: "MSME bills 16 to 45 days old: the time agreed with the suppliers is not set",
+      problem: t(ask, ask.length) + " are unpaid for 16 to 45 days. Without a written agreement the MSMED Act allows 15 days (section 15), and these are then disallowed.",
+      impact: "The time allowed decides the 43B(h) disallowance; it is not set for this client, so these are not counted in it.", amount: ask.reduce((s, r) => s + r.amount, 0),
+      suggestion: "Set the days agreed in writing (15 where there is no agreement, at most 45) under MIS \u2192 Settings, and run the audit again.", je: null, rows: ask});
+    return out;
   },
   // penalties, fines and interest that tax law does not allow
   penalties(A, V){
@@ -1028,77 +1046,7 @@ Object.assign(Audit.checks, {
       impact: "Large swings are where misstatements are found: missing or doubled entries, wrong ledgers, cut-off.", amount: 0, suggestion: "Get an explanation for each; the ones that cannot be explained need the vouchers checked.", je: null, rows};
   }
 });
-Object.assign(Audit, {
-  // (relatedGuess: with the Audit screen, src/js/77-audit.js, next-fix-mis-rework for legacy.js's budget)
-  // the Form 3CD draft: the clauses the books answer, filled from them
-  form3cd(run){
-    const b = S.books, from = run.from, to = run.to, f = id => run.findings.find(x => x.id === id), m = v => INR.format(r2(v || 0)), C = [];
-    const add = (no, title, head, rows, note) => C.push({no, title, head, rows: rows || [], note: note || ""});
-    add("4", "GST registrations", ["GSTIN"], ((b.meta || {}).gstins || []).map(g => [g]));
-    const pen = f("penalties");
-    add("21(a)", "Penalties, fines and similar amounts debited to profit and loss", ["Ledger", "Amount", "Nature"], pen ? pen.rows.map(r => [r.party, r.amount, r.note]) : [], pen ? "" : "None found in the books.");
-    // round 69: the TDS not deducted is a finding per party, section and year (TDSWatch.missed); its entries, the expense
-    // TDS was due on, as the working papers list them
-    const tm = run.findings.filter(x => x.check === "tdsMissed");
-    add("21(b)(ii)(A)", "Amounts disallowable under section 40(a)(ia): TDS not deducted", ["Party", "Amount", "Detail"], tm.flatMap(x => x.rows.map(r => [r.party, r.amount, r.note])), tm.length ? "" : "None found.");
-    const c3 = f("cash40A3");
-    add("21(d)(A)", "Cash payments above the limit, section 40A(3)", ["Date", "Party or ledger", "Amount"], c3 ? c3.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], c3 ? "" : "None found.");
-    const ms = f("msme43Bh");
-    add("22", "Interest under section 23 of the MSMED Act, not allowed", ["Supplier", "Bill", "Outstanding", "Days"], ms ? ms.rows.map(r => [r.party, r.no, r.amount, r.note]) : [], "The interest itself is not in the books; work it out on these bills at three times the bank rate.");
-    const rp = f("related:40A2b");
-    add("23", "Payments to persons specified in section 40A(2)(b)", ["Person", "Relation", "Amount", "Nature"], rp ? rp.rows.map(r => [r.party, r.type, r.amount, r.note]) : [], (b.auditRel || []).length ? (rp ? "" : "None in the period.") : "The list of related persons is not set yet (Audit \u2192 Related parties).");
-    const d43 = f("balances:43B");
-    add("26", "Sums under section 43B", ["Ledger or supplier", "Amount unpaid at the end of the period", "Note"], (d43 ? d43.rows.map(r => [r.party, r.amount, "statutory dues"]) : []).concat(ms ? ms.rows.map(r => [r.party, r.amount, "43B(h) MSME"]) : []),
-      "Add the date of payment of each before the due date of the return.");
-    const lt = f("cashLoans:269SS"), lr = f("cashLoans:269T"), st = f("cash269ST");
-    add("31(a)", "Loans or deposits taken or accepted otherwise than by bank (section 269SS)", ["Date", "Lender", "Amount"], lt ? lt.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lt ? "" : "None found in cash.");
-    add("31(b), 31(c)", "Loans or deposits repaid otherwise than by bank (section 269T)", ["Date", "To", "Amount"], lr ? lr.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], lr ? "" : "None found in cash.");
-    add("31(ba)", "Receipts of \u20b92 lakh or more otherwise than by bank (section 269ST)", ["Date", "From", "Amount"], st ? st.rows.map(r => [fmtDate(tallyDate(r.date)), r.party, r.amount]) : [], st ? "" : "None found.");
-    // 34(a): section by section, from the deductions and what was missed
-    const fy = TDS.fyOf(to), rows34 = {}, missed = tm.flatMap(x => x.rows);
-    TDS.allRows().filter(r => r.date >= from && r.date <= to).forEach(r => { const x = rows34[r.section] = rows34[r.section] || {paid: 0, tds: 0, n: 0, low: 0}; x.paid = r2(x.paid + r.paid); x.tds = r2(x.tds + r.tds); x.n++; });
-    ["Q1", "Q2", "Q3", "Q4"].forEach(q => Certs.issues(fy, q).filter(x => x.short > 0 && x.row.date >= from && x.row.date <= to).forEach(x => { const y = rows34[x.row.section]; if (y) y.low++; }));
-    const miss = {}; missed.forEach(r => { const s2 = r.type || "?"; miss[s2] = r2((miss[s2] || 0) + r.amount); });
-    Object.keys(rows34).forEach(k2 => { if (!k2){ rows34["not set (a TDS ledger with no section)"] = rows34[k2]; delete rows34[k2]; } });
-    add("34(a)", "Tax deducted at source, section by section", ["Section", "Paid or credited", "On which tax was to be deducted", "Tax deducted", "Deductions at a lower rate", "Paid or credited without deduction"],
-      Object.keys(Object.assign({}, rows34, miss)).sort().map(s2 => { const x = rows34[s2] || {paid: 0, tds: 0, low: 0}; return [s2, x.paid + (miss[s2] || 0), x.paid + (miss[s2] || 0), x.tds, x.low, miss[s2] || 0]; }),
-      "Salary under section 192 is from the books; confirm it against the salary sheet.");
-    const il = f("tdsLate");
-    add("34(c)", "Interest under section 201(1A)", ["Deductee", "Interest", "Detail"], il ? il.rows.map(r => [r.party, r.amount, r.note]) : [], il ? "" : "No late payment found among the challans entered.");
-    const ln = f("related:loans");
-    add("36A", "Deemed dividend under section 2(22)(e)", ["Person", "Relation", "Amount"], ln ? ln.rows.map(r => [r.party, r.type, r.amount]) : [], ln ? "Only where the person holds 10% or more of the shares, or has such an interest in the borrower." : "No loans to related persons found.");
-    const pl = MIS.pl(from, to), rev = (pl.heads.rev || {t: 0}).t;
-    add("40", "Turnover and ratios", ["Item", "This year"], [["Turnover", rev], ["Gross profit", pl.gross.t], ["Gross profit to turnover", rev ? (Math.round(pl.gross.t / rev * 10000) / 100) + "%" : ""], ["Net profit before tax", pl.pbt.t], ["Net profit to turnover", rev ? (Math.round(pl.pbt.t / rev * 10000) / 100) + "%" : ""]],
-      "Before the change in stock; add the stock figures from the accounts.");
-    // 44: expenditure by the GST status of the supplier
-    const info = b.ledInfo || {}, gst = b.gstins || {}, g44 = {exempt: 0, comp: 0, other: 0, unreg: 0, total: 0};
-    (b.vouchers || []).forEach(v => {
-      if (v.date < from || v.date > to || v.opt || v.cancel || Books.isSale(v)) return;
-      const val = v.ent.filter(e => e.a < 0 && (this.isExpense(e.l) || this.under(e.l, /^purchase accounts$/i) || this.isFixed(e.l))).reduce((s, e) => s - e.a, 0);
-      if (!val) return;
-      const party = (v.ent.find(e => e.a > 0 && (gst[e.l] || this.isCreditor(e.l))) || {}).l || v.party, g = gst[party] || v.gstin, rt = String((info[party] || {}).regType || "");
-      const tax = v.ent.some(e => { const k = Books.ledgerOf(e.l).kind; return e.a < 0 && (k === "gst" || k === "gst_common" || k === "ineligible"); });
-      g44.total += val;
-      if (!g) g44.unreg += val; else if (/composition/i.test(rt)) g44.comp += val; else if (!tax) g44.exempt += val; else g44.other += val;
-    });
-    add("44", "Break-up of expenditure by the GST status of the supplier", ["Total expenditure", "Registered: exempt or nil", "Registered: composition", "Registered: others", "Total with registered suppliers", "With unregistered suppliers"],
-      [[r2(g44.total), r2(g44.exempt), r2(g44.comp), r2(g44.other), r2(g44.exempt + g44.comp + g44.other), r2(g44.unreg)]],
-      "Purchases, expenses and fixed assets booked in the period; \u201cexempt or nil\u201d is a registered supplier's bill with no GST on it. Composition dealers are recognised from their GST type in Tally.");
-    return {from, to, at: run.at, code: run.code, clauses: C};
-  },
-  form3cdHtml(d){
-    const co = CO(), m = v => typeof v === "number" ? INR.format(r2(v)) : esc(String(v == null ? "" : v));
-    let h = '<div style="border-bottom:2px solid #15201B;padding-bottom:8px;margin-bottom:12px"><div style="font-size:12px;color:#5A6B63">FORM 3CD \u2014 WORKING FROM THE BOOKS</div><h1 style="font-size:20px;margin:4px 0">' + esc(co.name) + "</h1>" +
-      "<div>" + fmtDate(tallyDate(d.from)) + " to " + fmtDate(tallyDate(d.to)) + " \u00b7 from the audit run of " + fmtDate(String(d.at).slice(0, 10)) + " \u00b7 result code " + esc(d.code || "") + "</div>" +
-      '<p class="note">The clauses the books answer. Every figure is to be verified against the documents before it goes into the report on the portal. Other clauses are filled from the records.</p></div>';
-    d.clauses.forEach(c => {
-      h += '<h2 style="font-size:14px;margin:14px 0 4px">Clause ' + esc(c.no) + ". " + esc(c.title) + "</h2>";
-      if (c.rows.length) h += "<table><thead><tr>" + c.head.map(x => "<th>" + esc(x) + "</th>").join("") + "</tr></thead><tbody>" + c.rows.slice(0, gfN(200)).map(r => "<tr>" + r.map(v => '<td class="' + (typeof v === "number" ? "n" : "") + '">' + m(v) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
-      if (c.note) h += '<p class="note">' + esc(c.note) + "</p>";
-    });
-    return h;
-  }
-});
+// (Audit.form3cd, form3cdHtml: with the Audit screen, src/js/77-audit.js AuditRep, for legacy.js's budget)
 
 /* ---------- the ledger master, phase 2: what FinCom posts to, templates across clients, and a copy at each filing ---------- */
 Object.assign(LedMaster, {

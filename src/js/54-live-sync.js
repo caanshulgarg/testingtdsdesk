@@ -140,10 +140,14 @@ Object.assign(BookItems, {
   async take(cid, rows, o){
     const s = await this.state(cid), me = Live.me();
     // next-speed-pages (11-Nov-2026): nothing came (the 45-second round, most of the time): the work part is not copied
-    // and cut into items for nothing (10 MB on a large client: a 0.5 s freeze, 2 s on an office PC, every 45 s)
-    const work = rows.length ? ((await BookSync.localWork(cid)) || {}) : {}, mine = rows.length ? this.split(work) : new Map(), use = [], notes = [];
-    rows.forEach(r => {
-      const key = this.ik(r.key, r.item), hNew = r.deleted ? "gone" : this.h(r.data, r.ord);
+    // and cut into items for nothing (10 MB on a large client: a 0.5 s freeze, 2 s on an office PC, every 45 s).
+    // Audit 22-Nov-2026 (tally-sync 6): the same for rows known already (this computer's own saves coming back live, up to
+    // 400 a save), and only the parts the new rows touch are copied and cut (BookSync.localWork with their keys)
+    const hs = rows.map(r => r.deleted ? "gone" : this.h(r.data, r.ord)), bv0 = s.bv || 0, seq0 = s.seq;
+    const fresh = rows.filter((r, n) => s.base[this.ik(r.key, r.item)] !== hs[n]), keys = [...new Set(fresh.map(r => r.key))];
+    const work = fresh.length ? ((await BookSync.localWork(cid, keys)) || {}) : {}, mine = fresh.length ? this.split(work) : new Map(), use = [], notes = [];
+    rows.forEach((r, n) => {
+      const key = this.ik(r.key, r.item), hNew = hs[n];
       if (o.cursor) s.seq = Math.max(s.seq, num(r.seq));
       if (s.base[key] === hNew) return;                                       // known already (this computer's own save, come back)
       const loc = mine.get(key), hLoc = loc ? this.h(loc.d, loc.o) : "gone";
@@ -157,7 +161,7 @@ Object.assign(BookItems, {
     });
     this.prune(s);
     if (use.length) await this.into(cid, use);
-    await this.keep(cid);
+    if (!rows.length || (s.bv || 0) !== bv0 || s.seq !== seq0) await this.keep(cid);
     if (notes.length) Live.noteItems(cid, notes);
     return use.length;
   },
@@ -262,10 +266,16 @@ Object.assign(BookItems, {
     return send.length;
   },
   // a change arriving live: for the client open here; others are brought in when they are opened
+  // (audit 22-Nov-2026, tally-sync 6: the rows of one save come as one event each, up to 400: gathered for 200 ms and
+  // taken together, so the work part is copied and cut once a burst, not once a row)
   remote(r){
     const cid = r.client_id;
     if (!cid || !S.books || S.books.cid !== cid || S.books.loading) return;
-    this.queue(cid, () => this.take(cid, [r], {first: false, cursor: false}));
+    const w = this.inbox || (this.inbox = {});
+    if (w[cid]){ w[cid].push(r); return; }
+    w[cid] = [r];
+    // (an item saved twice in the burst: its last row alone, as two takes one after the other would leave it)
+    setTimeout(() => { const by = new Map(); (w[cid] || []).forEach(x => { const k = this.ik(x.key, x.item); by.delete(k); by.set(k, x); }); const rows = [...by.values()]; delete w[cid]; this.queue(cid, () => this.take(cid, rows, {first: false, cursor: false})); }, 200);
   },
   // anything not sent yet (after being offline)
   async flush(){ for (const cid of Object.keys(this.st)) if (this.st[cid].error || this.st[cid].timer) await this.push(cid).catch(() => {}); },
@@ -397,7 +407,7 @@ const Live = {
     if (this.postsTopic && m.topic === this.postsTopic){
       if (m.event === "phx_reply" && m.ref === this.postsRef) this.postsLive = !!(m.payload && m.payload.status === "ok");
       else if (m.event === "system" && m.payload && m.payload.status === "error") this.postsLive = false;
-      else if (m.event === "postgres_changes" && typeof CloudJobs === "object") CloudJobs.changed();
+      else if (m.event === "postgres_changes" && typeof CloudJobs === "object") CloudJobs.changed(m.payload && m.payload.data);
       return;
     }
     if (this.booksTopic && m.topic === this.booksTopic){

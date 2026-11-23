@@ -9,6 +9,7 @@
 // The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
 // The filter bar (search, quick chips UPI / IMPS / NEFT ... with counts, In / Out, unassigned, more filters, select all
 // shown, a rule from the filter), the bulk voucher type and narration and the keys are parts/bank/ (24-Oct-2026).
+import "../../../src/js/99-screen-parts.js";
 import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
 import { useRef, useEffect, useLayoutEffect, useState } from "react";
@@ -28,6 +29,7 @@ import LedgerBox from "../parts/LedgerBox.jsx";
 import { BankLedger } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import NoticeLine from "../parts/NoticeLine.jsx";
+import { BankOverlap } from "../lib/bankOverlap.js";
 import { AutoChip, AutoWhy, AutoUndo, AutoFilter, apRows, apView, isAuto } from "../parts/AutoPost.jsx";
 import { loadAP } from "../lib/autopostBoot.js";
 // the lines a posting of this computer already put in Tally, marked posted (kept out of legacy.js: build.py react_parts)
@@ -476,6 +478,7 @@ function BankPage() {
             : <span className="ok">✔ The statement adds up<span className="bs-more-words">: every line agrees with its running balance{st.summaryOk ? ", and opening + deposits − withdrawals = closing" : ""}</span></span>}
           {repaired > 0 && <> <span className="warn">· {repaired} amounts were read from the balance change (marked ≈)</span></>}
           <DupWords st={st} />
+          {st.cut && <> <span className="bad" data-bank-cut="">· ✖ {BankOverlap.cutWords(st.cut)}</span></>}
           {book && <> <span className="muted">· {book.live ? "Checked against Tally " + fmtDateTime(book.importedAt) : "Matched with the Tally bank book"}</span></>}
         </div>
         <dl className="bk-figs">

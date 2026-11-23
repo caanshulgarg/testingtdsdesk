@@ -2,7 +2,7 @@
 // "Tally link is still a big problem when linking first time.. don't know how to get code.. how to link.. that is main
 // problem now"). Before this, Connect Tally's step 1 said "Install" only; the 6-digit code was typed under Help & support ›
 // This computer (behind a "Connect" that only re-checked), and nothing showed while FinCom waited for the bridge.
-// Now, until FinCom's cloud hears a bridge, step 1 is this panel, drawn under the three steps:
+// Now, until FinCom's cloud hears a bridge, step 1 of Connect Tally's six steps is this panel, with three parts of its own:
 //   1. Download      the one button (the setup asks nothing but "Just for me", the default)
 //   2. Open it       FinCom looks for the bridge on THIS computer by itself (only /ping on 127.0.0.1:9100-9199; nothing
 //                    secret is sent) and says what it finds: waiting / another Windows user's / an older bridge / found
@@ -17,6 +17,7 @@
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
 import { ownHint, sameUser, START_SAY, lnaDenied, LNA_SAY, lookHere, HERE } from "../lib/tallyConnect.js";
+import { fullDue } from "../lib/ownBridge.js";
 import { soonDraw } from "../lib/soonDraw.js";
 
 const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
@@ -58,7 +59,7 @@ async function scan() {
   // (the whole range at most every 30 s; between, the light look)
   // (another caller's look in the last 5 s: its answer, nothing asked again)
   const A = HERE.lastAny, recent = A && A.gen === HERE.gen && Date.now() - A.at < SCAN_MS ? A.h : null;
-  const all = [].concat(((recent || await lookHere({ full: Date.now() - (HERE.fullAt || 0) > 30000 })) || {}).all || []).filter(Boolean);
+  const all = [].concat(((recent || await lookHere({ full: fullDue(Date.now(), Math.max(FL.watchAt || 0, HERE.askAt || 0), HERE.fullAt) })) || {}).all || []).filter(Boolean);
   FL.scanAt = Date.now();
   const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
   if (FL.st === "pairing") return;
@@ -120,6 +121,7 @@ export async function linkFirm() {
   if (typeof TCloud !== "object") return;
   TCloud.autoAt = 0; TCloud.autoErr = "";
   try { await TCloud.auto(); } catch (e) { TCloud.autoErr = (e && e.message) || String(e); }
+  if (!TCloud.autoErr) HERE.refused = false;   // (a new key handed over: an earlier refusal is over)
   if (TCloud.autoErr) { say({ st: "error", err: TCloud.autoErr }); logStep("link_failed", Bridge.st && Bridge.st.version, TCloud.autoErr); }
   try { await TCloud.refreshPane(); } catch (e) { /* read again in 5 seconds */ }
   if (typeof render === "function") render();
@@ -129,9 +131,11 @@ function useWatch(linked) {
   useEffect(() => {
     if (linked) return undefined;
     let stop = false;
+    FL.watchAt = Date.now();
     const tick = async () => {
       if (stop) return;
       try {
+        if (typeof document === "object" && document.hidden && FL.st !== "linking") throw 0;
         if (FL.st === "linking") { await TCloud.refreshPane({ soon: true }); if ((TCloud.pane.devices || []).length) logStep("linked", Bridge.st && Bridge.st.version); if (!(TCloud.pane.devices || []).length && Date.now() - (TCloud.lastAutoKick || 0) > 30000) { TCloud.lastAutoKick = Date.now(); await linkFirm(); } soonDraw(); }
         else await scan();
       } catch (e) { /* the next tick */ }

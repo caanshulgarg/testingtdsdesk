@@ -5,9 +5,11 @@
 // next-itc-simple (the owner, 24-Oct-2026: "in 3B if we want to see the hyperlink detail it should pop up a window rather
 // than showing it below"): every figure opens a window (Pop: ✕ or Esc closes it) with the rows behind it; table 4 as the
 // Final credit for 3B tab shows it (ItcFigure.jsx), with "Open in 2B reconciliation"; 6.1 how each head is paid.
+import "../../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { r3bTables, r3bBills, R3B_CLICK } from "./portal.js";
+import { r3bNeeds, r3bCarry, nlsSet } from "../../lib/gst3bNil.js";
 import { Pop } from "./ItcParts.jsx";
 import FigureDetail, { FIG_LABEL } from "./ItcFigure.jsx";
 
@@ -48,10 +50,13 @@ function Bills({ id, per, reg, t, label }) {
 // 6.1, one head: the tax payable, the credit used head by head, the cash, the credit carried
 function PayDetail({ t, head }) {
   const P = t.pay || { use: {}, cash: {}, rcmCash: {}, carry: {} }, HW = { igst: "Integrated Tax", cgst: "Central Tax", sgst: "State/UT Tax", cess: "Cess" };
-  const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
+  // (A): 3.1(a) with 3.1(b)'s IGST and cess, as the set-off takes them (P.due; the owner, 23-Nov-2026)
+  const rowsP = [["Tax payable, 3.1 other than reverse charge (A)", num((P.due || t.net || {})[head])], ["Tax payable on reverse charge (B), paid in cash", num((t.rcmOut || {})[head])],
     ["Credit brought forward", num((t.opening || {})[head])], ["Net ITC of the month, 4(C)", num((t.netItc || {})[head])]]
+    .concat(num(((P.negAdj || {})[head])) ? [["Less: negative liability of an earlier month adjusted (Negative Liability Statement)", -num(P.negAdj[head])]] : [])
     .concat(["igst", "cgst", "sgst", "cess"].map((c) => ["Paid with " + HW[c] + " credit", num(((P.use || {})[c] || {})[head])]))
-    .concat([["Paid in cash (A)", r2(num((P.cash || {})[head]) - num((P.rcmCash || {})[head]))], ["Paid in cash (B), reverse charge", num((P.rcmCash || {})[head])], [HW[head] + " credit carried to next month", num((P.carry || {})[head])]]);
+    .concat([["Paid in cash (A)", r2(num((P.cash || {})[head]) - num((P.rcmCash || {})[head]))], ["Paid in cash (B), reverse charge", num((P.rcmCash || {})[head])], [HW[head] + " credit carried to next month", num((P.carry || {})[head])]])
+    .concat(num((((P.carry || {}).neg) || {})[head]) ? [["Negative liability carried to next month", num(P.carry.neg[head])]] : []);
   return <div className="itc-pop-table" data-pay-detail={head}><table className="bk-table gf-off"><tbody>{rowsP.map(([l, v], i) => <tr key={i}><td>{l}</td><td className="n">{money(v)}</td></tr>)}</tbody></table>
     <p className="note">Credit is used as sections 49 and 49A and rule 88A require: IGST credit first, then CGST and SGST against their own tax and then IGST; CGST never against SGST; cess only against cess.</p></div>;
 }
@@ -59,8 +64,12 @@ function PayDetail({ t, head }) {
 // under 6.1: the tax payable (A) + (B) by head, and the electronic credit ledger brought forward and carried (FinCom's working)
 function Ledger({ t }) {
   const H = ["igst", "cgst", "sgst", "cess"], P = t.pay, line = (f) => H.map((k) => HEADW[k] + " " + money(f(k))).join(" · ");
-  return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
-    Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.</p>;
+  return <p className="note r3b-note" data-r3b-ledger="">Total tax payable, (A) + (B): {line((k) => r2(num((P.due || t.net || {})[k]) + num((t.rcmOut || {})[k])))}.<br />
+    Credit brought forward: {line((k) => num((t.opening || {})[k]))}.<br />Credit carried to next month: {line((k) => num((P.carry || {})[k]))}.
+    {P.negAdj && <><br /><span data-r3b-negadj="">Negative liability of an earlier month set against this month's tax: {line((k) => num(P.negAdj[k]))}.</span></>}
+    {/* (re-review of bac94a801, N1) 3.1 is never negative in the return: a head below nil is shown nil and carried as
+        negative liability; it is set against a later month's tax only once the CA confirms the portal's statement */}
+    {(P.carry || {}).neg && <><br /><span data-r3b-neg="">Carried as negative liability (3.1 below nil in a head, shown as nil in the return): {line((k) => num(P.carry.neg[k]))}. It is set against a later month’s tax once you confirm the portal’s Negative Liability Statement shows it.</span></>}</p>;
 }
 
 export default function R3bPortal({ b, t, cloud }) {
@@ -74,7 +83,15 @@ export default function R3bPortal({ b, t, cloud }) {
   const close = () => { S.r3bOpen = ""; render(); };
   const openTb = open && tables.find((tb) => tb.rows.some((r) => r.id === open)), openRow = openTb && openTb.rows.find((r) => r.id === open);
   const is4 = /^4/.test(open), is61 = /^6\.1[AB]\|/.test(open);
+  const needs = r3bNeeds(t, !!(typeof GSTF === "object" && (GSTF.peek(ym, reg) || {}).r3b)), carried = r3bCarry(t, ym);
+  // (re-review of bac94a801, N1) the CA's word that the portal's Negative Liability Statement shows the negative liability
+  // carried in (books.gst3b["<reg>|<month>"].nls, GSTR.nlsOk); then it is set off this month
+  const who = (S.account && S.account.me && S.account.me.email) || "", nlsTo = (on) => { nlsSet(S.books, reg, ym, on, who); GSTR._carry = null; saveBooks(); render(); }, nlsYes = () => nlsTo(true);
+  const nlsDone = !!((S.books.gst3b || {})[reg + "|" + ym] || {}).nls && t.pay && t.pay.negAdj;
   return <div data-r3b-portal="">
+    {needs.map((m, i) => <p key={i} className="note" data-r3b-needs={i} style={{ color: "var(--warn)" }}><b>Needs you:</b> {m}{/Negative Liability Statement/.test(m) && <> <button type="button" className="btn small" data-r3b-nls="" onClick={nlsYes}>The portal shows it</button></>}</p>)}
+    {carried.map((m, i) => <p key={"c" + i} className="note" data-r3b-carry={i}>{m}</p>)}
+    {nlsDone && <p className="note" data-r3b-nls-done="">You confirmed the portal’s Negative Liability Statement shows the negative liability set off here. <button type="button" className="linkbtn" onClick={() => nlsTo(false)}>Undo</button></p>}
     {tables.map((tb) => {
       return <section key={tb.id} className="r3b-t" data-r3b-table={tb.id}>
         <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off" data-statement="">

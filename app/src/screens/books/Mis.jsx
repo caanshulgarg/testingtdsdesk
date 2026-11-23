@@ -6,10 +6,11 @@
 //
 // State: S.misRange, S.misTab, S.misQ / S.misF / S.misCat (filters), S.misOpen (a party opened), S.misOpenHead,
 // a ledger's entries (the detail drawer, openDetail("misLed", ledger)), S.misCf, S.misWeek, S.misCc (rows opened), S.misBudPct.
+import "../../../../src/js/99-screen-parts.js";
 import NotRead from "../../parts/NotRead.jsx";
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
-import { CatchUp } from "../../parts/Notes.jsx";
+import { CatchUp } from "../../parts/BookNotes.jsx";
 import { catchSoon } from "../../lib/catchSoon.js";
 import { behind } from "../../lib/behind.jsx";
 import { useAutoLine } from "../../lib/autoLine.js";
@@ -45,6 +46,12 @@ const TABS = [["summary", "Summary"], ["pl", "Profit and loss"], ["recv", "Recei
 // the period and Run now, under the tabs; how often it runs on its own and the downloads fold away (review of 01-Oct-2026)
 // ui-tidy (13-Oct-2026): the one filter bar (parts/Filters.jsx): From, To and the quick periods; Run now and the downloads
 // at its end; the settings under it, folded
+// the days set: the books' MIS settings (b.misCfg, stored with the books), the month's MIS worked out again
+function misMsmeDaysSet(v) {
+  const b = S.books, c = Object.assign({}, b.misCfg);
+  if (v) c.msmeDays = Math.min(45, Math.max(1, Number(v) || 45)); else delete c.msmeDays;
+  b.misCfg = c; const r = (b.mis || {}).last; saveBooks(); if (r) MIS.runSoon(b, { from: r.from, to: r.to, how: r.how }); render();
+}
 function Head({ b, r, rg }) {
   const c = MIS.cfg(b);
   return <section className="mis-head" data-mis-head="">
@@ -59,6 +66,12 @@ function Head({ b, r, rg }) {
         <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}><span className="note">Run on its own</span>
           <select aria-label="MIS runs on its own" style={{ width: "auto" }} value={c.freq} onChange={(ev) => misFreqSet(ev.target.value)}>
             {[["monthly", "on the 1st, for the month just ended"], ["weekly", "every week, the year so far"], ["daily", "every day, the year so far"], ["off", "only when I run it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+        {/* section 43B(h) and section 15 of the MSMED Act: 15 days from acceptance without a written agreement, at most 45 days
+            with one (review of 22-Nov-2026: always 45, with no setting). Not set: 45 is used and the audit asks about 16 to 45 days */}
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}><span className="note">Time allowed to micro and small suppliers</span>
+          <select aria-label="MSME days" data-mis-msmedays="" style={{ width: "auto" }} value={(b.misCfg || {}).msmeDays ? String(Math.min(45, +b.misCfg.msmeDays)) : ""} onChange={(ev) => misMsmeDaysSet(ev.target.value)}>
+            <option value="">not set (45 days used; the audit asks)</option><option value="15">15 days: no written agreement</option>
+            {[...new Set([30, 45].concat((b.misCfg || {}).msmeDays && ![15, 30, 45].includes(+b.misCfg.msmeDays) ? [Math.min(45, +b.misCfg.msmeDays)] : []))].sort((x, y) => x - y).map((d) => <option key={d} value={d}>{d + " days: agreed in writing"}</option>)}</select></div>
         </Confirm>
       </details>
       <span className="note mis-period" data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>
@@ -302,6 +315,7 @@ function CashFlow({ b, r, p2 }) {
     <Card top title={"The next 13 weeks, from " + d(F.start)}>
       {F.opening != null ? <p className="note">{"Starting with cash and bank of ₹" + m(F.opening) + (F.low ? "; the lowest point is ₹" + m(F.low.close) + " in the week of " + d(F.low.from) + "." : ".")}</p>
         : <p className="note">The cash in hand at the start is not known here (see the Summary); the table shows what comes in and goes out.</p>}
+      {F.old && F.old.n > 0 && <p className="note warn" data-mis-fc-old="">{F.old.n + (F.old.n === 1 ? " bill is" : " bills are") + " more than 180 days past when the party usually pays (₹" + m(F.old.inn) + " to collect, ₹" + m(F.old.out) + " to pay): doubtful, so left out of the weeks. Follow them up, or provide for them."}</p>}
       <Table id="misFc" head={<><th>Week of</th><th className="n">Coming in</th><th className="n">Going out</th><th className="n">Net</th>{F.opening != null && <th className="n">Cash at the end</th>}</>}>
         {F.weeks.map((w) => { const open = S.misWeek === w.i;
           return <Fragment key={w.i}><tr><td><Opener open={open} onClick={toggle("misWeek", w.i, -1)}>{d(w.from)}</Opener></td><td className="n">{m(w.inn)}</td><td className="n">{m(w.out)}</td><td className={"n" + (w.net < 0 ? " bad" : "")}>{m(w.net)}</td>

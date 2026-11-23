@@ -200,7 +200,7 @@ the bill date, so 2,90,000 is owed to an MSME supplier beyond 45 days (section 4
 
 The rules are the ones the forecast states:
 
-- A customer's bill is expected after that customer's usual days to pay. These come from the bills it has settled in these books. A bill whose expected date has passed counts in week 1.
+- A customer's bill is expected after that customer's usual days to pay. These come from the bills it has settled in these books. A bill whose expected date has passed counts in week 1, unless it passed more than 180 days ago: such a bill is doubtful and is kept apart, not counted in any week (review of 22-Nov-2026).
 - A supplier's bill follows the same rule. For a micro or small supplier, the time is never more than 45 days.
 - A payment made in each of the last months, at about the same amount, is expected again on the same day of the month.
 - GST is due on the 20th. TDS is due on the 7th of the next month, but TDS deducted in March is due on 30 April (rule 30(2)).
@@ -216,13 +216,16 @@ bills, 25 days (15, 18, 21, 28, 30 and 40). Nightjar is micro, so its days are m
 
 | In | | Out | |
 |---|---:|---|---:|
-| Quillfeather LFE/010 (left after amounts on account), overdue | 1,94,000 | Nightjar NSL/112, overdue | 1,16,000 |
-| Quillfeather LFE/013 (10-Jan + 40 days), overdue | 2,36,000 | Nightjar NSL/140 (15-Jan + 25 days), overdue | 1,74,000 |
-| Orchid Lane LFE/008, overdue | 70,800 | Juniper JLA/388 (25-Feb + 40 days = 06-Apr) | 32,400 |
-| Marigold LFU/001, overdue | 59,000 | Office Rent, paid 30,000 on the 5th of Dec, Jan, Feb and Mar | 30,000 |
-| **Total in** | **5,59,800** | **Total out** | **3,52,400** |
+| Quillfeather LFE/010 (left after amounts on account), overdue | 1,94,000 | Nightjar NSL/140 (15-Jan + 25 days), overdue | 1,74,000 |
+| Quillfeather LFE/013 (10-Jan + 40 days), overdue | 2,36,000 | Juniper JLA/388 (25-Feb + 40 days = 06-Apr) | 32,400 |
+| Orchid Lane LFE/008, overdue | 70,800 | Office Rent, paid 30,000 on the 5th of Dec, Jan, Feb and Mar | 30,000 |
+| **Total in** | **5,00,800** | **Total out** | **2,36,400** |
 
-Week 1 net: **2,07,400**.
+Week 1 net: **2,64,400**.
+
+Kept apart as doubtful (expected more than 180 days before 01-Apr-2026): Marigold LFU/001, 59,000 (18-Jun + 40 days =
+28-Jul-2025), and Nightjar NSL/112, 1,16,000 (08-May + 25 days = 02-Jun-2025). Before 22-Nov-2026 both were taken in
+week 1 (in 5,59,800, out 3,52,400, net 2,07,400).
 
 Orchid Lane's LFE/015 is expected after 08-Apr, so it is not in week 1. March's TDS of 2,000 falls due on 30 April,
 which is week 5, not week 1 (finding 2, fixed on 02-Oct-2026).

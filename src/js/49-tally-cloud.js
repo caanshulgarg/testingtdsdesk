@@ -24,15 +24,35 @@ const TCloud = {
   d8(iso){ return String(iso || "").replace(/-/g, "").slice(0, 8); },
   rpc(fn, args, q){ return Cloud.api("rpc/" + fn + (q || ""), {method: "POST", body: args || {}}); },
   // a list function, a thousand rows at a time (the database gives at most that many in one answer)
-  async rpcAll(fn, args){
-    let out = [], off = 0;
+  // Audit 22-Nov-2026 (speed-db 4): each page is a call of its own, so a ledger written by live sync between two pages
+  // moves the next page by one and a row comes twice (a trial balance that does not tally). A row seen on two pages: the
+  // whole list read once more; again so: an error, never a list counted twice
+  // (re-review 22-Nov-2026: a row removed or merged above a page boundary moved the list up by one and a row was skipped
+  // without a word. Each later page now starts one row back: that row must be the last row already read, else the list
+  // moved (up or down) between the pages, and it is read again the same way)
+  // (release review 23-Nov-2026: the database answers 1,000 rows at most, so a later page asked as 1,001 came back
+  // 1,000 with the overlap row taken off: 999, read as the last page, and a list of more than 1,999 rows was cut short.
+  // Every page is now asked as 1,000 (CAP) starting on the last row read; only a page shorter than CAP is the last)
+  async rpcAll(fn, args, again){
+    const CAP = 1000;
+    let out = [], seen = new Set(), twice = false;
     for (;;){
-      const page = await this.rpc(fn, args, "?limit=1000&offset=" + off) || [];
+      const off = out.length ? out.length - 1 : 0;
+      const page = await this.rpc(fn, args, "?limit=" + CAP + "&offset=" + off) || [];
       if (!Array.isArray(page)) throw Error("not a list: " + fn);   // (never paged through for ever)
+      const full = page.length >= CAP;
+      if (out.length){
+        const head = page.shift();
+        if (!head || JSON.stringify(head) !== JSON.stringify(out[out.length - 1])) twice = true;
+        const k = page.map(r => JSON.stringify(r)); twice = twice || k.some(x => seen.has(x)); k.forEach(x => seen.add(x));
+      }
+      else if (full) page.forEach(r => seen.add(JSON.stringify(r)));
       out = out.concat(page);
-      if (page.length < 1000) return out;
-      off += 1000;
+      if (!full || twice) break;
     }
+    if (!twice) return out;
+    if (again) throw Error("The books changed while " + fn + " was read; try again in a moment.");
+    return this.rpcAll(fn, args, true);
   },
   // migration-32: a ledger deleted in Tally stays in the cloud, marked (tally_ledgers.deleted_at). Every read of the
   // cloud's ledger list leaves those out; a cloud without the column (migration-32 not applied) is read as before.
@@ -56,16 +76,33 @@ const TCloud = {
     this._del = {k, set};
     return set;
   },
+  // next-speed-2 (the speed plan, #11): one book's entries in GUID order (the GUID is unique in a book) are read page after
+  // page from the last GUID (keyset: guid=gt.), not by an offset the database counts through again for every page; the same
+  // rows in the same order. Any other list: by offset, as before
   async restPages(path){
-    let out = [], off = 0;
+    let keyed = /^tally_vouchers\?select=guid[,&]/.test(path) && /&book_id=eq\./.test(path) && /&order=guid\.asc$/.test(path);
+    let out = [], off = 0, after = null;
     for (;;){
-      const page = await Cloud.api(path + "&limit=1000&offset=" + off) || [];
+      const page = await Cloud.api(path + (keyed ? (after !== null ? "&guid=gt." + encodeURIComponent(after) : "") + "&limit=1000" : "&limit=1000&offset=" + off)) || [];
       if (!Array.isArray(page)) throw Error("not a list");
+      // (a server that did not take the GUID filter: the rest by offset, so nothing is read twice)
+      if (keyed && after !== null && page.length && !(String(page[0].guid) > after)){ keyed = false; continue; }
       out = out.concat(page);
       if (page.length < 1000) return out;
       off += 1000;
+      if (keyed){ const g = page[page.length - 1] && page[page.length - 1].guid; if (typeof g !== "string" || !g) throw Error("an entry without its GUID"); after = g; }
     }
   },
+  // next-speed-2 (the speed plan, #11): f over chunks of 40 GUIDs (the gateway's address limit), 4 chunks at a time, the
+  // answers in the chunks' order (one after another before)
+  async byChunks(g, f){
+    const ch = []; for (let i = 0; i < g.length; i += 40) ch.push(g.slice(i, i + 40));
+    const out = new Array(ch.length);
+    await this.capped4(ch.map((c, k) => async () => { out[k] = await f(c); }));
+    return out;
+  },
+  // (a chunk that fails: no further chunk is asked, the error is the answer)
+  async capped4(jobs){ let i = 0, bad = false; await Promise.all(Array.from({length: Math.min(4, jobs.length)}, async () => { while (i < jobs.length && !bad){ try { await jobs[i++](); } catch (e){ bad = true; throw e; } } })); },
   // the client's books in the cloud (one per Tally company; the latest first)
   async status(cid, force){
     const s = this.st[cid] = this.st[cid] || {};
@@ -510,7 +547,7 @@ const TCloud = {
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
     // bridge 2.4.2: the GST type columns (migration 72) first; a cloud without them, then without the IRN, read as before
     const read = async (extra) => {
-      const cols = [BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
+      const cols = [BookSrc.HEADS_FID, BookSrc.HEADS_TDS, BookSrc.HEADS_GST, BookSrc.HEADS, BookSrc.HEADS_OLD];
       for (let i = 0; ; i++){
         try { return await this.restPages("tally_vouchers?select=" + cols[i] + B + extra + "&order=guid.asc"); }
         // review L2: only a missing column (42703, PGRST204, "does not exist") falls back; any other error is the error
@@ -528,7 +565,7 @@ const TCloud = {
     let last = [];
     try { last = await Cloud.api("tally_recorder_lines?select=applied_at&state=eq.applied&applied_at=not.is.null" + B + "&order=applied_at.desc&limit=1") || []; } catch (e){ last = []; }
     const newest = (last[0] || {}).applied_at || seen;
-    const byGuids = async (g) => { let out = []; for (let i = 0; i < g.length; i += 40) out = out.concat(await read("&guid=in.(" + g.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")); return out; };
+    const byGuids = async (g) => [].concat(...await this.byChunks(g, c => read("&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")")));
     // next-fast-open (Leads, 20-Oct-2026: 4,414 entries' full heads, 2.8 MB, on every opening): books already here are
     // checked with each entry's GUID, AlterID and deletion; only the entries new, later, deleted, or with Tally's TDS
     // details not here yet are read in full. A cloud without the columns, or a failed read: every head, as before
@@ -576,13 +613,13 @@ const TCloud = {
   async copyRows(b, bk, copy, held){
     const B = "&book_id=eq." + encodeURIComponent(bk.book);
     const need = held ? (copy.heads || []).filter(h => h && h.guid && !h.deleted_at && BookSrc.wins(h.alter_id, held.get(h.guid) || null)).map(h => h.guid) : BookSrc.need(b, copy.heads);
-    let lines = [], bills = [];
-    for (let i = 0; i < need.length; i += 40){
-      const g = "&guid=in.(" + need.slice(i, i + 40).map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
-      lines = lines.concat(await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc"));
-      try { bills = bills.concat(await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc")); } catch (e){}
-    }
-    return {lines, bills};
+    const got = await this.byChunks(need, async (c) => {
+      const g = "&guid=in.(" + c.map(x => encodeURIComponent('"' + x + '"')).join(",") + ")";
+      const l = await this.restPages("tally_lines?select=guid,ledger,amount,hsn,rate" + B + g + "&order=guid.asc");
+      let bl = []; try { bl = await this.restPages("tally_bills?select=guid,ledger,name,type,amount,credit_days" + B + g + "&order=guid.asc"); } catch (e){}
+      return {l, bl};
+    });
+    return {lines: [].concat(...got.map(x => x.l)), bills: [].concat(...got.map(x => x.bl))};
   },
   copyPut(b, bk, copy, rows){
     const n = BookSrc.apply(b, copy.heads, rows.lines, rows.bills);
@@ -887,23 +924,13 @@ const TCloud = {
   },
   // why the poster has no bridge of their own for a company, and what to do (migration 54's tally_post_own_words)
   noTargetWords(company){
-    const own = this.bridgesHeard().filter(r => r.go && !r.old && r.id && this.isOwn(r)), w = (l) => [...new Set(l.map(r => [r.computer, r.user].filter(Boolean).join(" \u00b7 ")))].join(", ");
+    // (audit 22-Nov-2026, tally-pages 10: no computer's name or Windows login in these words)
+    const own = this.bridgesHeard().filter(r => r.go && !r.old && r.id && this.isOwn(r));
     const head = "Nobody can post into " + company + " from your sign-in just now: ";
     if (!own.length) return head + "FinCom has not heard from a FinCom Bridge of yours. Install FinCom Bridge on the computer where you use Tally, as your own Windows user (\u201cJust for me\u201d), and connect it to FinCom; then open " + company + " in Tally there and post again.";
     const has = own.filter(r => this.hasOpen(r, company));
-    if (has.length) return head + "your FinCom Bridge (" + w(has) + ") has it open but is set to Changes only or only reads Tally. Ask the firm\u2019s owner to switch Changes only off for it (Tally page), then post again.";
-    const may = own.filter(r => r.mayPost);
-    return head + "your FinCom Bridge (" + w(may.length ? may : own) + ") does not have " + company + " open in Tally. Open " + company + " in Tally there, then post again.";
-  },
-  // an owner switches a bridge to changes only (it never takes a posting) or back -> tally_bridge_changes_only
-  async changesOnly(r, on){
-    if (on){
-      const a = await askConfirm({title: "Changes only for " + this.bridgeWords(r) + "?", ok: "Changes only",
-        body: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
-      if (!a || !a.ok) return;
-    }
-    await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
-      (on ? "Changes only: " : "Posting allowed again: ") + this.bridgeWords(r) + ".");
+    if (has.length) return head + "your FinCom Bridge has it open but is set to Changes only or only reads Tally. Ask the firm\u2019s owner to switch Changes only off for it (Tally page), then post again.";
+    return head + "your FinCom Bridge does not have " + company + " open in Tally. Open " + company + " in Tally on the Tally computer, then post again.";
   },
   // the owner's condition (Fix 2): a computer key refused a bridge id: ONE alert per (id, computer) for the owners, until
   // read or until the identity is released (tally_bridge_alerts, migration 54); none on an older cloud
@@ -916,21 +943,6 @@ const TCloud = {
   async bridgeAlertRead(x){
     try { await this.rpc("tally_bridge_alert_read", {p_id: x.id}); x.read_at = new Date().toISOString(); } catch (e){ toast((e && e.message) || String(e)); }
     render();
-  },
-  // Fix 2b: an owner releases a bridge's identity: the next computer that reports the id gets it (kept with who, when, why)
-  async releaseIdentity(r){
-    const a = await askConfirm({title: "Release the identity of " + this.bridgeWords(r) + "?", ok: "Release it",
-      body: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
-        '<div class="bk-form one"><label><span>Why (kept with the release)</span><input id="releaseWhy" maxlength="300" placeholder="e.g. the computer was set up again"></label></div>',
-      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the identity is released."});
-    if (!a || !a.ok) return;
-    await this.control("tally_bridge_reset", {p_bridge: r.id, p_why: a.data.why}, "The identity of " + this.bridgeWords(r) + " is released; the next computer that reports it gets it.");
-  },
-  // an owner links a member to the bridge they post through (r null: unlinked) -> tally_member_bridge_link
-  async linkMember(uid, r){
-    const m = ((typeof Cloud === "object" && Cloud.st.members) || []).find(x => x.user_id === uid), who = (m && (m.name || m.email)) || "The member";
-    await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
-      r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
   },
   // the reading state of a bridge's computer (plan item 14): {state: reading | paused | retrying | fincomstop | offline,
   // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
@@ -1017,49 +1029,11 @@ const TCloud = {
     }
     await this.refreshPane();
   },
-  // round 15 (F3): the posting settings of a computer, saved by an owner -> tally_device_post_settings(p_device, p_post_only
-  // (names; [] = any company), p_bills, p_bank (1..500)); the bridge applies them at its next heartbeat (info.beat.postOnly,
-  // postBatchBills, postBatchBank, settingsAt). Checked here first: the words stay on the line, nothing is sent
-  postSettingsCheck(v){
-    const n = k => { const x = Math.floor(num(v[k])); return x >= 1 && x <= 500 ? x : null; };
-    if (!n("bills")) return "Bills per request must be a number from 1 to 500.";
-    if (!n("bank")) return "Bank lines per request must be a number from 1 to 500.";
-    return "";
-  },
-  postSettingsNames(text){ const seen = new Set(); return String(text || "").split(/[,\n;]/).map(x => x.trim()).filter(x => x && !seen.has(x.toUpperCase()) && seen.add(x.toUpperCase())).slice(0, 20); },
-  // v.only0 is the names box as the editor opened: left as it was, p_post_only goes as null (the row's list, and an
-  // installer-set PostOnly, stay); emptied from a named list, the owner is asked first (review of 2.1.8, must-fix)
-  async postSettings(dev, v){
-    const why = this.postSettingsCheck(v);
-    if (why) return why;
-    const names = this.postSettingsNames(v.only), was = this.postSettingsNames(v.only0), touched = JSON.stringify(names) !== JSON.stringify(was);
-    if (touched && !names.length && was.length){
-      const a = await askConfirm({title: "Posting to any company from this computer?", ok: "Yes, any company", danger: true,
-        body: "<p>" + esc(dev.name || "This computer") + " now posts only to " + esc(was.join(", ")) + ". With the list empty, FinCom Bridge there posts into whichever Tally company a client is set to, and the list set by its installer goes.</p>"});
-      if (!a || !a.ok) return "Nothing sent: the list stays as it was.";
-    }
-    await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
-      "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
-    return "";
-  },
-  // round 19: an owner switches the trial tools of one computer on or off -> tally_device_trial_tools(p_device, p_on)
-  // (migration 46; owner only there too); the bridge applies it at its next heartbeat (within 30 seconds)
-  async trialTools(dev, on){
-    await this.control("tally_device_trial_tools", {p_device: dev.id, p_on: !!on},
-      "Trial tools " + (on ? "on" : "off") + " for " + (dev.name || "the computer") + "; the bridge applies it within 30 seconds.");
-  },
-  // round 20 (d.3): an owner picks where a computer's changes come from -> tally_device_recorder_source(p_device,
-  // p_source) (migration 47; owner only there too); the bridge takes it from its next heartbeat's answer
-  RECORDER_SOURCES: [["addon", "the add-on"], ["alterid", "Tally’s change list"], ["both", "both"]],
-  async recorderSource(dev, src){
-    const w = (this.RECORDER_SOURCES.find(x => x[0] === src) || [])[1];
-    if (!w) return;
-    await this.control("tally_device_recorder_source", {p_device: dev.id, p_source: src},
-      "Changes on " + (dev.name || "the computer") + " now come from " + w + "; the bridge takes it within 30 seconds.");
-  },
+  // (audit 22-Nov-2026: changesOnly, releaseIdentity, linkMember, postSettings, trialTools and recorderSource, called
+  // by the Tally page only, are app/src/lib/tallyActs.js's, to keep legacy.js within its budget)
   async readStop(r){
-    const all = !r, where = all ? "every computer" : r.computer;
-    const a = await askConfirm({title: all ? "Stop reading Tally on all computers?" : "Stop reading Tally on " + r.computer + "?", ok: "Stop reading",
+    const all = !r, where = all ? "every computer" : "the Tally computer";
+    const a = await askConfirm({title: all ? "Stop reading Tally on all computers?" : "Stop reading Tally on the Tally computer?", ok: "Stop reading",
       body: "<p>FinCom Bridge on " + esc(where) + " stops reading Tally at its next heartbeat (within 30 seconds). Posting to Tally goes on. Reading starts again only when an owner presses Resume reading.</p>" +
         '<div class="bk-form one"><label><span>Why (shown on the Tally page and by the bridge)</span><input id="readStopWhy" maxlength="300" placeholder="Stopped from FinCom"></label></div>',
       read: () => ({why: ((document.getElementById("readStopWhy") || {}).value || "").trim()})});
@@ -1067,7 +1041,7 @@ const TCloud = {
     await this.control("tally_read_stop", {p_device: all ? null : r.device.id, p_reason: (a.data && a.data.why) || ""}, "Reading stopped on " + where + "; it stops within 30 seconds.");
   },
   async readResume(r){
-    await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? r.computer : "every computer") + " within 30 seconds.");
+    await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? "the Tally computer" : "every computer") + " within 30 seconds.");
   },
   // the owner's actions on the release, a book's baseline, the main bridge and an install log: app/src/lib/tallyActs.js
   // (next-fast-open: moved out of legacy.js, at its size budget; put on TCloud when the Tally page loads)
@@ -2485,6 +2459,8 @@ function tallyHereNow(co){
   }
   const company = here ? here.name : (st.open || []).map(x => x.name).join(", ");
   if (tally === "busy") return out("busy", "warn", "Tally busy", {company, hint: "Tally is open but answering slowly (a report, or a message box in Tally). FinCom asks again by itself; nothing is lost.", next: [check]});
+  // (audit 22-Nov-2026, tally-pages 1: a key FinCom's cloud refuses is not "no internet": red, and the way to a new key)
+  if (typeof FCOwn === "object" && FCOwn.refused && FCOwn.refused()) return out("refused", "bad", "Key not accepted", {company, hint: "FinCom\u2019s cloud does not accept the computer key of FinCom Bridge here any more, so nothing it reads reaches FinCom and postings from other computers do not come to it. Tally page \u2192 Connect this computer gives it a new key.", next: [{act: "tallyConnect", label: "Tally page"}]});
   if (tallyNoNet(st)) return out("nonet", "warn", "No internet", {company, hint: "FinCom Bridge here cannot reach FinCom since " + tallyIst(st.beat.missedSince) + ". Posting from this computer still works; the other computers see it again when the internet is back.", next: [check]});
   return out("ready", "ok", "Tally ready", {company, next: [{act: "tallyGuide", label: "Tally page"}]});
 }

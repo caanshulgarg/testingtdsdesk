@@ -1992,6 +1992,8 @@ const FSX = (() => {
     const reconTot = sum(recon, z => z[1]);
     return {from: inp.from, to: inp.to, months: ms, rec, pay, lines, totals: {receipts: R, payments: Pp, net: R - Pp}, cash: {open, move, close: open + move, ledgers: cashL.map(t => t.l)}, recon, reconTot, diff: reconTot - move, voucherDiff: (R - Pp) - move, entity: inp.entity || {}};
   };
+  // (review of 22-Nov-2026) each head's month by an exact match (SUMPRODUCT): SUMIFS read * ? ~ in a Tally group's name as
+  // wildcards and a leading < > = as a comparison, so "Salary*" added up "Salary" too
   X.cashMisExcel = function(cm){
     const mL = m => { const [y, mo] = m.split("-"); return MON[Number(mo) - 1].slice(0, 3) + "-" + y.slice(2); };
     const ln = {name: "Lines", rows: [["Date", "Month", "Voucher", "Type", "Head", "Ledger", "Receipt", "Payment"]], widths: [12, 9, 14, 14, 30, 36, 16, 16]};
@@ -2000,7 +2002,7 @@ const FSX = (() => {
     const rp = {name: "Receipts and Payments", rows: [[String((cm.entity || {}).name || "").toUpperCase()], ["Receipts and payments (cash basis) " + cm.from + " to " + cm.to], [X.UNITS], [], ["Head"].concat(cm.months.map(mL)).concat(["Total"])], widths: [40].concat(cm.months.map(() => 14)).concat([16])};
     const block = (title, list, col) => {
       rp.rows.push([{v: title, s: 1}]); const first = rp.rows.length + 1;
-      list.forEach(h => { const r = rp.rows.length + 1; rp.rows.push([h.head].concat(cm.months.map(m => ({v: (h.m[m] || 0) / 100, f: "SUMIFS(" + col + ",CM_H,$A" + r + ",CM_M,\"" + m + "\")", s: 2}))).concat([{v: h.t / 100, f: "SUM(B" + r + ":" + colL(cm.months.length) + r + ")", s: 3}])); });
+      list.forEach(h => { const r = rp.rows.length + 1; rp.rows.push([h.head].concat(cm.months.map(m => ({v: (h.m[m] || 0) / 100, f: "SUMPRODUCT((CM_H=$A" + r + ")*(CM_M=\"" + m + "\")*" + col + ")", s: 2}))).concat([{v: h.t / 100, f: "SUM(B" + r + ":" + colL(cm.months.length) + r + ")", s: 3}])); });
       const last = rp.rows.length, r = last + 1;
       rp.rows.push([{v: "Total " + title.toLowerCase(), s: 1}].concat(cm.months.map((m, j) => ({v: sum(list, h => h.m[m] || 0) / 100, f: "SUM(" + colL(j + 1) + first + ":" + colL(j + 1) + last + ")", s: 3}))).concat([{v: sum(list, h => h.t) / 100, f: "SUM(" + colL(cm.months.length + 1) + first + ":" + colL(cm.months.length + 1) + last + ")", s: 3}]));
       return r;
@@ -2047,7 +2049,10 @@ const FSX = (() => {
     ["29", "Consideration for shares received above fair market value (section 56(2)(viib))", "you"], ["29A", "Advance received on a capital asset forfeited (section 56(2)(ix))", "you"],
     ["29B", "Income under section 56(2)(x)", "you"], ["30", "Amounts borrowed on hundi or repaid otherwise than by account payee cheque (section 69D)", "you"],
     ["30A", "Primary or secondary transfer pricing adjustment (section 92CE)", "you"], ["30B", "Interest expenditure exceeding the limit of section 94B", "you"], ["30C", "Impermissible avoidance arrangement (section 96)", "you"],
-    ["31(a)", "Loans or deposits taken or accepted (section 269SS)", "books"], ["31(b)", "Loans or deposits repaid (section 269T)", "books"], ["31(ba)", "Receipts of Rs 2 lakh or more otherwise than by bank (section 269ST)", "books"],
+    ["31(a)", "Loans or deposits taken or accepted (section 269SS)", "books"], ["31(b)", "Specified sums taken or accepted (section 269SS)", "you"], ["31(ba)", "Receipts of Rs 2 lakh or more otherwise than by bank (section 269ST)", "books"],
+    ["31(bb)", "Receipts of Rs 2 lakh or more by a cheque or draft not account payee (section 269ST)", "you"], ["31(bc)", "Payments of Rs 2 lakh or more otherwise than by bank (section 269ST)", "books"],
+    ["31(bd)", "Payments of Rs 2 lakh or more by a cheque or draft not account payee (section 269ST)", "you"], ["31(c)", "Loans, deposits or specified advances repaid otherwise than by bank (section 269T)", "books"],
+    ["31(d)", "Repayments of loans or deposits received otherwise than by bank (section 269T)", "you"], ["31(e)", "Repayments received by a cheque or draft not account payee (section 269T)", "you"],
     ["32", "Brought forward losses and unabsorbed depreciation", "you"], ["33", "Deductions under Chapter VI-A and Chapter III", "you"],
     ["34(a)", "Tax deducted or collected at source, section by section", "books"], ["34(b)", "TDS / TCS statements furnished in time", "you"], ["34(c)", "Interest under section 201(1A) / 206C(7)", "books"],
     ["35", "Quantitative details of principal items of goods traded, raw materials and finished products", "books"], ["36", "Distributed profits / buy-back tax", "you"],
@@ -2287,7 +2292,10 @@ const FSX = (() => {
     return wp ? {src: "77-audit.js (AuditWP)", wp} : {src: "06-audit.js / 07-mis.js (Audit.runNow; to merge with 77-audit.js)", wp: null}; };
   X.taxAuditFromBooks = function(fy){
     const sh = X.shared(), from = fy + "0401", to = String(Number(fy) + 1) + "0331";
-    const run = Audit.runNow(from, to, "3CD draft"), d = Audit.form3cd(run), counts = {};
+    // (review of 22-Nov-2026) worked out only (Audit.calcIn), never written into the books' audit: the Audit tab's last run,
+    // its history and its items stay as they were; every row of each finding (full), not its first 1,000
+    const c0 = Audit.drain(Audit.calcIn(from, to)), run = {from, to, at: new Date().toISOString(), code: c0.code, vouchers: c0.n, how: "3CD draft", findings: c0.findings.map((f, i) => Object.assign({}, f, {rows: c0.full[i]}))};
+    const d = Audit.form3cd(run), counts = {};
     run.findings.forEach(f => { counts[f.id] = f.count; });
     const dt = x => typeof fmtDate === "function" && typeof tallyDate === "function" ? fmtDate(tallyDate(x)) : x;
     const clauses = d.clauses.map(c => ({no: c.no, title: c.title, head: c.head, rows: c.rows, note: c.note}));
@@ -2298,9 +2306,9 @@ const FSX = (() => {
       const put = (no, head, rows, note) => { const c = clauses.find(z => z.no === no); if (c) Object.assign(c, {head, rows, note: note != null ? note : (rows.length ? "" : "None found.")}); };
       put("21(d)(A)", ["Date", "Party or ledger", "Amount"], c40.entries.map(e => [dt(e.date), e.party, e.amount]));
       put("31(a)", ["Date", "Lender", "Amount"], cl.entries.filter(e => /^269SS/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
-      put("31(b), 31(c)", ["Date", "To", "Amount"], cl.entries.filter(e => /^269T/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
+      put("31(c)", ["Date", "To", "Amount"], cl.entries.filter(e => /^269T/.test(e.note)).map(e => [dt(e.date), e.party, e.amount]));
       put("31(ba)", ["Date", "From", "Amount"], cst.entries.map(e => [dt(e.date), e.party, e.amount]));
-      put("21(b)(ii)(A)", ["Party", "Amount", "Detail"], td.entries.filter(e => /^not deducted/.test(e.note)).map(e => [e.party, e.amount, e.note]));
+      // 21(b)(ii)(A) stays Audit.form3cd's (the owner, 23-Nov-2026): the part not covered once, a short deduction's 30% too
       put("34(c)", ["Deductee", "Interest", "Detail"], td.entries.filter(e => /^interest/.test(e.note)).map(e => [e.party, e.amount, e.note]));
       if (ms.status !== "na") put("22", ["Supplier", "Bill", "Outstanding", "Days"], ms.entries.map(e => [e.party, e.no, e.amount, e.note]), "The interest itself is not in the books; work it out on these bills at three times the bank rate.");
       const c26 = clauses.find(z => z.no === "26"); if (c26 && ms.status !== "na") c26.rows = c26.rows.filter(r => r[2] !== "43B(h) MSME").concat(ms.entries.map(e => [e.party, e.amount, "43B(h) MSME"]));

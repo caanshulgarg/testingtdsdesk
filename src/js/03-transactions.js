@@ -83,7 +83,6 @@ function txnColPass(r){
   if (f.doc === "no" && r.file) return false;
   return true;
 }
-function txnColOn(){ const f = txnF(); return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function txnFiltered(rows){
   const q = String(S.txnQ || "").trim().toLowerCase();
   const st = S.txnStatus || "";
@@ -91,23 +90,6 @@ function txnFiltered(rows){
   return rows.filter(r => txnColPass(r) && (!q || [r.no, r.party, r.file, r.vch, String(r.total)].join(" ").toLowerCase().includes(q))
     && (st === "dup" || st === "del" ? stOf(r) === st : stOf(r) !== "del" && (!st || r.cls === st)));
 }
-// the register: React (app/src/screens/Txn.jsx)
-// the register as an Excel file (review item 30), the same rows and columns as the CSV, amounts as numbers
-function txnTable(){
-  const tab = txnTab();
-  const rows = txnFiltered(tab === "bills" ? txnRowsBills() : tab === "sales" ? txnRowsSales() : txnRowsBank());
-  const head = ["S. no.", "Date", "Uploaded", "Voucher", tab === "bank" ? "Reference" : "Invoice no.", tab === "sales" ? "Customer" : "Party",
-    tab === "bank" ? "Withdrawal (₹)" : "Taxable (₹)", tab === "bank" ? "Deposit (₹)" : "GST (₹)", tab === "bank" ? "Amount (₹)" : "Invoice value (₹)", "In Tally", "Document"];
-  const body = rows.map((r, i) => [i + 1, r.date ? fmtDate(r.date) : "", r.up ? fmtDate(r.up) : "", r.vch, r.no, r.party,
-    num(tab === "bank" ? r.dr : r.taxable) || "", num(tab === "bank" ? r.cr : r.gst) || "", num(r.total) || "", r.label, r.file]);
-  return {tab, head, body};
-}
-function txnExcel(){
-  const t = txnTable();
-  FC.excel("transactions-" + t.tab + "-" + new Date().toISOString().slice(0, 10), [[{bills: "Purchase", sales: "Sales", bank: "Bank"}[t.tab] || t.tab, [t.head].concat(t.body)]]);
-}
-// columns that can be hidden (the chooser on the Transactions page)
-const TXN_COLS = [["date", "Date"], ["vch", "Voucher"], ["no", "Invoice no. / Reference"], ["party", "Party"], ["amts", "Taxable and GST / Withdrawal and deposit"], ["val", "Invoice value / Amount"], ["status", "In Tally"], ["doc", "Document"]];
 function txnColShown(k){ return !(S.txnHide && S.txnHide[k]); }
 function txnColToggle(k){ S.txnHide = Object.assign({}, S.txnHide, {[k]: txnColShown(k)}); render(); }
 function txnCsv(){

@@ -350,15 +350,6 @@ function postPostedRows(cid){
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
 function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
-// a bill's ledgers on one line, the party first; a Round Off of nothing is left out
-function postLedgerLine(e){
-  const ls = (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !((l.role === "roundoff" || /^round\s*(ed\s*)?off\b/i.test(l.ledger)) && Math.abs(num(l.amt)) < 0.005));
-  const order = {party: 0, expense: 1, gst: 2, "rcm-in": 2, "rcm-out": 2, tds: 3, roundoff: 4};
-  return [...new Set(ls.slice().sort((a, b) => (order[a.role] ?? 1) - (order[b.role] ?? 1)).map(l => l.ledger))].join(" · ");
-}
-
-function goSetupFor(msg){ Smart.setReturn(); S.postStop = null; S.step = null; S.tab = /TDS/.test(msg) || /expense/.test(msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); }
-
 // ---------- a bill sent and not confirmed in Tally, checked with a fresh read of Tally (review of 02-Oct-2026, item 3)
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
 // made while bridge 2.1.1 was timing out: a duplicate in real books. Now, before such a bill is shown, Tally is read
@@ -537,12 +528,6 @@ function postIdReleased(id, cid){
   if (PostIds.readable === false || !s || !s.held) return null;
   return !s.held.get(String(id));
 }
-// a failed posting of the cloud: one of the entries still to send is held live
-function postJobHeld(j){
-  if (typeof CloudJobs !== "object") return false;
-  const ids = (CloudJobs.idsOf(j) || []).filter(id => !CloudJobs.inTally(j, id));
-  return ids.some(id => postIdReleased(id, j.client_id) === false);
-}
 // round 14c (C5a): a failed posting of the cloud cannot be retried while a bill of it (one still to send) is deleted in
 // FinCom: the words for the row, else ""
 function postRetryRefusal(j){
@@ -563,8 +548,6 @@ function postRetryRefusal(j){
   if (rev.length) return "Retry not possible: Tally accepted " + rev.length + (rev.length === 1 ? " entry that needs" : " entries that need") + " review first (Mark posted, or Not in Tally \u2014 release, under Errors).";
   return "";
 }
-// what the row of a posting says beside Retry: the refusal of the last press, or the standing one (a deleted bill)
-function postRetryWhy(j){ return (j && typeof CloudJobs === "object" && CloudJobs.refused && CloudJobs.refused[j.id]) || postRetryRefusal(j) || ""; }
 // round 14c (C7): Tally's reply for a posting, summed over its entries' results: {created, altered, exceptions, ignored,
 // has (any count came back), messages}; the words for the page in .text ("" when Tally said nothing countable)
 function postReply(results){
@@ -642,7 +625,9 @@ function postReconcile(cid, quiet){
   const d = S.data[cid], b = S.bank && S.bank.cid === cid && !S.bank.loading ? S.bank : null;
   const pid = typeof PostIds === "object" ? PostIds.by[cid] : null;
   const released = id => !!(pid && pid.held && pid.held.has(id) && !pid.held.get(id));
-  let bills = 0, lines = 0;
+  let bills = 0, lines = 0, byId = null;
+  // (audit 22-Nov-2026, tally-sync 4: the lines by id, made once, not a find over every line for each id posted)
+  const rowOf = id => b ? (byId || (byId = new Map(b.rows.slice().reverse().map(q => [String(q.id), q])))).get(id) : null;
   postJobStates(cid).forEach((v, id) => {
     const j = v.job;
     if (v.st !== "posted" || !j || (!v.reg && !["done", "failed"].includes(j.status))) return;
@@ -657,7 +642,7 @@ function postReconcile(cid, quiet){
       Store.saveEntry(cid, e); bills++;
       return;
     }
-    const r = b ? b.rows.find(q => String(q.id) === id) : null;
+    const r = rowOf(id);
     if (!r || r.goneFromTally || r.postVerified === true || r.postByReply === true) return;
     if (!((r.state === "ready" && !postOld(r, j)) || (r.state === "sent" && !r.checking))) return;
     if (typeof bankPosted === "function"){ bankPosted(cid, r, x, j.company || "", at, {by, quiet: true}); lines++; }
@@ -680,14 +665,6 @@ function postMyName(){
 function postMatched(id, cid){
   const s = PostIds.by[cid || S.coId], m = s && s.matched && s.matched.get(String(id));
   return m || null;
-}
-// B4: the timing the bridge wrote on the job (tally_post_jobs.timing = {reqs: [{n, seconds, …}], secondsTotal}): "K requests, T s"
-function postTimingWords(j){
-  const t = j && j.timing;
-  if (!t || typeof t !== "object") return "";
-  const k = Array.isArray(t.reqs) ? t.reqs.length : num(t.reqs), s = t.secondsTotal != null ? num(t.secondsTotal) : (Array.isArray(t.reqs) ? t.reqs.reduce((a, q) => a + num(q.seconds), 0) : 0);
-  if (!k && !s) return "";
-  return k + (k === 1 ? " request, " : " requests, ") + (Math.round(s * 10) / 10) + " s";
 }
 // T: test bills (the owner's timing). Round 19 (the owner's decision, 04-Oct): any company linked in FinCom, no
 // company-name check; only a client whose posting company (postTo) is confirmed, and an owner (postTestCopies)
@@ -754,15 +731,10 @@ async function postClearReady(){
 }
 // the rarely used settling of a posting (Deleted in Tally, Not this Tally entry) is src/js/59-post-owner.js: loaded first
 function postPart(f){ (typeof PostOwner === "object" ? Promise.resolve() : window.loadPart ? window.loadPart("post") : Promise.reject(new Error("not in this page"))).then(() => f(PostOwner)).catch(e => toast("This could not be done: " + ((e && e.message) || e))); }
-function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && b.rows.find(r => String(r.id) === String(x))); if (o) o.postJobNew = job; }); }
+function postMarkNew(cid, ids, job){ const d = S.data[cid], b = S.bank && S.bank.cid === cid ? S.bank : null; let m = null; ids.forEach(x => { const o = (d && d.entries && d.entries[x]) || (b && (m || (m = new Map(b.rows.slice().reverse().map(r => [String(r.id), r])))).get(String(x))); if (o) o.postJobNew = job; }); }
 // the entries a check with Tally released: the bridge lets each go once more (without looking in Tally)
 function postReleased(list){ return list.filter(x => x.release && x.release.at).map(x => ({id: x.id, at: x.release.at, by: x.release.by || "", why: x.release.why || ""})); }
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
-// the owner's decision B (05-Oct-2026, migration 55): any member of the firm who may post (owner or staff: the cloud's
-// can_write) settles a posting whose result is uncertain: "Mark posted" (a Tally id) and "Not in Tally - post again"
-// (the FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there). A reason is required;
-// the name and time are kept. A superadmin who is not a member, or a viewer, does not
-function postCanSettle(){ const r = S.account && (S.account.me || {}).role; return r === "owner" || r === "staff"; }
 // the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
 function postJobOf(cid, id){
   const js = postJobStates(cid).get(String(id));
@@ -940,12 +912,6 @@ function postRunShow(cid, bp, from){
   const words = bad ? (ok ? ok + " posted, " : "") + bad + " not posted: the failed " + (bad === 1 ? "one is" : "ones are") + " first under Errors" : ok + " posted";
   return Smart.go(() => { S.postTabs[cid] = tab; }, words, {kind: "post", from, label: bad ? "Show Errors →" : "Show Posted →", undo: () => { S.postTabs[cid] = was; }});
 }
-// a bill of the last run that Tally did not take: opened to be put right (the Errors tab's "Fix in bill →")
-function postFixBill(id){
-  const e = D().entries[id]; if (!e) return;
-  S.step = null; S.tab = "invoices"; S.reviewTable = false; S.drawerOpen = false; S.filter = e.status; S.selected = id;
-  render(); window.scrollTo(0, 0);
-}
 // the row on the Errors tab when a press of Post ended in neither a job nor a result line: {cid, at, name, why, what}
 function postRefusedShow(cid, err, what){
   const e = err || {}, msg = plainMsg((e && e.message) || (typeof err === "string" ? err : "")) || "no reason given";
@@ -958,14 +924,3 @@ function postRefusedShow(cid, err, what){
   render();
 }
 function postRefusedFor(cid){ const r = S.postRefused; return r && r.cid === cid ? r : null; }
-function postPreviewOne(kind, id){
-  const co = CO(), row = postRows(co).find(r => r.kind === kind && r.id === id);
-  if (row) postPreview(co, [row], {view: true});
-}
-// Back to review from the Post to Tally page, for any kind
-function postBackToReview(kind, id){
-  if (kind === "bill"){ billBack(id); return; }
-  if (kind === "bank" && S.bank){ const r = S.bank.rows.find(x => x.id === id); if (r){ r.state = "attention"; r.userSet = false; saveBank({rows: true}); toast("Back in To review in Bank."); render(); } return; }
-  if (kind === "sale" && S.sales){ const v = S.sales.list.find(x => x.id === id); if (v){ v.status = "review"; saveSales(); toast("Back in To review in Sales."); render(); } }
-}
-

@@ -2,6 +2,7 @@
 // reversed under rules 42 and 43. Were viewGstAmend, viewGstAdv and viewGstRev (src/js/18). The figures come from
 // GSTAmend (13), GSTAdv (14) and GSTRev (15); what the user corrects is saved by amendSetAct, advFix, assetSet
 // (src/js/23). GSTR-1A under Amendments is Filing.jsx.
+import "../../../../src/js/99-screen-parts.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Gstr1a } from "./Filing.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
@@ -256,7 +257,7 @@ export function Reversal({ b }) {
       {!commonLeds && <p className="note" style={{ color: "var(--warn)" }}>No ledger is marked “GST, common credit” yet. On the Ledgers tab, mark the input tax ledgers that carry credit used for both taxable and exempt (or non-business) supplies.</p>}
       <HeadTable rows={[["C2 Common credit (" + r42.n + " voucher" + (r42.n === 1 ? "" : "s") + ")", r42.C2], ["D1 For exempt supplies: C2 × E ÷ F", r42.D1], ["D2 For non-business use: 5% of C2", r42.D2],
         ["Reversed: D1 + D2", r42.reverse, true], ["C3 Credit kept", r42.C3]]} />
-      <p className="note" style={{ marginTop: 8 }}>D2 (5% for non-business use): <b>{set.d2 ? "applies" : "does not apply"}</b> · <button className="linkbtn" onClick={() => { S.gsetGo = { tab: "client" }; goGstSettings(); }}>change in GST settings</button></p>
+      <p className="note" style={{ marginTop: 8 }}>D2 (5% for non-business use): <b>{set.d2 ? "applies" : "does not apply"}</b>{typeof (b.rev || {}).d2 !== "boolean" && r42.n > 0 && <b data-d2-ask="" style={{ color: "var(--warn)" }}> · Needs you: say in GST settings whether any common credit is used for non-business purposes (rule 42(1)(g)){GSTRev.d2Filed() ? "; a 3B already filed reversed D2, so until then it is reversed as before" : "; until then D2 is not reversed"}</b>} · <button className="linkbtn" onClick={() => { S.gsetGo = { tab: "client" }; goGstSettings(); }}>change in GST settings</button></p>
     </Card>
     {y.rows.length > 0 && <Rule42Year y={y} />}
     <Rule43 b={b} r43={r43} ym={ym} />
