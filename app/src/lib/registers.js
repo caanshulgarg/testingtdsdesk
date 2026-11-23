@@ -782,8 +782,8 @@ const SheetPost = {
   },
   // a credit note's number from its invoice's (as cnNumber, src/js/26-sales-invoice.js, Edit type): "<number>-CN<n>", at
   // most 16 of letters, digits, - and / (GSTR-1's note number), the invoice's end kept, cut at a / or -
-  cnNumber(base, n){
-    const suf = "-CN" + n, keep = 16 - suf.length, b = String(base).replace(/[^A-Za-z0-9\/-]/g, "");
+  cnNumber(base, n, tag){
+    const suf = "-" + (tag || "CN") + n, keep = 16 - suf.length, b = String(base).replace(/[^A-Za-z0-9\/-]/g, "");
     let t = b.slice(-keep); if (t.length < b.length && !/[\/-]/.test(b[b.length - keep - 1])) t = t.replace(/^[^\/-]*/, "") || b.slice(-keep);
     return t.replace(/^[\/-]+/, "") + suf;
   },
@@ -807,9 +807,12 @@ const SheetPost = {
     cnOf.forEach((list, base) => {
       const esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), old = new RegExp("^" + esc + " \\(CN(?:-(\\d+))?\\)$", "i"), used = new Set();
       const safe = base.replace(/[^A-Za-z0-9\/-]/g, ""), isNew = (no) => { const m = /-CN(\d+)$/i.exec(no || ""); return !!m && this.cnNumber(safe, +m[1]).toUpperCase() === String(no).toUpperCase(); };
-      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && (normInv(v.x.number) === normInv(base) || old.test(v.x.number || "") || ((v.x.cnOf || v.x.againstInvoice) === base && /-CN\d+$/i.test(v.x.number || "")) || isNew(v.x.number)));
+      // (re-review of bf5c7f9c0) a note kept with its invoice (cnOf) is that invoice's only: two invoices whose numbers end
+      // alike never share one; a note kept before cnOf by its number
+      const have = s.list.filter(v => (v.x.noteKind || "") === "credit" && (v.x.cnOf ? v.x.cnOf === base : (normInv(v.x.number) === normInv(base) || old.test(v.x.number || "") || (v.x.againstInvoice === base && /-CN\d+$/i.test(v.x.number || "")) || isNew(v.x.number))));
       let k = have.reduce((a, v) => Math.max(a, +((/(?:-CN|\(CN-)(\d+)\)?$/i.exec(v.x.number) || [])[1] || 0)), 0);
-      const mk = () => { let n; do { n = this.cnNumber(safe, ++k); } while (taken.has(n.toUpperCase())); taken.add(n.toUpperCase()); return n; };
+      let kd = 0;
+      const mk = (tag) => { let n; do { n = this.cnNumber(safe, tag ? ++kd : ++k, tag); } while (taken.has(n.toUpperCase())); taken.add(n.toUpperCase()); return n; };
       // a number of its own (no invoice of it, here or in the sheet, and no earlier note numbered from it; never a
       // marketplace return, read under its invoice's): kept as it is, the first note of it
       let own = !have.length && !["amazon", "flipkart", "shopify"].includes(list[0].market) && !docs.some(x => x.note !== "credit" && normInv(x.no) === normInv(base)) && !s.list.some(v => (v.x.noteKind || "") !== "credit" && !v.hold && normInv(v.x.number) === normInv(base));
@@ -818,12 +821,17 @@ const SheetPost = {
         // (re-review of bac94a801) a figure this note had before (an older report brought in again) never puts it back
         if (hit){ used.add(hit); const T0 = Math.abs(num(d.total)); if (Math.abs(num(hit.x.total) - T0) >= 0.005){ if ((hit.x.cnSeen || []).some(z => Math.abs(z - T0) < 0.005)) cnOld.add(d); else cnRev.set(d, hit); } }
         const late = hit && cnRev.has(d) && !(["review", "ready"].includes(hit.status) && !hit.postJob && hit.x.irnStatus !== "active");
-        // posted: a further note of the difference only, held for a person
-        if (late){ cnRev.delete(d); const was = num(hit.x.total);
-          ["taxable", "cgst", "sgst", "igst", "cess", "total"].forEach(f => { d[f] = -r2(Math.abs(num(d[f])) - Math.abs(num(hit.x[f]))); });
-          hit.x.cnSeen = (hit.x.cnSeen || [was]).concat([Math.abs(num(d.total)) + was]);
-          d.hold = d.hold || "This return's amount changed after its credit note " + hit.x.number + " was posted (it was " + was + "): this further note is for the difference only; check it"; }
-        cnNo.set(d, hit && !late ? hit.x.number : own && !taken.has(String(base).toUpperCase()) ? (taken.add(String(base).toUpperCase()), base) : mk()); own = false; });
+        // posted: the difference only, held for a person, from the figures last seen (cnLast): more returned, a further
+        // credit note; less (s.34(3)), a debit note, or the credit note corrected in Tally (re-review of bf5c7f9c0)
+        let tag = "";
+        if (late){ cnRev.delete(d); const T0 = Math.abs(num(d.total)), F = ["taxable", "cgst", "sgst", "igst", "cess", "total"], last = hit.x.cnLast || hit.x, was = Math.abs(num(last.total));
+          const df = {}; F.forEach(f => { df[f] = r2(Math.abs(num(d[f])) - Math.abs(num(last[f]))); });
+          hit.x.cnSeen = (hit.x.cnSeen || [Math.abs(num(hit.x.total))]).concat([T0]); hit.x.cnLast = {}; F.forEach(f => { hit.x.cnLast[f] = Math.abs(num(d[f])); });
+          if (df.total > 0){ F.forEach(f => { d[f] = -df[f]; });
+            d.hold = d.hold || "This return's amount went up after its credit note " + hit.x.number + " was posted (" + was + " then, " + T0 + " now): this further credit note is for the difference only; check it"; }
+          else { tag = "DN"; d.note = "debit"; F.forEach(f => { d[f] = -df[f]; });
+            d.hold = d.hold || "This return was reduced after its credit note " + hit.x.number + " was posted (" + was + " then, " + T0 + " now): this debit note of " + r2(-df.total) + " takes back the difference (section 34(3)). Post it, or instead correct the credit note in Tally to " + T0 + " and delete this one"; } }
+        cnNo.set(d, hit && !late ? hit.x.number : tag ? mk(tag) : own && !taken.has(String(base).toUpperCase()) ? (taken.add(String(base).toUpperCase()), base) : mk()); own = false; });
     });
     docs.forEach(d => {
       const cnMine = cnNo.get(d), rev = cnRev.get(d);

@@ -330,6 +330,22 @@ const file = (name, data) => { const u = typeof data === "string" ? new TextEnco
     tryOk(() => { list.length = 0; up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]); const r3 = up([["SR/26-27/9", "20/09/2026", "Credit Note", "P One", G1, 400, 36, 36, 472]]); return list[0].x.number === "SR/26-27/9" && r3.added === 0 && list.length === 1; }, "… its number as it is: SR/26-27/9; the sheet again adds nothing");
   }
 
+  console.log("23. (re-review of bf5c7f9c0) a return reduced after its note was posted: a held debit note of the difference; numbers never shared by two invoices");
+  { const fr = (rows) => [["Order ID", "Order Item ID", "Event Type", "Buyer Invoice ID", "Buyer Invoice Date", "Return Date", "Taxable Value", "IGST Amount", "Final Invoice Amount", "Customer's Delivery State"]].concat(rows);
+    const r = (d, amt, inv) => ["OD8", "I8", "Return", inv || "FK-088", "05/09/2026", d, -amt, -C.r2(amt * .18), -C.r2(amt * 1.18), "Karnataka"];
+    const up = (rows) => C.SheetPost.toSales(F.apply(F.builtin(fr(rows)[0], "sales"), fr(rows), 0, CO, "sales"), "c1", "fk.csv");
+    const mine = () => list.filter(v => /FK-088/.test(v.x.number));
+    tryOk(() => { list.length = 0; up([r("20/09/2026", 200)]); list.forEach(v => { v.status = "posted"; });
+      const a = up([r("20/09/2026", 150)]), dn = mine().find(v => v.hold);
+      return a.added === 1 && dn && dn.x.noteKind === "debit" && Math.abs(Math.abs(dn.x.total) - 59) < 0.01 && /debit note/i.test(dn.hold) && /236/.test(dn.hold) && /177/.test(dn.hold) && /^FK-088-DN1$/.test(dn.x.number); }, "posted at 236, reduced to 177: a held DEBIT note FK-088-DN1 of 59 that says what to do");
+    tryOk(() => { const b = up([r("20/09/2026", 150)]); return b.added === 0 && mine().length === 2; }, "the same reduced report again: nothing added");
+    tryOk(() => { const c = up([r("20/09/2026", 200)]); return c.added === 0 && mine().length === 2; }, "the original report again: nothing added");
+    tryOk(() => { const d = up([r("20/09/2026", 250)]), fx = mine().filter(v => v.hold && v.x.noteKind === "credit"); return d.added === 1 && fx.length === 1 && Math.abs(Math.abs(fx[0].x.total) - 118) < 0.01; }, "then raised to 295: a further credit note of 118 (from the 177 last seen)");
+    tryOk(() => { list.length = 0; up([r("12/09/2026", 100, "AMZ/2026/000123456")]); up([r("12/09/2026", 100, "AMZ/2025/000123456")]);
+      const ns = list.map(v => v.x.number), a = up([r("12/09/2026", 100, "AMZ/2026/000123456")]), b = up([r("12/09/2026", 100, "AMZ/2025/000123456")]);
+      return ns.length === 2 && new Set(ns).size === 2 && a.added === 0 && b.added === 0 && list.length === 2 && list.every(v => v.x.cnOf); }, "two invoices whose numbers end alike (AMZ/2026/… and AMZ/2025/…): two numbers, each kept on a re-import");
+  }
+
   console.log(fails ? "\n" + fails + " FAILED" : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();
