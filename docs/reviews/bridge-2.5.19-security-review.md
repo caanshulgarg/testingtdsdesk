@@ -147,5 +147,5 @@ The bridge sources built as 2.5.19: this branch as reviewed and re-reviewed up t
 origin/next-fast-bankpost merged (ff7609b6a, the faster bank posting, reviewed separately and ready, the owner's approval
 of 23-Nov-2026), its review's small fix (every post-pace.json counter read as 0 or more, test-first), origin/staging-next
 merged (nothing under bridge-go/ changed by it; the post-shapes manifest regenerated: only the builders' hash, the 10
-shapes byte-identical), the version 2.5.19 and one test's wait (TestR2515BurstAs2514). Release-check range for this note:
-Range: b64a6d398..db067ba46
+shapes byte-identical), the version 2.5.19 and two tests' waits (TestR2515BurstAs2514, TestR2510EarlierHoldKeptAcrossRestart). Release-check range for this note:
+Range: b64a6d398..ccb383c39
