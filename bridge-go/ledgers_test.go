@@ -70,7 +70,18 @@ func ledgerTally(t *testing.T, n int, extra string) *standTally {
 	}
 	standBridge(t, f, `,"KeepBudgetSec":600`+extra)
 	liveFrom(today())
+	// a request the bridge stopped waiting for (the stop tests) is finished by the stand before the test's bridge goes:
+	// its late log line ("Tally ... finished the request the bridge stopped waiting for") then lands in the test's own
+	// folder, never in bridge-go/tds-bridge.log (run before standBridge's own cleanup: cleanups run last first)
+	t.Cleanup(func() { waitEarlierDone(f.port, 15*time.Second) })
 	return f
+}
+
+// until Tally (the stand) has finished any request the bridge stopped waiting for on this port, at most d
+func waitEarlierDone(port int, d time.Duration) {
+	for end := time.Now().Add(d); earlierBusy(port) && time.Now().Before(end); {
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // the requests of the ledger list, as MasterID ranges ("a-b", or "a-end" for the last one)

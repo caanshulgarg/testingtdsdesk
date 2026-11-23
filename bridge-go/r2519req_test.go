@@ -860,7 +860,7 @@ func TestR2519ResentLookFailedTwiceHeld(t *testing.T) {
 	}
 	for _, r := range arr(p["results"]) {
 		// the code re-review's R4: what a person can really do in FinCom (the Post page's buttons), never "release it"
-		if o := obj(r); str(o["id"]) == "r82" && (!strings.Contains(str(o["message"]), "It is in Tally: mark posted") || !strings.Contains(str(o["message"]), "Not in Tally – post again") || strings.Contains(str(o["message"]), "release it")) {
+		if o := obj(r); str(o["id"]) == "r82" && (!strings.Contains(str(o["message"]), `"It is in Tally: mark posted (Tally id)"`) || !strings.Contains(str(o["message"]), `"Not in Tally – post again"`) || strings.Contains(str(o["message"]), "release it")) {
 			t.Fatalf("not plain words for a person: %v", o["message"])
 		}
 	}
@@ -1290,8 +1290,17 @@ func TestR2519NoLeaseLooksBeforeEachPart(t *testing.T) {
 
 // R4: every held message names only what a person can do in FinCom
 func TestR2519HeldWordsArePaths(t *testing.T) {
+	// the words of the app's own buttons (app/src/screens/Post.jsx, src/js/62-post-reasons.js), exactly
+	for _, f := range []string{"../app/src/screens/Post.jsx", "../src/js/62-post-reasons.js"} {
+		if !strings.Contains(readText(f), "It is in Tally: mark posted (Tally id)") {
+			t.Fatalf("%s no longer has the button the held words name", f)
+		}
+	}
+	if !strings.Contains(readText("../app/src/screens/Post.jsx"), "Not in Tally – post again") && !strings.Contains(readText("../src/js/98-post-register.js"), "Not in Tally – post again") {
+		t.Fatal("the app no longer has the Not in Tally – post again button")
+	}
 	for _, w := range []string{resentHeldWords, resentNoMarkWords, resentDatesWords, resentRedatedWords("20261120")} {
-		if strings.Contains(w, "release it") || !strings.Contains(w, "It is in Tally: mark posted") {
+		if strings.Contains(w, "release it") || !strings.Contains(w, `"It is in Tally: mark posted (Tally id)"`) {
 			t.Errorf("held words: %q", w)
 		}
 	}
