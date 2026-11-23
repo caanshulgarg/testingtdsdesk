@@ -61,7 +61,8 @@ STUB = """() => { window.__toasts = []; const t0 = window.toast; window.toast = 
   Cloud.api = async (q, o) => { if (!/^tally_days\?/.test(q)) return api0(q, o); window.__dcalls.push(q); const h = window.__held;
     if (h.daysFail) throw {message: "Failed to fetch"};
     const ds = decodeURIComponent((q.match(/day=in\.\(([^)]*)\)/) || [])[1] || "").split(",").filter(Boolean);
-    return ds.filter(d => d >= "2026-04-01" && d <= h.to && !(h.gap || []).some(([a, b]) => d >= a && d <= b)).map(d => ({day: d, at: new Date().toISOString(), note: (h.notes || {})[d] || null})); };
+    return ds.filter(d => d >= "2026-04-01" && d <= h.to && !(h.gap || []).some(([a, b]) => d >= a && d <= b)).map(d => ({day: d, at: new Date().toISOString(), note: (h.notes || {})[d] || null,
+      n: (h.n || {})[d] != null ? h.n[d] : window.__cloud.vouchers.filter(x => x.date === d.replace(/-/g, "")).length})); };
   const bk = () => ({book: "bk-zz", from: "2026-04-01", to: window.__held.to, company: "ZZ Test Readsoff Traders", daysAt: window.__cloud.at,
     state: {seen: window.__cloud.at, doneTo: window.__held.doneTo, skipped: window.__held.skipped}});
   TCloud.on = () => true; TCloud.has = () => !!window.__cloud.has; TCloud.book = () => window.__cloud.has ? bk() : null;
@@ -156,7 +157,10 @@ with sync_playwright() as p:
     # (Optional vouchers are off by default since migration 213: switched on here, so the held part is seen after its note)
     A.evaluate("() => { CO().createOptional = true; window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
     for label, held, dates, miss in [
-        ("after the later of its end and the last day read", {"to": "2026-11-05", "doneTo": "2026-11-10", "skipped": []}, ["2026-11-08", "2026-11-12", "2026-11-14"], ["2026-11-12", "2026-11-14"]),
+        ("after the last day uploaded", {"to": "2026-11-10", "doneTo": "", "skipped": []}, ["2026-11-08", "2026-11-12", "2026-11-14"], ["2026-11-12", "2026-11-14"]),
+        # a Day Book file set doneTo to its upload day (bridge-go keep.go); October never uploaded: still not held
+        ("a seeded last day read of today, October never uploaded", {"to": "2026-11-30", "doneTo": "2026-11-23", "skipped": [], "gap": [["2026-10-01", "2026-10-31"]]}, ["2026-09-30", "2026-10-15"], ["2026-10-15"]),
+        ("fewer entries in the copy than the day's count", {"to": "2026-11-30", "doneTo": "", "skipped": [], "n": {"2026-11-04": 5}}, ["2026-11-02", "2026-11-04"], ["2026-11-04"]),
         ("a skipped day", {"to": "2026-11-30", "doneTo": "", "skipped": ["20261103"]}, ["2026-11-02", "2026-11-03"], ["2026-11-03"]),
         ("before its start", {"to": "2026-11-30", "doneTo": "", "skipped": []}, ["2026-03-31", "2026-04-02"], ["2026-03-31"]),
         # Apr-Sep and Nov uploaded, October never: an October day inside the book's range is not held by the copy
@@ -178,7 +182,7 @@ with sync_playwright() as p:
         ok(t.startswith("%d posted to Tally (%d as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers), %d held: FinCom's copy has no entries for %s." % (n, n, len(miss), ", ".join(fm))),
            label + ": the counts said, the held part after the Optional note (%s)" % t)
     A.evaluate("() => { CO().createOptional = false; }")
-    ok(any("tally_days?select=" in q and "book_id=eq.bk-zz" in q for q in A.evaluate("() => window.__dcalls")), "the days read from FinCom's cloud (tally_days), not from Tally")
+    ok(any("tally_days?select=day,at,n,note" in q and "book_id=eq.bk-zz" in q for q in A.evaluate("() => window.__dcalls")), "the days read from FinCom's cloud (tally_days), not from Tally")
     A.evaluate("() => { SL().filter = 'ready'; render(); }"); A.wait_for_timeout(400)
     ok("has no entries for" in A.inner_text("#app"), "the held invoice's red note shown on its row")
     A.evaluate("() => { SL().filter = 'all'; render(); }")

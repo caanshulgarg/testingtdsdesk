@@ -139,24 +139,23 @@ function salesCopyAt(cid){
   const bk = TCloud.book(cid), st = (bk && bk.state) || {};
   return [st.readAt, st.seen, bk && bk.daysAt].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || "";
 }
-// the invoices' dates (yyyy-mm-dd) the cloud copy does not hold (review of 7df0b8932: the book's start to its end is not
-// enough, a day inside it may never have been uploaded). A day is held only when FinCom's cloud has a row for it in
-// tally_days (the same read as app/src/lib/payrollPost.js readMonth: a cloud read, not a Tally request) and that row says
-// no short read and no empty read waiting for a second one; or when it is on or before the last day the bridge read
-// (state.doneTo). The copy never holds a day before the book's start, or a day not read (state.skipped). A failed read of
-// tally_days is thrown (nothing is posted)
+// the invoices' dates (yyyy-mm-dd) the cloud copy does not hold. A day is held only when FinCom's cloud has a row for it
+// in tally_days (the same read as app/src/lib/payrollPost.js readMonth: a cloud read, not a Tally request) and that row
+// says no short read and no empty read waiting for a second one (reviews of 7df0b8932 and de520c137: neither the book's
+// start-to-end range nor state.doneTo says a day was read: a Day Book file sets doneTo to its upload day, bridge-go
+// keep.go, and with reads off nothing corrects it). The copy never holds a day before the book's start, or a day not
+// read (state.skipped). Returns {miss: [dates], rows: Map(date -> row with n)}; a failed read of tally_days is thrown
 const SALES_DAY_BAD = /short read|confirm by a second empty read/i;
 async function salesCopyMissing(cid, list){
   const bk = TCloud.book(cid) || {}, st = bk.state || {}, d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
-  const from = d8(bk.from), doneTo = d8(st.doneTo), skipped = new Set([].concat(st.skipped || []).map(d8));
+  const from = d8(bk.from), skipped = new Set([].concat(st.skipped || []).map(d8));
   const days = [...new Set(list.map(v => String(v.x.date || "").slice(0, 10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
-  const never = d => (from && d8(d) < from) || skipped.has(d8(d)), byDone = d => !!doneTo && d8(d) <= doneTo;
-  const ask = days.filter(d => !never(d) && !byDone(d)), rows = new Map();
+  const never = d => (from && d8(d) < from) || skipped.has(d8(d)), ask = days.filter(d => !never(d)), rows = new Map();
   for (let i = 0; i < ask.length; i += 100){
-    const got = await Cloud.api("tally_days?select=day,at,note&book_id=eq." + encodeURIComponent(bk.book) + "&day=in.(" + ask.slice(i, i + 100).join(",") + ")");
+    const got = await Cloud.api("tally_days?select=day,at,n,note&book_id=eq." + encodeURIComponent(bk.book) + "&day=in.(" + ask.slice(i, i + 100).join(",") + ")");
     [].concat(got || []).forEach(r => { if (r && r.day) rows.set(String(r.day).slice(0, 10), r); });
   }
-  return days.filter(d => never(d) || (!byDone(d) && (!rows.has(d) || SALES_DAY_BAD.test(String(rows.get(d).note || "")))));
+  return {miss: days.filter(d => never(d) || !rows.has(d) || SALES_DAY_BAD.test(String(rows.get(d).note || ""))), rows};
 }
 async function salesCheckSafe(list){
   const co = CO(SL().cid), none = {note: "", held: ""};
@@ -165,15 +164,24 @@ async function salesCheckSafe(list){
   try { await salesCheckTally(list); list.forEach(v => { delete v.copyCheck; }); return none; }
   catch (e){ if (!salesReadsOff(e) || tallyVia(co) !== "bridge") throw e; }
   if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) throw {code: "check_off", message: SALES_NO_COPY};
-  let miss;
-  try { miss = new Set(await salesCopyMissing(co.id, list)); } catch (e){ throw {code: "check_off", message: SALES_NO_CHECK}; }
-  const day = v => String(v.x.date || "").slice(0, 10);
-  const held = list.filter(v => miss.has(day(v))), go = list.filter(v => !miss.has(day(v)));
-  held.forEach(v => { delete v.copyCheck; v.copyHeld = v.postError = "Not posted: FinCom's copy of Tally has no entries for " + fmtDate(day(v)) + ", so this invoice number could not be checked. Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer."; });
-  const heldWords = held.length ? held.length + " held: FinCom's copy has no entries for " + [...miss].map(fmtDate).join(", ") : "";
+  let cm;
+  try { cm = await salesCopyMissing(co.id, list); } catch (e){ throw {code: "check_off", message: SALES_NO_CHECK}; }
+  const miss = new Set(cm.miss), day = v => String(v.x.date || "").slice(0, 10), held = [];
+  const hold = v => { delete v.copyCheck; held.push(v); v.copyHeld = v.postError = "Not posted: FinCom's copy of Tally has no entries for " + fmtDate(day(v)) + ", so this invoice number could not be checked. Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer."; };
+  list.filter(v => miss.has(day(v))).forEach(hold);
+  let go = list.filter(v => !miss.has(day(v)));
+  // (the vouchers the cloud copy answered, each once, counted by day against the day's own count: fewer is a short read)
+  const got = new Map(), call = async (c, u) => { const r = await CloudTally.call(c, u); [].concat((r && r.vouchers) || []).forEach(x => got.set(salesTallyKey(x), x)); return r; };
   // (an answer of the cloud copy's cap for one day stays its own message; anything else: the copy is not available)
-  try { await salesCheckTally(go, (c, u) => CloudTally.call(c, u)); }
+  try { await salesCheckTally(go, call); }
   catch (e){ throw e && e.code === "check_cap" ? e : {code: "check_off", message: SALES_NO_CHECK}; }
+  const per = {};
+  got.forEach(x => { const d = String(x.date || "").replace(/-/g, "").slice(0, 8); per[d] = (per[d] || 0) + 1; });
+  const short = d => { const r = cm.rows.get(d); return !!r && num(r.n) > (per[d.replace(/-/g, "")] || 0); };
+  // (a voucher of the invoice found all the same stands: In Tally; any other invoice of a short day is held)
+  go.filter(v => short(day(v)) && v.status !== "intally").forEach(v => { miss.add(day(v)); hold(v); });
+  go = go.filter(v => !v.copyHeld);
+  const heldWords = held.length ? held.length + " held: FinCom's copy has no entries for " + [...new Set(held.map(day))].sort().map(fmtDate).join(", ") : "";
   const at = salesCopyAt(co.id);
   if (!go.length || (at && Date.now() - Date.parse(at) <= SALES_COPY_OLD)){ go.forEach(v => { delete v.copyCheck; }); return {note: "", held: heldWords}; }
   const note = "Checked against FinCom's copy of Tally, last updated " + (at ? tallyHm(at) : "at a time not known") + ". Invoices entered in Tally after that were not checked.";
@@ -198,7 +206,7 @@ async function salesPostOneByOne(ids){
     try { chk = await salesCheckSafe(list); }
     catch (e){ toast((e && e.message) || "Tally could not be checked, so nothing was posted."); return; }
     list.filter(v => v.status === "intally").forEach(v => { delete v.refused; out.push({id: v.id, number: v.x.number, ok: true, word: "Already in Tally: not posted again"}); });
-    list.filter(v => v.status !== "intally" && salesDupOf(v)).forEach(v => out.push({id: v.id, number: v.x.number, ok: false, word: salesDupWords(salesDupOf(v)) + " Not posted: press “Post duplicate anyway” on it to post it."}));
+    list.filter(v => v.status !== "intally" && salesDupOf(v) && !v.copyHeld).forEach(v => out.push({id: v.id, number: v.x.number, ok: false, word: salesDupWords(salesDupOf(v)) + " Not posted: press “Post duplicate anyway” on it to post it."}));
     // (dated on a day FinCom's copy does not hold: held, its red note said on its row of the result)
     list.filter(v => v.copyHeld && v.status !== "intally").forEach(v => out.push({id: v.id, number: v.x.number, ok: false, held: true, word: v.copyHeld}));
     list = list.filter(v => v.status !== "intally" && !salesDupOf(v) && !v.copyHeld);
