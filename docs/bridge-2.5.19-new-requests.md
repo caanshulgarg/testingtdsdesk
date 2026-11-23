@@ -564,6 +564,12 @@ On TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (and NWS144), ZZ BIG TEST as in B.5 and
 11. Background behaviour: with someone typing in Tally on NWS144 none of B1, C1 to C4, C6 or C8 goes; with Tally left
     alone 60 s they go one at a time after any posting.
 
+12. The faster bank posting (no new request; the owner's approval of 23-Nov-2026, up to 3 over-long test sends of
+    about 12 s a client, ever, only when idle): post 674 bank entries like the 674-line statement on ZZ BIG TEST with
+    Tally and the computer left alone, and time it (first to last request; each request's size and time; the largest
+    under 8 s). Then post the same again while someone types in Tally the whole time and time it: one line a request,
+    Tally never held 2 s, the posting finishes. Write both totals and the TallyPrime version here.
+
 The worst time and date of each go into its row in `docs/tally-allowlist.md` and `bridge-go/allowlist.go` before release.
 
 ### The review fixes of 23-Nov-2026 (code review B1, B2, N1 to N8; security review L1, I1, I2, I4)
@@ -588,3 +594,13 @@ The worst time and date of each go into its row in `docs/tally-allowlist.md` and
   group seen so far, chunk by chunk (R2); a cloud that keeps no lease shows no lapse, so the re-sent entries still to
   send are looked for again before every part after the first (R3); the held words name the Post page's buttons, "It is
   in Tally: mark posted" and, for a look Tally did not answer, "Not in Tally – post again" (R4).
+
+## The faster bank posting (merged into 2.5.19 from next-fast-bankpost, the owner's approval of 23-Nov-2026)
+
+Not a new request: the same Import request with more bank lines in it. On a Tally whose Import time is mostly a fixed
+cost a request (about 4.5 s even for one voucher on some books), each company's recent parts are fitted as a fixed cost
+plus a cost a voucher (post-pace.json). Only while nobody has used the computer for 30 s: up to 10 bank lines a request,
+each predicted within 8 s (PostSlowMaxMs). A test of 2 lines learns the fit; a test that runs long (about 12 s) is
+allowed at most 3 times a client, ever, and only when idle (every counter in post-pace.json is read as 0 or more, so the
+file cannot buy more). Someone at the computer: one line a request, and postings never wait. Bills, masters, payroll and
+a Tally whose time grows with each voucher: as before. Timing on ZZ BIG TEST: item 12 of the list above.

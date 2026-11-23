@@ -1,11 +1,11 @@
-FINCOM BRIDGE 2.5.19 - TEST SHEET (not built yet; 2.5.18's sheet below, with 2.5.19's changes first)
+FINCOM BRIDGE 2.5.19 - TEST SHEET (2.5.18's sheet below, with 2.5.19's changes first)
 
-File:        not built yet (the version number is still 2.5.18 in bridge-go/util.go)
-Fingerprint: none yet
+File:        FinComBridge-Setup-2.5.19.exe
+Fingerprint: (filled in when the setup is built)
 
 2.5.19, item 1: after Quit on the tray icon, background reading starts again by itself. Item 1 asks nothing new of
 Tally; the same 2-second stop, one request at a time, postings first, never while someone is typing in Tally.
-Since then (23-Nov-2026) the owner approved those new read requests, and they are built (items 2 to 9): a very big day
+Since then (23-Nov-2026) the owner approved those new read requests, and they are built (items 2 to 9); item 10 is the faster bank posting: a very big day
 read in pieces (B1), the FinCom Books masters and fields (C1 to C7), the daily tie-out of the main groups (C8), and a
 look in Tally for FinCom's mark before an entry FinCom handed out before is posted again (E). Every one is NOT yet
 measured: items 2 and 3 are the measurement and the name checks and must pass before this build is handed out. Use a
@@ -64,6 +64,20 @@ test company with made-up entries only.
     next sign-in)". Check the menu says so in each mode. You should see: while the icon is away a posting from FinCom
     still goes and background reading waits; as a service the icon is back after about 10 minutes, installed just for
     you it is back when you sign in again.
+10. Faster bank posting (the owner's approval of 23-Nov-2026). What happens: on a Tally that takes about the same
+    time for any Import, even one voucher (about 4.5 s on some books), bank lines used to go one a request (674 lines
+    about 78 minutes). Now, only while nobody has used the computer for 30 seconds, the bridge sends up to 10 bank
+    lines in one request when Tally's time is mostly a fixed cost a request, each request predicted within 8 seconds.
+    To learn that, it may send a test of 2 lines; a test that runs long (about 12 s) is allowed at most 3 times a
+    client, ever, and only when idle. While someone uses the computer: one line a request, as before, and the posting
+    still goes (postings never wait for typing). Bills, masters and payroll: as before. No new request to Tally.
+    Check A (ZZ BIG TEST, NWS144, required before release): post 674 bank entries like the 674-line statement from
+    FinCom with Tally and the computer left alone. Time it from the bridge's log (first and last request) and write
+    down each request's size and time. You should see: requests of several lines, each well under the 8 s budget,
+    and the whole posting far quicker than 78 minutes.
+    Check B: post the same kind of entries again while typing in Tally the whole time. You should see: one line a
+    request, Tally stays usable while you type (no freeze of 2 s or more), the posting still finishes.
+    Write both totals, the largest request time and the TallyPrime version into the paper's timing list.
 
 -------------------------------------------------------------------------------------------------------------------
 
