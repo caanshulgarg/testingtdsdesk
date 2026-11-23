@@ -241,7 +241,9 @@ On NWS144 and on the tally-versions runners (TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1)
 2. For each day: F1 once; then B1 with bands of 500, 1,000, 2,000 and 5,000 rows. Record t, rows, bytes and Tally's
    window hold for each piece. Pass: every piece the bridge would send is under 2 s (aim 1.35 s) and the window is never
    held 2 s.
-3. Check the span rule: on each release, the highest MasterID of any voucher is not above the company's AltVchId.
+3. Check the span rule: on each release, the highest MasterID of any voucher is not above the company's AltVchId, and
+   write down by how much AltVchId is above it (as built, the first band is cut to a sixteenth of the highest entry
+   number the bridge has seen when that is lower).
 4. Check exactness: the union of a day's bands equals F1's list for the 2,216 and 7,601 days (same GUIDs, MasterIDs,
    AlterIDs), on every release; no row of another date; no row outside its band.
 5. Check the fixed cost: for the same day, a band returning 10 rows and one returning 5,000; the difference gives the
@@ -328,8 +330,10 @@ its rule (other centres dropped) stay as they are.
 `ISPOSTDATED` (Tally's stored Yes/No on a voucher) added at the end of the fields of the two entry requests, which
 FinCom's copy of each entry comes from:
 
-- `FinComVoucherObject`: one more `<FETCH>ISPOSTDATED</FETCH>` at the end of its FETCHLIST, and `ISPOSTDATED` added to the
-  fields its strip keeps. The request becomes (the existing fields shown as `...`, unchanged and in the same order):
+- `FinComVoucherObject`: **as built (23-Nov-2026), its request is NOT changed**: Tally sends the whole voucher for this
+  request whatever its FETCHLIST says, so only `ISPOSTDATED` was added to the fields its strip keeps
+  (`TestR2519PostDatedMark`). No new shape; the time check (item 6 of the list at the end) is kept anyway. The paper
+  first proposed this request (not built):
 
 ```xml
 <ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:1</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>GUID</FETCH> ... <FETCH>ISPOSTDATED</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>
@@ -533,12 +537,16 @@ On TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (and NWS144), ZZ BIG TEST as in B.5 and
 
 1. B1 FinComDayHeadsPart: days of 2,216, 7,601, 12,000, 15,000 and 18,000 entries; bands of 500, 1,000, 2,000 and 5,000
    rows; t, rows, bytes and window hold for each band; the union of the bands equals F1's list (2,216 and 7,601 days);
-   the highest voucher MasterID is not above AltVchId; a 10-row band against a 5,000-row band (the per-row cost, 0.085 ms
+   the highest voucher MasterID is not above AltVchId (write down AltVchId and the highest MasterID: by how much it is
+   above); a 10-row band against a 5,000-row band (the per-row cost, 0.085 ms
    an entry expected); typing in Tally while a band is at Tally (window hold under 1 s).
 2. C1 FinComBillOpenings: every chunk of 500 MasterIDs at 5,000 bill-wise parties (estimate 0.15 to 0.4 s); the bills
-   against Tally's own Bills Receivable / Payable at the books' start.
+   against Tally's own Bills Receivable / Payable at the books' start. As built it is read at most once a day.
 3. C2 FinComVoucherTypes: the one request at 200 types (estimate under 0.1 s); with `GSTREGISTRATION` once confirmed.
-4. C3 FinComCostCentres: each chunk of 2,000 at 2,000 centres (estimate under 0.15 s).
+4. C3 FinComCostCentres: each chunk of 2,000 at 2,000 centres (estimate under 0.15 s). Also on ZZ TEST with payroll on
+   (TallyPrime 3.0 and 7.1): export an employee and check it answers FORPAYROLL Yes; then check that no employee name
+   and no employee group reaches FinCom by this read (the bridge drops FORPAYROLL rows, employee groups and every centre
+   under one, the security review's I2).
 5. C4 FinComCostCategories: the one request (estimate under 0.05 s).
 6. C5 ISPOSTDATED: FinComVoucherBatch, a group of 100 entries of the 2,216 and 7,601 days (was 945 / 1,405 ms worst);
    FinComVoucherObject a 500-employee payroll entry (was 2.2 s worst under its 3 s stop) and an ordinary entry; a made-up
@@ -557,3 +565,18 @@ On TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (and NWS144), ZZ BIG TEST as in B.5 and
     alone 60 s they go one at a time after any posting.
 
 The worst time and date of each go into its row in `docs/tally-allowlist.md` and `bridge-go/allowlist.go` before release.
+
+### The review fixes of 23-Nov-2026 (code review B1, B2, N1 to N8; security review L1, I1, I2, I4)
+
+- E is looked for again whenever it could be stale: the look is the worker run's own (a job resumed after a stop or
+  handed back looks again), and again before the next part whenever FinCom's lease had to be taken anew (B1).
+- A look is used only when Tally's answer is whole and every entry in it is of the date asked; one entry of another
+  date or an answer cut short: the look failed, nothing of that date is sent (B2).
+- Held for a person with plain words, never sent unchecked: a re-sent entry with no FinCom mark or no date (N1); the
+  entries of a date whose look failed twice (E.3.4, N2); entries beyond the first 7 dates of one posting (I1). The look
+  keeps its 2 s stop whatever RecorderLimitMs says, and matches the ids as a release does (N1).
+- On a mark found, only this computer's record is written; the local copy takes the entry only when Tally's entry is
+  the one sent by type, date and party, else the keeper reads it (L1).
+- B1's first band is cut to a sixteenth of the highest entry number seen when that is below AltVchId (N4); C1 at most
+  once a day (N7); cost centres also drop employee groups and every centre under one (I2); the tray's Quit reads "Hide
+  this icon (reading continues; the icon comes back in 10 minutes)" (I4).

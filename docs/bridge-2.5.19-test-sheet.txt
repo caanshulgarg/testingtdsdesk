@@ -1,12 +1,15 @@
-FINCOM BRIDGE 2.5.19 - TEST SHEET (DRAFT: not built yet; 2.5.18's sheet below, with 2.5.19's changes first)
+FINCOM BRIDGE 2.5.19 - TEST SHEET (not built yet; 2.5.18's sheet below, with 2.5.19's changes first)
 
 File:        not built yet (the version number is still 2.5.18 in bridge-go/util.go)
 Fingerprint: none yet
 
-2.5.19 so far: after Quit on the tray icon, background reading starts again by itself. Nothing new is asked of Tally:
-no new request and no request changed (the requests are 2.5.18's), the same 2-second stop, one request at a time,
-postings first, never while someone is typing in Tally. The new read requests the owner is asked about are in
-docs/bridge-2.5.19-new-requests.md (drafts only, not on the allow-list). Use a test company with made-up entries only.
+2.5.19, item 1: after Quit on the tray icon, background reading starts again by itself. Item 1 asks nothing new of
+Tally; the same 2-second stop, one request at a time, postings first, never while someone is typing in Tally.
+Since then (23-Nov-2026) the owner approved those new read requests, and they are built (items 2 to 9): a very big day
+read in pieces (B1), the FinCom Books masters and fields (C1 to C7), the daily tie-out of the main groups (C8), and a
+look in Tally for FinCom's mark before an entry FinCom handed out before is posted again (E). Every one is NOT yet
+measured: items 2 and 3 are the measurement and the name checks and must pass before this build is handed out. Use a
+test company with made-up entries only.
 
  1. Quit on the tray icon no longer stops background reading until the next sign-in (the owner's decision A of
     23-Nov-2026).
@@ -26,6 +29,35 @@ docs/bridge-2.5.19-new-requests.md (drafts only, not on the allow-list). Use a t
     Check C: Quit, then start FinCom Bridge from the Start menu after 2 minutes. You should see: one icon only (not a
     second one at the 10-minute mark).
     Check D: Quit, sign out and sign in again. You should see: the icon at once.
+ 2. The ZZ BIG TEST timing list: docs/bridge-2.5.19-new-requests.md, the last section ("The manual ZZ BIG TEST timing
+    list"), every item on TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1. Each request under 2 s worst (aim 1.35 s), Tally's
+    window never held 2 s. Write each worst time and date into its row of docs/tally-allowlist.md and allowlist.go.
+    For B1 also write down AltVchId and the highest entry number of the company, and by how much AltVchId is above.
+ 3. The names to confirm (the same paper, "Names still to confirm"): one made-up master of each kind exported from
+    TallyPrime 3.0 and 7.1 on ZZ TEST. Only when every name matches is its switch turned on (Confirmed2519VchTypeGst,
+    Confirmed2519GstRegs, Confirmed2519LedgerLists, Confirmed2519GroupClosing). A name that differs goes back to the
+    owner as exact XML first.
+ 4. Cost centres never bring employees (FinComCostCentres). On ZZ TEST with payroll on: export one employee and check
+    it says FORPAYROLL Yes on 3.0 and 7.1. Then run Update now and check in FinCom that no employee name and no
+    employee group came with the cost centres (they come only from the payroll's own employee list).
+ 5. The first masters round after the update sends every ledger once. What happens: the ledger rows now carry the
+    added fields (GST registration type, bill-by-bill, credit days, cost centres, address, pin code, country), so the
+    first round after 2.5.19 is installed sees every ledger as changed and the whole list goes to FinCom once. The
+    same happens once more on the day Confirmed2519LedgerLists is turned on (the mailing details and MSME lists).
+    You should see: one full ledger list in the log ("the ledger list sent"), then only changes again.
+ 6. The look before an entry is posted again (E). On ZZ TEST: post a made-up entry from FinCom, then release it in
+    FinCom ("Not in Tally - post again") while the entry IS in Tally (as if another computer had posted it).
+    You should see: the bridge looks in Tally for that date, finds FinCom's mark, does not post it again, and FinCom
+    shows it as already in Tally. Then stop Tally while such a posting waits: the entry is not sent ("Not
+    posted yet: Tally was busy..."); the second time it is held for you with words to look in Tally and release it.
+ 7. A very big day read in pieces (B1). On ZZ BIG TEST with an 18,000-entry day picked in FinCom: the day's list is
+    stopped at 2 s, then read in pieces ("read again in pieces of entry numbers" in the log), each piece under 2 s,
+    and FinCom closes the day. While a piece is at Tally, type in Tally: no piece goes until Tally is left alone a
+    minute.
+ 8. The daily tie-out (C8), only once Confirmed2519GroupClosing is on: leave Tally alone for the day's catch-up. You
+    should see one "Tie-out of ..." line a day; the main groups' closing balances match Tally's Trial Balance.
+ 9. The tray's Quit now reads "Hide this icon (reading continues; the icon comes back in 10 minutes)". Check the menu
+    says so, and the icon comes back about 10 minutes after it is used.
 
 -------------------------------------------------------------------------------------------------------------------
 
