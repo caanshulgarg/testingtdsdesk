@@ -56,20 +56,6 @@ const TaxLed = {
       if (!o.group) o.group = (b.under || {})[o.name] || ""; if (!o.chain.length && o.group) o.chain = LedCheck.chain(b, o.name).length ? LedCheck.chain(b, o.name) : [o.group]; });
     return out;
   },
-  // the opening balance and Tally's nature of payment, from FinCom's cloud copy (read once a book; the ledger list itself
-  // does not carry them). Nothing is asked of Tally
-  async loadExt(cid){
-    const bk = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid) ? TCloud.book(cid) : null, cur = this.ext[cid];
-    if (!bk || (cur && cur.book === bk.book && (cur.at || cur.busy))) return;
-    this.ext[cid] = {book: bk.book, busy: true, by: (cur && cur.by) || {}};
-    const q = sel => "tally_ledgers?select=" + sel + "&merged_into=is.null&book_id=eq." + encodeURIComponent(bk.book) + "&order=name.asc";
-    let rows = null;
-    for (const sel of ["name,open,tds_nature,tds_deductee_type", "name,open"]){ try { rows = await TCloud.restAll(q(sel)); break; } catch (e){ this.ext[cid].err = (e && e.message) || String(e); } }
-    const by = {};
-    [].concat(rows || []).forEach(r => { if (r && r.name) by[ledNm(r.name).toLowerCase()] = {open: r.open == null || r.open === "" ? null : num(r.open), nature: r.tds_nature || "", dtype: r.tds_deductee_type || ""}; });
-    this.ext[cid] = {book: bk.book, at: new Date().toISOString(), by};
-    if (typeof render === "function") render();
-  },
   // a Tally ledger that is about TDS or GST by what Tally says of it, or by its name
   taxLikeTally(t){ return !!(t && (/^(GST|TDS|TCS)$/i.test(t.taxType || "") || t.nature || LedMaster.taxLike(t.name, null, t))); },
 
@@ -122,11 +108,6 @@ const TaxLed = {
     const a = this.all(b), pick = r => kind === "all" || r.kind === kind || !r.kind;
     return {rows: a.rows.filter(pick), more: a.more.filter(pick), tally: a.tally};
   },
-  // the count for the notice line ("19 ledgers to confirm"): the same as LedMaster.pending, by kind
-  pending(b, kind){
-    return LedMaster.pending(b).filter(([n, m]) => { if (!kind || kind === "all") return true; const k = this.kindOfWhat(m.what) || this.kindOfName(n, (b.ledInfo || {})[n]); return !k || k === kind; });
-  },
-
   // ---------- confirm, unconfirm ----------
   who(){ return typeof whoAmI === "function" ? whoAmI() : "this computer"; },
   write(m, a){
@@ -194,18 +175,6 @@ const TaxLed = {
     if (typeof Cloud !== "object" || !Cloud.on() || typeof ASST !== "object") return false;
     const st = ASST.st().settings; if (!st && !ASST.st().settingsBusy) ASST.loadSettings(); return !!(st && !st.error && st.enabled);   // on by default since 14-Oct-2026 (the owner's decision); no consent tick
   },
-  // the ledgers to ask about: not confirmed, no answer from the rules or the master, not asked before with the same facts
-  toAsk(b, rows){ return rows.filter(r => !r.ok && r.src !== "rule" && r.src !== "confirmed" && !(r.it && r.it.ai && r.it.ai.key === this.aiKey(b, r))); },
-  aiKey(b, r){ const it = r.it || {}; return [r.n, r.group, (it.use || {}).n || 0].join("|"); },
-  // what goes to the server for one ledger: name, group, opening, Tally's tax type and nature, the use, 3 sample entries
-  // (the server masks identifiers and the parties named in them)
-  payload(b, r, tl){
-    const t = tl[r.n] || {}, it = r.it || ((b.ledCheck || {}).items || {})[r.n] || {}, use = it.use || {};
-    return {name: r.n, group: r.group || t.group || "", chain: (t.chain || []).slice(0, 6), open: r.open, taxType: t.taxType || "", nature: t.nature || "",
-      use: use.say || "not used in the day book", samples: (use.samples || []).slice(0, 3).map(s => s.date + " " + s.type + " " + s.side + " " + s.amt + " | " + (s.lines || []).join(", "))};
-  },
-  parties(b){ const set = new Set(); Object.keys(b.gstins || {}).concat(Object.keys(b.pans || {})).forEach(n => set.add(n));
-    Object.entries(b.under || {}).forEach(([n, g]) => { if (/sundry (debtors|creditors)/i.test(g || "")) set.add(n); }); return Array.from(set).slice(0, 2000); },
   async fetchGuess(body){
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
@@ -214,43 +183,6 @@ const TaxLed = {
     if (!r.ok && !(j && j.guesses)) throw Object.assign(new Error(j.error || ("AI could not be asked (" + r.status + ").")), {kind: j.kind || "other"});
     return j;
   },
-  MAPK: {gst_output: ["gst", "output"], gst_input: ["gst", "input"], gst_rcm: ["gst_rcm", "output"], gst_ineligible: ["ineligible", "input"], tds_payable: ["tds_payable", ""], tds_receivable: ["tds_receivable", ""],
-    tcs_payable: ["tcs_payable", ""], tcs_receivable: ["tcs_receivable", ""], tax_interest: ["", ""], not_tax: ["none", ""]},
-  // one batch for the client (at most 100), kept with the books as the check's "ai" (src/js/57's shape): a guess, pending
-  async ask(b, opts){
-    opts = opts || {};
-    const cid = b.cid;
-    if (this.ai.busy[cid]) return 0;
-    if (!this.aiOn() && !opts.force){ this.ai.err[cid] = "off"; return 0; }
-    const a = this.all(b), rows = this.toAsk(b, a.rows.concat(a.more)).slice(0, 100);
-    if (!rows.length) return 0;
-    this.ai.busy[cid] = true; this.ai.asked[cid] = Date.now(); render();
-    let j = null;
-    try { j = await this.fetchGuess({action: "ledger_guess", client_id: cid, ledgers: rows.map(r => this.payload(b, r, a.tally)), parties: this.parties(b)}); this.ai.err[cid] = ""; }
-    catch (e){ this.ai.err[cid] = (e && e.kind) === "off" || (e && e.kind) === "consent" ? "off" : (e && e.message) || "AI could not be asked"; }
-    this.ai.busy[cid] = false;
-    const c = LedCheck.st(b), at = new Date().toISOString(), byName = new Map(rows.map(r => [r.n, r]));
-    let n = 0;
-    ((j && j.guesses) || []).forEach(g => { const r = byName.get(g.name), k = this.MAPK[g.kind]; if (!r || !k) return;
-      const it = c.items[g.name] = c.items[g.name] || {s: {what: "", conf: "low", ev: []}, use: {n: 0, say: "not used in the day book"}, state: "pending", tallyOnly: !r.inBooks};
-      const what = g.kind === "tax_interest" ? (/TDS|TCS|19\d|206C/i.test(g.name) || /^tds/.test(g.section || "") ? "tds_interest" : "gst_interest") : k[0];
-      it.ai = {what, side: k[1], tax: g.head || "", rate: g.rate == null ? null : num(g.rate), section: LedCheck.section(g.section || ""), conf: ["high", "medium", "low"].includes(g.confidence) ? g.confidence : "low",
-        reason: String(g.reason || "").slice(0, 200), at, key: this.aiKey(b, r), model: (j && j.model) || ""};
-      n++; });
-    this.ai.last[cid] = {at, n, asked: rows.length, cached: (j && j.cached) || 0, usd: (j && j.usd) || 0};
-    if (n){ Drafts.direct(() => saveBooks(), {bypass: true}); }
-    render();
-    return n;
-  },
-  // drawn with the page: the AI guess asked once by itself where the rules cannot tell (the owner: "a default guess from
-  // AI reading every ledger should be there"); again only when a ledger's facts change
-  auto(b, rows){
-    const cid = b.cid;
-    if (!cid || this.ai.busy[cid] || Date.now() - (this.ai.asked[cid] || 0) < 60000 || !this.aiOn()) return;
-    if (!this.toAsk(b, rows).length) return;
-    setTimeout(() => { if (S.books === b) this.ask(b); }, 0);
-  },
-
   // ---------- the ledgers FinCom posts to (were Client setup's boxes) ----------
   // a search over the client's Tally ledgers: every word of the question that is not a filler word ("which ledger is")
   // counts; a TDS section in it ("194C", "94C") matches the ledger's section; the ledgers of a preferred group first
@@ -272,22 +204,6 @@ const TaxLed = {
     });
     return out.sort((x, y) => y.score - x.score || y.used - x.used || x.l.name.localeCompare(y.l.name)).slice(0, opts.max || 30).map(x => x.l);
   },
-  // the posting choices of each page
-  postKeys(kind){
-    if (kind === "gst") return [["gst:cgst", "Input CGST"], ["gst:sgst", "Input SGST"], ["gst:igst", "Input IGST"]];
-    return rules().filter(r => r.basis !== "never").map(r => ["tds:" + r.id, r.label, r]);
-  },
-  // a person's choice from the list: checked (a TDS ledger of another section is refused), then confirmed
-  postSet(co, key, value){
-    value = String(value || "").trim();
-    if (!co || !value) return false;
-    const [k, sub] = choiceSplit(key);
-    if (k === "tds"){ const r = ruleOf(sub), c = tdsLedgerCheck(co.id, value, Ledgers.sec(r.old)); if (!c.ok && c.msg){ toast(c.msg + "."); return false; } if (c.name) value = c.name; }
-    if (k === "rcm"){ Drafts.direct(() => { co.gst = co.gst || {}; co.gst[sub] = value; Store.saveCompany(co); }, {bypass: true}); toast("Saved: " + value + "."); render(); return true; }
-    choiceConfirm(co, key, value); toast("Confirmed: " + value + "."); render(); return true;
-  },
-  postUnconfirm(co, key){ const r = choiceUnconfirm(co, key); if (r) toast("Unconfirmed: " + r.value + ". Posting waits until it is confirmed again."); render(); return r; },
-
   // ---------- the old places lead here ----------
   // kind: "tds", "gst" or "all" (the old Tally ledgers tab showed both)
   go(kind){

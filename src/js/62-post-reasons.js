@@ -174,21 +174,6 @@ function postReplySentence(r, at){
 }
 function lcFirst(s){ s = String(s || ""); return /^Tally\b|^FinCom\b|^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1); }
 function postLineWords(r){ const l = r && r.lineError, a = Array.isArray(l) ? l : l ? [l] : []; return a.map(x => postReasonText(x)).filter(Boolean).join(" "); }
-// what "Show Tally's reply" opens: Tally's words and counts as they came
-function postReplyRaw(r, it){
-  if (!r && !it) return "";
-  const parts = [];
-  if (r){
-    const c = ["created", "altered", "ignored", "exceptions", "errors"].filter(k => r[k] != null && r[k] !== "").map(k => k.toUpperCase() + " " + num(r[k]));
-    if (c.length) parts.push(c.join(", "));
-    if (r.lastVchId != null && r.lastVchId !== "") parts.push("LASTVCHID " + r.lastVchId);
-    if (postLineWords(r)) parts.push(postLineWords(r));
-    if (r.message) parts.push(postReasonText(r.message));
-  }
-  if (it && it.reason && !parts.includes(postReasonText(it.reason))) parts.push(postReasonText(it.reason));
-  return parts.join("\n");
-}
-
 // ---------- the financial year (April to March): "2023-24"
 function postFyOf(iso){
   const m = String(iso || "").match(/^(\d{4})-(\d{2})/);
@@ -197,8 +182,6 @@ function postFyOf(iso){
   return y + "-" + String(y + 1).slice(2);
 }
 function postFyNow(now){ const d = new Date(now || Date.now()); return postFyOf(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")); }
-function postIsoOf(d){ const s = String(d || ""); return /^\d{8}$/.test(s) ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : ""; }
-
 // ---------- the Tally id of an entry. Tally's own number (the voucher's master id), never the bill number:
 //   a correction an owner recorded (tally_post_marks 'posted' with digits) > the bridge's exact id (vchId) > the batch's
 //   end (batchEnd, batchN > 1: "in batch ending Tally id N") > the ids the cloud kept (reply_vch, batch_end) > the
@@ -594,8 +577,6 @@ const PostFlags = {
     if (x.job && f.attempts != null && num(x.job.attempts) !== f.attempts) return null;
     return f;
   },
-  // review M2: an owner restores any removal; another member only their own
-  mayRestore(k){ const f = this.removed.get(k), me = (S.account && S.account.me) || {}; return !!f && (me.role === "owner" || (!!me.user_id && f.by === me.user_id)); },
   async call(fn, args, done, more){
     try {
       const r = await TCloud.rpc(fn, args);
@@ -623,7 +604,6 @@ const PostFlags = {
     return ok;
   },
   hideRows(keys, on){ return this.batches("tally_post_row_hide", keys, {p_on: on !== false}, on === false ? null : keys.length + (keys.length === 1 ? " row hidden" : " rows hidden") + " (for you only). Show hidden brings them back."); },
-  removeRows(keys, why){ return this.batches("tally_post_row_remove", keys, {p_why: why || ""}, keys.length + (keys.length === 1 ? " row moved" : " rows moved") + " to Removed. The entries in Tally are not affected."); },
   restoreRows(keys){ return this.batches("tally_post_row_restore", keys, null, keys.length + (keys.length === 1 ? " row restored." : " rows restored.")); }
 };
 // a row that may not be removed: its posting is still going on (removing never cancels a posting)
@@ -643,14 +623,4 @@ function postTabRows(cid, tab){
   const mine = all.filter(x => x.st.tab === tab);
   const gone = x => !!PostFlags.removedNow(x);
   return {shown: mine.filter(x => !PostFlags.isHidden(x.key) && !gone(x)), hidden: mine.filter(x => PostFlags.isHidden(x.key) && !gone(x)), removed: mine.filter(gone)};
-}
-// G. search: bill no., party, amount, Tally id (and FinCom's id)
-function postRowHit(x, q){
-  const n = String(q || "").trim().toLowerCase();
-  if (!n) return true;
-  const tid = x.st && x.st.id ? [x.st.id.vch, x.st.id.batchEnd].concat(x.st.id.ids || []) : [];
-  const amt = x.d.amount ? [String(x.d.amount), typeof INR === "object" ? INR.format(x.d.amount) : ""] : [];
-  const n2 = n.replace(/[₹,\s]/g, "");
-  return [x.id, x.d.no, x.d.party].concat(tid, amt).some(v => v != null && v !== "" && String(v).toLowerCase().includes(n))
-    || (!!n2 && /^\d+(\.\d+)?$/.test(n2) && amt.some(v => String(v).replace(/,/g, "").includes(n2)));
 }

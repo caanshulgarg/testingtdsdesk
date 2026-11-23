@@ -11,6 +11,7 @@
 // The figures: FinSt.build (src/js/88-fin-statements.js, docs/fin-statements-api.md). The page's state: S.fin (tab, note,
 // the trial balance's filters, ticks, an edit; fin/util.js), S.fsFy (the year, as before). S.fsTab === "dep" still opens
 // the fixed asset register (FixedAssets.jsx), from Note 8 and from the register's old links.
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, lazy, Suspense } from "react";
 import More from "../../parts/More.jsx";
 import PageTabs from "../../parts/PageTabs.jsx";

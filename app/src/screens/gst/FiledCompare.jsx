@@ -3,6 +3,7 @@
 // The comparison is GSTCMP (src/js/39); the fetching is GSTAPI.fetch / syncKept.
 // ui-tidy (13-Oct-2026; the owner: "every detail is showing at the last of the page"): the month's tables open under the
 // month's row (it was under the whole year's table); the month is the page's (S.gstYm), kept in the address.
+import "../../../../src/js/99-screen-parts.js";
 import { Fragment, useEffect, useState } from "react";
 import { Info } from "../../parts/Answer.jsx";
 

@@ -3,6 +3,7 @@
 // Asked in Arc's Dialog (src/arc/registry/components/dialog); closing it (✕, Esc, a click outside, Back) is "Later", at once
 // (the owner, 22-Oct-2026: "Yes, same as others"): what was typed stays as a draft for the session, said when it is asked
 // again ("Unsaved changes kept · Discard"); Save clears it.
+import "../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 const FS_REF = { get current() { return document.querySelector('[data-overlay="firmsetup"]'); } };
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";

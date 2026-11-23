@@ -5,6 +5,7 @@
 // bankSetAccLedger, bankStdLedger, bankOptSet, ruleAct, bankSettingsShow (src/js/23). The ticks on suggested rules are
 // read from their boxes (data-sug) by ruleMakeSug, as before.
 
+import "../../../src/js/99-screen-parts.js";
 import LedgerSelect from "./LedgerSelect.jsx";
 import Confirm, { BankLedger, KeptLine } from "./Confirm.jsx";
 import Loading from "./Loading.jsx";

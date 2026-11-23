@@ -15,6 +15,7 @@
 //
 // State: S.ledKind (tds | gst | all), S.ledQ (the find box), S.ledEdit (the row being changed), S.tlPick (the posting
 // choice whose picker is open) and S.tlPickQ (its search).
+import "../../../../src/js/99-screen-parts.js";
 import { Editor, changeRow, Example, PleaseCheck, Status, UndoLine, Others, Notices, pleaseLines } from "./Ledgers.jsx";
 import { behind, Working } from "../../lib/behind.jsx";
 const plural = (k, one, many) => k + " " + (k === 1 ? one : many);

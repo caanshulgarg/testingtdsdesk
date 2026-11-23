@@ -176,10 +176,3 @@ const ITCLock = {
   }
 };
 if (typeof globalThis === "object") globalThis.ITCLock = ITCLock;
-// Client setup, closed periods (app/src/screens/SettingsMore.jsx): the closing date, a warning on or off, a TDS return filed
-function closedSet(co, k, v){
-  if (k === "to"){ ClosedP.set(co, "to", v); toast(v ? "Books closed up to " + fmtDate(v) + " for " + co.name + "." : "No closing date."); }
-  else if (k.indexOf("q:") === 0){ const q = k.slice(2), f = Object.assign({}, ClosedP.cfg(co).tdsFiled); if (v) f[q] = v; else delete f[q]; ClosedP.set(co, "tdsFiled", f); }
-  else ClosedP.set(co, k, v);
-  render();
-}

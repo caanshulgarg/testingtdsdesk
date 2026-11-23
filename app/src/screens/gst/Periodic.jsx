@@ -2,6 +2,7 @@
 // and PMT-06, in its last month GSTR-1 and 3B for the quarter; for composition, CMP-08 each quarter and GSTR-4 for the
 // year. Were viewQrmp, viewCmp08 and viewGstr4 (src/js/37). The figures are GSTQ (37); what is typed goes through
 // gqSetField, gqSetPaid, gqIffJson (37) and gstfSet (35).
+import "../../../../src/js/99-screen-parts.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import FileApi, { FiledOrDate } from "./FileApi.jsx";
 import BrowserHelper from "./BrowserHelper.jsx";

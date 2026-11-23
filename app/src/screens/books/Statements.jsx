@@ -9,6 +9,7 @@
 // No AI in any figure. Nothing here writes to the books: what is typed (the DCF's assumptions, the 3CD draft) is kept with
 // the client (b.fs.rx).
 // State: S.rxView, S.rxFy, S.rxTab.
+import "../../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import { staleReload } from "../../staleChunk.js";
 // FSX (src/js/78-reports.js) is its own file, fetched the first time a report is opened (not in legacy.js, build.py

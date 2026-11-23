@@ -1,6 +1,7 @@
 // Transactions: everything filed for this client in one register — purchase bills, sales invoices or bank lines —
 // with where each stands in Tally and its document. Was viewTransactions (src/js/03). The rows are made by
 // txnRowsBills / txnRowsSales / txnRowsBank and filtered by txnFiltered (src/js/03), shared with the CSV download.
+import "../../../src/js/99-screen-parts.js";
 import HowPage from "../parts/HowPage.jsx";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ColFunnel } from "../parts/ColHead.jsx";
