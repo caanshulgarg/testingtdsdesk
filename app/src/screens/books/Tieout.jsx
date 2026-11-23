@@ -3,6 +3,7 @@
 // (Rec.fincom, src/js/61: the helpers the books screens already use) and the difference of each. Save -> tally_tieout_save;
 // the owner's Tick / Untick ("Tied out by <name> on <date>") and Lock month / Unlock (tally_month_lock / unlock). A
 // ticked month is read-only for staff. Without migration 44: "not available until migration 44 runs".
+import "../../../../src/js/99-screen-parts.js";
 import Msg from "../../parts/Msg.jsx";
 import { useState, useEffect } from "react";
 import { behind, Working } from "../../lib/behind.jsx";

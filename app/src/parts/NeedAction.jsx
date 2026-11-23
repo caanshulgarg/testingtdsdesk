@@ -1,6 +1,7 @@
 // The ONE action of a "Needs you" group (Rec.needKind, src/js/61, the shared classifier): on Sync activity and on a
 // client's GST and TDS ledgers page (Books -> Tally ledgers).
 // the ONE action of a "Needs you" group (Rec.needKind, src/js/61): who may do it, else the words say who does
+import "../../../src/js/99-screen-parts.js";
 import Button from "./Button.jsx";
 export default function NeedAction({ g, canApply, busy }) {
   const owner = Rec.owner(), day = g.day ? fmtDate(g.day) : "that day";

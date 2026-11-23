@@ -15,7 +15,6 @@ const Rec = {
   firm(){ const f = typeof Cloud === "object" && Cloud.st ? Cloud.st.firm : ""; return f && typeof f === "object" ? String(f.id || "") : String(f || ""); },
   missing(e){ return /42703|42P01|PGRST20[0-9]|does not exist|Could not find|schema cache|\b404\b/i.test(String((e && e.message) || e)); },
   role(){ return (S.account && S.account.me && S.account.me.role) || ""; },
-  owner(){ return this.role() === "owner"; },
   canWrite(){ return ["owner", "staff"].includes(this.role()); },
   say(e){ return String((e && e.message) || e).replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase()); },
   // a local date as yyyy-mm-dd
@@ -108,45 +107,6 @@ const Rec = {
     const n = Number(t);
     return neg ? -n : n;
   },
-  // Save (tick null), Tick (true), Untick (false): tally_tieout_save(p_client, p_month, p_figures, p_fincom, p_tick)
-  async tieSave(cid, month, vals, tick){
-    const t = this.tieOf(cid), figs = {};
-    for (const [k, label] of this.FIGS){
-      const n = this.parse(vals[k]);
-      if (Number.isNaN(n)){ t.msg[month] = {err: label + " must be a number."}; render(); return false; }
-      figs[k] = n == null ? null : r2(n);
-    }
-    figs.note = String(vals.note || "").trim().slice(0, 300);
-    const f = this.fincom(cid, month), fc = {};
-    this.FIGS.forEach(([k]) => { fc[k] = f[k] == null ? null : f[k]; });
-    t.msg[month] = {busy: true}; render();
-    try {
-      const r = await TCloud.rpc("tally_tieout_save", {p_client: cid, p_month: month, p_figures: figs, p_fincom: fc, p_tick: tick === undefined ? null : tick});
-      if (r && r.ok === false) throw new Error(r.error || "It was not saved.");
-      if (r && r.month) t.rows[String(r.month).slice(0, 10)] = r;
-      t.msg[month] = {ok: tick === true ? "Saved and ticked." : tick === false ? "Saved; the tick is taken off." : "Saved."};
-    } catch (e){
-      t.msg[month] = {err: this.missing(e) ? "Tie-out: " + REC_NOT44 + "." : this.say(e)};
-    }
-    render();
-    return true;
-  },
-  async lock(cid, month){
-    const a = await askConfirm({title: "Lock " + GSTR.label(month.slice(0, 4) + month.slice(5, 7)) + "?", ok: "Lock the month",
-      body: "<p>Changes made in Tally to entries of this month are held, not applied to FinCom’s copy, until you approve each one (Tally page → Sync activity → Apply now) or unlock the month.</p>" +
-        '<div class="bk-form one"><label><span>Note (kept with the lock)</span><input id="lockNote" maxlength="300" placeholder="Why the month is locked"></label></div>',
-      read: () => ({note: ((document.getElementById("lockNote") || {}).value || "").trim()})});
-    if (!a || !a.ok) return;
-    await this.lockCall(cid, month, "tally_month_lock", {p_client: cid, p_month: month, p_note: (a.data && a.data.note) || ""});
-  },
-  async unlock(cid, month){
-    const a = await askConfirm({title: "Unlock " + GSTR.label(month.slice(0, 4) + month.slice(5, 7)) + "?", ok: "Unlock",
-      body: "<p>Changes made in Tally to this month are applied to FinCom’s copy again as they come. Lines already held stay held until you apply them.</p>" +
-        '<div class="bk-form one"><label><span>Note (optional)</span><input id="unlockNote" maxlength="300"></label></div>',
-      read: () => ({note: ((document.getElementById("unlockNote") || {}).value || "").trim()})});
-    if (!a || !a.ok) return;
-    await this.lockCall(cid, month, "tally_month_unlock", {p_client: cid, p_month: month, p_note: (a.data && a.data.note) || ""});
-  },
   async lockCall(cid, month, fn, args){
     const t = this.tieOf(cid);
     t.msg[month] = {busy: true}; render();
@@ -158,28 +118,7 @@ const Rec = {
     await this.tieLoad(cid);
   },
 
-  // ---------------------------------------------------------------- H49-H51: Sync activity
-  // 05-Oct-2026 (the owner's words): what was done in Tally, and what it means for the books. Never "synced": a line not
-  // entered in the books says so, with the cloud's reason
-  ACTS: {created: "Created", altered: "Altered", deleted: "Deleted", cancelled: "Cancelled", imported: "Imported", ledger_created: "Ledger created",
-    ledger_altered: "Ledger altered", ledger_renamed: "Ledger renamed", ledger_deleted: "Ledger deleted"},
-  // FinCom's own entry coming back from Tally: a line with a FinCom id (fid) or a short line (migration 45; read as fid / short
-  // with the lines, or in the whole row a live line brings), or the cloud's words for it. Only its creation is FinCom's: a
-  // later change to it in Tally is a person's (Altered)
-  fromFincom(r){
-    if (!r || !["created", "imported"].includes(String(r.event || ""))) return false;
-    const p = (r.payload && typeof r.payload === "object") ? r.payload : {};
-    const fid = r.fid || p.fid, short = r.short != null ? r.short : p.short;
-    return !!fid || short === true || short === "true" || /^FinCom (posting|id) /.test(String(r.held_why || ""));
-  },
-  actWords(r){ return this.fromFincom(r) ? "Posted from FinCom" : (this.ACTS[r.event] || String(r.event || "")); },
   act: {},                 // {rows, no44, busy, at, err, cid (whose lines were read), msg}
-  actOf(){
-    const a = this.act, cid = S.syncClient || "";
-    if (!a.rows && !("at" in a)) Object.assign(a, {rows: null, at: 0, busy: false, no44: false, err: "", cid: ""});
-    if (typeof TCloud === "object" && TCloud.on() && !a.busy && (a.cid !== cid || !a.at || (Date.now() - a.at > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()))){ a.at = Date.now(); a.cid = cid; setTimeout(() => this.actLoad(), 0); }
-    return a;
-  },
   async actLoad(){
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
@@ -203,43 +142,6 @@ const Rec = {
     return true;
   },
   sorted(){ return [].concat(this.act.rows || []).sort((x, y) => String(y.received_at || "").localeCompare(String(x.received_at || "")) || num(y.id) - num(x.id)); },
-  filtered(f){
-    const rows = this.sorted(), today = new Date().toDateString();
-    if (f === "waiting") return rows.filter(r => r.state === "held" || r.state === "received" || r.state === "fetching");
-    if (f === "held") return rows.filter(r => r.state === "held");
-    if (f === "mismatch") return rows.filter(r => r.check && r.check.ok === false);        // the ledger check (F37-40): none yet
-    if (f === "today") return rows.filter(r => r.received_at && new Date(r.received_at).toDateString() === today);
-    return rows;
-  },
-  entry(r){
-    if (/^ledger_/.test(String(r.event || ""))){ const l = [].concat(r.ledgers || [])[0]; return (l && (l.name || l.to || l.from)) || "a ledger"; }
-    const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
-    return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
-  },
-  // bridge 2.3.1 (the owner's rule after review, 06-Oct-2026): an entry is held only when its lines do not total zero; any
-  // other mismatch is entered with plain words for a person (tally-ingest's payload checkNotes, read as checks; a live row
-  // carries its payload): "; to check: ..." after "Entered in the books"
-  notesWords(r){
-    const n = [].concat((r && (r.checks || (r.payload && r.payload.checkNotes))) || []).map(x => String(x || "").trim()).filter(Boolean);
-    return n.length ? "; to check: " + n.join("; ") : "";
-  },
-  // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
-  stateWords(r){
-    const why = r.held_why ? ": " + r.held_why : "";
-    switch (r.state){
-      case "applied": return "Entered in the books" + this.notesWords(r);
-      case "held": return "Received, not yet entered in the books" + why;
-      case "received": return "Received, not yet entered in the books";
-      // migration 196 (the owner, 13-Nov-2026: no entry is ever held): FinCom is bringing the entry from Tally by itself
-      case "fetching": return "Being brought from Tally" + why;
-      case "replaced": return "Replaced by a later line";
-      case "duplicate": return "Already in the books";
-      case "stale": return "An older change, not applied";
-      case "failed": return "Not entered" + why;
-      case "queued": return "Received, waiting in FinCom's queue";
-      default: return "Not entered: " + String(r.state || "unknown state");
-    }
-  },
   // the computer a line came from, from the firm's computers as the Tally page or the Tally light read them
   devOf(id){ return [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).find(d => d && d.id === id) || null; },
   // the lines received or held more than 2 minutes ago, each with why it waits: the PC offline, Tally closed there, or
@@ -385,30 +287,9 @@ const Rec = {
       || Object.values(S.companies || {}).find(x => x && String(x.name || "").trim().toLowerCase() === k);
     return c ? c.id : "";
   },
-  // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
-  async uploadDay(cid, day){
-    if (!cid || !day) return;
-    S.dbFrom = day; S.dbTo = day;
-    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
-    S.dbFrom = day; S.dbTo = day;
-    goClient("books:import");
-  },
   // a client's Tie-out (unlocking a month), its From Tally (the ledgers), the Tally page, Resume reading on one computer
   async openClientTab(cid, tab){ if (!cid) return; if (S.view !== "company" || S.coId !== cid) await openCompany(cid); goClient(tab); },
   openTallyPage(){ tallyBasic(); S.tallyFocus = ""; S.tallyAdv = null; navHome("tally"); },
-  resumeOn(g){ if (typeof TCloud === "object" && g && g.deviceId) TCloud.readResume({device: {id: g.deviceId}, computer: g.pc}); },
-  // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
-  async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },
-  async release(r){
-    const a = this.act;
-    a.msg = {busy: true, id: r.id}; render();
-    try {
-      const j = await TCloud.rpc("tally_recorder_release_held", {p_line: num(r.id)});
-      if (j && j.ok === false) a.msg = {err: "Line " + (j.line_id || r.id) + " is still held" + (j.why ? ": " + j.why : ".")};
-      else a.msg = {ok: "Line " + ((j && j.line_id) || r.line_id || r.id) + ": " + this.stateWords({state: (j && j.state) || "applied"}) + (j && j.why ? " (" + j.why + ")" : "") + "."};
-    } catch (e){ a.msg = {err: this.missing(e) ? "Apply now: " + REC_NOT44 + "." : this.say(e)}; }
-    await this.actLoad();
-  },
   // a client's own lines: the Tally page's Sync activity, for that client
   // filter: the list shown first ("held": the lines held, from the books' "not yet in these books" line)
   openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
@@ -518,8 +399,6 @@ const Rec = {
     return [...new Set([].concat((st && st.books) || []).map(b => b && b.book).filter(Boolean).map(String))].sort();
   },
   unkNames(r){ return Array.isArray(r.ledgers) ? r.ledgers.map(String) : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean); },
-  // "Sales GBTS2627-09 · 12-Oct-2026"
-  unkEntry(r){ return ([r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") || "An entry") + (r.day ? " · " + fmtDate(String(r.day).slice(0, 10)) : ""); },
   // one group a client ("" : every client; books: read those books only, a client's pages), the ledgers FinCom does not
   // have yet, most used first: [{cid, ledgers: [{n, rows}], entries (distinct), settled: [{n, as, how}]}]
   unkGroups(cid, books){
@@ -537,25 +416,6 @@ const Rec = {
     return [...by.values()].filter(g => g.map.size).map(g => ({cid: g.cid, entries: g.keys.size, settled: [...g.settled.values()],
       ledgers: [...g.map.values()].sort((x, y) => y.rows.length - x.rows.length || x.n.localeCompare(y.n))}));
   },
-  // "9 ledgers used in Tally are not in FinCom yet (INPUT IGST, INPUT CGST, … · 327 entries)"
-  unkHead(g){
-    const n = g.ledgers.length, names = g.ledgers.slice(0, 2).map(x => x.n).join(", ") + (n > 2 ? ", …" : "");
-    return (n === 1 ? "1 ledger used in Tally is" : n + " ledgers used in Tally are") + " not in FinCom yet (" + names + " \u00b7 " + this.unkN(g.entries) + ")";
-  },
-  unkN(k){ return k + (k === 1 ? " entry" : " entries"); },
-  // can Tally's ledger list be read for this client now, and what to say beside the way to From Tally: {ok, kind, pc, text}
-  unkCan(cid){
-    const co = S.companies && S.companies[cid], name = (co && (co.tallyName || co.name)) || "this client's company";
-    const l = co && typeof tallyLine === "function" ? tallyLine(co) : null, pc = (l && l.computer) || "the Tally computer";
-    if (!l) return {ok: false, kind: "none", pc, text: "No Tally computer keeps this client's books yet: link one in Client setup → Tally."};
-    if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Tally can't be read now: " + pc + " is offline. Once FinCom Bridge runs there again, use Books › From Tally."};
-    if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Tally can't be read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
-    if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Tally can't be read now: it is not open on " + pc + ". Open " + name + " in Tally there, then use Books › From Tally."};
-    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. Update from Tally reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
-    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; Update from Tally goes once Tally answers."};
-    return {ok: true, kind: "open", pc, text: "Update from Tally on Books › From Tally reads Tally's ledger list on " + pc + "."};
-  },
-
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
   // the recorder words a computer's bridges send (info.bridges[id].recorder: {company: {seen, lastAt}}; the beat's
   // companies may carry recorderSeen / recorderLastAt too): null when none of its bridges reports one (before 2.1.9)
@@ -658,7 +518,6 @@ const Rec = {
     } catch (e){ a.rows = []; if (this.missing(e)) a.none = true; }
     a.busy = false; a.at = Date.now(); quietChanged("rec:alerts", [a.rows, !!a.none]);
   },
-  clientAlerts(cid){ return this.alertsOf().filter(x => !x.read_at && cid && String(x.client_id || "") === String(cid)); },
   async alertRead(x){
     const a = this.alerts;
     if (!this.canWrite()) return;

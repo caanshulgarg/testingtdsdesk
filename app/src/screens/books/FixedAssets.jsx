@@ -15,6 +15,7 @@
 //
 // State: S.farFy (the year shown), S.farTab, S.farF (the filter bar), S.farTie (the difference opened), S.farWhy (the
 // reason typed for a change), the drawer openDetail("farAsset", id).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect } from "react";
 import ListTable from "../../parts/ListTable.jsx";
 import Filters, { Search } from "../../parts/Filters.jsx";

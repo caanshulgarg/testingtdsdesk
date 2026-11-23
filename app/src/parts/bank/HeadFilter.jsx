@@ -3,6 +3,8 @@
 // Particulars, Withdrawal, Deposit and Ledger keep. What is chosen is kept on b.f and read by ./smart.js (headPass).
 import { useEffect, useRef, useState } from "react";
 import { setF, headOn, STATE_WORDS, VTYPES, vtypeOf } from "./smart.js";
+import { newLook } from "../../newlook/flag.js";
+import { NL_BST } from "../../newlook/words.js";
 
 function Range({ f, lo, hi }) {
   const [a, setA] = useState(f[lo] || ""), [z, setZ] = useState(f[hi] || "");
@@ -41,7 +43,7 @@ export default function HeadFilter({ k, label }) {
   const count = (fn) => { const m = new Map(); b.rows.forEach((r) => { if (bankAside(r)) return; const v = fn(r); m.set(v, (m.get(v) || 0) + 1); }); return m; };
   let body = null;
   if (at && k === "bal") body = <Range f={f} lo="bmin" hi="bmax" />;
-  if (at && k === "st") { const n = count((r) => r.state); body = <Pick f={f} k="sts" values={Object.keys(STATE_WORDS).filter((s) => n.get(s) || (f.sts || []).includes(s)).map((s) => [s, STATE_WORDS[s], n.get(s) || 0])} />; }
+  if (at && k === "st") { const n = count((r) => r.state); body = <Pick f={f} k="sts" values={Object.keys(STATE_WORDS).filter((s) => n.get(s) || (f.sts || []).includes(s)).map((s) => [s, newLook() && NL_BST[s] ? NL_BST[s][1] : STATE_WORDS[s], n.get(s) || 0])} />; }
   if (at && k === "vt") { const n = count(vtypeOf); body = <Pick f={f} k="vts" values={VTYPES.map((t) => [t, t, n.get(t) || 0])} />; }
   return <>
     <button ref={btn} type="button" className={"colf bs-hf" + (on ? " on" : "") + (at ? " open" : "")} data-hf={k} aria-label={"Filter " + label} title={"Filter " + label} aria-expanded={!!at}

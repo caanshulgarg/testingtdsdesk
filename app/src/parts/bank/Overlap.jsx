@@ -8,6 +8,7 @@
 //   - kept aside as repeats: Bring back (nothing is ever deleted);
 //   - a line marked "Possible repeat — check" (RepMark, in the line's particulars): Keep it / It's a repeat;
 //   - the join: "₹X difference between <date> and <date>", and the days no statement holds.
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 import { BankOverlap } from "../../lib/bankOverlap.js";
 import NoticeLine from "../NoticeLine.jsx";

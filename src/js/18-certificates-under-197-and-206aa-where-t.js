@@ -464,22 +464,7 @@ function tdsYears(b, rows){
     .concat(TDS.salaryRows().map(r => r.fy))))     // round 92: salary TDS in the books (192) alone is TDS here too
     .filter(f => /^\d{4}-\d{2}$/.test(f)).sort().reverse();
 }
-// a TDS return's pages are React (app/src/screens/TdsReturn.jsx); these work out what they show
-function tdsSorted(tab, list, get){
-  const s = ((S.tdsSort || {})[tab]) || {};
-  if (!s.k) return list;
-  return list.slice().sort((a, c) => { const x = get(a, s.k), y = get(c, s.k); return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y))) * (s.d || 1); });
-}
-function tdsMonths(fy, q){
-  const y = num(fy.slice(0, 4)), start = {Q1: 4, Q2: 7, Q3: 10, Q4: 1}[q], yy = q === "Q4" ? y + 1 : y;
-  return [0, 1, 2].map(i => String(yy) + String(start + i).padStart(2, "0"));
-}
 function monthName(ym){ return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][num(ym.slice(4, 6)) - 1] + " " + ym.slice(0, 4); }
-// the challans a quarter uses: deposited in it, or paying one of its deductions
-function tdsQuarterChallans(fy, q, rows){
-  const used = new Set(rows.map(r => r.challan).filter(Boolean));
-  return TDS.challans().filter(c => (TDS.fyOf(c.date) === fy && TDS.qOf(c.date) === q) || used.has(c.id));
-}
 // printing, which is also how a PDF is made
 function printView(title, html){
   const w = window.open("", "_blank");
@@ -509,21 +494,6 @@ function misRangeQuick(k, b){
 }
 // the MIS pack and Excel (misPackHtml, misExcel) are src/js/18-mis-pack.js; GSTR-9's PDF and Excel (gst9PackHtml, gst9Excel) src/js/08: each comes with its screen
 
-// the GST tab: React (app/src/screens/Gst.jsx); GSTR-1 and 3B are app/src/screens/gst/Returns.jsx, the input register gst/InputRegister.jsx, 2B gst/TwoB.jsx, amendments, advances and reversal gst/Workings.jsx, GSTR-9 and 9C gst/Annual.jsx, ITC follow-up gst/ItcFollow.jsx, returns filed gst/ReturnsFiled.jsx, QRMP, CMP-08 and GSTR-4 gst/Periodic.jsx; the other parts are still the old pages below
-// the parts of the GST tab for the GSTIN and month chosen, following its filing type
-// the From Tally tab: React (app/src/screens/books/FromTally.jsx). What it asks:
-// the bridge's own view of this client's company (it asks Tally nothing), asked at most once a minute
-function setupKeepFor(co){
-  const ks = (S.setupKeep || {})[co.id];
-  if (Bridge.on() && (!ks || Date.now() - ks.at > 60000) && !S.setupKeepBusy){
-    S.setupKeepBusy = true;
-    Bridge.call("/keep?company=" + encodeURIComponent(BridgeSeed.company()) + Bridge.pinQ(), null, 20000).then(j => ({at: Date.now(), st: j}), e => ({at: Date.now(), error: (e && e.message) || String(e)}))
-      .then(x => { S.setupKeep = S.setupKeep || {}; S.setupKeep[co.id] = x; S.setupKeepBusy = false; render(); });
-  }
-  return ks;
-}
-// the time of the bridge's daily update from Tally (build 188: Tally is read once a day, or on Update from Tally)
-function keepAtSet(v){ if (/^\d{2}:\d{2}$/.test(v)) LK.keepSet({dailyAt: v}, "Tally will be updated every day at " + v + "."); }
 // the Tally ledgers and Audit tabs: React (app/src/screens/books/Ledgers.jsx, Audit.jsx)
 function gstParts(b){
   const regs = GSTR.gstins(b) || [], noBooks = !(b.vouchers || []).length;
@@ -544,10 +514,6 @@ function gstParts(b){
 }
 // one part of the GST tab, as the old pages draw it
 function gstPartGo(id){ S.gstPart = id; S.gstView = "return"; S.gstSub = ""; render(); }
-function gstSetYm(ym){ S.gstYm = ym; Smart.keep("gst", {ym}); S.books.reco = null; render(); }
-function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
-
-
 function inregRows(b){
   const reg = S.gstReg || "", ym = S.gstYm || "", mode = S.inregScope || "month";
   const months = mode === "year" ? GSTRev.fyMonths(ym).filter(m => GSTR.months().includes(m)) : [ym];
@@ -610,18 +576,6 @@ function r2Reg(b){
   const own = Array.from(new Set(GST2B.all2b("").map(t => t.gstin.slice(0, 2))));
   return own.length === 1 ? own[0] : regs.length === 1 ? regs[0] : "";
 }
-/* ---------- Today: what needs doing, across every client ---------- */
-/* ---------- Inbox: every waiting document, and uploads that matched no client ---------- */
-// Today, Inbox and Clients are drawn by React (app/src/screens/Today.jsx, InboxAll.jsx, Clients.jsx)
-/* ---------- Tally: the connection, and everything sent ---------- */
-// Settings, TDS rates and limits and reading bills (app/src/screens/SettingsMore.jsx)
-function rateSet(id, k, v){ const r = S.firm.rules[id] = S.firm.rules[id] || {}; r[k] = num(v); Store.saveFirm(); render(); }
-function readingToggle(which, on){
-  if (which === "askClaudeNew"){ S.askClaudeNewSupplier = on; lsSet("tdsdesk:askClaudeNew", on ? "1" : ""); }
-  else { S.freeFirst = on; lsSet("tdsdesk:freeFirst", on ? "1" : "0"); }
-  render();
-}
-
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
 // books-speed: the top bar's news is drawn with the figures of the last drawing when the books did not change (memoKeep)
 // next-fix-hang-books (FINCOM-APP-STAGING-H): the top bar's news right after the books changed (Saving… after a save, a

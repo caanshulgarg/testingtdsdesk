@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FinComNav } from "./nav.js";
 import { useDismiss } from "./parts/dismiss.js";
+import { newLook, nlTree } from "./newlook/flag.js";
 // Arc UI (arc-ui, 09-Oct-2026): the sidebar in Arc's look (styles/arc-shell.css): a light surface, Lucide icons as
 // Arc's components use, quiet section labels, the open client as a card, and on a computer a button that folds the
 // sidebar to its icons (remembered on this computer).
@@ -47,7 +48,8 @@ const FOLD = "fincom:sideFolded";
 const meetOn = () => { try { return typeof Cloud === "object" && Cloud.on() && ["owner", "staff"].includes(String((Cloud.st && Cloud.st.role) || "")); } catch (e) { return false; } };
 // the person's choice, kept in this browser (t70: never folded on its own: "only icons make the system unreadable"; folded
 // is a rail with each item's words under its icon, styles/arc-shell.css)
-const readFold = () => { try { return localStorage.getItem(FOLD) === "1"; } catch (e) { return false; } };
+// (the new look: folded to icons on a screen under 1400 px until the person chooses)
+const readFold = () => { try { const v = localStorage.getItem(FOLD); return v === null && newLook() ? innerWidth < 1400 : v === "1"; } catch (e) { return false; } };
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 
 // the menu's items, in order: [group label or null, items]. Each item: icon, label, on, go, and optionally count, title,
@@ -242,7 +244,7 @@ export default function Side() {
 
   const co = CO(), open = co || (S.coId && S.companies[S.coId]);
   const home = S.view === "home" || !open;
-  const groups = tree();
+  const groups = nlTree() || tree();
   const all = groups.flatMap(([, items]) => items), barOn = all.some((x) => x.bar && x.on);
   // stability batch 1: the firm's menu and a client's are two different trees; each is drawn whole (keyed by which one),
   // so going from one to the other replaces the menu in one go instead of sliding the shared items (Help, the separator)

@@ -41,5 +41,3 @@ function billSetKind(id, k){
   delete e.hold; e.readNote = ""; e.uncertain = []; Store.saveEntry(S.coId, e); refreshStats(S.coId); render();
 }
 function vrOpen(){ S.vrec = null; if (typeof reconGo === "function") reconGo("vendor"); else render(); }
-function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
-function reconExcelGo(){ bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }

@@ -3,6 +3,7 @@
 // the customers' IMS rejections are CustIms.jsx; filing is Filing.jsx. Since 09-Oct-2026 each return is shown a tab at
 // a time (sub: summary, details, diff, file; Gst.jsx draws the tabs and the File tab's downloads); without sub, all of it.
 // next-room-2: GSTX's working for the GST screens (not in the program every page loads)
+import "../../../../src/js/99-screen-parts.js";
 import "../../../../src/js/56-gst-recon-filed.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";

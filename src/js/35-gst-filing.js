@@ -10,14 +10,6 @@
 // it was filed (k + "Via": api, helper) and what was kept with it (the 3B as filed, the IFF's documents). Set together;
 // taken off together, so marking it again (by hand, the GST API or the browser helper) starts afresh
 const GSTMark = {
-  set(ym, reg, k, on, arn, via){
-    const r = GSTF.rec(ym, reg);
-    r[k] = on || r[k] || GSTF.today();
-    if (arn){ r[k + "Arn"] = arn; if (via) r[k + "Via"] = via; else delete r[k + "Via"]; }
-    if (k === "r3b" && !r.snap && typeof GSTR === "object"){ r.snap = GSTF.snapOf(GSTR.threeB(ym, reg)); r.snapAt = new Date().toISOString(); }
-    if (k === "iff"){ delete r.iffSkip; if (typeof GSTQ === "object") GSTQ.iffSnap(ym, reg); }
-    GSTR._carry = null; return r;
-  },
   clear(ym, reg, k){
     const r = GSTF.rec(ym, reg), was = {on: r[k] || "", arn: r[k + "Arn"] || "", via: r[k + "Via"] || ""};
     [k, k + "Arn", k + "Via"].concat(k === "r3b" ? ["snap", "snapAt"] : k === "iff" ? ["iffDocs", "iffSnapAt"] : []).forEach(f => { delete r[f]; });
@@ -61,17 +53,4 @@ function gstfUnsnap(){
   askConfirm({title: "Remove the kept copy?", ok: "Remove it", danger: true,
     body: esc(w) + " Its credit carried forward came from this kept copy of " + esc(GSTR.label(ym)) + "; without it the carry is worked out from the books as they are now."})
     .then(a => { if (!a || !a.ok) return; try { auditEvent("gst_kept_copy_removed", {reg, ym, nextFiled: nx}, S.coId); } catch (e){} go(); });
-}
-function gstfJournal(){
-  const ym = S.gstYm || "", reg = S.gstReg || "", J = GSTF.journal(ym, reg); if (!J.lines.length){ toast("Nothing to set off this month."); return; }
-  if (!J.balanced){ toast("A ledger is missing in Tally (" + J.missing.join(", ") + "); the journal would not balance."); return; }
-  const co = CO() || {}; saveFile(String(co.name || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-GST-setoff-" + reg + "-" + ym + ".xml", new Blob([Audit.jeXml([{date: J.date, narr: J.narr, lines: J.lines}])], {type: "application/xml"}));
-}
-// the GSTR-1A file; a copy is kept so the next GSTR-1 does not report these again
-function gst1aJson(){
-  const ym = S.gstYm || "", reg = S.gstReg || "", r = GSTAmend.json1a(ym, reg); if (!r || !r.rows.length) return;
-  const out = Object.assign({version: "GST3.2.1", hash: "hash"}, r.json);
-  GSTAmend.keep1a(out); saveBooks();
-  saveFile("GSTR1A_" + out.gstin + "_" + out.fp + ".json", new Blob([JSON.stringify(out)], {type: "application/json"}));
-  render(); toast("GSTR-1A for " + GSTR.label(ym) + " downloaded and kept.");
 }

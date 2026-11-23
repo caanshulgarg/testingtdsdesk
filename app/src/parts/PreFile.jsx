@@ -1,6 +1,7 @@
 // "Check before filing" (src/js/76-prefiling.js): the button on a TDS return (26Q, 27Q, 24Q) and on a GST month, and the
 // checklist it opens: each check ok or "fix this", its entries (a date opens the entry), and an Excel export. FinCom's own
 // checks only: no AI; on whatever the Assistant switch says.
+import "../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import { ListChecks, FileSpreadsheet } from "lucide-react";

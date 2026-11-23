@@ -6,7 +6,7 @@ the cloud that answers migration 206's tables with made-up rows (tests/daily_fix
   4. Needs you: a choice calls finding_choose with that candidate; Done: Undo calls finding_undo
   5. Entries: the Checks chip; Reject calls entry_decide; Approve runs the EXISTING approval first (a bank line through
      bankSetLedger, a bill through approve()) and only then records the decision; refused there = nothing recorded
-  6. Send: the owner only; "Test mode" line; the message holds only the client's questions still needed (never a
+  6. Send: the owner only; "Test mode" line; its Settings (with the new look on: a link to Settings › Email and messages); the message holds only the client's questions still needed (never a
      resolved or closed one); Send email calls assistant-send with the ticked ids; staff see no Send
   7. contacts in Client setup: loaded from client_contacts; a new one saved with a POST
   8. a phone (390 px): the same tabs, no sideways scroll
@@ -141,6 +141,13 @@ with sync_playwright() as p:
             pg.click("button:has-text('Send email')"); settle(pg, 500)
             f = [x for x in calls(pg) if x[0] == "fn:assistant-send"]
             ok(len(f) == 1 and f[0][2]["client_id"] == "d1" and len(f[0][2]["ask_ids"]) == 4, "6. Send email calls assistant-send with the 4 ticked questions")
+            pg.evaluate("() => navHome('daily')"); settle(pg, 400); pg.click("[data-tab=clients]"); settle(pg, 200)
+            pg.click("[data-client=d1] .btn.primary"); pg.wait_for_selector("[data-send]"); settle(pg, 300)
+            ok(pg.locator("[data-send-settings]").count() == 1 and pg.locator("[data-send-settings-moved]").count() == 0, "6. new look off: Send keeps its Settings")
+            pg.evaluate("() => FCNewLook.set(true)"); settle(pg, 400)
+            ok(pg.locator("[data-send-settings]").count() == 0 and pg.locator("[data-send-settings-moved]").count() == 1, "6. new look on: sending's settings are in Settings › Email and messages (a link here)")
+            pg.evaluate("() => FCNewLook.set(false)"); settle(pg, 400)
+            ok(pg.locator("[data-send-settings]").count() == 1, "6. new look off again: Settings back on Send")
         # 7. contacts
         pg.evaluate("() => { S.view = 'company'; S.coId = 'd1'; S.tab = 'settings'; S.loadingCo = false; delete S.setupList; render(); }")
         pg.wait_for_selector("[data-client-contacts] table", timeout=15000); settle(pg, 400)

@@ -154,7 +154,7 @@ async function salesPostOneByOne(ids){
       const told = r && r.ok === false && !r.outcomeUnknown && !r.held && r.created != null && r.created !== "" && num(r.created) === 0 && !num(r.altered) && [].concat(r.lineError || []).some(x => String(x || "").trim());
       let word;
       delete v.refused; delete v.needsCheck;
-      if (r && r.ok && r.verified === true){ v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = !!r.optional; learnCustomer(v); word = "Posted"; }
+      if (postTaken(r)){ v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); word = "Posted"; }
       else if (r && r.held){ v.status = "ready"; v.postError = said; v.postJob = r.job; word = "Queued: " + said; }
       else if (no){ salesMarkRefused(v, r, {n: 1, exceptions: no.exceptions}, true); word = "Refused by Tally on its own, with no reason given: this voucher is one that stops the batch"; }
       else if (told){ v.postError = said; mapInvoice(v); word = "Not posted: " + said; }

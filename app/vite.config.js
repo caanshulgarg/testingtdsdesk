@@ -122,6 +122,12 @@ function legacy(mode) {
       html = html.replace("__FINCOM_LS__", test ? "tdsdesk-test:" : "tdsdesk:").replaceAll("__FINCOM_BUILD__", BUILD_ID);
       // the page's own healer (index.html, fincom-heal) reports by its own beacon, on the testing site only
       html = html.replace("__FINCOM_REPORT__", sentryOn(mode) ? SENTRY_INGEST + "/api/4512221234724864/store/?sentry_version=7&sentry_key=7f2432ad2a6406244d931f4856c30933" : "");
+      // next-speed-2 (the speed plan, #7): guard.js (public/guard.js: the frame check and the helpers older Safari lacks) is
+      // put inside the page, allowed by its hash below: the head no longer waits for a file of its own (served no-cache, a
+      // round trip on every open without the service worker). The file is still published for older pages
+      const guard = fs.readFileSync(new URL("./public/guard.js", import.meta.url), "utf8");
+      if (guard.includes("</script")) throw new Error("public/guard.js cannot go inside the page");
+      html = html.replace('<script src="./guard.js"></script>', () => '<script id="fincom-guard">' + guard + "</script>");
       const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].filter((m) => !/type="module"/.test(m[0]))
         .map((m) => " 'sha256-" + crypto.createHash("sha256").update(m[1], "utf8").digest("base64") + "'").join("");
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + csp(mode, hashes) + '">\n</head>');

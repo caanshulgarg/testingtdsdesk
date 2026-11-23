@@ -18,6 +18,7 @@
 //
 // State: S.ledQ (the find box), S.ledEdit (the row being changed), S.ledEditPrev (that row before the change, for Undo),
 // S.ledUndo (the last step, for the Undo line).
+import "../../../../src/js/99-screen-parts.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import NeedAction from "../../parts/NeedAction.jsx";
 import { UnknownBody, unknownGroup } from "../../parts/UnknownLedgers.jsx";

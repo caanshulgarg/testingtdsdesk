@@ -3,6 +3,7 @@
 // difference, then also show it in the difference."). The party's statement in any format (the sheet engine: AI once
 // for a new format, then its saved columns) against the party's ledger in FinCom's copy of the books. The logic is
 // PartyRecon (app/src/lib/registers.js); the upload goes through the register panel (parts/SheetPanel.jsx).
+import "../../../../src/js/99-screen-parts.js";
 import { useEffect, useState } from "react";
 import Loading from "../../parts/Loading.jsx";
 import ListTable from "../../parts/ListTable.jsx";

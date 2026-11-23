@@ -19,6 +19,12 @@ const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
 const GateBanner = lazy(() => import("./parts/GateBanner.jsx"));
 // next-assistant (phase 1 design): Daily Check, what last night's checks left, in a file of its own
 const DailyCheck = lazy(() => import("./screens/daily/DailyCheck.jsx"));
+// the new look's pages (newlook/flag.js): Bank with its Statements tab, the one Tally page, the row of a menu item's pages
+import { newLook } from "./newlook/flag.js";
+const NLBank = lazy(() => import("./newlook/Bank.jsx"));
+const NLTally = lazy(() => import("./newlook/Tally.jsx"));
+const NLDue = lazy(() => import("./newlook/Due.jsx"));
+const NLTabs = lazy(() => import("./newlook/Shell.jsx").then((m) => ({ default: m.NLTabs })));
 const PausedPage = lazy(() => import("./parts/GateBanner.jsx").then((m) => ({ default: m.PausedPage })));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
@@ -47,19 +53,19 @@ function Screen() {
     if (S.loadingCo) return <PageSkeleton what={co.name + "’s work"} />;
     // the vendor reconciliation's old place: Reconciliations → Vendors now (src/js/42 vrOpen)
     if (S.tab === "invoices") return S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
-    if (S.tab === "bank") return <Bank />;
+    if (S.tab === "bank") return newLook() ? <NLBank /> : <Bank />;
     if (S.tab === "sales") return <Sales />;
     if (S.tab === "deductees") return <Parties />;
     return <Export />;
   }
   const t = S.homeTab;
-  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? <Compliance /> : t === "inbox" ? <InboxAll /> : t === "tally" ? <TallyHome /> : t === "integrations" ? <Integrations /> : t === "meetings" ? <Meetings /> : t === "daily" ? <DailyCheck /> : t === "rules" ? <FirmSettings /> : <Clients />;
+  return t === "help" ? <Help /> : t === "today" ? <Today /> : t === "compliance" ? (newLook() ? <NLDue /> : <Compliance />) : t === "inbox" ? <InboxAll /> : t === "tally" ? (newLook() ? <NLTally /> : <TallyHome />) : t === "integrations" ? <Integrations /> : t === "meetings" ? <Meetings /> : t === "daily" ? <DailyCheck /> : t === "rules" ? <FirmSettings /> : <Clients />;
 }
 
 // the bar at the foot of a client's bank, sales or bills
 function Bar() {
   if (S.view !== "company") return null;
-  if (S.tab === "bank") return B() && !B().loading && curStmt() ? <BankBar /> : null;
+  if (S.tab === "bank") return B() && !B().loading && curStmt() && !(newLook() && S.nlBankTab === "stmts") ? <BankBar /> : null;
   if (S.tab === "sales") return salesBarOn() ? <SalesBar /> : null;
   return S.tab === "invoices" ? <ActionBar /> : null;
 }
@@ -79,6 +85,7 @@ export default function Main({ v }) {
     {/* tds-layout (14-Oct-2026; the owner: "why is there Overview, Bills, GST, MIS and Settings in TDS?"): no row of the
         client's pages here any more (the sidebar lists them); its Tally chip is on the title line (TopBar.jsx ClientHeader) */}
     {FirmGate.why() && <Suspense fallback={null}><GateBanner /></Suspense>}
+    {company && newLook() && <Guard name="the pages of this item" v={v} quiet><Suspense fallback={null}><NLTabs /></Suspense></Guard>}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}

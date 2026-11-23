@@ -2,6 +2,7 @@
 // reversed under rules 42 and 43. Were viewGstAmend, viewGstAdv and viewGstRev (src/js/18). The figures come from
 // GSTAmend (13), GSTAdv (14) and GSTRev (15); what the user corrects is saved by amendSetAct, advFix, assetSet
 // (src/js/23). GSTR-1A under Amendments is Filing.jsx.
+import "../../../../src/js/99-screen-parts.js";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Gstr1a } from "./Filing.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
