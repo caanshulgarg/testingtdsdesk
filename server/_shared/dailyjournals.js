@@ -339,6 +339,7 @@ export function payrollSettings(co, heads) {
     vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort(), typed: Array.from(typed).sort() };
 }
 export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
+const tpHolds = (inp, d) => { const t = Date.parse(String(d.at || "")); return live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !(isFinite(t) && Date.now() - t > 24 * 3600e3); };
 const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
 // the salary booked for a month (review H2, N5; next-payroll review B1): any entry with a salary expense on the debit side
 // (salaryClass), a pay head of Tally's payroll (an earning: an expense ledger for payroll, "Basic", "HRA"), or any ledger
@@ -363,7 +364,10 @@ export function payrollOne(ym, rows, inp) {
   if (tp.method === "tally" && !(tp.journal || {})[ym]) return tallyOne(ym, rows, inp, { key, dedupe, vid, label, date, base, you });
   if (posted(inp, vid)) return null;
   { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
-  if (pending(inp, dedupe)) return null;
+  // (fourth review) a Tally Payroll part of this month (posted as Tally Payroll before the owner chose a journal) holds the
+  // journal back while it may be in Tally: its FinCom id in the books (then the salary is booked anyway), or sent within
+  // the last day; one a day old and not in the books (deleted in Tally) does not (Approve settles it from Tally first)
+  if ((inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && (!/^dc-tp-/.test(String(d.vid || "")) || tpHolds(inp, d)))) return null;
   // 1. the sheet itself
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you("Payroll " + label + ": the sheet has surcharge or cess on TDS. Book it by hand.");
   const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });

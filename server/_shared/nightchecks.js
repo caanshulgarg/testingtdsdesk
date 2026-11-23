@@ -337,9 +337,10 @@ export const salaryNamed = (l) => SALARY_RE.test(l) && !NOT_SALARY.test(l);
 // Employees", bonus, overtime, arrears), by Tally's pay head type; with no type (a bridge before 2.4.4), by its name. The
 // employer's contributions (PF, ESI, EDLI, admin charges), gratuity, reimbursements, loans and deductions are not salary
 // (third review) by Tally's type alone when it gives one (arrears are salary whatever their type, as 73-payroll.js has
-// it); by the name only when it gives none ("Company PF Share", "Mediclaim (Company)", "Employer ESI": not salary)
+// it); by the name only when it gives none ("Company PF Share", "Mediclaim (Company)", "Employer ESI": not salary; an
+// earning such as "Company Car Allowance" is: "company" counts only with a share, PF, ESI or insurance word)
 const NOT_EARN_TYPE = /employer|gratuity|reimburse|loan|advance|deduction|not applicable/i;
-const EMPLOYER_NAME = /employer|\bcompany('?s)?\b|\bco\.?\s*(share|contribution)|gratuity|contribution|\bedli\b|admin(istrative|istration)?\s*charge|mediclaim|\bbonus\s*provision/i;
+const EMPLOYER_NAME = /employer|gratuity|contribution|\bedli\b|admin(istrative|istration)?\s*charge|mediclaim|\bbonus\s*provision|\b(company|co\.?)('?s)?\b.*\b(share|pf|epf|esic?|insurance)\b|\b(share|pf|epf|esic?)\b.*\bcompany\b/i;
 const NOT_EARN_NAME = /payable|reimburse|\bloan\b|advance|\btds\b|income\s*tax|prof(essional)?\.?\s*tax|\b(e?pf|esic?)\b/i;
 const ARREARS = /\bar{1,2}ears?\b/i;
 export function earningHead(name, type) {

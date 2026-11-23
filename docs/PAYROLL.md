@@ -294,6 +294,15 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
   month's new count of parts on every part and a fingerprint of the accepted differences (each employee's amounts by
   pay head among them): anything else differing is asked again. The night checks the books for a part's FinCom id
   before saying "Not confirmed in Tally".
+- **Fourth review (23-Nov-2026)**: a send never answered (or Tally holding a part FinCom has no record of sending) is
+  settled from Tally's own copy, read afresh, before anything is refused, and only while no posting of that part runs in
+  the queue: FinCom's id there with the same employees and amounts -> in Tally; other figures -> in Tally as Tally has it
+  (the change named, accepting offered when the rest builds from the remaining employees); not there -> "not posted",
+  sent again (the bridge's check by FinCom's id guards a copy behind Tally). Nothing is sent again while the id is in
+  Tally. "Post as a journal this month": the night no longer waits on a Tally Payroll part a day old and not in the books,
+  and Daily Check's Approve settles each part first (deleted in Tally, or a day old and never seen); a part in Tally holds
+  the journal back. Changed parts name who joined and who is in another part now. With no pay head type, "company"
+  marks an employer's head only with a share, PF, ESI or insurance word.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: the `assistant-night` function (dailyjournals.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.

@@ -83,7 +83,7 @@ function world(rows, o = {}) {
   const g = { tallyVia: () => "bridge", Bridge: { st: { version: "2.5.18" }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers[0].id); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
     TCloud: { on: () => true, has: () => false }, Cloud: { api: async (path) => (String(path).startsWith("night_findings") ? (o.findings || []) : []) } };
   const rpc = async (fn) => { log.push(fn); return { ok: true }; };
-  const env = Object.assign({ g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {} }, o.noPrior ? {} : { prior: [] });
+  const env = Object.assign({ g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {} }, o.noPrior ? {} : { prior: [] }, o.readPart ? { readPart: o.readPart } : {});
   const run = async (e) => {
     Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E.GSTR, GSTF: E.GSTF, GSTSet: E.GSTSet, Books: E.Books, ledGroupPath: E.ledGroupPath });
     try { return await TPost.approveTallyPayroll(Object.assign({ id: "n1", client_id: "c1", state: "ready" }, e), Object.assign({}, env, run.extra || {})); }
@@ -201,12 +201,13 @@ console.log("2, 3, 4, 6: the bridge asked, the payable and type, cost categories
   // (third review) "already in Tally" counts only when FinCom's record of the earlier, unanswered send is this very XML
   const v6 = TPost.prepare({ co: rows6.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows6.ledgers.map((l) => l.name), books: {} }).vouchers[0], x6 = TP.payrollVoucherXml(v6);
   const lost = (xml) => ({ "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", kind: "tallyPayroll", part: 1, parts: 1, state: "posting", sent: { xml, at: "2026-11-22T10:00:00Z" }, results: { "dc-tp-202610-1": { ok: false, state: "sent" } }, vouchers: [{ xml }] } });
-  w6 = world(rows6, { drafts: lost(x6), answer: (v) => ({ id: v.id, ok: false, message: "Already in Tally (voucher no. 41)" }) });
+  const has41 = async () => ({ found: true, no: "41", employees: TPost.readVoucherXml(x6).employees });
+  w6 = world(rows6, { drafts: lost(x6), readPart: async () => ({ found: false, deleted: false }), answer: (v) => ({ id: v.id, ok: false, message: "Already in Tally (voucher no. 41)" }) });
   r6 = await w6.run(e6);
-  ok(r6.ok && /already in Tally \(not sent again\)/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  already in Tally (voucher no. 41) after an unanswered send of the same XML: in Tally, with its number");
-  w6 = world(rows6, { drafts: lost(x6), answer: (v) => ({ id: v.id, ok: true, existed: true, vchId: "42" }) });
+  ok(r6.ok && /already in Tally \(not sent again\)/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  an unanswered send not in Tally's copy yet: sent again as the same XML; Tally says already there (no. 41): in Tally");
+  w6 = world(rows6, { drafts: lost(x6), readPart: has41 });
   r6 = await w6.run(e6);
-  ok(r6.ok && /already in Tally/.test(r6.words), "  existed: in Tally");
+  ok(r6.ok && !w6.posts.length && /already in Tally/.test(r6.words) && w6.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].tallyId === "41", "  fourth review: an unanswered send found in Tally's copy with the same figures: in Tally, not sent again");
   w6 = world(rows6, { answer: (v) => ({ id: v.id, ok: true, existed: true, vchId: "42" }) });
   r6 = await w6.run(e6);
   ok(!r6.ok && /from an earlier send FinCom has no record of/.test(r6.why) && w6.log.includes("entry_release"), "  already in Tally with no record of sending it: refused, released (what is in Tally can't be vouched for)");
@@ -363,7 +364,7 @@ console.log("re-review 7: Tally's payroll read leaves out merged and deleted led
 console.log("third review: the page closed between parts, and the sheet changed before the retry");
 {
   // a made-up Tally that keeps each voucher by FinCom's id: a second send of an id is "Already in Tally"
-  const tallyOf = () => { const T = new Map(); return { T, answer: (v) => { if (T.has(v.id)) return { id: v.id, ok: false, message: "Already in Tally (voucher no. " + (Array.from(T.keys()).indexOf(v.id) + 1) + ")" }; T.set(v.id, v.xml); return { id: v.id, ok: true, created: 1, vchId: String(500 + T.size) }; } }; };
+  const tallyOf = () => { const T = new Map(); return { T, read: async (cid, id) => (T.has(id) ? { found: true, no: String(Array.from(T.keys()).indexOf(id) + 1), employees: TPost.readVoucherXml(T.get(id)).employees } : { found: false, deleted: false }), answer: (v) => { if (T.has(v.id)) return { id: v.id, ok: false, message: "Already in Tally (voucher no. " + (Array.from(T.keys()).indexOf(v.id) + 1) + ")" }; T.set(v.id, v.xml); return { id: v.id, ok: true, created: 1, vchId: String(500 + T.size) }; } }; };
   const paid = (T) => Array.from(T.values()).flatMap((x) => TPost.readVoucherXml(x).employees.map((e) => e.name));
   const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
   // the late joiner comes first in Tally's employee list (by name), so part 1 built now is not part 1 as sent
@@ -377,14 +378,13 @@ console.log("third review: the page closed between parts, and the sheet changed 
     const p1 = TPost.readVoucherXml(ty.T.get("dc-tp-202610-1"));
     const x = inTally({ id: "dc-tp-202610-1", narration: "Salary", payable: "Salary Payable", net: p1.net, employees: p1.employees.map((e) => ({ name: e.name, heads: e.heads })) }, "tp1");
     const rows2 = rowsOf({ sheet: sheet2, vouchers: [x.voucher] }), t2 = night(rows2, { draftRecs: asRecs(w.drafts) });
-    const w2 = world(rows2, { sheet: sheet2, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv, answer: (v) => ty.answer({ id: v.id, xml: w2.posts[w2.posts.length - 1].vouchers[0].xml }) });
+    const w2 = world(rows2, { sheet: sheet2, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv, readPart: ty.read, answer: (v) => ty.answer({ id: v.id, xml: w2.posts[w2.posts.length - 1].vouchers[0].xml }) });
     const r = await w2.run(t2.entry);
     ok(t2.entry && !r.ok && r.stuck && ty.T.size === 1 && !w2.posts.length, "  the retry with a late joiner: refused, nothing sent (" + String(r.why || "it was posted").slice(0, 120) + "…)");
-    if (!lostAnswer) {
-      w2.run.extra = { accept: true };
-      const r2 = await w2.run(t2.entry), names = paid(ty.T);
-      ok(r2.ok && names.length === 151 && new Set(names).size === 151 && names.includes("Aaa Late Joiner"), "  accepted as it is in Tally: everyone on the sheet paid exactly once (151), the late joiner too");
-    } else ok(/never had Tally’s answer/.test(String(r.why || "")), "  the part whose answer was lost goes again only as the very XML sent then");
+    ok(r.canAccept && /joined this part now: Aaa Late Joiner/.test(String(r.why)) && /in another part now: Made Up Person 099 \(now part 2\)/.test(String(r.why)), "  what changed, by name: who joined part 1 and who is in another part now" + (lostAnswer ? " (the lost answer settled from Tally's copy first)" : ""));
+    w2.run.extra = { accept: true };
+    const r2 = await w2.run(t2.entry), names2 = paid(ty.T);
+    ok(r2.ok && names2.length === 151 && new Set(names2).size === 151 && names2.includes("Aaa Late Joiner"), "  accepted as it is in Tally: everyone on the sheet paid exactly once (151), the late joiner too");
     const names = paid(ty.T);
     ok(new Set(names).size === names.length, "  nobody paid twice");
   }
@@ -428,6 +428,56 @@ console.log("third review: types first, the accepted parts counted, acceptance a
   const dr = { "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", parts: 1, part: 1, state: "posted", results: { "dc-tp-202610-1": { ok: true, at: new Date(Date.now() - 30 * 3600e3).toISOString() } } } };
   const tb = night(rowsOf({ vouchers: [xi.voucher] }), { draftRecs: asRecs(dr) }), all = journals(tb.inp).findings;
   ok(!all.some((f) => f.kind === "sent_check") && !tb.entry, "(d) its FinCom id in the books: in Tally, no “Not confirmed in Tally”, the month done");
+}
+
+console.log("fourth review (6): no type, an earning named “Company …” is salary");
+ok(earningHead("Company Car Allowance", "") && earningHead("Company Lease Allowance", "") && !earningHead("Company PF Share", "") && !earningHead("Company ESI", "") && !earningHead("Co. Share of PF", ""), "“company” is employer's only with a share, PF, ESI or insurance word");
+
+console.log("fourth review: sends never answered, settled from Tally itself");
+{
+  const rows = rowsOf(), e = night(rows).entry;
+  const v1 = TPost.prepare({ co: rows.co, ym: YM, rows: SHEET, pay: payOf(SHEET), ledgers: rows.ledgers.map((l) => l.name), books: {} }).vouchers[0], x1 = TP.payrollVoucherXml(v1);
+  const sheetB = SHEET.map((r) => (r.name === "Asha Verma" ? emp(r.name, 16000, 6000, { pt: 200, pf: 1800, esi: 188, adv: 2000 }) : r)), rowsB = rowsOf({ sheet: sheetB }), eB = night(rowsB).entry;
+  const draft = (sent) => ({ "dc-tp-202610-1": { id: "dc-tp-202610-1", dedupe: "payroll:202610", kind: "tallyPayroll", part: 1, parts: 1, state: sent.unknown ? "failed" : "posting", sent, results: { "dc-tp-202610-1": { ok: false, state: sent.unknown ? "failed" : "sent", at: "2026-11-22T10:00:00Z" } }, vouchers: [{ xml: x1, date: "2026-10-31" }] } });
+  // B: part 1 really in Tally with the old figures; the sheet changed since (Asha's basic)
+  let w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }), readPart: async () => ({ found: true, no: "7", employees: TPost.readVoucherXml(x1).employees }) });
+  let r = await w.run(eB);
+  ok(!r.ok && r.stuck && !w.posts.length && w.drafts["dc-tp-202610-1"].sent.answered === "ok" && /Asha Verma’s net/.test(r.why), "B: the unanswered send found in Tally (old figures): settled as in Tally, the change named, nothing sent: " + r.why.slice(0, 120));
+  ok(!r.canAccept, "  (Asha's amount differs from the sheet: no accepting; correct Tally or the sheet)");
+  w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }), readPart: async () => ({ found: false, deleted: true }) });
+  r = await w.run(eB);
+  ok(r.ok && w.posts.length === 1 && /Asha Verma/.test(w.posts[0].vouchers[0].xml) && /<AMOUNT>-16000\.00<\/AMOUNT>/.test(w.posts[0].vouchers[0].xml), "B after part 1 is deleted in Tally: settled as not posted, the part built now posted");
+  w = world(rowsB, { sheet: sheetB, drafts: draft({ xml: x1, at: "2026-11-22T10:00:00Z" }) });
+  w.env.g.Cloud.api = async (path) => (/tally_post_jobs/.test(path) ? [{ id: "j9", status: "running" }] : []);
+  w.drafts["dc-tp-202610-1"].job = "j9";
+  r = await w.run(eB);
+  ok(!r.ok && /on its way/i.test(r.why) && !w.posts.length, "  a posting of that part still running in the queue: waited for, never settled meanwhile");
+  // C: Tally had it with no record of sending (sent unknown); then the voucher deleted in Tally
+  w = world(rows, { drafts: draft({ xml: null, at: "", unknown: true }), readPart: async () => ({ found: true, no: "8", employees: TPost.readVoucherXml(x1).employees }) });
+  r = await w.run(e);
+  ok(r.ok && !w.posts.length && /already in Tally/.test(r.words), "C: in Tally with no record of sending: Tally's figures are the part built now: in Tally, nothing sent");
+  w = world(rows, { drafts: draft({ xml: null, at: "", unknown: true }), readPart: async () => ({ found: false, deleted: true }) });
+  r = await w.run(e);
+  ok(r.ok && w.posts.length === 1 && w.drafts["dc-tp-202610-1"].results["dc-tp-202610-1"].ok, "C after the voucher is deleted in Tally: not posted, sent again, in Tally");
+  // post as a journal this month, after settling: the night prepares the journal, Daily Check's approve settles first
+  const rowsJ = rowsOf({ co: { payrollJournal: { [YM]: { by: "x" } } }, sheet: SHEET.map((r) => Object.assign({}, r, { ded: {}, otherDed: 0, net: r2(r.gross - r.tds - r.profTax - r.pf - r.esi) })), ledgers: { "TDS on Salary 192": "Duties & Taxes", "Professional Tax Payable": "Duties & Taxes", "PF Payable": "Duties & Taxes", "ESI Payable": "Duties & Taxes" } });
+  const dj = draft({ xml: x1, at: new Date(Date.now() - 2 * 3600e3).toISOString() });
+  const picks = [["profTax", "Professional Tax Payable"], ["pf", "PF Payable"], ["esi", "ESI Payable"]].map(([k, l]) => ({ kind: "ledger_pick", key: "led:" + k, state: "resolved", evidence: [{ t: "ledger", ledger: l }], undone: false }));
+  let tj = night(rowsJ, { draftRecs: asRecs(dj), prior: picks });
+  ok(tj.entry && tj.entry.voucher.kind === "payroll", "journal this month: the night prepares the journal (the unanswered Tally Payroll part is not in the books)");
+  const gj = { Cloud: { api: async () => [] }, TCloud: {} }, Aj = { Drafts: { save: async (cid, d) => { dj[d.id] = JSON.parse(JSON.stringify(d)); return true; } } };
+  let st = await TPost.settleParts(rowsJ.co, tj.entry, Object.values(dj), {}, Aj, gj, { forJournal: true, readPart: async () => ({ found: false, deleted: false }) });
+  ok(st.waits.length === 1 && dj["dc-tp-202610-1"].sent.answered !== "gone", "  approving it 2 hours after the part was sent, not in Tally's copy yet: waits (a journal is not checked by FinCom's id)");
+  st = await TPost.settleParts(rowsJ.co, tj.entry, Object.values(dj), {}, Aj, gj, { forJournal: true, readPart: async () => ({ found: false, deleted: true }) });
+  ok(!st.waits.length && dj["dc-tp-202610-1"].state === "failed" && dj["dc-tp-202610-1"].sent.answered === "gone", "  the part deleted in Tally: settled as not posted");
+  const okd = { "dc-tp-202610-1": Object.assign({}, dj["dc-tp-202610-1"], { state: "posted", sent: { xml: x1, answered: "ok" }, results: { "dc-tp-202610-1": { ok: true, state: "posted", tallyId: "7", at: new Date(Date.now() - 3 * 3600e3).toISOString() } } }) };
+  tj = night(rowsJ, { draftRecs: asRecs(okd), prior: picks });
+  ok(!tj.entry, "  a part posted in Tally (its draft says so, within a day): no journal");
+  okd["dc-tp-202610-1"].results["dc-tp-202610-1"].at = new Date(Date.now() - 30 * 3600e3).toISOString();
+  tj = night(rowsJ, { draftRecs: asRecs(okd), prior: picks });
+  ok(tj.entry && tj.entry.ready, "  a day later, its FinCom id not in the books (deleted in Tally): the journal is prepared");
+  st = await TPost.settleParts(rowsJ.co, tj.entry, Object.values(okd), {}, { Drafts: { save: async (cid, d) => { okd[d.id] = JSON.parse(JSON.stringify(d)); return true; } } }, gj, { forJournal: true, readPart: async () => ({ found: false, deleted: true }) });
+  ok(okd["dc-tp-202610-1"].state === "failed", "  and Daily Check's Approve settles that part as not in Tally before the journal goes");
 }
 
 console.log("the drafts the night reads carry the parts");
