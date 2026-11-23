@@ -214,11 +214,31 @@ that). A payroll-shaped voucher would therefore already pass the bridge if FinCo
 is the only stop: this branch never sends one (no `Bridge.post` from the Payroll page; Approve is held by
 `payrollHold`). Step 1 of 4.2 closes that, by routing such bodies to their own, narrower id.
 
-### 4.3 What happens after sign-off (app side, small)
+### 4.3 The app side: Approve posts it (built 23-Nov-2026, not published)
 
-- `tallyPayroll.js` vouchers become Daily Check drafts (`dc-tp-<ym>[-n]`).
-- Approve posts each through `postDraft` → `Bridge.post`, one voucher per call, with the same claim, release and
-  approved steps as the journal.
-- `payrollHold` then lets a Tally Payroll company's Approve post the voucher instead of the journal.
-
-The bridge side is built (section 4). The app wiring above is the next step.
+- **Builder** (`app/src/lib/tallyPayroll.js`): exactly the shape `payrollimport.go` accepts. Never a REMOTEID. Free
+  text (narration, category) is cleaned: no-break and other odd spaces become spaces, control and format characters are
+  dropped, trimmed, capped (narration with FinCom's id at most 2,000 characters). A Tally master's name (employee, pay
+  head, salary payable ledger, voucher type, the company) is never changed: one the bridge would refuse (a no-break
+  space, a control character, over 200 characters) is listed, "Rename it in Tally". Also refused in plain words: a net of
+  zero or less, a negative earning, one pay head for an earning and a deduction, more than 50 pay heads, an amount past
+  10 digits of rupees, an employee twice. A month is split into vouchers of at most 100 employees and under the 1 MiB
+  request cap, each its own posting (`dc-tp-<yyyymm>-<n>`).
+- **Approve** (`app/src/lib/payrollPost.js`), from the Payroll page or Daily Check › Entries (data.js
+  `tallyPayrollFor`; the journal is still posted for a month marked "Post as a journal this month"):
+  1. the post gate, and the posting bridge (this computer's, or the one the cloud's queue goes to) 2.5.18 or later, else
+     "Install FinCom Bridge 2.5.18 to post Tally Payroll" with the download (latest.json);
+  2. the second check: `again.js recheck` on the night's payroll entry, the vouchers made again from `b.salary`, every
+     employee and pay head in the payroll FinCom read from Tally (`Payroll.data()`, no new Tally request), the bridge's
+     rules, the night entry's gross and net, and on the Payroll page the very XML shown;
+  3. `entry_claim` on the night's entry (migration 208);
+  4. one voucher a `Bridge.post`, each kept as a draft with the night's dedupe; a part already in Tally is not sent
+     again, one queued is waited for;
+  5. the proof: "Tally created 1 payroll voucher (voucher id …)", or Tally's refusal in plain words; `entry_approved`, or
+     `entry_release` to try again.
+- **Tests**: `node tests/run_payroll_post.mjs` (the builder's output and tampered copies through the bridge's own Go
+  checks, by a `go test -overlay` that adds nothing to the tree; the approve flow with fakes) and section 8 of
+  `tests/run_payroll_flex_ui.py`.
+- **Open**: Approve needs the night's payroll entry for the claim. A month whose sheet has other deductions, or whose
+  journal ledgers are not picked, gets no night entry, so it cannot be approved yet (the night would need a Tally
+  Payroll entry of its own).

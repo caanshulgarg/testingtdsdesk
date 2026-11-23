@@ -6,20 +6,24 @@
 //      AI (the header and at most 3 masked rows), the owner confirms the mapping, it is saved as the client's rule
 //   3. Or typed in, employee by employee, with running totals and each row checked
 //   4. The preview: the payroll journal (Daily Check's own builder; approved on Daily Check › Entries), or the Tally
-//      Payroll voucher, which needs the owner's OK of its new Tally request before it can be posted (until then: "Post as a
-//      journal this month")
+//      Payroll voucher (bridge 2.5.18, FinComPayrollImport): Approve here posts it (lib/payrollPost.js: the second check,
+//      the claim on the night's entry, one voucher a posting, Tally's answer as the proof); the owner may still choose "Post
+//      as a journal this month"
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Check, AlertTriangle, Sparkles, ScrollText, Upload, PencilLine } from "lucide-react";
 import * as PS from "../../lib/payrollSheet.js";
 import * as TP from "../../lib/tallyPayroll.js";
+import * as TPost from "../../lib/payrollPost.js";
 import { payrollOne } from "../../../../server/_shared/dailyjournals.js";
 import { inputOf } from "../daily/again.js";
 import "./payroll.css";
-/* global S, CO, Store, saveBooks, openBooks, toast, Payroll, whoAmI */
+/* global S, CO, Store, saveBooks, openBooks, toast, Payroll, whoAmI, Cloud */
 
 const rs = PS.inr;
 const say = (m) => { try { toast(m); } catch (e) { /* no toast here */ } };
 const owner = () => { try { const r = S.account && S.account.me && S.account.me.role; return r === "owner" || !r; } catch (e) { return false; } };
+const canWrite = () => { try { const r = S.account && S.account.me && S.account.me.role; return r === "owner" || r === "staff" || !r; } catch (e) { return false; } };
+const cloudOn = () => { try { return typeof Cloud === "object" && Cloud.on(); } catch (e) { return false; } };
 const who = () => { try { return typeof whoAmI === "function" ? whoAmI() : ""; } catch (e) { return ""; } };
 const saveCo = (co) => { try { Store.saveCompany(co); } catch (e) { /* kept on this page */ } };
 const curYm = () => { const d = new Date(Date.now() + 5.5 * 3600e3); d.setUTCMonth(d.getUTCMonth() - 1); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, "0"); };
@@ -175,26 +179,57 @@ function JournalPreview({ co, rows, ledgers, asOnce }) {
       : <p className="pr-line bad" data-why="">{why}</p>}
   </section>;
 }
-function TallyPreview({ co, rows, ledgers, onJournal }) {
-  const pd = payData(), heads = pd.heads || {}, emps = (pd.employees || []).filter((x) => !x.group), [, kick] = useState(0);
-  const saved = co.payHeadPlan || {}, { plan, missing } = TP.payHeadPlan(rows, heads, saved);
-  const ym = (rows[0] || {}).month || "", payable = (co.payrollPayable && ledgers.includes(co.payrollPayable)) ? co.payrollPayable : (ledgers.find((l) => /salar(y|ies).*payable|payable.*salar/i.test(l)) || "");
-  const out = TP.payrollVouchers({ id: "dc-tp-" + ym, date: ((rows[0] || {}).date) || "", label: PS.monLabel(ym), type: co.payrollVchType || "Payroll", payable, rows, plan, employees: emps });
-  const pick = (k, v) => { co.payHeadPlan = Object.assign({}, saved, { [k]: v }); saveCo(co); kick((x) => x + 1); };
+function Proof({ res }) {
+  const parts = res.proof || [];
+  return <div className={"pr-proof " + (res.ok ? "ok" : "bad")} data-proof={res.ok ? "ok" : "bad"} role="status">
+    <p className="pr-line">{res.ok ? <Check width={14} height={14} aria-hidden="true" /> : <AlertTriangle width={14} height={14} aria-hidden="true" />} <b>{res.ok ? "Posted to Tally" : "Not posted"}</b></p>
+    {parts.map((r) => <p key={r.id} className="pr-line" data-part={r.id}>{r.words}</p>)}
+    {!parts.length && <p className="pr-line">{res.why}</p>}
+    {(res.problems || []).length > 1 && <ul className="pr-list">{res.problems.map((w, i) => <li key={i}>{w}.</li>)}</ul>}
+  </div>;
+}
+function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
+  const pd = payData(), heads = pd.heads || {}, [, kick] = useState(0);
+  const ym = (rows[0] || {}).month || "";
+  const p = TPost.prepare({ co, ym, rows, date: TPost.lastDay(ym), pay: pd, ledgers });
+  const pick = (k, v) => { co.payHeadPlan = Object.assign({}, co.payHeadPlan, { [k]: v }); saveCo(co); kick((x) => x + 1); };
   const once = (co.payrollJournal || {})[ym];
+  const [ent, setEnt] = useState(undefined), [busy, setBusy] = useState(""), [res, setRes] = useState(null), [setup, setSetup] = useState(undefined), [past, setPast] = useState([]);
+  useEffect(() => { let on = true; setEnt(undefined); TPost.loadEntry(co.id, ym).then((x) => on && setEnt(x)); return () => { on = false; }; }, [co.id, ym, res]);
+  useEffect(() => { let on = true; TPost.setupLink().then((x) => on && setSetup(x)); return () => { on = false; }; }, []);
+  useEffect(() => { let on = true; if (ent && ent.state === "approved") import("../../lib/asstEntries.js").then((A) => TPost.proofOf(co.id, ym, A)).then((x) => on && setPast(x || [])).catch(() => {}); return () => { on = false; }; }, [ent && ent.state]);
+  const br = TPost.postingBridge(co), brOk = TPost.bridgeOk(br.version), cloud = cloudOn();
+  const going = ent && ent.state === "approving" && Date.now() - Date.parse(ent.updated_at || 0) < 30 * 60000;
+  const approve = async () => {
+    setBusy("Checking again…"); setRes(null);
+    let r;
+    try { r = await TPost.approveTallyPayroll(ent, { co, seen: p.vouchers.map(TP.payrollVoucherXml), progress: (v, pj) => setBusy((v.parts > 1 ? "Part " + v.part + " of " + v.parts + ": " : "") + ((pj && pj.message) || "Posting…")) }); }
+    catch (x) { r = { ok: false, why: String((x && x.message) || x) }; }
+    setBusy(""); setRes(r); say(r.ok ? r.words : r.why);
+  };
+  const net = p.vouchers.reduce((s, v) => s + v.net, 0), done = (ent && ent.state === "approved") || (res && res.ok);
   return <section className="pr-card" data-preview="tally">
-    <div className="pr-title">Tally Payroll voucher · {PS.monLabel(ym)} {out.vouchers.length > 0 && <b className="pr-amt">{rs(out.vouchers.reduce((s, v) => s + v.net, 0))}</b>} <span className="pr-chip warn" data-needs-ok="">Needs your OK</span></div>
-    {missing.length > 0 && <div className="pr-heads">{missing.map((k) => <label key={k} className="pr-hp">{TP.keyWords(k)} → <select value={plan[k] || ""} onChange={(ev) => pick(k, ev.target.value)} aria-label={"Tally pay head for " + TP.keyWords(k)}>
+    <div className="pr-title">Tally Payroll voucher · {PS.monLabel(ym)} {p.vouchers.length > 0 && <b className="pr-amt">{rs(net)}</b>} <span className={"pr-chip " + (done ? "ok" : p.problems.length || p.missing.length ? "bad" : "warn")} data-state="">{done ? "Approved" : p.problems.length || p.missing.length ? "Check first" : "To approve"}</span></div>
+    {p.missing.length > 0 && <div className="pr-heads">{p.missing.map((k) => <label key={k} className="pr-hp">{TP.keyWords(k)} → <select value={p.plan[k] || ""} onChange={(ev) => pick(k, ev.target.value)} aria-label={"Tally pay head for " + TP.keyWords(k)}>
       <option value="">Pick the pay head</option>{Object.keys(heads).map((h) => <option key={h} value={h}>{h}</option>)}</select></label>)}</div>}
-    {out.problems.filter((p) => !/^Pick the pay head/.test(p)).slice(0, 3).map((p, i) => <p key={i} className="pr-line bad">{p}.</p>)}
-    {out.vouchers.map((v) => <div key={v.id} className="pr-vch" data-voucher={v.id}>
-      <p className="pr-line">{v.employees.length} employees · net {rs(v.net)} to <b>{v.payable}</b></p>
+    {p.problems.length > 0 && <div className="pr-need" data-need=""><p className="pr-line bad"><b>Before posting</b>, Tally needs:</p><ul className="pr-list">{p.problems.map((w, i) => <li key={i}>{w}.</li>)}</ul></div>}
+    {p.vouchers.map((v) => <div key={v.id} className="pr-vch" data-voucher={v.id}>
+      <p className="pr-line">{v.parts > 1 ? "Part " + v.part + " of " + v.parts + " · " : ""}{v.employees.length} employee{v.employees.length === 1 ? "" : "s"} · net {rs(v.net)} to <b>{v.payable}</b></p>
       <More label="Employees and pay heads" id={"emp-" + v.id}>{v.employees.map((e) => <div key={e.name} className="pr-emp"><b>{e.name}</b> <span className="note">{e.heads.map((h) => h.head + " " + rs(Math.abs(h.amount)) + (h.earn ? "" : " (ded.)")).join(" · ")}</span> <span className="pr-amt">{rs(-e.amount)}</span></div>)}</More>
-      <More label="Tally XML (new request)" id={"xml-" + v.id}><pre className="pr-pre" data-xml="">{TP.payrollVoucherXml(v)}</pre>
-        <p className="note">{TP.validatePayrollXml(TP.payrollVoucherXml(v)).length ? "Not the spec's shape." : "The exact shape in docs/PAYROLL.md: one voucher, Create only, no master."}</p></More>
+      <More label="Tally XML" id={"xml-" + v.id}><pre className="pr-pre" data-xml="">{TP.payrollVoucherXml(v)}</pre>
+        <p className="note">One payroll voucher, Create only, in a posting of its own. FinCom creates no employee or pay head.</p></More>
     </div>)}
-    <p className="pr-line note" data-wait="">Posting payroll vouchers is a new Tally request. It waits for your OK (docs/PAYROLL.md).</p>
-    {owner() && <div className="pr-acts"><button type="button" className={"btn small" + (once ? "" : " primary")} onClick={onJournal} data-journal-once="">{once ? "Post as Tally Payroll again" : "Post as a journal this month"}</button></div>}
+    {res && <Proof res={res} />}
+    {!res && past.length > 0 && <Proof res={{ ok: true, proof: past }} />}
+    {!done && p.vouchers.length > 0 && (!brOk ? <p className="pr-line pr-install" data-install=""><AlertTriangle width={14} height={14} aria-hidden="true" /> {TPost.OLD_BRIDGE}{br.version ? " (" + (br.where || "the posting computer") + " has " + br.version + ")" : ""}.{" "}
+        {setup ? <a className="btn small primary" href={setup.href} download={setup.file} data-bridge-download="">Download FinCom Bridge {setup.version}</a> : <span className="note">Download it on the Tally page.</span>}</p>
+      : !cloud ? <p className="pr-line note" data-no-cloud="">Sign in to the firm account to approve.</p>
+      : ent === undefined ? <p className="pr-line note">Reading…</p>
+      : !ent ? <p className="pr-line note" data-no-entry="">{kept ? "Kept with the books. Tonight’s Daily Check checks it; then Approve it here." : "Keep this sheet with the books first. Tonight’s Daily Check checks it; then Approve it here."}</p>
+      : going && !busy ? <p className="pr-line note" data-going="">Someone is approving it now.</p>
+      : <div className="pr-acts"><button type="button" className="btn small primary" disabled={!!busy || !canWrite()} onClick={approve} data-approve="">{busy ? "Posting…" : "Approve and post to Tally"}</button>
+        {busy ? <span className="note" data-busy="">{busy}</span> : <span className="note">FinCom checks it again first.</span>}</div>)}
+    {owner() && !done && <div className="pr-acts"><button type="button" className="linkbtn" onClick={onJournal} data-journal-once="">Post as a journal this month</button></div>}
   </section>;
 }
 
@@ -235,7 +270,7 @@ export default function PayrollPage() {
     {st && st.step === "map" && (st.busy ? <section className="pr-card"><p className="pr-line note">Reading the columns…</p></section> : <MapStep st={st} setSt={setSt} co={co} />)}
     {manual && <Manual ym={ym} setYm={setYm} onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
     {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} />}
-    {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} />
+    {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}
     {rows && chk.ok && !method && <p className="pr-line note">Set how this company books salary to see the entry.</p>}

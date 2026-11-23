@@ -6,8 +6,13 @@ made-up books and sheets (tests/payroll_sheets.mjs), FinCom's AI mocked (window.
      salary payable)
   4. the next upload of that layout: "Read by your saved layout · no AI", the AI not called again
   5. manual entry: rows typed, running totals, a row that does not add up marked
-  6. Tally Payroll: the voucher previewed, "Needs your OK", its XML on opening; no Bridge.post anywhere
+  6. Tally Payroll: the voucher previewed, its XML on opening; this computer's bridge too old: "Install FinCom Bridge
+     2.5.18 to post Tally Payroll" with the download; no Bridge.post
   7. a phone (390 px): no sideways scroll
+  8. Approve for Tally Payroll (the cloud, the bridge and Tally faked; the night's entry made from the page's own journal):
+     the second check, the claim before the posting, ONE voucher in the ONE Bridge.post (the bridge's shape, no REMOTEID),
+     the proof (Tally's created count and voucher id), entry_approved after; an employee Tally lacks listed and nothing
+     posted; a bridge older than 2.5.18: the install line and its download, nothing posted
 Screenshots (deviceScaleFactor 2, desktop 1440 and phone 390) into SHOTS (default scratchpad/shots-payroll). UI_PORT (8476)."""
 import os, sys, json, subprocess, threading, functools, http.server, tempfile
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -81,6 +86,7 @@ def noside(pg): return pg.evaluate("() => document.scrollingElement.scrollWidth 
 def run(br, w, kind):
     ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
     pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
     pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
     P = lambda: pg.evaluate("() => window.__pr")
@@ -127,24 +133,101 @@ def run(br, w, kind):
     pg.click("[data-manual-done]"); settle(pg, 300)
     pg.set_input_files("[data-sheet-in]", FILES["A"]); pg.wait_for_selector("[data-preview=tally]", timeout=10000); settle(pg, 300)
     tp = pg.inner_text("[data-preview=tally]")
-    ok("Needs your OK" in tp and "waits for your OK" in tp and len(P()["ai"]) == 1, kind + " 6. Tally Payroll: the voucher preview, Needs your OK (read by the rule, no AI)")
+    ok("Tally Payroll voucher" in tp and "Needs your OK" not in tp and len(P()["ai"]) == 1, kind + " 6. Tally Payroll: the voucher preview (read by the rule, no AI)")
     ok(pg.locator("[data-preview=tally] select").count() == 1 and "Gross" not in tp, kind + " 6. Basic has no same-named pay head: the owner picks it")
     pg.select_option("[data-preview=tally] select", "Basic Pay"); settle(pg, 300)
     tp = pg.inner_text("[data-preview=tally]")
     ok("3 employees · net ₹78,255.71 to Salary Payable" in tp, kind + " 6. the voucher: 3 employees, net ₹78,255.71 to Salary Payable")
     pg.click("[data-preview=tally] [data-more^=emp-] .pr-more-btn"); pg.click("[data-preview=tally] [data-more^=xml-] .pr-more-btn"); settle(pg, 200)
     x = pg.inner_text("[data-xml]")
-    ok('OBJVIEW="PaySlip Voucher View"' in x and "<EMPLOYEENAME>Mehta, Sunil</EMPLOYEENAME>" in x and "The exact shape" in tp + pg.inner_text("[data-preview=tally]"), kind + " 6. the XML on opening, the spec's shape")
-    shot(pg, "6-tally-payroll-needs-ok", kind)
+    ok('OBJVIEW="PaySlip Voucher View"' in x and "<EMPLOYEENAME>Mehta, Sunil</EMPLOYEENAME>" in x and "REMOTEID" not in x and "Create only" in pg.inner_text("[data-preview=tally]"), kind + " 6. the XML on opening, the bridge's shape, no REMOTEID")
+    ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in pg.inner_text("[data-install]") and pg.locator("[data-install] [data-bridge-download]").count() == 1, kind + " 6. no 2.5.18 bridge here: the install line with its download, no Approve")
+    shot(pg, "6-tally-payroll-preview", kind)
     pg.click("[data-journal-once]"); settle(pg, 300)
     ok(pg.locator("[data-preview=journal]").count() == 1 and "As a journal this month" in pg.inner_text("[data-preview=journal]") and P()["co"]["payrollJournal"].get("202610"), kind + " 6. Post as a journal this month: the journal instead, kept for Oct 2026")
     ok(P()["posts"] == 0, kind + " no Bridge.post: nothing posted from this page")
     if w < 600: ok(noside(pg), kind + " 7. no sideways scroll")
     ctx.close()
+LATEST = open(os.path.join(HERE, "..", "assets-test", "bridge-go", "latest.json"), "rb").read()
+MOCK = """(v) => { window.__ap = {rpc: [], posts: [], order: [], entry: null};
+  const LED = Object.keys(S.books.under || {});
+  Cloud.on = () => true;
+  Cloud.api = async (path) => { path = String(path); const A = window.__ap;
+    if (path.startsWith("night_entries")) return A.entry ? [A.entry] : [];
+    if (path.startsWith("rpc/")) { const fn = path.slice(4); A.rpc.push(fn); if (fn !== "save_book_items") A.order.push(fn);
+      if (fn === "entry_claim") A.entry = Object.assign({}, A.entry, {state: "approving", updated_at: new Date().toISOString()});
+      if (fn === "entry_approved") A.entry = Object.assign({}, A.entry, {state: "approved"});
+      return fn === "save_book_items" ? {ok: true, items: []} : {ok: true}; }
+    return []; };
+  TCloud.on = () => true; TCloud.has = () => true; CloudTally.call = async () => ({ok: true, via: "cloud", ledgers: LED.map((n) => ({name: n, group: ""}))});
+  window.tallyVia = () => "bridge"; Bridge.st = Object.assign({}, Bridge.st, {version: v});
+  Bridge.post = async (pl) => { window.__ap.posts.push(pl); window.__ap.order.push("post"); await new Promise((r) => setTimeout(r, 300));
+    return {ok: true, company: pl.company, results: pl.vouchers.map((x) => ({id: x.id, ok: true, created: 1, vchId: "101", word: "In Tally (verified)"}))}; };
+  return LED.length; }"""
+# the post gate's globals (set again after the lazy posting files have loaded, which set them)
+GATE = "() => { window.postToProblem = () => ''; window.tallyPostSign = () => ({on: true}); window.canPostTally = () => true; return true; }"
+def remount(pg):
+    pg.click("[data-pick=journal]"); settle(pg, 250); pg.click("[data-pick=tally]"); settle(pg, 600)
+def approve_flow(br, w, kind):
+    ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
+    pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
+    pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    A = lambda: pg.evaluate("() => window.__ap")
+    ok(pg.evaluate(MOCK, "2.5.18") > 0, kind + " 8. the cloud, the bridge (2.5.18) and Tally faked")
+    pg.evaluate("() => { const co = S.companies.c1; co.payHeadPlan = {'earn:Basic': 'Basic Pay'}; return true; }")
+    pg.click("[data-pick=journal]"); settle(pg, 250)
+    pg.set_input_files("[data-sheet-in]", FILES["A"]); pg.wait_for_selector("[data-step=map] [data-save-rule]", timeout=10000); settle(pg, 300)
+    pg.click("[data-save-rule]"); pg.wait_for_selector("[data-preview=journal] tbody tr", timeout=10000); settle(pg, 400)
+    # last night's entry: the journal Daily Check's builder makes of these books (as the page shows it)
+    lines = pg.evaluate("""() => Array.from(document.querySelectorAll('[data-preview=journal] tbody tr')).map((tr) => { const t = tr.querySelectorAll('td'), n = (s) => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
+      return n(t[1].innerText) ? {ledger: t[0].innerText, dr: n(t[1].innerText)} : {ledger: t[0].innerText, cr: n(t[2].innerText)}; })""")
+    pg.click("[data-keep]"); settle(pg, 300)
+    pg.evaluate("(lines) => { window.__ap.entry = {id: '00000000-0000-4000-8000-000000000701', client_id: 'c1', source: 'payroll', dedupe: 'payroll:202610', work_ref: '', state: 'ready', updated_at: new Date().toISOString(), why: 'Payroll Oct 2026', reason: 'Payroll', evidence: [], checks: [],"
+      " voucher: {type: 'Journal', kind: 'payroll', date: '20261031', no: '', party: 'Salary Payable', period: '202610', book: '', lines, narration: 'Salary for Oct 2026 as per the salary sheet (3 employees)'}}; return true; }", lines)
+    pg.click("[data-pick=tally]")
+    try: pg.wait_for_selector("[data-approve]", timeout=10000)
+    except Exception:
+        print("  (the Tally preview: " + (pg.inner_text("[data-payroll]")[-900:] if pg.locator("[data-payroll]").count() else "none") + ")")
+        raise
+    settle(pg, 400)
+    pg.evaluate(GATE)
+    tp = pg.inner_text("[data-preview=tally]")
+    ok("3 employees · net ₹78,255.71 to Salary Payable" in tp and "To approve" in tp and "FinCom checks it again first" in tp, kind + " 8. ready: 3 employees, net ₹78,255.71, Approve offered")
+    pg.click("[data-preview=tally] [data-more^=emp-] .pr-more-btn"); settle(pg, 200)
+    if w > 600: shot(pg, "7-tally-approve-ready", kind)
+    pg.click("[data-approve]"); pg.wait_for_selector("[data-proof]", timeout=20000); settle(pg, 500)
+    a = A(); posts = a["posts"]
+    order = [x for x in a["order"] if x == "post" or x.startswith("entry_")]
+    ok(order == ["entry_claim", "post", "entry_approved"], kind + " 8. claimed first, then posted, then approved: " + " > ".join(order))
+    ok(len(posts) == 1 and len(posts[0]["vouchers"]) == 1 and posts[0]["vouchers"][0]["id"] == "dc-tp-202610-1" and not posts[0]["masters"], kind + " 8. one Bridge.post, ONE payroll voucher (dc-tp-202610-1), no master")
+    x = posts[0]["vouchers"][0]["xml"] if posts else ""
+    ok(x.startswith('<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="PaySlip Voucher View">') and "REMOTEID" not in x and "TDSDesk:dc-tp-202610-1</NARRATION>" in x and x.count("<EMPLOYEEENTRIES.LIST>") == 3, kind + " 8. the bridge's shape: Create only, no REMOTEID, FinCom's id, 3 employees")
+    pr = pg.inner_text("[data-proof]")
+    ok("Posted to Tally" in pr and "Tally created 1 payroll voucher (voucher id 101)." in pr and pg.locator("[data-approve]").count() == 0, kind + " 8. the proof: Tally created 1 payroll voucher (voucher id 101); no Approve again")
+    ok("save_book_items" in a["rpc"], kind + " 8. the draft kept with the books (save_book_items)")
+    if w > 600: shot(pg, "8-tally-approve-posted", kind)
+    # an employee Tally lacks: listed, nothing posted
+    pg.evaluate("() => { window.__ap.entry = Object.assign({}, window.__ap.entry, {state: 'ready'}); S.books.payroll.employees = S.books.payroll.employees.filter((e) => e.name !== 'Mehta, Sunil'); return true; }")
+    remount(pg)
+    nd = pg.inner_text("[data-need]") if pg.locator("[data-need]").count() else ""
+    ok("Create the employee “Mehta, Sunil” in Tally" in nd and pg.locator("[data-approve]").count() == 0 and "Check first" in pg.inner_text("[data-preview=tally]"), kind + " 8. an employee Tally lacks: listed in plain words, no Approve")
+    # a bridge older than 2.5.18
+    pg.evaluate("() => { S.books.payroll.employees.push({guid: 'e9', name: 'Mehta, Sunil', parent: 'Staff', category: 'Primary Cost Category', group: false, pan: '', joined: '', left: '', designation: '', gone: false}); Bridge.st = Object.assign({}, Bridge.st, {version: '2.5.17'}); return true; }")
+    remount(pg)
+    ins = pg.inner_text("[data-install]") if pg.locator("[data-install]").count() else ""
+    ok("Install FinCom Bridge 2.5.18 to post Tally Payroll" in ins and "2.5.17" in ins and pg.locator("[data-install] [data-bridge-download]").get_attribute("href").startswith("assets/bridge-go/FinComBridge-Setup-2.5.18.exe") and pg.locator("[data-approve]").count() == 0, kind + " 8. bridge 2.5.17: the install line, the 2.5.18 download, no Approve")
+    if w > 600: shot(pg, "9-tally-bridge-too-old", kind)
+    ok(len(A()["posts"]) == 1, kind + " 8. nothing more posted")
+    if w < 600: ok(noside(pg), kind + " 8. no sideways scroll")
+    ctx.close()
 with sync_playwright() as p:
     br = p.chromium.launch()
-    run(br, 1440, "desktop")
-    run(br, 390, "phone")
+    if not os.environ.get("ONLY8"): run(br, 1440, "desktop")
+    if not os.environ.get("ONLY8"): run(br, 390, "phone")
+    approve_flow(br, 1440, "desktop")
+    approve_flow(br, 390, "phone")
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
 print("FAILED: %d" % len(fails) if fails else "all passed")
