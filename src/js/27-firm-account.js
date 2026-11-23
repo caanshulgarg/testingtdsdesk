@@ -92,8 +92,11 @@ const Cloud = {
     // fresh page, before anything of this one is shown or sent with their sign-in
     const uid = j.user && j.user.id;
     if (LocalOwner.other(uid)){ LocalOwner.switchTo(uid, "", (j.user && j.user.email) || String(email).trim()); return new Promise(() => {}); }
+    // next-speed-2 (the speed plan, #15): the firm's members asked beside the two-step check (one wait, not two); used only
+    // when no code is due (with one due, the answer is dropped: nothing of the firm is kept or shown before the code)
+    const rows = this.api("members?select=user_id,firm_id,name,email,role,active").then(r => ({r}), e => ({e}));
     if (await this.checkMfa()) return true;      // the code is asked for before anything of the firm is shown
-    await this.whoAmI();
+    await this.whoAmI(rows);
     return true;
   },
   // refreshToken(used): src/js/43 (one at a time across tabs; a network error never signs out)
@@ -163,8 +166,10 @@ const Cloud = {
     if (!r.ok) throw new Error(j.msg || j.message || j.error_description || ("Could not change the password (" + r.status + ")"));
     return true;
   },
-  async whoAmI(){
-    const rows = await this.api("members?select=user_id,firm_id,name,email,role,active");
+  async whoAmI(asked){
+    const got = asked ? await asked : null;
+    if (got && got.e) throw got.e;
+    const rows = got ? got.r : await this.api("members?select=user_id,firm_id,name,email,role,active");
     const me = (rows || []).find(m => m.user_id === (this.sess() || {}).user_id) || (rows || [])[0];
     // the copy here is this person's in this firm, or theirs is opened (LocalOwner, src/js/00) before the firm is set
     if (me && !(await LocalOwner.ensure((this.sess() || {}).user_id || me.user_id, me.firm_id, (this.sess() || {}).email || me.email))) return new Promise(() => {});
@@ -290,10 +295,12 @@ async function cloudMarkDeleted(path, why){
   catch (e){ if (!/delete_reason|PGRST204|column/i.test(String(e && e.message || e))) throw e; await Cloud.api(path, {method: "PATCH", headers: {Prefer: "return=minimal"}, body: {deleted: true}}); }
 }
 function cloudDelsSent(rows){ const d = Cloud.dels(); let n = 0; rows.forEach(r => { if (r.deleted && d[cloudKey(r)]){ delete d[cloudKey(r)]; n++; } }); if (n) Cloud.setDels(d); }
-async function cloudPush(){
+// pre: the changes cloudSync has just worked out (next-speed-2, the speed plan #13: every record of the firm is written out
+// and fingerprinted once a sync to find them, not twice in a row)
+async function cloudPush(pre){
   // never a record of one firm's copy while signed in to another (owner, 21-Oct-2026): held, said once in the console
   if (!LocalOwner.mayPush(Cloud.st.firm)) return 0;
-  const {changes} = cloudChanges();
+  const {changes} = pre || cloudChanges();
   if (!changes.length) return 0;
   const marks = Cloud.marks();
   const clients = changes.filter(r => r.kind === "client");
@@ -693,7 +700,7 @@ async function cloudSync(manual){
   // quiet refresh (14-Oct-2026): the look every 45 s with nothing to send said "Saving…" in the top bar each time; it says
   // so only when asked for, or when there is something of this computer's to send
   const before = JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]), wasSynced = !!Cloud.st.lastSync;
-  let toSend = 0; try { toSend = cloudChanges().changes.length; } catch (e){}
+  let toSend = 0, pre = null; try { pre = cloudChanges(); toSend = pre.changes.length; } catch (e){ pre = null; }
   Cloud.st.busy = manual || toSend ? "Syncing\u2026" : ""; Cloud.st.error = "";
   // this person's copy opened again (LocalOwner): what they changed here and had not sent goes now, and is said so
   if (LocalOwner.restored){ const r = LocalOwner.restored; LocalOwner.restored = null;
@@ -702,7 +709,8 @@ async function cloudSync(manual){
   let changed = !!Cloud.st.busy;
   try {
     // a paused firm (FinCom's console) is read-only: what is changed here waits on this computer (src/js/99)
-    const sent = FirmGate.paused() ? 0 : await cloudPush();
+    // (the changes worked out above, when nothing could have changed since: no drawing of the page in between)
+    const sent = FirmGate.paused() ? 0 : await cloudPush(manual ? null : pre);
     const got = await cloudPull();
     FirmGate.load();
     if (sent || cloudPull.took) changed = true;
@@ -767,13 +775,19 @@ Cloud.fn = async function(name, body, retry){
   }
   return j;
 };
+let accountAsk = null;
 async function loadAccount(quiet){
   if (Cloud.st.mfa) return null;                 // nothing of the firm before the two-step code
   if (LocalOwner.stale) return null;             // this page is being opened again for another sign-in
   setTimeout(() => loadDocq(true), 0);
   if (!Cloud.on()) return null;
+  // next-speed-2 (the speed plan, #15): a call while another is out (the sign-in's and its sync's, side by side) shares
+  // its answer: my_account asked once
+  const first = !accountAsk;
+  if (first) accountAsk = Cloud.rpc("my_account").finally(() => { accountAsk = null; });
   try {
-    const a = await Cloud.rpc("my_account");
+    const a = await accountAsk;
+    if (first){
     S.account = a || null;
     // the firm's name is the firm account's (firms.name): shown in the firm record, never asked for again when it is there
     const fn = String(((a || {}).firm || {}).name || "").trim();
@@ -781,6 +795,7 @@ async function loadAccount(quiet){
     try { pickEngine(); } catch (e){}      // the plan may provide Claude
     FirmGate.load();                                      // the console's switches (src/js/99)
     if (typeof SUP === "object") SUP.load(true);          // the Help count: tickets awaiting an answer
+    }
     if (!quiet) render();
     return a;
   } catch (e){ if (!quiet) toast("Could not read the account: " + e.message); return null; }

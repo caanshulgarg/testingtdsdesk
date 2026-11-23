@@ -140,12 +140,17 @@ Cloud.factors = async function(){
   return (u.factors || []).filter(f => f.factor_type === "totp");
 };
 // asks the server whether this sign-in still needs the code; sets st.mfa when it does
+// next-speed-2 (the speed plan, #15): the server's "no code needed" for this sign-in is taken again for 15 s (the sign-in
+// asks, and the sync it starts asked again at once); a code needed, or another sign-in, is always asked
 Cloud.checkMfa = async function(){
   if (!this.on()) { this.st.mfa = null; return null; }
+  const tok = (this.sess() || {}).access_token, kept = this._mfaNo;
+  if (kept && kept.tok === tok && Date.now() - kept.at < 15000){ this.st.mfa = null; return null; }
   let st;
   try { st = await this.rpc("mfa_status"); this.st.mfaInfo = st || null; }
   catch (e){ if (/mfa_status|could not find|404/i.test(e.message)) { this.st.mfa = null; return null; } throw e; }   // a server without two-step yet
-  if (!st || st.ok !== false){ this.st.mfa = null; return null; }
+  if (!st || st.ok !== false){ this.st.mfa = null; this._mfaNo = {tok, at: Date.now()}; return null; }
+  this._mfaNo = null;
   const list = await this.factors();
   const good = list.find(f => f.status === "verified");
   if (good){ this.st.mfa = {need: "code", factorId: good.id}; return this.st.mfa; }
