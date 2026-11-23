@@ -43,6 +43,17 @@ C8 is the only one where Tally works out a figure (a balance). The rules forbid 
 person's click, so C8 needs the owner's own decision: either (a) the daily tie-out may ask it in the background, once
 a day, or (b) only when a person clicks "Check against Tally".
 
+**Part E: look in Tally for FinCom's own mark before posting (a fix found by a review; no new request needed)**
+
+Every entry FinCom posts carries its own mark in the narration ("TDSDesk:<id>"). Today the bridge does not look for that
+mark in Tally before posting. The only guard against posting the same entry twice is this computer's own list of what
+it has posted. So the same entry could go into Tally twice if a second computer posts it, or if FinCom hands out again
+an entry that was let go after a stop. The fix: before posting, the bridge reads the entries already in Tally on that
+date (only their numbers, type and narration, no amounts) and skips any entry whose mark is already there. **The
+question it uses is already approved and on the list (FinComTag)**, but it has not been timed yet. It costs a little
+posting time, so the owner is asked to choose: (a) look only for entries FinCom had handed out before (the cheap,
+recommended way), or (b) look before every posting.
+
 **Stock: a later release** (stock items and their openings, units, stock groups, godowns, batches, and the godown and
 batch on each item line). Shown at the end so the owner can see what is coming; nothing to decide now.
 
@@ -51,6 +62,7 @@ batch on each item line). Shown at the end so the owner can see what is coming; 
 2. C1 to C8: yes or no to each exact request in section C (the field names marked "to confirm" are checked on ZZ TEST
    first; if any name changes, the request is shown to the owner again before it is built).
 3. C8: (a) or (b) above.
+4. E: (a) or (b) above, and the timing of FinComTag on ZZ BIG TEST first (section E).
 
 ---
 
@@ -398,6 +410,75 @@ Parameters: company, the date D (yyyymmdd); SVFROMDATE is the first day of D's f
 4. Background behaviour: with someone typing in Tally on NWS144, none of these goes; with Tally left alone 60 s, they go
    one at a time after any posting.
 5. The rows' worst times and dates go into `docs/tally-allowlist.md` and `allowlist.go` before any build.
+
+---
+
+## E. Looking for FinCom's mark in Tally before posting (the coordinator's review item of 23-Nov-2026)
+
+### E.1 What the review found (checked on this branch)
+
+- `findPostedTags` (`bridge-go/post.go`, about line 724) and `dupCheck` / `dupCheckWith` (`bridge-go/dupcheck.go:239`)
+  exist but **nothing outside the tests calls them** (checked with a search of every non-test file). The posting path's
+  only duplicate guard is this computer's own record (`posted-ids.json`, accepted.go). Entries posted by a second
+  computer, or a job FinCom released and handed out again, are not looked for in Tally before they are sent.
+- `tagsOnDate` (the read both use) is called today only after a posting (`findAccepted`, the read-back: by Tally's
+  voucher id, then by the mark on the date) and by the night's empty-day check (`keep.go`).
+
+### E.2 The request is already on the list: no new XML
+
+`findPostedTags` → `tagHeadsOn` → `tagsOnDate` sends exactly `tagCheckRequest(company, date)`, id **FinComTag**:
+
+```xml
+<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComTag</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20260401</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FinComTag" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION, ISOPTIONAL, ISCANCELLED</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>
+```
+
+- On the allow-list: row "FinComTag | the FinCom id check: one date's entries, heads and narration only | c6adb1e0d825 |
+  **not yet measured** | - | bridge" (`docs/tally-allowlist.md`); pinned to its builder (`pinned.go`: rebuilt from
+  `pinCo` and the date); classed as a posting's read (`isPostingRequest`, `tally.go`), so it goes before any other
+  request waiting for that Tally; one in flight as every request.
+- **Not measured.** Two things must be measured before it is wired in:
+  1. **Time.** Estimate from F1 (0.17 ms per entry of the day for four fields; this has nine, the narration the longest):
+     about 0.25 ms per entry of the date, so about 0.55 s for a date of 2,216 entries, 1.35 s at about 5,400, 2 s at
+     about 8,000. Posting dates are usually far smaller (tens to a few hundred entries: under 0.1 s).
+  2. **The date form.** It carries the period as plain `yyyymmdd` (no `TYPE="Date"`), the form round 18 found answered
+     for Tally's current period on NWS144. The answer's rows must therefore be checked to be of the date asked (as
+     every day read is); if the measurement shows the plain form is not applied on a release, the request must change to
+     `yyyymmdd TYPE="Date"` (F1's form): that is a changed request and comes back to the owner as exact XML first.
+
+### E.3 Proposed wiring (bridge change only, once measured)
+
+1. **When.** Before the first part of a posting job that holds an entry for a date, one FinComTag for that date (one
+   request per distinct date of the job, not per part). Option (a), recommended: only for the job's entries FinCom marks
+   as handed out before (the job's `released` / `resendOnly` lists, `cloud.go`, `jobs.go`) and for any entry this
+   computer has no record of sending but FinCom says was sent before. Option (b): every date of every job.
+2. **Why once per job is enough.** Postings to a company already serialize across computers through FinCom's lease
+   (`safety.go`, decision D, 05-Oct-2026: "a posting never yields; two postings serialize"), so no other computer posts
+   to that company while this job holds the lease. What the check must catch is an entry that went in before this job
+   started. The read is kept for the job only (as `dupCheckWith`'s cache) and never used after the lease is let go.
+3. **What happens to the answer.** An entry whose mark `TDSDesk:<id>` is in a narration of that date (and the entry is
+   not cancelled): not sent; reported to FinCom as posted already, with Tally's GUID and MasterID (as the read-back does),
+   and written to `posted-ids.json`. Any row of another date: the answer is not used.
+4. **The 2 s rule and one in flight.** Sent with the posting's own priority, under the 2 s hard stop (a `TC` with
+   `limitMs` 2000; the posting `fin` has none today). Stopped, not answered or not usable: nothing of that date is
+   guessed. Option (a): the entries that needed the check wait ("Not posted yet: Tally was busy while FinCom checked
+   for a copy; tried again shortly"), the rest of the job goes. A date stopped twice: those entries are held for a
+   person (Check Tally), never sent unchecked.
+5. **Cost against "posting never slower than before".** Option (a): no cost for an ordinary job (no entry handed out
+   before); a released job pays one read per date of its released entries. Option (b): a 40-bill job over 20 dates
+   pays 20 reads of about 0.05 to 0.5 s each, against about 20 parts of 1.35 s: up to about a third slower in the worst
+   case, which breaks the owner's condition. Hence (a) is recommended.
+6. **Test-first** on the stand-in Tally: a released job whose entry is already in Tally with its mark is not sent and is
+   reported posted; an entry not there is sent; a stopped check sends nothing of that date; a mark in a cancelled entry
+   does not count; another computer's posting of the same entry before the job (two stand-in bridges, one stand-in
+   Tally) is not posted twice; posting time of an ordinary 40-bill job unchanged.
+
+### E.4 Test plan on ZZ BIG TEST
+
+On TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (and NWS144): FinComTag for dates of 50, 500, 2,216 and 7,601 entries, timed
+and Tally's window watched; every row of the date asked (the plain date form applied); a made-up entry with its mark
+found. Pass: under 2 s for the dates postings use (aim 1.35 s); the worst case and date go into the FinComTag row of
+`docs/tally-allowlist.md` and `allowlist.go`. If the plain date form is not applied on any release: stop and show the
+owner the changed request (E.2).
 
 ---
 
