@@ -3,7 +3,8 @@ to locate the error").
 
   1. a red "Errors N" cell of the year's grid opens that month's return on "What to fix": the errors grouped by kind
      ("Missing HSN — 120 invoices"), each group opening to its documents (date, number, party, amount), the reason in
-     plain words, what to do and the field to correct in Tally, and each document opening in Look up;
+     plain words, what to do and the field to correct in Tally, and each document opening in its window, whose Open in
+     Look up opens it in Look up;
   2. the month's GSTR-1 and GSTR-3B show "What to fix (N)" on top of their other tabs; N is the grid's own count
      (GSTR.errorChecks, the list GSTR.errorsFor counts), for every month of the year;
   3. 3B's errors (the purchase side) are listed the same way;
@@ -74,8 +75,12 @@ def open_group(pg, what):
         rows: Array.from(g.querySelectorAll('[data-fix-row]')).map(r => ({id: r.dataset.id, cells: Array.from(r.querySelectorAll('td')).map(td => td.innerText.trim())}))}; }""", what)
 
 def open_row(pg, what, i):
-    """the document's button: Look up opens with that entry found and opened; then back to the list"""
+    """the document's button opens its window on the page (fix in place, 23-Nov-2026); its Open in Look up: Look up opens
+    with that entry found and opened; then back to the list"""
     pg.evaluate("(a) => { const g = Array.from(document.querySelectorAll('#app [data-fix-group]')).find(x => x.dataset.fixGroup === a[0]); g.querySelectorAll('[data-fix-row]')[a[1]].querySelector('[data-fix-open]').click(); }", [what, i])
+    try: pg.wait_for_selector("[data-fix-entry] [data-fix-lookup]", timeout=10000)
+    except Exception: pass
+    pg.evaluate("() => { const b = document.querySelector('[data-fix-entry] [data-fix-lookup]'); if (b) b.click(); }")
     try: pg.wait_for_function("() => S.booksTab === 'lookup' && S.lk && !S.lk.busy && S.lk.res", timeout=30000, polling=100)
     except Exception: pass
     wait_idle(pg, 200)

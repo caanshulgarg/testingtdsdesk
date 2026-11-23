@@ -5,6 +5,7 @@
 // Tally; each document opens in Look up, found and opened. FixTop is the same count on top of the return's other tabs.
 import { useState } from "react";
 import { PosSet, PosCell, PosFixed } from "./PosPick.jsx";
+import { FixEntry, FixHistory } from "./FixEntry.jsx";
 const POS_MISSING = "Outward invoices with no place of supply";
 // the invoice-number checks: a B2C large row in them can be marked a summary of many B2C sales (B2CS, no number)
 const NUM_CHECKS = /^Invoice numbers (longer than|with characters|used twice)/;
@@ -66,6 +67,9 @@ function openDoc(d) {
 
 function Group({ c, k, find, r3b }) {
   const st = (S.gstFix = S.gstFix || {}), open = !!st[k], all = !!st[k + "|all"];
+  // fix in place (FixEntry.jsx): the entry opened in a window on this page (kept on the list, so the window stays while
+  // its row leaves the list once fixed)
+  const setPop = (d) => { st.pop = d ? { d, what: c.what, at: k.split("|").slice(0, 3).join("|") } : null; render(); };
   const [label, word, why, tally] = sayOf(c);
   const rows = open ? (c.all || c.rows).slice(0, all ? undefined : SHOW).map((x) => [x, docOf(x, find)]) : [];
   const toggle = () => { st[k] = !open; render(); };
@@ -98,7 +102,7 @@ function Group({ c, k, find, r3b }) {
           <td>{d.party || x.party || "—"}{x.doc && x.no ? <small className="nr"> GSTIN {x.no}</small> : d.gstin && /GSTIN/.test(c.what) ? <small className="nr"> GSTIN {d.gstin}</small> : null}</td>
           <td className="n">{d.id ? money(amountOf(d)) : "—"}</td>
           {pos && <td><PosCell r={d} /></td>}
-          <td>{d.date || d.id ? <button type="button" className="linkbtn" data-fix-open="" title="Open the entry in Look up" onClick={() => openDoc(d)}>Open the entry</button> : ""}</td></tr>)}</tbody>
+          <td>{d.date || d.id ? <button type="button" className="linkbtn" data-fix-open="" onClick={() => setPop(d)}>Open the entry</button> : ""}</td></tr>)}</tbody>
       </table></div>
       {!all && (c.all || c.rows).length > SHOW && <button type="button" className="linkbtn" data-fix-more="" onClick={() => { st[k + "|all"] = true; render(); }}>Show all {c.n}</button>}
     </div>}
@@ -118,12 +122,23 @@ export function FixList({ ym, reg, ret, n }) {
   const name = ret === "r3b" ? "GSTR-3B" : "GSTR-1";
   return <section className="dash-card fx" data-fix-list="" data-fix-n={n} data-fix-ret={ret}>
     <h3>What to fix ({n})</h3>
-    <p className="note">{name} for {GSTR.label(ym)}: {plural(n, "error")} to fix before filing{ids.size && ids.size !== n ? ", on " + plural(ids.size, "document") : ""}, by kind. Open a kind to see its documents; each opens in Look up. The fix is made in Tally and the books read again.</p>
+    <p className="note">{name} for {GSTR.label(ym)}: {plural(n, "error")} to fix before filing{ids.size && ids.size !== n ? ", on " + plural(ids.size, "document") : ""}, by kind. Open a kind to see its documents, and open an entry to correct it: the change is made in Tally and FinCom Books together.</p>
+    <FixHistory />
     <ul className="fx-list">{list.map((c) => <Group key={c.what} c={c} k={ym + "|" + reg + "|" + ret + "|" + c.what} find={find} r3b={ret === "r3b"} />)}</ul>
+    <FixPop list={list} at={ym + "|" + reg + "|" + ret} />
     {ret === "r1" && <PosFixed rows={GSTR.outward(ym, reg).filter((r) => r.posFrom === "fincom")} />}
     {ret === "r1" && (() => { const o = GSTR.outward(ym, reg), sp = GSTR.b2cSumParties(S.books || {});
       return <B2csSum rows={o.filter((r) => r.b2cSum)} notes={o.filter((r) => r.b2cNote || ((r.kind === "CDNR" || r.kind === "DBNR") && r.gstin && r.cls === "taxable" && !r.rcm && sp.has(r.party)))} />; })()}
   </section>;
+}
+
+// the entry opened from the list, in its window (FixEntry.jsx)
+function FixPop({ list, at }) {
+  const st = (S.gstFix = S.gstFix || {}), p = st.pop;
+  if (!p || p.at !== at) return null;
+  const c = list.find((x) => x.what === p.what) || { what: p.what }, [, , why, tally] = sayOf(c);
+  const close = () => { st.pop = null; render(); };
+  return <FixEntry key={p.d.id || p.d.no} d={p.d} c={c} why={why} tally={tally} onClose={close} onLookup={() => { close(); openDoc(p.d); }} />;
 }
 
 // the entries reported in B2CS as summaries of many B2C sales (GSTR.b2cSumWhy), each with the rule that made it so

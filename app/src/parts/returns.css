@@ -495,6 +495,23 @@ details.more .more-words p{margin:0 0 6px}
 .fx-tally { margin: 0 0 8px; font-size: 13px; }
 .fx-b .bk-tablewrap { max-width: 100%; }
 @media (max-width: 640px) { .fx-b { padding-left: 4px; } }
+/* fix in place (GST › What to fix, FixEntry.jsx): the entry's window and Changes made here */
+.fx-pop { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fx-pop-head { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.fx-field label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600; }
+.fx-field input, .fx-field select { flex: 1 1 220px; min-width: 0; min-height: 40px; font: inherit; font-weight: 400; }
+.fx-field .note { font-weight: 400; }
+.fx-sub { flex-basis: 100%; margin: 0; font-size: 12px; }
+.fx-lines { width: 100%; font-size: 13px; }
+.fx-lines td { padding: 5px 6px; overflow-wrap: anywhere; }
+.fx-state { margin: 0; font-size: 13px; }
+.fx-state.good { color: var(--ok); }
+.fx-pop-act { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.fx-pop-btns { display: inline-flex; gap: 8px; margin-left: auto; }
+.fx-hist { margin: 12px 0 0; font-size: 13px; }
+.fx-hist summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.fx-hist ul { margin: 4px 0 0; padding-left: 18px; }
+.fx-hist li { margin: 3px 0; overflow-wrap: anywhere; }
 /* next-gst-pos: setting the place of supply of sales that have none (GST › What to fix, GSTR-1 Details) */
 .pos-bulk { margin: 4px 0 10px; display: flex; flex-direction: column; gap: 8px; }
 .pos-all, .pos-tk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
