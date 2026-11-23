@@ -24,6 +24,10 @@ a switch per person, off unless turned on. Offline, made-up data only:
      Settings for the firm's GST page (Due dates › GST portal links; #/settings/gstapi opens it); a group "Email and
      messages" holds Daily Check's sending switch and the firm's test email and WhatsApp (the same assistant_mail_set
      call, the owner only); Academy batches stay. Off, Settings keeps GST API and has no Email and messages.
+ 10. follow-ups: the GST API warnings Settings' Needs you held ("not linked for N clients", "ends soon") are on the firm
+     Home's Needs you, each a link to Due dates › GST portal links (off: Home as before, Settings keeps them); on a phone,
+     signed in, every page's title fits the top bar (no "Settin…"), the menu's own words (Home, Due dates); off: the top
+     bar's title as before (one line, cut with …).
 Screenshots of every changed screen (desktop 1366x768 and phone 390, deviceScaleFactor 2) go to TDSDESK_SHOTS when set.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_newlook_ui.py"""
 import os, threading, functools, http.server, re
@@ -72,6 +76,13 @@ CLOUD = """(role) => { window.__calls = []; S.firm.firmName = "Sample & Co"; S.a
     if (t.startsWith("rpc/")) return {ok: true}; return []; };
   GSTAPI.on = () => true; GSTAPI.firmStatus = async () => ({sessions: [], returns: [], accounts: []});
   render(); return true; }"""
+
+# two clients' GST portal links: one ended (not linked any more), one live and ending soon
+GSTS = """() => { GSTAPI.sess = {"07AAGCL4827M1Z3": {connectedAt: "2026-10-01T10:00:00Z", endedAt: "2026-11-01T10:00:00Z"}, "27AAAFS1234K1Z9": {connectedAt: "2026-11-10T10:00:00Z", accessUntil: new Date(Date.now() + 2 * 864e5).toISOString()}};
+  GSTAPI.live = (g) => g === "27AAAFS1234K1Z9"; GSTAPI.accessLeft = (g) => (g === "27AAAFS1234K1Z9" ? {soon: true, over: false} : null); render(); return true; }"""
+TITLE = """() => { const h = document.querySelector('header.top .tbar-title h2'); if (!h) return null; const r = document.createRange(); r.selectNodeContents(h);
+  const lines = new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size; const cs = getComputedStyle(h);
+  return {text: h.textContent, fits: h.scrollWidth <= h.clientWidth + 1, lines, ws: cs.whiteSpace, to: cs.textOverflow}; }"""
 
 def page(br, w=1366, h=768, nl=False, phone=False):
     ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, is_mobile=phone, has_touch=phone)
@@ -307,6 +318,37 @@ with sync_playwright() as p:
     go(pg, "S.nlDueTab = 'gstapi'; navHome('compliance')", 2000)
     ok(pg.evaluate("document.scrollingElement.scrollWidth - innerWidth") <= 1, "phone: GST portal links, no sideways scroll")
     shot(pg, "phone-10-gst-portal-links")
+    ctx.close()
+
+    print("10. follow-ups: GST API warnings on Home; titles fit on a phone")
+    ctx, pg = page(br)
+    pg.evaluate(CLOUD, "owner"); pg.evaluate(GSTS); go(pg, "navHome('today')", 1500)
+    ok(pg.locator("[data-nl-home-needs]").count() == 0, "off: Home as before (no new Needs you line)")
+    go(pg, "goSettings(null)", 1200)
+    needs = pg.evaluate("() => [...document.querySelectorAll('[data-needs-go]')].map((e) => e.textContent)")
+    ok(any("GST API not linked for 1 client" in n for n in needs), "off: Settings' Needs you keeps the GST API warning (%s)" % needs)
+    t = pg.evaluate(TITLE)
+    ok(t and t["ws"] == "nowrap", "off: the top bar's title as before, one line (%s)" % t)
+    ctx.close()
+    ctx, pg = page(br, nl=True)
+    pg.evaluate(CLOUD, "owner"); pg.evaluate(GSTS); go(pg, "navHome('today')", 1500)
+    box = pg.locator("[data-nl-home-needs]")
+    txt = box.inner_text() if box.count() else ""
+    ok(box.count() == 1 and "GST API not linked for 1 client" in txt and "GST API link ends soon for 1 client" in txt, "Home › Needs you: the GST API warnings (%r)" % txt)
+    shot(pg, "desktop-19-home-needs-gst")
+    if box.locator("[data-nl-needs-go]").count(): box.locator("[data-nl-needs-go]").first.click(); pg.wait_for_timeout(1500)
+    ok(pg.evaluate("S.homeTab") == "compliance" and pg.evaluate("S.nlDueTab") == "gstapi" and pg.locator('[data-pane="gstapi-all"]').count() == 1, "the warning opens Due dates › GST portal links")
+    pg.evaluate("() => { GSTAPI.sess = {}; GSTAPI.live = () => false; GSTAPI.accessLeft = () => null; render(); }"); go(pg, "navHome('today')", 1000)
+    ok(pg.locator("[data-nl-home-needs]").count() == 0, "nothing to say: no Needs you line")
+    ctx.close()
+    ctx, pg = page(br, 390, 844, nl=True, phone=True)
+    pg.evaluate(CLOUD, "owner"); pg.evaluate(GSTS)
+    for js, want in (("goSettings(null)", "Settings"), ("goSettings('mail')", None), ("S.nlDueTab = 'due'; navHome('compliance')", "Due dates"), ("navHome('daily')", "Daily Check"),
+                     ("navHome('today')", "Home"), ("navHome('clients')", "Clients"), ("navHome('tally')", "Tally"), ("navHome('help')", "Help"), ("goClient('bank')", None)):
+        go(pg, js, 1500); t = pg.evaluate(TITLE)
+        ok(t and t["fits"] and t["lines"] <= 2 and (want is None or t["text"] == want), "phone, signed in: the title fits (%s)" % t)
+    go(pg, "navHome('today')", 1500); shot(pg, "phone-11-home-needs-gst")
+    go(pg, "goSettings(null)", 1200); shot(pg, "phone-12-settings-signed-in")
     ctx.close()
 
     print("8. a phone")

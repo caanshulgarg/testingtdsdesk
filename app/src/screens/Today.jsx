@@ -17,6 +17,10 @@ function NotLinkedLine() {
 }
 import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
 import { FirstRunTally } from "../parts/TallyFirstRun.jsx";
+import { lazy, Suspense } from "react";
+import { newLook } from "../newlook/flag.js";
+// the new look: Needs you (the GST API warnings that were in Settings' Needs you)
+const HomeNeeds = lazy(() => import("../newlook/HomeNeeds.jsx"));
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
@@ -45,6 +49,7 @@ export default function Today() {
         <h2 style={{ margin: "0 0 12px" }}>What needs doing</h2>
         <button className="btn small" onClick={() => doAct("addCo")}>Add client</button>
       </div>
+      {newLook() && <Suspense fallback={null}><HomeNeeds /></Suspense>}
       <div className="metrics">
         <Metric label="To read" n={inboxTotal()} onClick={() => navHome("inbox")} tone="violet" Icon={Inbox} />
         <Metric label="To review" n={sum("review")} onClick={go("review", "drafts", "review")} tone="amber" Icon={ReceiptText} />

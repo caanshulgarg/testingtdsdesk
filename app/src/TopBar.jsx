@@ -317,7 +317,7 @@ export default function TopBar() {
   return <>
     {createPortal(
       <div className="headrow">
-        {inCo ? <ClientHeader /> : <Title title={HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}
+        {inCo ? <ClientHeader /> : <Title title={(newLook() && { today: "Home", compliance: "Due dates" }[S.homeTab]) || HOME_TITLES[S.homeTab] || "Clients"} sub={S.firm.firmName || ""} crumb={S.firm.firmName ? "firm" : undefined} />}
         <TopRight />
       </div>, document.getElementById("cobar"))}
     <TallyPanel open={!!S.tallyPanel && !hide} />

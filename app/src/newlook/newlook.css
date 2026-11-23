@@ -196,3 +196,15 @@ html.nl .nle-foot { display: flex; justify-content: flex-end; gap: 8px; padding:
   html.nl .nle-types kbd { display: none; }
   html.nl .nl-cut { max-width: 140px; }
 }
+
+/* ---- the firm Home's Needs you (HomeNeeds.jsx): the look of Settings' Needs you */
+html.nl .nl-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid color-mix(in oklab, var(--warn) 30%, transparent); border-radius: 10px; background: var(--warn-soft); }
+html.nl .nl-needs > b { color: var(--warn); font-size: 14px; }
+html.nl .nl-needs > .linkbtn { font-size: 14px; text-align: left; min-height: 32px; }
+@media (max-width: 600px) { html.nl .nl-needs { flex-direction: column; align-items: flex-start; } }
+
+/* ---- a phone, signed in: the page's title fits beside the top bar's buttons (wraps to two lines, never cut) */
+@media (max-width: 600px) {
+  html.nl header.top .tbar-title h2 { font-size: 17px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
+  html.nl header.top .nl-top { gap: 4px; margin-right: 2px; }
+}
