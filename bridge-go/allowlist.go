@@ -269,6 +269,9 @@ func allowListSamples() map[string]string {
 		fetchTestE:           fetchTestRequest("E", c, a, "", "", "1"),
 		fetchTestF:           fetchTestRequest("F", c, "", "Receipt", "1", ""),
 	}
+	for id, x := range samples2519(c, a) { // 2.5.19 (requests2519.go)
+		m[id] = x
+	}
 	// next-fast-entries: the two window requests, in the table only with FastEntries on (fastAllowList)
 	if fastOn() {
 		m[fastHeadsID], m[fastBatchID] = fastHeadsRequest(c, a, z), fastBatchRequest(c, a, z, 1, 100)
@@ -282,10 +285,11 @@ func shapeOf(x string) string {
 }
 
 // the table as docs/tally-allowlist.md holds it: one row per id, sorted
-func allowListRows() string {
-	samples := allowListSamples()
+func allowListRows() string { return allowListRowsOf(allowListSamples(), allowListNow()) }
+
+// the table for these samples and rows (2.5.19: the history tests rebuild an earlier version's table with it)
+func allowListRowsOf(samples map[string]string, list map[string]allowedReq) string {
 	var ids []string
-	list := allowListNow()
 	for id := range list {
 		ids = append(ids, id)
 	}

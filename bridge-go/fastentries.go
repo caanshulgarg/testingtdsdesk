@@ -85,10 +85,11 @@ func fastHeadsRequest(company, from, to string) string {
 
 // W2: the entries dated from..to with a MasterID in a..b; "" for anything else
 func fastBatchRequest(company, from, to string, a, b int64) string {
-	if !fastWindowOK(from, to) || a <= 0 || b < a || !batchFetchOK() {
+	if !fastWindowOK(from, to) || a <= 0 || b < a || !batchFetch2518OK() {
 		return ""
 	}
-	return formCollection(fastBatchID, company, formPlainT, from, to, batchFetchText, fmt.Sprintf(fastBatchFilter, a, b))
+	// 2.5.19: 2.5.18's FETCH (C5's ISPOSTDATED is FinComVoucherBatch's only; this window request is unchanged)
+	return formCollection(fastBatchID, company, formPlainT, from, to, batchFetchText2518, fmt.Sprintf(fastBatchFilter, a, b))
 }
 
 var reFastRange = regexp.MustCompile(`<SYSTEM TYPE="Formulae" NAME="` + fastBatchID + `Only">\$MasterID &gt;= (\d+) AND \$MasterID &lt;= (\d+)</SYSTEM>`)

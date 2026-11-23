@@ -138,7 +138,7 @@ func TestPay244EmployeeRowsReal(t *testing.T) {
 func TestPay244LedgerPayFields(t *testing.T) {
 	noteBooksFrom("SAMPLE CO", "20250401") // 2.5.0: the company list said its books begin on 1-Apr-2025 (booksfrom.go)
 	noteBooksFrom("FinCom Spike Co", "20260401")
-	if ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added {
+	if ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added+ledFetch2519 { // 2.5.19 (C7): the added fields at the end
 		t.Fatalf("ledFetch: %s", ledFetch)
 	}
 	for _, x := range []string{ledgerChunkRequest("SAMPLE CO", 0, 2000), ledgerChangesRequest("SAMPLE CO", 0, 200), ledgerByNameRequest("SAMPLE CO", "FC Basic")} {
@@ -151,7 +151,7 @@ func TestPay244LedgerPayFields(t *testing.T) {
 	}
 	// the request measured on real 7.1 (P3: 9 ms worst) is today's FinComLedgers with the four fields
 	want := strings.TrimSpace(readText(filepath.Join("testdata", "payroll244", "7.1", "ledgers-p3.request.xml")))
-	if got := ledgerChunkRequest("FinCom Spike Co", 0, 0); !strings.Contains(want, "PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL") || group(`<FETCH>([^<]*)</FETCH>`, got, 1) != group(`<FETCH>([^<]*)</FETCH>`, want, 1) {
+	if got := ledgerChunkRequest("FinCom Spike Co", 0, 0); !strings.Contains(want, "PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL") || strings.TrimSuffix(group(`<FETCH>([^<]*)</FETCH>`, got, 1), ledFetch2519) != group(`<FETCH>([^<]*)</FETCH>`, want, 1) { // 2.5.19: C7's fields after those measured
 		t.Fatalf("not the fields measured:\n%s\n%s", got, want)
 	}
 	check := func(rel, file string) {

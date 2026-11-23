@@ -234,6 +234,7 @@ func newPostJob(pl M) (M, error) {
 					its = []any{}
 				}
 				pay["items"] = its
+				pay["checkFirst"] = arr(pl["resendOnly"]) // 2.5.19 (E): looked for in Tally before the first part
 				_ = saveJSONBak(filepath.Join(dir, "payload.json"), pay)
 			}
 			_ = os.Remove(filepath.Join(dir, "cancel"))
@@ -317,6 +318,9 @@ func newPostJob(pl M) (M, error) {
 	}
 	// the port FinCom chose is kept only as a hint, and never as 0 (0 means "find it", which happens on every try anyway)
 	payload := M{"company": str(pl["company"]), "items": items, "released": arr(pl["released"])}
+	if len(only) > 0 {
+		payload["checkFirst"] = arr(pl["resendOnly"]) // 2.5.19 (E): looked for in Tally before the first part (resent2519.go)
+	}
 	if truthy(pl["fromCloud"]) {
 		payload["fromCloud"] = true // 2.5.15 item 1: FinCom is asked before each part is sent
 	}
@@ -893,6 +897,14 @@ func jobWorker(dir string) {
 			writeLog("  voucher " + k + ": NOT SENT: " + str(r["message"]))
 		}
 		todo = left
+	}
+	// 2.5.19 (E, the owner's option a): an entry FinCom had handed out before is looked for in Tally (FinComTag, its
+	// date) before the first part; an ordinary posting asks nothing more (resent2519.go)
+	if ids := resentIDs(pl); len(ids) > 0 && !truthy(p["resentLooked"]) {
+		left, rs := resentLookFirst(port, company, todo, ids)
+		results = append(results, rs...)
+		todo = left
+		p["resentLooked"] = true
 	}
 	// what cannot be sent at all (no valid date, not a voucher or master) is said now
 	var masters, vouchers []M

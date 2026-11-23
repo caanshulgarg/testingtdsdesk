@@ -184,6 +184,15 @@ type pullWork struct {
 	// reason (not open here, no starting point ...) has kept a day already begun waiting (zero: it does not)
 	began    bool
 	ownSince time.Time
+	// 2.5.19 (B1, the owner's approval of 23-Nov-2026; daybands2519.go): the day read in MasterID bands after its one-day
+	// list was stopped at 2 s: the next band's first MasterID and width, whether it is the last (open-ended) band, and the
+	// span (the company check's AltVchId when the bands began)
+	bands    bool
+	bandA    int64
+	bandN    int64
+	bandOpen bool
+	bandSpan int64
+	bandsN   int
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -789,6 +798,9 @@ func pullStep() (sent bool, more bool) {
 
 // F1, else (after a stop) F2 for the next type
 func pullHeadsStep(w *pullWork, port int) (bool, bool) {
+	if w.bands {
+		return pullBandStep(w, port) // 2.5.19 (B1): the day's next band
+	}
 	it := w.it
 	x, form := dayHeadsRequest(it.Company, it.Day), "one day (yyyymmdd TYPE=Date)"
 	typ := ""
@@ -822,6 +834,12 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	switch {
 	case gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped) || errors.Is(err, errDayHeadsRefused):
 		return false, false // nothing reached Tally; the day waits
+	case errors.Is(err, errRecorderStop) && holdMs < 2000 && !w.split && pullBandsBegin(w):
+		// 2.5.19 (B1, the owner's approval of 23-Nov-2026): the day's list over 2 s: the same day is read in bands of
+		// MasterIDs (FinComDayHeadsPart, daybands2519.go), in the heavy tier, each under its own 2 s stop, instead of one
+		// voucher type at a time
+		pullRangeNoteFail(it)
+		return true, false
 	case errors.Is(err, errRecorderStop) && holdMs < 2000 && !w.split && pullSplitOn() && len(it.types()) > 0:
 		// 2.5.16 (the owner's YES of 13-Nov-2026: the voucher-type split back on for very big days): the day's list over
 		// 2 s: the same day is asked one voucher type at a time (F2, measured at 1.08 s at worst), in the heavy tier, each
@@ -915,6 +933,8 @@ func pullSendHeads(w *pullWork) bool {
 	via := "day"
 	if w.split {
 		via = "split"
+	} else if w.bands {
+		via = "bands" // 2.5.19 (B1): the day's whole list, read in bands end to end (tally-ingest takes it as a whole day)
 	}
 	body := M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "via": via, "n": len(rows), "heads": rows, "fetch": it.Fetch}
 	if w.split {

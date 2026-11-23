@@ -21,6 +21,7 @@ func TestEveryIdPinned(t *testing.T) {
 	noteBooksFrom(zz, "20260401") // 2.5.0: the company list said when the books begin (booksfrom.go)
 	f := newStandTally(t)
 	standBridge(t, f, "")
+	r2519Confirm(t, "Confirmed2519GstRegs", "Confirmed2519GroupClosing") // 2.5.19: as they will go once confirmed
 	samples := allowListSamples()
 	for id := range tallyAllowList {
 		if requestRebuild[id] == nil {

@@ -880,7 +880,7 @@ func newStandCloud(t *testing.T) *standCloud {
 				c.recBodies = append(c.recBodies, o)
 			}
 			out["results"], out["applied"] = res, len(res)
-		case "period_heads", "period_entries", "ledger_progress", "period_stop", "period_day_stop", "oldtest", "stock", "fast_measure", "post_ok": // 2.5.15: post_ok; 2.5.16: period_day_stop
+		case "period_heads", "period_entries", "ledger_progress", "period_stop", "period_day_stop", "oldtest", "stock", "fast_measure", "post_ok", "tieout_groups": // 2.5.15: post_ok; 2.5.16: period_day_stop; 2.5.19: tieout_groups
 			if c.other != nil {
 				code, ans := c.other(k, o)
 				if code != 200 {
@@ -992,6 +992,7 @@ func TestUpdateNowReadsMonthSlicesOnly(t *testing.T) {
 			}
 			slices = append(slices, a+"-"+z)
 		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", ledListID, grpListID, natListID: // 2.1.4: the plain ledger and group lists too; 2.4.3: the natures
+		case vchTypesID, costCentresID, costCatsID, billOpenID, gstRegsID: // 2.5.19 (C1 to C4, C6): the books' masters, read with the ledger list
 		default:
 			t.Errorf("Update now sent %q", id)
 		}

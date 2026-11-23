@@ -431,6 +431,7 @@ func TestR249R1GateAnswersAsObject(t *testing.T) {
 				if want == "" {
 					t.Fatalf("%s MasterID %s: no object answer", rel, mid)
 				}
+				want = objectAs2518(c, want) // 2.5.19: the capture is of 2.5.18's group request (r2519hist_test.go)
 				if reRemote.ReplaceAllString(v, "") != reRemote.ReplaceAllString(want, "") {
 					t.Errorf("%s %s MasterID %s (%s) differs:\nbatch  %s\nobject %s", rel, w.File, mid, tagValue(c, "VOUCHERTYPENAME"), cut(v, 2000), cut(want, 2000))
 				}

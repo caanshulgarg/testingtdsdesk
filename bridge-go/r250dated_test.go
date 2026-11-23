@@ -194,10 +194,11 @@ func TestR250ReadDaysExemptionOnlyThree(t *testing.T) {
 			classed = append(classed, id)
 		}
 	}
-	if len(classed) != 3 || !ledgerPeriodIDs[classed[0]] || !ledgerPeriodIDs[classed[1]] || !ledgerPeriodIDs[classed[2]] || len(ledgerPeriodIDs) != 3 {
+	// 2.5.19 (C1, the owner's approval of 23-Nov-2026): FinComBillOpenings carries the books' first year as these three do
+	if len(classed) != 4 || len(ledgerPeriodIDs) != 4 || !ledgerPeriodIDs[billOpenID] || !ledgerPeriodIDs[ledListID] || !ledgerPeriodIDs[ledChangesID] || !ledgerPeriodIDs[ledByNameID] {
 		t.Fatalf("the exemption's ids: %v", classed)
 	}
-	for id, x := range map[string]string{ledListID: ledgerChunkRequest(zz, 0, 2000), ledChangesID: ledgerChangesRequest(zz, 5, 205), ledByNameID: ledgerByNameRequest(zz, "Cash")} {
+	for id, x := range map[string]string{ledListID: ledgerChunkRequest(zz, 0, 2000), ledChangesID: ledgerChangesRequest(zz, 5, 205), ledByNameID: ledgerByNameRequest(zz, "Cash"), billOpenID: billOpenRequest(zz, booksFromOf(zz), 0, 500)} {
 		if err := datedRefused(fin, x); err != nil {
 			t.Fatalf("%s as built: %v", id, err)
 		}
@@ -209,7 +210,7 @@ func TestR250ReadDaysExemptionOnlyThree(t *testing.T) {
 			"the period twice":        strings.Replace(x, r250Period, r250Period+r250Period, 1),
 			"another company":         strings.Replace(x, "<SVCURRENTCOMPANY>"+zz+"<", "<SVCURRENTCOMPANY>OTHER CO<", 1),
 			"a date filter as well":   strings.Replace(x, "</SYSTEM>", " AND $Date &gt; $$Date:&#34;1-Apr-2025&#34;</SYSTEM>", 1),
-			"a field more":            strings.Replace(x, "LEDSTATENAME", "LEDSTATENAME, CLOSINGBALANCE", 1),
+			"a field more":            strings.Replace(strings.Replace(x, "LEDSTATENAME", "LEDSTATENAME, CLOSINGBALANCE", 1), "ISBILLWISEON,", "ISBILLWISEON, CLOSINGBALANCE,", 1),
 			"the period in the TDL":   strings.Replace(strings.Replace(x, r250Period, "", 1), "<TDLMESSAGE>", "<TDLMESSAGE>"+r250Period, 1),
 			"the books-from a day on": strings.Replace(strings.Replace(x, ">20250401<", ">20250402<", 1), ">20260331<", ">20260401<", 1),
 		}

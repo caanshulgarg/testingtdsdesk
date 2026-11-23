@@ -252,7 +252,7 @@ func TestFast234StripDropsEverythingElse(t *testing.T) {
 		ps = append(ps, p)
 	}
 	sort.Strings(ps)
-	if len(ps) != 61+2+len(liveKeepGST242)+len(liveKeepTDS243)+len(liveKeepPay244)+len(liveKeepInv2512) || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
+	if len(ps) != 61+2+len(liveKeepGST242)+len(liveKeepTDS243)+len(liveKeepPay244)+len(liveKeepInv2512)+len(liveKeepPost2519) || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
 		t.Fatalf("%d approved paths: %v", len(ps), ps)
 	}
 }

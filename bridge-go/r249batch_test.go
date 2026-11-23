@@ -33,12 +33,13 @@ func midList(from, n int64) []string {
 
 // 1. the request is byte for byte the one measured and approved (run 40750991113's capture, the same on 3.0 .. 7.1)
 func TestR249RequestAsApproved(t *testing.T) {
-	if got, want := voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222), batchTD(t, "b4-range.xml"); got != want {
+	// 2.5.19 (C5): the approved text with ", ISPOSTDATED" at the end of its FETCH, the one change (r2519hist_test.go)
+	if got, want := batch2518(voucherBatchRangeRequest("@@CO@@", "20991231", 111111, 222222)), batchTD(t, "b4-range.xml"); got != want {
 		t.Fatalf("the range form is not the approved request:\n%s\nwant\n%s", got, want)
 	}
 	mids := []string{"15", "17", "20"}
 	want := strings.Replace(batchTD(t, "b4-list.xml"), "@@MIDS@@", "$MasterID = 15 OR $MasterID = 17 OR $MasterID = 20", 1)
-	if got := voucherBatchListRequest("@@CO@@", "20991231", mids); got != want {
+	if got := batch2518(voucherBatchListRequest("@@CO@@", "20991231", mids)); got != want {
 		t.Fatalf("the list form is not the approved request:\n%s\nwant\n%s", got, want)
 	}
 	// the company escaped as every request escapes it; FETCH: FinComVoucherObject's kept fields, then the ledger lines
@@ -61,8 +62,8 @@ func TestR249RequestAsApproved(t *testing.T) {
 			t.Errorf("a field FinComVoucherObject does not keep: %s", f)
 		}
 	}
-	if len(fs) != 174 {
-		t.Errorf("%d fields, measured with 174", len(fs))
+	if len(fs) != 174+len(liveKeepPost2519) { // 2.5.19 (C5): ISPOSTDATED at the end
+		t.Errorf("%d fields, measured with 174 (and 2.5.19's ISPOSTDATED)", len(fs))
 	}
 	// refused: no day, b below a, no MasterID, more than 100 listed, a MasterID twice or with a leading zero
 	for _, bad := range []string{voucherBatchRangeRequest("C", "2026083", 1, 2), voucherBatchRangeRequest("C", "20260831", 9, 5), voucherBatchRangeRequest("C", "20260831", 0, 5),
@@ -157,6 +158,7 @@ func TestR249ConverterMatchesObjectOnRealAnswers(t *testing.T) {
 				if rg := regexp.MustCompile(`REMOTEID="([^"]*)"`).FindStringSubmatch(got); rg != nil && rg[1] != tagValue(got, "GUID") {
 					t.Fatalf("a REMOTEID other than the GUID: %s", rg[1])
 				}
+				want = objectAs2518(c, want) // 2.5.19: the capture is of 2.5.18's group request (r2519hist_test.go)
 				if reRemote.ReplaceAllString(got, "") != reRemote.ReplaceAllString(want, "") {
 					t.Errorf("%s MasterID %s differs:\nbatch  %s\nobject %s", rel, mid, cut(got, 3000), cut(want, 3000))
 				}
@@ -545,7 +547,7 @@ func TestR249GroupLeavesWhatItGivesOtherwise(t *testing.T) {
 	}
 	same := func(dir, mid, c string) {
 		got, leave := batchEntry("BDIFF CO", c)
-		if leave != "" || reRemote.ReplaceAllString(got, "") != reRemote.ReplaceAllString(obj(dir, mid), "") {
+		if leave != "" || reRemote.ReplaceAllString(got, "") != reRemote.ReplaceAllString(objectAs2518(c, obj(dir, mid)), "") { // 2.5.19: 2.5.18's capture
 			t.Errorf("MasterID %s taken from a group differs (%s)", mid, leave)
 		}
 	}

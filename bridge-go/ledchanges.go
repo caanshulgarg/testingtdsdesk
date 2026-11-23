@@ -61,7 +61,7 @@ func ledgerChangesRequestAt(company, booksFrom string, after, upto int64) string
 	if sv == "" {
 		return ""
 	}
-	return fcCollection(ledChangesID, company, sv, "Ledger", ledFetch, alterRange(after, upto))
+	return fcCollection(ledChangesID, company, sv, "Ledger", ledFetchNow(), alterRange(after, upto))
 }
 
 // the one ledger of that name: the full list's fields; "" when the name cannot go in a TDL string
@@ -78,7 +78,7 @@ func ledgerByNameRequestAt(company, booksFrom, name string) string {
 	if sv == "" {
 		return ""
 	}
-	return fcCollection(ledByNameID, company, sv, "Ledger", ledFetch, `$Name = "`+name+`"`)
+	return fcCollection(ledByNameID, company, sv, "Ledger", ledFetchNow(), `$Name = "`+name+`"`)
 }
 
 func ledNameOK(s string) bool {
@@ -300,7 +300,9 @@ func ledSend(company, guid, bf string, rows []ledRow, why string, after, upto in
 		n := minI(500, len(rows))
 		led := []any{}
 		for _, r := range rows[:n] {
-			led = append(led, append(append([]any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype}, ledTDSCols(r.nature, r.special, r.ldc)...), r.payArr()...)) // 2.4.3: the TDS master fields; 2.4.4: the pay-head fields
+			row := append(append([]any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype}, ledTDSCols(r.nature, r.special, r.ldc)...), r.payArr()[:4]...) // 2.4.3: the TDS master fields; 2.4.4: the pay-head fields
+			// 2.5.19 (C7): the added fields, when Tally gave any
+			led = append(led, append(row, ledBooksCol(r.books)...))
 		}
 		body := M{"kind": "ledger_changes", "company": company, "company_guid": guid, "ledgers": led, "why": why}
 		if isTallyDate(bf) {
