@@ -333,6 +333,17 @@ export const sheetNet = (r) => r2(r.net != null && r.net !== "" ? num(r.net) : n
 export const SALARY_RE = /SALAR|WAGES|REMUNERATION|STIPEND|BONUS|STAFF\s*(PAY|COST)|PAYROLL|EMPLOYEE\s*(BENEFIT|COST)/i;
 const NOT_SALARY = /AUDIT|WELFARE/i;
 export const salaryNamed = (l) => SALARY_RE.test(l) && !NOT_SALARY.test(l);
+// next-payroll (re-review 1): a pay head of Tally's payroll that is salary paid to the employee (an earning: "Earnings for
+// Employees", bonus, overtime, arrears), by Tally's pay head type; with no type (a bridge before 2.4.4), by its name. The
+// employer's contributions (PF, ESI, EDLI, admin charges), gratuity, reimbursements, loans and deductions are not salary
+const NOT_EARN_TYPE = /employer|gratuity|reimburse|loan|advance|deduction|not applicable/i;
+const NOT_EARN_NAME = /employer|gratuity|contribution|\bedli\b|admin(istrative|istration)?\s*charge|payable|reimburse|\bloan\b|advance|\btds\b|income\s*tax|prof(essional)?\.?\s*tax|\b(e?pf|esic?)\b/i;
+export function earningHead(name, type) {
+  const t = String(type || "").trim();
+  if (t) return /earning|bonus|overtime|arrear/i.test(t) && !NOT_EARN_TYPE.test(t);
+  return !NOT_EARN_NAME.test(String(name || ""));
+}
+export const notSalaryHeadName = (l) => /employer|gratuity|contribution|\bedli\b|admin(istrative|istration)?\s*charge/i.test(String(l || ""));
 export function salaryClass(A, l, base, ledgers) {
   if (!A.isExpense(l)) return "";
   if (base && l === base) return "yes";

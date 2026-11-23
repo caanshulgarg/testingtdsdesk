@@ -203,10 +203,12 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
   const types = TPost.vchTypesOf(pd, books()), payables = ledgers.filter((l) => /payable|salar|outstanding|due/i.test(l));
   const br = TPost.postingBridge(co), brOk = TPost.bridgeOk(br.version), cloud = cloudOn();
   const going = ent && ent.state === "approving" && Date.now() - Date.parse(ent.updated_at || 0) < 30 * 60000;
-  const approve = async () => {
+  // (re-review 3) the night's findings are read by Approve itself (the owner's ledger picks), as Daily Check passes them;
+  // (re-review 4) accept: the parts in Tally taken as they are, the rest posted
+  const approve = async (accept) => {
     setBusy("Checking again…"); setRes(null);
     let r;
-    try { r = await TPost.approveTallyPayroll(ent, { co, seen: p.vouchers.map(TP.payrollVoucherXml), progress: (v, pj) => setBusy((v.parts > 1 ? "Part " + v.part + " of " + v.parts + ": " : "") + ((pj && pj.message) || "Posting…")) }); }
+    try { r = await TPost.approveTallyPayroll(ent, { co, accept: accept === true, seen: accept === true ? undefined : p.vouchers.map(TP.payrollVoucherXml), progress: (v, pj) => setBusy((v.parts > 1 ? "Part " + v.part + " of " + v.parts + ": " : "") + ((pj && pj.message) || "Posting…")) }); }
     catch (x) { r = { ok: false, why: String((x && x.message) || x) }; }
     setBusy(""); setRes(r); say(r.ok ? r.words : r.why);
   };
@@ -230,6 +232,7 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
     </div>)}
     <p className="pr-line note" data-employer-note="">The employer’s PF and ESI are not in this voucher: book them in Tally separately, as now.</p>
     {res && <Proof res={res} />}
+    {res && res.stuck && res.canAccept && canWrite() && <div className="pr-acts"><button type="button" className="btn small" disabled={!!busy} onClick={() => approve(true)} data-accept-part="">Accept what is in Tally and post the rest</button></div>}
     {!res && past.length > 0 && <Proof res={{ ok: true, proof: past }} />}
     {!done && p.vouchers.length > 0 && (!brOk ? <p className="pr-line pr-install" data-install=""><AlertTriangle width={14} height={14} aria-hidden="true" /> {TPost.OLD_BRIDGE}{br.version ? " (" + (br.where || "the posting computer") + " has " + br.version + ")" : ""}.{" "}
         {setup ? <a className="btn small primary" href={setup.href} download={setup.file} data-bridge-download="">Download FinCom Bridge {setup.version}</a> : <span className="note">Download it on the Tally page.</span>}</p>
@@ -237,7 +240,7 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept }) {
       : ent === undefined ? <p className="pr-line note">Reading…</p>
       : !ent ? <p className="pr-line note" data-no-entry="">{kept ? "Kept with the books. Tonight’s Daily Check checks it; then Approve it here." : "Keep this sheet with the books first. Tonight’s Daily Check checks it; then Approve it here."}</p>
       : going && !busy ? <p className="pr-line note" data-going="">Someone is approving it now.</p>
-      : <div className="pr-acts"><button type="button" className="btn small primary" disabled={!!busy || !canWrite()} onClick={approve} data-approve="">{busy ? "Posting…" : "Approve and post to Tally"}</button>
+      : <div className="pr-acts"><button type="button" className="btn small primary" disabled={!!busy || !canWrite()} onClick={() => approve(false)} data-approve="">{busy ? "Posting…" : "Approve and post to Tally"}</button>
         {busy ? <span className="note" data-busy="">{busy}</span> : <span className="note">FinCom checks it again first.</span>}</div>)}
     {owner() && !done && <div className="pr-acts"><button type="button" className="linkbtn" onClick={onJournal} data-journal-once="">Post as a journal this month</button></div>}
   </section>;
@@ -293,7 +296,7 @@ export default function PayrollPage() {
     {st && st.step === "map" && (st.busy ? <section className="pr-card"><p className="pr-line note">Reading the columns…</p></section> : <MapStep st={st} setSt={setSt} co={co} />)}
     {manual && <Manual ym={ym} setYm={setYm} onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
     {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} />}
-    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them read for 24Q (their exemptions, deductions, regime and PAN are carried over by employee)" : ""}. Keeping this sheet replaces them. <button type="button" className="btn small" onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
+    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
     {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}

@@ -15,7 +15,7 @@
 // Loaded only with the Payroll page or an Approve of a payroll entry (a lazy chunk).
 import * as TP from "./tallyPayroll.js";
 import { monLabel } from "./payrollSheet.js";
-import { sheetMonth } from "../../../server/_shared/nightchecks.js";
+import { sheetMonth, earningHead, notSalaryHeadName } from "../../../server/_shared/nightchecks.js";
 
 export const NEED = "2.5.18";
 export const OLD_BRIDGE = "Install FinCom Bridge " + NEED + " to post Tally Payroll";
@@ -82,20 +82,32 @@ export function vchTypesOf(pay, b) {
 }
 // (review B1) a payroll entry already in Tally for the month that FinCom did not post (no TDSDesk:dc-tp-<yyyymm>- in its
 // narration): Tally's payroll read (Payroll.data(): the entries with pay-head allocations) and the books' payroll-type
-// vouchers. Posting would book the month twice: refused, with the entry named
+// vouchers. Posting would book the month twice: refused, with the entry named. (re-review 1) only an entry paying an
+// earning counts: one touching only the employer's contributions, gratuity and the like is not salary. (re-review 6) the
+// narration from the books, else from Tally's payroll read; an entry whose narration FinCom has neither way is unknown
+// (read the books again), never called one FinCom did not post
 export function payrollInTally(ym, pay, b) {
-  const tag = "TDSDesk:dc-tp-" + ym + "-", V = new Map(((b && b.vouchers) || []).filter((v) => v && v.id).map((v) => [String(v.id), v])), out = [];
-  const inMonth = (d) => String(d || "").replace(/-/g, "").slice(0, 6) === ym;
-  const seen = new Set(), add = (id, day, type, no, narr) => { if (seen.has(id)) return; seen.add(id); if (!String(narr || "").includes(tag)) out.push({ id, day: String(day || "").replace(/-/g, ""), type, no }); };
+  const tag = "TDSDesk:dc-tp-" + ym + "-", V = new Map(((b && b.vouchers) || []).filter((v) => v && v.id).map((v) => [String(v.id), v])), out = [], unknown = [];
+  const inMonth = (d) => String(d || "").replace(/-/g, "").slice(0, 6) === ym, heads = (pay && pay.heads) || {};
+  const earn = (h) => earningHead(h, (heads[h] || {}).type || "");
+  const seen = new Set(), add = (id, day, type, no, narr) => {
+    if (seen.has(id)) return; seen.add(id);
+    const x = { id, day: String(day || "").replace(/-/g, ""), type, no };
+    if (narr == null) unknown.push(x); else if (!String(narr).includes(tag)) out.push(x);
+  };
   const pv = (pay && pay.vouchers) || {};
-  ((pay && pay.allocs) || []).forEach((a) => { if (!a || !inMonth(a.day)) return; const v = V.get(String(a.guid)) || {}, h = pv[a.guid] || {}; add(String(a.guid), a.day, h.type || v.type || "", h.no || v.no || "", v.narr); });
-  V.forEach((v, id) => { if (!v.cancel && !v.opt && /payroll/i.test(String(v.type || "")) && inMonth(v.date)) add(id, v.date, v.type, v.no, v.narr); });
+  ((pay && pay.allocs) || []).forEach((a) => { if (!a || !inMonth(a.day) || !earn(a.head)) return; const v = V.get(String(a.guid)), h = pv[a.guid] || {};
+    add(String(a.guid), a.day, h.type || (v && v.type) || "", h.no || (v && v.no) || "", v && v.narr != null ? v.narr : h.narr != null ? h.narr : null); });
+  V.forEach((v, id) => { if (!v.cancel && !v.opt && /payroll/i.test(String(v.type || "")) && inMonth(v.date) && (v.ent || []).some((e) => e.a < 0 && !(heads[e.l] && !earn(e.l)) && !notSalaryHeadName(e.l) && !/payable/i.test(e.l))) add(id, v.date, v.type, v.no, v.narr || ""); });
+  out.unknown = unknown;
   return out;
 }
 const dmy = (d) => (/^\d{8}$/.test(d) ? d.slice(6, 8) + "-" + d.slice(4, 6) + "-" + d.slice(0, 4) : d);
+const named = (xs) => xs.slice(0, 2).map((x) => [x.type, x.no ? "no. " + x.no : "", dmy(x.day)].filter(Boolean).join(" ")).join("; ") + (xs.length > 2 ? "; and " + (xs.length - 2) + " more" : "");
 // o: {co, ym, rows, date, pay (Payroll.data()), ledgers (the client's Tally ledger names), books (S.books), payable (the
-// night entry's party, when it names one)} -> {vouchers, missing (sheet heads with no pay head picked), problems (plain
-// words: what Tally lacks, what the bridge could not take), payable}
+// night entry's party, when it names one), skip (employees already in Tally in parts accepted as they are), partNo,
+// parts (the numbering of the rest)} -> {vouchers, missing (sheet heads with no pay head picked), problems (plain words:
+// what Tally lacks, what the bridge could not take), payable}
 export function prepare(o) {
   const co = o.co || {}, pay = o.pay || {}, heads = pay.heads || {};
   const emps = (pay.employees || []).filter((e) => e && e.name && !e.group && !e.gone);
@@ -103,14 +115,15 @@ export function prepare(o) {
   // the ledger picked on Payroll; else the one the night's entry names; else one named like salary payable
   const L = o.ledgers || [], payable = co.payrollPayable && L.includes(co.payrollPayable) ? co.payrollPayable : o.payable && L.includes(o.payable) ? o.payable : payableOf(co, L);
   const read = emps.length > 0 || Object.keys(heads).length > 0;
-  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, i), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
-    payable, rows: o.rows || [], plan, employees: emps });
+  const no = o.partNo || ((i) => i + 1);
+  const out = TP.payrollVouchers({ id: "dc-tp-" + o.ym, idOf: (i) => voucherIdOf(o.ym, no(i) - 1), date: o.date || lastDay(o.ym), label: monLabel(o.ym), type: co.payrollVchType || "Payroll",
+    payable, rows: o.rows || [], plan, employees: emps, skip: o.skip, partNo: o.partNo, parts: o.parts });
   let problems = out.problems.filter((p) => !/^Pick the pay head for /.test(p));
   if (!read) problems = ["FinCom has not read this company’s payroll from Tally yet (its employees and pay heads). Open the company in Tally and read the books again"];
   if (!payable && (o.ledgers || []).length) problems = problems.filter((p) => p !== "Pick the salary payable ledger").concat(["Tally has no salary payable ledger FinCom can tell (a ledger named like “Salary Payable”). Create it in Tally, or pick it on Payroll"]);
   const there = payrollInTally(o.ym, pay, o.books);
-  if (there.length) problems = ["Tally already has a payroll entry for " + monLabel(o.ym) + " that FinCom did not post (" + there.slice(0, 2).map((x) => [x.type, x.no ? "no. " + x.no : "", dmy(x.day)].filter(Boolean).join(" ")).join("; ") + (there.length > 2 ? "; and " + (there.length - 2) + " more" : "") +
-    "). Check it in Tally: FinCom does not post the month twice"].concat(problems);
+  if (there.unknown.length) problems = ["FinCom’s copy of the books does not have the payroll entr" + (there.unknown.length === 1 ? "y" : "ies") + " of " + monLabel(o.ym) + " Tally has (" + named(there.unknown) + ") yet. Read the books again, so FinCom can tell whether it posted " + (there.unknown.length === 1 ? "it" : "them")].concat(problems);
+  if (there.length) problems = ["Tally already has a payroll entry for " + monLabel(o.ym) + " that FinCom did not post (" + named(there) + "). Check it in Tally: FinCom does not post the month twice"].concat(problems);
   return { vouchers: missing.length || problems.length ? [] : out.vouchers, missing, problems, payable, plan };
 }
 
@@ -132,6 +145,7 @@ export function plainPayrollWhy(msg, plainWhy) {
 export function partWords(r) {
   const of = r.parts > 1 ? "Part " + r.part + " of " + r.parts + ": " : "";
   if (r.ok && r.existed) return of + "already in Tally (not sent again).";
+  if (r.ok && r.unconfirmed) return of + "sent before from that computer (not sent again); Tally has not confirmed it yet. FinCom checks it, and asks you after 24 hours if it is not in Tally.";
   if (r.ok) { const n = Number(r.created) || 0; return of + (n ? "Tally created " + n + " payroll voucher" + (n === 1 ? "" : "s") : String(r.msg || "In Tally")) + (r.tallyId ? " (voucher id " + r.tallyId + ")" : "") + "."; }
   if (r.state === "sent" && r.onWay) return of + "on its way to Tally (sent before; not sent again). " + String(r.msg || "");
   if (r.state === "sent") return of + "queued for the Tally computer. " + String(r.msg || "It posts by itself.");
@@ -141,15 +155,19 @@ export function partWords(r) {
 // ---------------------------------------------------------------- one voucher, in a posting of its own
 // Bridge.post's answer for the voucher -> the part's result. (review 6) as the bank path takes them (src/js/24, 59):
 // already in Tally (the bridge found FinCom's id there: "already", "alreadyThere", "Already in Tally (voucher no. …)") is
-// in Tally; held back by the resend guard (alreadySent: it went from that computer before) or a job whose answer never
-// came here (notAnswered with its job) is on its way, settled from that job: neither is a failure, neither sent again
+// in Tally; held back by the resend guard (alreadySent) or a job whose answer never came here (notAnswered) with its job is
+// on its way, settled from that job. (re-review 2) the resend guard's answer with no job to follow: posted without Tally's
+// voucher id, so the 24-hour rule applies ("pending", then "Not confirmed in Tally": Needs you), never failed or silent
 const alreadyIn = (x) => !!x && (x.already === true || (x.ok === true && (x.alreadyThere === true || x.existed === true)) || (!x.ok && /^Already in Tally \(voucher no\./i.test(String(x.message || ""))));
 export function resultOf(x, out, A, why) {
   if (!x) return { ok: false, state: "failed", msg: out && out.notAllowed ? "Not allowed." : "Tally did not answer for this voucher." };
   if (alreadyIn(x)) return { ok: true, state: "posted", existed: true, created: 0, tallyId: A.tallyIdOf(x) || String(x.vchNumber || x.vchNo || "") || ((String(x.message || "").match(/voucher no\.\s*([^)\s]+)/i) || [])[1] || ""), msg: String(x.message || x.word || "Already in Tally").slice(0, 200) };
   if (x.ok) return { ok: true, state: "posted", existed: false, created: x.created == null ? null : Number(x.created), tallyId: A.tallyIdOf(x), msg: String(x.word || "In Tally").slice(0, 200) };
   if (x.held) return { ok: false, state: "sent", msg: String(x.message || "").slice(0, 300), job: x.job || (out && out.job && out.job.id) || "" };
-  if (x.alreadySent === true || (x.notAnswered === true && x.jobId)) return { ok: false, state: "sent", onWay: true, msg: String(x.message || "").replace(/^Failed:\s*/i, "").slice(0, 300), job: String((x.notAnswered ? x.jobId : x.sentJob) || x.jobId || (out && out.job && out.job.id) || "") };
+  if (x.alreadySent === true || (x.notAnswered === true && x.jobId)) {
+    const job = String((x.notAnswered ? x.jobId : x.sentJob) || x.jobId || (out && out.job && out.job.id) || ""), msg = String(x.message || "").replace(/^Failed:\s*/i, "").slice(0, 300);
+    return job ? { ok: false, state: "sent", onWay: true, msg, job } : { ok: true, state: "posted", unconfirmed: true, tallyId: "", created: null, msg };
+  }
   return { ok: false, state: "failed", msg: why(x.message || x.word).slice(0, 400), said: String(x.message || "").slice(0, 300) };
 }
 // the draft of a part (dc-tp-<yyyymm>-<n>), kept with the client's books: the voucher exactly as built (its XML, the proof
@@ -159,12 +177,18 @@ function draftOf(co, e, v, A, at) {
   return Object.assign(d, { dedupe: e.dedupe, night_entry: e.id, parts: v.parts, part: v.part, title: "Tally Payroll " + monLabel(String(e.voucher.period)) + (v.parts > 1 ? ", part " + v.part + " of " + v.parts : ""),
     vouchers: [{ id: v.id, kind: "tallyPayroll", type: v.type, date: v.date, narration: v.narration, category: v.category, employees: v.employees.length, gross: v.gross, net: v.net, xml: TP.payrollVoucherXml(v) }], removed: false });
 }
-async function postOne(co, company, e, v, A, g, progress) {
+// (re-review 5) the order of the saves, so that the cloud's settle (migration 208 asst_draft_state: the month's LATEST
+// draft) never finds a posted part latest while another part is still to go: the part saved "posting" (not in Tally:
+// failed), then the last part still to go saved "waiting" (failed), then the posting; the parts' answers are saved only
+// once the last part has been tried, the last one tried saved last. A page closed anywhere on the way leaves an unsent part
+// latest: the entry goes back to ready, and Approve again posts only what is missing (the bridge checks FinCom's id first)
+async function postOne(co, company, e, v, A, g, progress, before) {
   const at = () => new Date().toISOString(), xml = TP.payrollVoucherXml(v);
   const d = draftOf(co, e, v, A, at);
   d.state = "posting";
   d.results = Object.assign({}, d.results, { [v.id]: { ok: false, state: "sent", msg: "", at: at() } });
   await A.Drafts.save(co.id, d, "pressed Approve (Tally Payroll): " + v.employees.length + " employees, net " + v.net.toFixed(2) + " to " + company + (v.parts > 1 ? ", part " + v.part + " of " + v.parts : ""));
+  if (before) await before();
   let out = null, x = null;
   try {
     out = await g.Bridge.post({ company, client: co.id, masters: [], vouchers: [{ id: v.id, xml }] }, (pj) => { try { progress && progress(v, pj); } catch (err) { /* only words */ } });
@@ -177,13 +201,8 @@ async function postOne(co, company, e, v, A, g, progress) {
   d.results[v.id] = r; d.state = r.ok ? "posted" : r.state === "sent" ? "posting" : "failed";
   const res = Object.assign({ id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net }, r);
   res.words = partWords(res);
-  await A.Drafts.save(co.id, d, "Tally Payroll: " + res.words);
-  return res;
+  return { res, d };
 }
-// (review, low: the page closed between parts) the cloud settles a claim left half way from the month's LATEST draft
-// (migration 208 asst_draft_state): after a part is in Tally, a part not yet sent is saved again ("waiting"), so the
-// latest draft is never a posted part while another is still to go: the entry goes back to ready, not to approved, and
-// Approve again posts only what is missing
 async function holdNext(co, e, v, A) {
   const at = () => new Date().toISOString(), d = draftOf(co, e, v, A, at);
   if (((d.results || {})[v.id] || {}).ok) return;
@@ -191,9 +210,55 @@ async function holdNext(co, e, v, A) {
   await A.Drafts.save(co.id, d, "Tally Payroll: part " + v.part + " of " + v.parts + " to post next");
 }
 
+// ---------------------------------------------------------------- a part in Tally that is not the part built now
+const xun = (s) => String(s).replace(/&(amp|lt|gt|quot|apos);/g, (m, k) => ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" })[k]);
+const fold = (s) => String(s || "").toUpperCase().split(/\s+/).filter(Boolean).join(" ");
+// a saved voucher's XML (the builder's own shape) read back: its type, payable, category, net and employees
+export function readVoucherXml(x) {
+  const s = String(x || ""), one = (re) => xun((s.match(re) || [])[1] || ""), employees = [];
+  const re = /<EMPLOYEEENTRIES\.LIST>\n<EMPLOYEENAME>([^<]*)<\/EMPLOYEENAME>\n<AMOUNT>([^<]*)<\/AMOUNT>\n([\s\S]*?)<\/EMPLOYEEENTRIES\.LIST>/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const heads = []; const hr = /<PAYHEADNAME>([^<]*)<\/PAYHEADNAME>\n<ISDEEMEDPOSITIVE>(?:Yes|No)<\/ISDEEMEDPOSITIVE>\n<AMOUNT>([^<]*)<\/AMOUNT>/g; let h;
+    while ((h = hr.exec(m[3]))) heads.push({ head: xun(h[1]), amount: Number(h[2]) });
+    employees.push({ name: xun(m[1]), amount: Number(m[2]), heads });
+  }
+  return { type: one(/VCHTYPE="([^"]*)"/), payable: one(/<LEDGERNAME>([^<]*)<\/LEDGERNAME>/), category: one(/<CATEGORY>([^<]*)<\/CATEGORY>/), net: Number(one(/<ALLLEDGERENTRIES\.LIST>[\s\S]*?<AMOUNT>([^<]*)<\/AMOUNT>/)) || 0, employees };
+}
+const rsx = (p) => "₹" + (Math.abs(p) / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+// (re-review 4) exactly what changed since the part went to Tally: the payable, the voucher type, an employee's pay heads
+// (a pay head picked again), cost category, amounts, or an employee no longer on the sheet
+export function partChanges(was, now) {
+  const out = [], cur = new Map(), v0 = now[0] || {};
+  now.forEach((v) => v.employees.forEach((e) => cur.set(fold(e.name), { v, e })));
+  if (v0.payable && was.payable !== v0.payable) out.push("the salary payable ledger (" + was.payable + " in Tally, " + v0.payable + " now)");
+  if (v0.type && was.type !== v0.type) out.push("the voucher type (" + was.type + " in Tally, " + v0.type + " now)");
+  was.employees.forEach((we) => {
+    const c = cur.get(fold(we.name));
+    if (!c) { out.push(we.name + " is no longer on the sheet"); return; }
+    const hk = (hs) => hs.map((h) => fold(h.head)).sort().join("|"), hv = (hs) => hs.map((h) => fold(h.head) + "=" + P(h.amount)).sort().join("|");
+    if (P(c.e.amount) !== P(we.amount)) out.push(we.name + "’s net (" + rsx(P(we.amount)) + " in Tally, " + rsx(P(c.e.amount)) + " now)");
+    else if (hk(we.heads) !== hk(c.e.heads)) out.push(we.name + "’s pay heads (" + we.heads.map((h) => h.head).join(", ") + " in Tally; " + c.e.heads.map((h) => h.head).join(", ") + " now: a pay head picked again)");
+    else if (hv(we.heads) !== hv(c.e.heads)) out.push(we.name + "’s amounts by pay head");
+    if (c.v.category !== was.category) out.push(we.name + "’s cost category (" + was.category + " in Tally, " + c.v.category + " now)");
+  });
+  const inWas = new Set(was.employees.map((e) => fold(e.name)));
+  if (!out.length) out.push("the employees in it (" + now.flatMap((v) => v.employees).filter((e) => !inWas.has(fold(e.name))).length + " of the sheet’s are in other parts now)");
+  return out.length > 6 ? out.slice(0, 6).concat(["and " + (out.length - 6) + " more"]) : out;
+}
+
 // ---------------------------------------------------------------- Approve
+// the client's findings from last night (the owner's ledger picks, the drafts said not in Tally), as Daily Check reads
+// them: the second check needs them to make the very entry the night made (re-review 3)
+export async function priorOf(cid, g = G) {
+  try {
+    const r = await g.Cloud.api("night_findings?select=client_id,kind,key,state,evidence,undone_at&client_id=eq." + encodeURIComponent(cid) + "&state=in.(ask,you,resolved)");
+    return (Array.isArray(r) ? r : []).map((f) => ({ cid: f.client_id, kind: f.kind, key: f.key, state: f.state, evidence: f.evidence || [], undone: !!f.undone_at }));
+  } catch (e) { return []; }
+}
 // e: the night's payroll entry (night_entries row); env (tests, the page): {g, A, recheck, rpc, books, pay, prior, seen,
-// progress, jobs}. Returns {ok, words, proof, queued} or {ok: false, why, install?, problems?, proof?}
+// progress, jobs, accept (the owner accepts the parts in Tally as they are)}. Returns {ok, words, proof, queued} or
+// {ok: false, why, install?, problems?, proof?, stuck?, canAccept?}
 export async function approveTallyPayroll(e, env = {}) {
   const g = env.g || G, cid = e.client_id, ym = String((e.voucher || {}).period || ""), ev = e.voucher || {};
   const no = (why, extra) => Object.assign({ ok: false, why }, extra || {});
@@ -214,13 +279,15 @@ export async function approveTallyPayroll(e, env = {}) {
   const drafts = (await A.Drafts.load(cid, true)) || [];
   const mine = drafts.filter((d) => d && /^dc-tp-/.test(String(d.id || "")) && d.dedupe === e.dedupe && !d.removed);
   const ledgers = ((await A.clientLedgers(co, true)) || []).map((l) => l.name);
+  const prior = env.prior || await priorOf(cid, g);
   const recheck = env.recheck || (await import("../screens/daily/again.js")).recheck;
-  const why1 = await recheck(e, Object.assign({ prior: env.prior || [], drafts: drafts.filter((d) => !mine.includes(d)), ledgers }, env.jobs ? { jobs: env.jobs } : {}, env.now != null ? { now: env.now } : {}, env.bookId != null ? { bookId: env.bookId } : {}));
+  const why1 = await recheck(e, Object.assign({ prior, drafts: drafts.filter((d) => !mine.includes(d)), ledgers }, env.jobs ? { jobs: env.jobs } : {}, env.now != null ? { now: env.now } : {}, env.bookId != null ? { bookId: env.bookId } : {}));
   if (why1) return no(why1);
-  const b = env.books || (g.S && g.S.books) || {};
+  const b = env.books || (g.S && g.S.books) || {}, pay = env.pay || payData(g);
   // (review 3) the payable ledger is the one the night's entry names (the Payroll page's pick, else the one certain by
   // name); a night entry naming none takes the one found now
-  const p = prepare({ co, ym, rows: monthRows(b, ym), date: iso(ev.date), pay: env.pay || payData(g), ledgers, books: b, payable: ev.kind === "tallyPayroll" ? ev.party : "" });
+  const base = { co, ym, rows: monthRows(b, ym), date: iso(ev.date), pay, ledgers, books: b, payable: ev.kind === "tallyPayroll" ? ev.party : "" };
+  const p = prepare(base);
   if (p.missing.length) return no("Pick the Tally pay head for " + p.missing.map(TP.keyWords).join(", ") + " on Payroll first.", { problems: p.problems });
   if (p.problems.length) return no("Not posted: " + p.problems[0] + (p.problems.length > 1 ? " (and " + (p.problems.length - 1) + " more on Payroll)" : "") + ".", { problems: p.problems });
   const xmls = p.vouchers.map(TP.payrollVoucherXml);
@@ -232,43 +299,72 @@ export async function approveTallyPayroll(e, env = {}) {
     const lines = ev.lines || [], dr = lines.reduce((s, l) => s + P(l.dr), 0), cr = lines.filter((l) => l.ledger === ev.party).reduce((s, l) => s + P(l.cr), 0);
     if (dr !== gross || cr !== net) return no(CHANGED);
   }
-  // a part already in Tally is not sent again, only when it is the very part built now (review B2: its saved voucher's
-  // XML the same, byte for byte); one on its way is waited for
-  const done = new Map(), byId = new Map(p.vouchers.map((v, i) => [v.id, xmls[i]]));
+  // a part already in Tally is not sent again; one on its way is waited for
+  const done = new Map(), byId = new Map(p.vouchers.map((v, i) => [v.id, xmls[i]])), inTally = [];
   for (const d of mine) {
     const r = (d.results || {})[d.id] || {};
-    if (!byId.has(d.id) && r.ok) return no("Part of this month is already in Tally from an earlier approval, split differently. Check Tally before posting the rest.");
-    if (r.ok) {
-      const was = String((((d.vouchers || [])[0]) || {}).xml || "");
-      if (was !== byId.get(d.id)) return no("Part " + (Number(d.part) || String(d.id).split("-").pop()) + " in Tally differs from the sheet now (other employees or amounts). Check that part in Tally; FinCom posts nothing until the sheet kept with the books is the one posted.");
-      done.set(d.id, r); continue;
-    }
+    if (r.ok) { inTally.push(d); done.set(d.id, r); continue; }
     if (r.state === "sent" && (r.job || d.job)) {
       let live = true;
       try { const j = ((await g.Cloud.api("tally_post_jobs?select=id,status&id=eq." + encodeURIComponent(r.job || d.job))) || [])[0]; live = !!j && ["waiting", "taken", "running"].includes(j.status); } catch (x) { live = true; }
       if (live) return no("On its way to Tally: wait for it to finish.");
     }
   }
-  // 3. the claim
+  // (review B2) a part in Tally counts only when it is the very part built now (its saved XML, byte for byte). (re-review 4)
+  // one that is not: what changed is said exactly; the owner may accept the parts in Tally as they are and post the rest,
+  // only when the rest can be built without anyone in those parts and the parts add up to the night's entry
+  let plan = p.vouchers;
+  const nPart = (d) => Number(d.part) || Number(String(d.id).split("-").pop()) || 0;
+  const differs = inTally.filter((d) => String((((d.vouchers || [])[0]) || {}).xml || "") !== byId.get(d.id));
+  if (differs.length) {
+    const kept = inTally.map((d) => ({ d, x: readVoucherXml(((d.vouchers || [])[0] || {}).xml), no: nPart(d) }));
+    const skip = kept.flatMap((k) => k.x.employees.map((x) => x.name)), used = new Set(kept.map((k) => k.no));
+    const keptNet = kept.reduce((s, k) => s + P(k.x.net), 0), keptGross = kept.reduce((s, k) => s + P(((k.d.vouchers || [])[0] || {}).gross), 0);
+    const onSheet = new Set(p.vouchers.flatMap((v) => v.employees.map((x) => fold(x.name))));
+    let rest = null, canWhy = "";
+    if (!skip.every((nm) => onSheet.has(fold(nm)))) canWhy = "someone in that part is no longer on the sheet";
+    else {
+      const all = skip.length >= onSheet.size;
+      const r0 = all ? { vouchers: [], problems: [], missing: [] } : prepare(Object.assign({}, base, { skip }));
+      const freeNo = (k) => { const out = []; for (let i = 1; out.length < k; i++) if (!used.has(i)) out.push(i); return out; };
+      const nos = freeNo(r0.vouchers.length), r1 = all || !r0.vouchers.length ? r0 : prepare(Object.assign({}, base, { skip, partNo: (i) => nos[i], parts: kept.length + r0.vouchers.length }));
+      const rg = r1.vouchers.reduce((s, v) => s + P(v.gross), 0), rn = r1.vouchers.reduce((s, v) => s + P(v.net), 0);
+      if (r1.problems.length || r1.missing.length) canWhy = r1.problems[0] || "a pay head to pick";
+      else if (keptNet + rn !== net || keptGross + rg !== gross) canWhy = "the parts in Tally have other amounts than the sheet";
+      else rest = r1.vouchers;
+    }
+    const accepted = env.accept || differs.every((d) => d.accepted);
+    if (!accepted || !rest) {
+      const changes = differs.map((d) => (differs.length > 1 || inTally.length > 1 || p.vouchers.length > 1 ? "part " + nPart(d) + ": " : "") + partChanges(readVoucherXml(((d.vouchers || [])[0] || {}).xml), p.vouchers).join("; "));
+      const label = differs.length === 1 ? "Part " + nPart(differs[0]) : "Parts " + differs.map(nPart).join(" and ");
+      return no(label + " in Tally differs from the sheet now: " + changes.join(". ") + ". " + (rest ? "On Payroll you can accept " + label.toLowerCase() + " as it is in Tally and post the rest." : "Correct it in Tally or on the sheet first (" + canWhy + "); FinCom posts nothing until they agree."),
+        { stuck: true, canAccept: !!rest, changes });
+    }
+    for (const d of differs) if (!d.accepted) { d.accepted = { by: A.me(), at: new Date().toISOString() }; await A.Drafts.save(co.id, d, "Tally Payroll: part " + nPart(d) + " accepted as it is in Tally"); }
+    plan = kept.map((k) => ({ id: k.d.id, part: k.no, parts: kept.length + rest.length, employees: k.x.employees, net: k.x.net, kept: true })).concat(rest).sort((a, c) => a.part - c.part);
+  }
+  const todo = plan.filter((v) => !done.has(v.id));
+  // 3. the claim (a part already in Tally is not left the latest draft: the last part to go saved "waiting" first)
+  if (done.size && todo.length) await holdNext(co, e, todo[todo.length - 1], A);
   try { const c = await rpc("entry_claim", { p_id: e.id }); if (c && c.ok === false) return no(c.why || "This entry is not ready."); }
   catch (x) { return no(errWords(x) || "This entry is not ready."); }
-  // 4. each voucher alone, in order; a refusal stops the rest
-  const proof = [], todo = p.vouchers.filter((v) => !done.has(v.id));
-  for (const v of p.vouchers) {
+  // 4. each voucher alone, in order; a refusal stops the rest; the answers saved once the last part is tried (above)
+  const proof = [], pend = [];
+  for (const v of plan) {
     if (done.has(v.id)) { const r = Object.assign({ id: v.id, part: v.part, parts: v.parts, employees: v.employees.length, net: v.net }, done.get(v.id)); r.words = partWords(r); proof.push(r); continue; }
-    const r = await postOne(co, company, e, v, A, g, env.progress);
-    proof.push(r);
-    if (r.state === "failed") break;
-    const next = todo.filter((x) => x.part > v.part);
-    if (next.length && r.ok) await holdNext(co, e, next[next.length - 1], A);
+    const after = todo.filter((x) => x.part > v.part), last = after[after.length - 1];
+    const { res, d } = await postOne(co, company, e, v, A, g, env.progress, last ? () => holdNext(co, e, last, A) : null);
+    proof.push(res); pend.push({ res, d });
+    if (res.state === "failed") break;
   }
+  for (const x of pend) await A.Drafts.save(co.id, x.d, "Tally Payroll: " + x.res.words);
   // 5. the proof, and the decision
-  const failed = proof.find((r) => r.state === "failed") || (proof.length < p.vouchers.length ? { words: "Not all parts were sent." } : null);
+  const failed = proof.find((r) => r.state === "failed") || (proof.length < plan.length ? { words: "Not all parts were sent." } : null);
   if (failed) {
     await rpc("entry_release", { p_id: e.id, p_why: String(failed.words || "").slice(0, 200) }).catch(() => null);
     return no(failed.words, { proof });
   }
-  await rpc("entry_approved", { p_id: e.id, p_work_ref: p.vouchers[0].id });
+  await rpc("entry_approved", { p_id: e.id, p_work_ref: plan[0].id });
   return { ok: true, proof, queued: proof.some((r) => r.state === "sent"), words: proof.map((r) => r.words).join(" ") };
 }
 

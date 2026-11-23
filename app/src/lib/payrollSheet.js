@@ -110,9 +110,10 @@ export function findRule(head, sheet, rules) {
 }
 
 // ---------------------------------------------------------------- what the AI is shown, and its answer checked
-// (review 8) a full date (a birth, joining or pay date) masked to DATE_n, a pay month ("Oct-2026", "10/2026") kept; an
-// account, phone or UAN of 9 digits or more (spaces, dashes and dots aside) masked; the figures rounded to two
-// significant digits (a salary is never sent as it is; a day count up to 31 kept, to tell days from amounts)
+// (review 8, re-review 8) every date masked to DATE_n (a birth, joining or pay date: "01-01-1990" too); a month kept only
+// in the pay month / period column ("Oct-2026", "10/2026", a date of the 1st there as 2026-10). An account, phone or UAN of
+// 9 digits or more (spaces, dashes and dots aside) masked; the figures rounded to two significant digits (a salary is
+// never sent as it is; a day count up to 31 kept, to tell days from amounts)
 export function roundFigure(s) {
   const n = amount(s);
   if (!n) return String(s).trim();
@@ -121,22 +122,31 @@ export function roundFigure(s) {
   const k = Math.pow(10, Math.max(0, Math.floor(Math.log10(a)) - 1));
   return String((n < 0 ? -1 : 1) * Math.round(a / k) * k);
 }
+export const isMonthColumn = (h) => /^(pay|salary|wage)?(month|period|monthyear|forthemonth|salarymonth|paymonth|payperiod)$/.test(norm(h)) || /^(month|period)of/.test(norm(h));
 export function samples(head, rows) {
   const toks = new Map(), tok = (kind, v) => { const k = kind + "|" + v; if (!toks.has(k)) toks.set(k, kind + "_" + (Array.from(toks.keys()).filter((x) => x.startsWith(kind + "|")).length + 1)); return toks.get(k); };
-  const cell = (v) => {
-    if (v instanceof Date) { const t = isNaN(v) ? "" : v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0"); return /-01$/.test(t) ? t.slice(0, 7) : tok("DATE", t); }   // the 1st: a pay month
+  const monthCol = (head || []).map(isMonthColumn);
+  const MONTH_ONLY = new RegExp("^(" + MON.join("|") + ")[a-z]*[-\\s'/]*\\d{2,4}$|^\\d{1,2}[-/]\\d{4}$|^\\d{4}[-/]\\d{1,2}$", "i");
+  const cell = (v, i) => {
+    const mc = monthCol[i];
+    if (v instanceof Date) { const t = isNaN(v) ? "" : v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0"); return mc ? t.slice(0, 7) : tok("DATE", t); }
     let s = String(v == null ? "" : v).trim();
     if (!s) return "";
     if (/^[A-Z]{5}\d{4}[A-Z]$/i.test(s)) return tok("PAN", s.toUpperCase());
     if (/@/.test(s)) return tok("EMAIL", s);
     if (/^\+?\d{9,}$/.test(s.replace(/[\s\-./]/g, "")) && !/^\d{1,3}(,\d{2,3})+(\.\d+)?$/.test(s) && !/\.\d{1,2}$/.test(s)) return tok("NUMBER", s);   // a phone, an account, a UAN
-    if (/^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(s) || /^\d{1,2}[-\s]?[a-z]{3,9}[-\s']*\d{2,4}$/i.test(s)) return tok("DATE", s);   // a full date
-    if (/^\d{1,2}[-\/]\d{4}$|^\d{4}[-\/]\d{1,2}$/.test(s) || new RegExp("^(" + MON.join("|") + ")[a-z]*[-\\s'/]*\\d{2,4}$", "i").test(s)) return s;   // a pay month
+    const full = /^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(s) || /^\d{1,2}[-\s]?[a-z]{3,9}[-\s']*\d{2,4}$/i.test(s);
+    if (full || MONTH_ONLY.test(s)) {
+      if (!mc) return tok("DATE", s);                                                                    // any date outside the pay month column
+      if (!full) return s;                                                                                // the pay month
+      const m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.]\d{1,2}$/) || s.match(/^\d{1,2}[-\/.](\d{1,2})[-\/.](\d{4})$/);
+      return m ? (m[1].length === 4 ? m[1] + "-" + m[2].padStart(2, "0") : m[2] + "-" + m[1].padStart(2, "0")) : tok("DATE", s);
+    }
     if (/^[A-Z]{1,5}[-\/]?\d{1,6}$/i.test(s)) return tok("CODE", s.toUpperCase());                     // an employee code
     if (/^[\d,.\-()₹\s]+$/.test(s) || /^(rs\.?|inr|₹)/i.test(s)) return roundFigure(s);                 // a figure, rounded
     return tok("TEXT", s);                                                                               // a name, a department, a bank
   };
-  return { head: head.map((h) => String(h == null ? "" : h)), rows: (rows || []).filter((r) => (r || []).some((c) => String(c == null ? "" : c).trim())).slice(0, MAX_SAMPLE_ROWS).map((r) => (r || []).map(cell)) };
+  return { head: head.map((h) => String(h == null ? "" : h)), rows: (rows || []).filter((r) => (r || []).some((c) => String(c == null ? "" : c).trim())).slice(0, MAX_SAMPLE_ROWS).map((r) => (r || []).map((c, i) => cell(c, i))) };
 }
 // the answer: {map: {field: header}, earn: [header], ded: [header], why}; only the sheet's own headers, one field a column,
 // a column in at most one place
@@ -294,22 +304,31 @@ export function builderRows(rows) {
 const rowMonth = (r) => r.month || String(r.date || "").slice(0, 7).replace("-", "");
 export const CARRY = ["exempt", "standard", "chapter6", "taxable", "regime", "pan"];
 const nameKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-function sameEmp(a, b) {
-  if (a.code && b.code) return String(a.code).trim().toUpperCase() === String(b.code).trim().toUpperCase();
-  if (a.pan && b.pan) return String(a.pan).toUpperCase() === String(b.pan).toUpperCase();
-  return !!nameKey(a.name) && nameKey(a.name) === nameKey(b.name);
+// (re-review 9) the old row of the same employee: by code; else (codes missing or not matching) by PAN; else by name
+const up = (x) => String(x || "").trim().toUpperCase();
+function oldRowOf(was, r, taken) {
+  const free = was.filter((w) => !taken.has(w) && rowMonth(w) === rowMonth(r));
+  return (up(r.code) && free.find((w) => up(w.code) === up(r.code))) || (up(r.pan) && free.find((w) => up(w.pan) === up(r.pan))) || (nameKey(r.name) && free.find((w) => nameKey(w.name) === nameKey(r.name))) || null;
 }
 const has = (v) => v != null && v !== "" && v !== 0;
+const taxOf = (r) => CARRY.some((k) => k !== "pan" && has(r[k]));
+// the pairs: each new row with its old row (or none)
+function pairs(old, rows) {
+  const months = new Set(rows.map(rowMonth)), was = (old || []).filter((r) => months.has(rowMonth(r))), taken = new Set();
+  return { was, list: rows.map((r) => { const o = oldRowOf(was, r, taken); if (o) taken.add(o); return [r, o]; }), taken };
+}
+// what keeping these rows replaces: n employees kept for the month(s), tax (of them with 24Q's figures), carried (the
+// employees whose figures carry over), missed (those with 24Q's figures found on this sheet by none of code, PAN or name)
 export function replacing(old, rows) {
-  const months = new Set(rows.map(rowMonth)), was = (old || []).filter((r) => months.has(rowMonth(r)));
-  return { n: was.length, months: Array.from(new Set(was.map(rowMonth))).sort(), tax: was.filter((r) => CARRY.some((k) => k !== "pan" && has(r[k]))).length };
+  const { was, list, taken } = pairs(old, rows);
+  return { n: was.length, months: Array.from(new Set(was.map(rowMonth))).sort(), tax: was.filter(taxOf).length,
+    carried: list.filter(([, o]) => o && taxOf(o)).map(([r]) => r.name), missed: was.filter((w) => taxOf(w) && !taken.has(w)).map((w) => w.name) };
 }
 export function mergeSalary(old, rows) {
-  const months = new Set(rows.map(rowMonth));
-  const keep = (old || []).filter((r) => !months.has(rowMonth(r))), was = (old || []).filter((r) => months.has(rowMonth(r)));
-  return keep.concat(rows.map((r) => {
-    const o = was.find((w) => rowMonth(w) === rowMonth(r) && sameEmp(w, r)) || {}, carry = {};
-    CARRY.forEach((k) => { if (!has(r[k]) && has(o[k])) carry[k] = o[k]; });
+  const months = new Set(rows.map(rowMonth)), keep = (old || []).filter((r) => !months.has(rowMonth(r)));
+  return keep.concat(pairs(old, rows).list.map(([r, o]) => {
+    const carry = {};
+    if (o) CARRY.forEach((k) => { if (!has(r[k]) && has(o[k])) carry[k] = o[k]; });
     return Object.assign({ exempt: 0, standard: 0, chapter6: 0, taxable: 0, regime: "" }, r, carry);
   }));
 }

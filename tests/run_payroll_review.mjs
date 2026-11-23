@@ -14,6 +14,7 @@
 //   whose names fold to one
 import { booksOf, gstOf, nightInput, draftsOf } from "../server/assistant-night/nightinput.js";
 import { journals, payrollOne, draftState } from "../server/_shared/dailyjournals.js";
+import { earningHead } from "../server/_shared/nightchecks.js";
 import * as E from "../server/_shared/gst3b.js";
 import * as TP from "../app/src/lib/tallyPayroll.js";
 import * as TPost from "../app/src/lib/payrollPost.js";
@@ -34,10 +35,12 @@ const emp = (name, basic, hra, o = {}) => {
 const SHEET = [emp("Ravi Kumar", 25000, 10000, { tds: 2500, pt: 200, pf: 1800 }), emp("Asha Verma", 15000, 6000, { pt: 200, pf: 1800, esi: 188, adv: 2000 }), emp("Mehta, Sunil", 6774.19, 2709.68, { pf: 813, esi: 82 })];
 const many = (k) => Array.from({ length: k }, (_, i) => emp("Made Up Person " + String(i).padStart(3, "0"), 10000, 2000, { pt: 200 }));
 const PAYHEADS = { "Basic Pay": "Indirect Expenses", "HRA": "Indirect Expenses", "Income Tax": "Duties & Taxes", "Professional Tax": "Duties & Taxes", "PF Employee 12%": "Duties & Taxes",
-  "ESI Employee": "Duties & Taxes", "Advance Recovery": "Loans & Advances (Asset)", "Salary Payable": "Provisions" };
+  "ESI Employee": "Duties & Taxes", "Advance Recovery": "Loans & Advances (Asset)", "Salary Payable": "Provisions", "PF Employer": "Indirect Expenses", "PF Payable": "Duties & Taxes", "Gratuity": "Indirect Expenses" };
 const HEADS = { "Basic Pay": { type: "Earnings for Employees" }, "HRA": { type: "Earnings for Employees" }, "Income Tax": { type: "Deductions from Employees", stat: "Income Tax" },
   "Professional Tax": { type: "Deductions from Employees", stat: "Professional Tax" }, "PF Employee 12%": { type: "Employees' Statutory Deductions", stat: "PF Account (A/c No. 1)" },
-  "ESI Employee": { type: "Employees' Statutory Deductions", stat: "Employee State Insurance" }, "Advance Recovery": { type: "Loans and Advances" }, "Salary Payable": { type: "" } };
+  "ESI Employee": { type: "Employees' Statutory Deductions", stat: "Employee State Insurance" }, "Advance Recovery": { type: "Loans and Advances" }, "Salary Payable": { type: "" },
+  "PF Employer": { type: "Employer's Statutory Contributions", stat: "PF Account (A/c No. 1)" }, "PF Payable": { type: "" }, "Gratuity": { type: "Gratuity" } };
+const HEADROWS = Object.entries(HEADS).map(([name, h]) => ({ name, type: h.type }));
 const PLAN = { "earn:Basic": "Basic Pay", "ded:Advance Recovery": "Advance Recovery" };
 const CO = (o = {}) => Object.assign({ id: "c1", name: "Sample Traders", closed: {}, payrollMethod: { value: "tally", by: "Made-up Owner" }, payHeadPlan: PLAN, payrollPayable: "Salary Payable" }, o);
 // the cloud rows: GST months as daily2_books makes them, the salary sheet kept with the books, the payroll's ledgers
@@ -50,7 +53,7 @@ function rowsOf(o = {}) {
 // tonight, as assistant-night runs it (the client's settings from its record; the pay heads read with for_payroll)
 function night(rows, o = {}) {
   const b = booksOf(rows);
-  const inp = nightInput(rows, b, { today: TODAY, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst: gstOf(rows, b, TODAY), prior: [], draftRecs: o.draftRecs || [], jobs: {}, payHeads: o.payHeads === undefined ? Object.keys(PAYHEADS) : o.payHeads });
+  const inp = nightInput(rows, b, { today: TODAY, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst: gstOf(rows, b, TODAY), prior: o.prior || [], draftRecs: o.draftRecs || [], jobs: {}, payHeads: o.payHeads === undefined ? HEADROWS : o.payHeads });
   const j = journals(inp);
   return { entry: j.entries.find((e) => e.source === "payroll"), finding: j.findings.find((f) => f.kind === "payroll_due"), inp };
 }
@@ -76,12 +79,12 @@ function world(rows, o = {}) {
   };
   const answer = o.answer || ((v) => ({ id: v.id, ok: true, created: 1, vchId: String(100 + posts.length), word: "In Tally" }));
   const g = { tallyVia: () => "bridge", Bridge: { st: { version: "2.5.18" }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers[0].id); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
-    TCloud: { on: () => true, has: () => false }, Cloud: { api: async () => [] } };
+    TCloud: { on: () => true, has: () => false }, Cloud: { api: async (path) => (String(path).startsWith("night_findings") ? (o.findings || []) : []) } };
   const rpc = async (fn) => { log.push(fn); return { ok: true }; };
-  const env = { g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {}, prior: [] };
+  const env = Object.assign({ g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {} }, o.noPrior ? {} : { prior: [] });
   const run = async (e) => {
     Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E.GSTR, GSTF: E.GSTF, GSTSet: E.GSTSet, Books: E.Books, ledGroupPath: E.ledGroupPath });
-    try { return await TPost.approveTallyPayroll(Object.assign({ id: "n1", client_id: "c1", state: "ready" }, e), env); }
+    try { return await TPost.approveTallyPayroll(Object.assign({ id: "n1", client_id: "c1", state: "ready" }, e), Object.assign({}, env, run.extra || {})); }
     finally { ["S", "CO", "GSTR", "GSTF", "GSTSet", "Books", "ledGroupPath"].forEach((k) => delete globalThis[k]); }
   };
   return { log, drafts, posts, env, b, run };
@@ -139,8 +142,10 @@ console.log("B3 and B2: a split month, part 1 in Tally, then the rest");
   const w = world(rows, { sheet, answer: (v, k) => (v.id.endsWith("-2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "2" + k }) });
   let r = await w.run(t.entry);
   ok(!r.ok && w.posts.map((p) => p.vouchers[0].id).join() === "dc-tp-202610-1,dc-tp-202610-2" && w.log.includes("entry_release"), "the real second check passes; part 1 posted, part 2 refused, released");
-  const after1 = w.log.slice(w.log.indexOf("post dc-tp-202610-1") + 1);
-  ok(after1[0] === "save dc-tp-202610-1 posted" && after1[1] === "save dc-tp-202610-2 waiting", "low: after part 1, part 2 is saved again (waiting): the latest draft is never a posted part while one is to go");
+  const i1 = w.log.indexOf("post dc-tp-202610-1"), i2 = w.log.indexOf("post dc-tp-202610-2"), saves = w.log.filter((l) => /^save/.test(l));
+  ok(w.log.slice(0, i1).filter((l) => /^save/.test(l)).join() === "save dc-tp-202610-1 posting,save dc-tp-202610-2 waiting" && w.log.slice(i1, i2).filter((l) => /^save/.test(l)).every((l) => !/ posted$/.test(l))
+    && saves[saves.length - 1] === "save dc-tp-202610-2 failed",
+    "re-review 5: part 2 saved waiting before part 1 is sent, no posted part saved before part 2 is tried, the last part tried saved last: " + saves.join(" > "));
   ok(draftState({ vid: "dc-tp-202610-2", dedupe: "payroll:202610", state: "waiting", results: w.drafts["dc-tp-202610-2"].results }, {}, Date.now()) === "failed", "  so the cloud's settle (the latest draft) sends the entry back to ready, never to approved");
   // the books synced: part 1 is in Tally (FinCom's id in its narration, its allocations in Tally's payroll read)
   const p1 = TPost.prepare({ co: rows.co, ym: YM, rows: sheet, pay: w.b.payroll, ledgers: rows.ledgers.map((l) => l.name), books: w.b }).vouchers[0], x = inTally(p1, "tp1");
@@ -233,6 +238,118 @@ console.log("7, 8, 9: the sheet kept, the AI's samples, the layout's key");
     const p = S.payrollPrompt(["Name", "DOB", "Account", "Basic"], [["TEXT_1", "12/03/1990", "123456789012", "25,345.50"]]);
     ok(/"DATE"/.test(p) && /"NUMBER"/.test(p) && /"25000"/.test(p) && /TEXT_1/.test(p) && !/1990|123456789012|25,345/.test(p), "  the server masks again whatever the page sent (sheetmap.ts payrollPrompt)");
   }
+}
+
+console.log("re-review 1: the employer's contributions are not salary booked");
+{
+  ok(earningHead("Basic Pay", "Earnings for Employees") && earningHead("Bonus", "Bonus") && !earningHead("PF Employer", "Employer's Statutory Contributions") && !earningHead("Gratuity", "Gratuity")
+    && !earningHead("Conveyance", "Reimbursements to Employees") && !earningHead("PF Employer", "") && !earningHead("EDLI Admin Charges", "") && earningHead("HRA", ""), "a pay head is salary only when it is an earning (by Tally's type; with none, by its name)");
+  const er = (guid, day, amt, led = "PF Employer") => ({ guid, day, type: "Payroll", narr: "PF employer's share", lines: [[led, -amt], ["PF Payable", amt]] });
+  let t = night(rowsOf({ vouchers: [er("er1", "2026-10-31", 3600)] }));
+  ok(t.entry && t.entry.ready, "the employer's PF (₹3,600, a Payroll voucher) entered before the salary: the month is still prepared");
+  t = night(rowsOf({ vouchers: [er("er1", "2026-10-31", 3600), er("gr1", "2026-10-31", 1500, "Gratuity")] }), { payHeads: Object.keys(PAYHEADS) });
+  ok(t.entry && t.entry.ready, "  and with the pay heads' types unknown (an older bridge): by name, still prepared (gratuity too)");
+  const rows = rowsOf({ vouchers: [er("er1", "2026-10-31", 3600)] }), e = night(rows).entry;
+  const w = world(rows, { allocs: [{ guid: "er1", day: "20261031", head: "PF Employer", employee: "Ravi Kumar", amt: 3600 }], pv: { er1: { day: "20261031", type: "Payroll", no: "5", narr: "PF employer's share" } } });
+  const r = await w.run(e);
+  ok(r.ok && w.posts.length === 1, "  Approve: the employer's PF entry in Tally's payroll read is not a payroll entry FinCom did not post: posted");
+  // a split month: part 1 in, then the employer's contributions booked, then part 2
+  const sheet = many(150), r0 = rowsOf({ sheet }), t0 = night(r0);
+  let first = true;
+  const w0 = world(r0, { sheet, answer: (v, k) => (v.id.endsWith("-2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "3" + k }) });
+  await w0.run(t0.entry);
+  const p1 = TPost.prepare({ co: r0.co, ym: YM, rows: sheet, pay: w0.b.payroll, ledgers: r0.ledgers.map((l) => l.name), books: w0.b }).vouchers[0], x = inTally(p1, "tp1");
+  const synced = rowsOf({ sheet, vouchers: [x.voucher, er("er2", "2026-10-31", 21600)] });
+  ok(JSON.stringify((night(synced, { draftRecs: asRecs(w0.drafts) }).entry || {}).voucher) === JSON.stringify(t0.entry.voucher), "  a split month: part 1 in, then the employer's PF booked: the same night entry");
+  first = false;
+  const w1 = world(synced, { sheet, drafts: w0.drafts, allocs: x.allocs.concat([{ guid: "er2", day: "20261031", head: "PF Employer", employee: "Made Up Person 000", amt: 21600 }]), pv: Object.assign({}, x.pv, { er2: { day: "20261031", type: "Payroll", no: "9", narr: "PF employer" } }) });
+  const r1 = await w1.run(t0.entry);
+  ok(r1.ok && w1.posts.length === 1 && w1.posts[0].vouchers[0].id === "dc-tp-202610-2", "  and Approve posts part 2");
+}
+
+console.log("re-review 2: the resend guard's answer with no job");
+{
+  const rows = rowsOf(), e = night(rows).entry;
+  const w = world(rows, { answer: (v) => ({ id: v.id, ok: false, alreadySent: true, message: "Already sent from this computer: not sent again" }) });
+  const r = await w.run(e);
+  const d = w.drafts["dc-tp-202610-1"], res = d.results["dc-tp-202610-1"];
+  ok(r.ok && d.state === "posted" && res.ok && !res.tallyId && /Tally has not confirmed it yet/.test(r.words), "saved as posted without Tally's voucher id (not failed, not on its way to a job that is not there)");
+  ok(draftState({ vid: d.id, dedupe: d.dedupe, state: d.state, results: d.results, at: res.at }, {}, Date.now()) === "pending", "  the 24-hour rule: pending now");
+  const old = JSON.parse(JSON.stringify(d)); old.results[d.id].at = new Date(Date.now() - 26 * 3600e3).toISOString();
+  const t = night(rows, { draftRecs: asRecs({ [d.id]: old }) });
+  ok(!t.entry && t.inp && journals(t.inp).findings.some((f) => f.kind === "sent_check" && /not confirmed there after 24 hours/.test(f.facts.title)), "  after 24 hours: “Not confirmed in Tally” (Needs you)");
+}
+
+console.log("re-review 3: Approve reads last night's findings (the owner's ledger pick)");
+{
+  const pick = [{ kind: "ledger_pick", key: "led:salaryPayable", state: "resolved", evidence: [{ t: "ledger", ledger: "Staff Dues" }], undone: false }];
+  const rows = rowsOf({ co: { payrollPayable: "" }, drop: ["Salary Payable"], ledgers: { "Staff Dues": "Provisions" } }), t = night(rows, { prior: pick });
+  ok(t.entry && t.entry.voucher.party === "Staff Dues", "the night: the payable as the owner picked it in Daily Check");
+  let w = world(rows, { noPrior: true, findings: pick.map((p) => ({ client_id: "c1", kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone_at: null })) });
+  let r = await w.run(t.entry);
+  ok(r.ok && w.posts.length === 1 && /<LEDGERNAME>Staff Dues<\/LEDGERNAME>/.test(w.posts[0].vouchers[0].xml), "Approve from the Payroll page (no findings handed in): reads them itself, posts to Staff Dues");
+  w = world(rows, { noPrior: true, findings: [] });
+  r = await w.run(t.entry);
+  ok(!r.ok && r.why === TPost.CHANGED, "  (without them the second check would refuse: what it did before)");
+}
+
+console.log("re-review 4: a part in Tally that differs: what changed, and accept it as it is");
+{
+  const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
+  let first = true;
+  const w = world(rows, { sheet, answer: (v, k) => (v.id.endsWith("-2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "4" + k }) });
+  await w.run(t.entry); first = false;
+  const p1 = TPost.prepare({ co: rows.co, ym: YM, rows: sheet, pay: w.b.payroll, ledgers: rows.ledgers.map((l) => l.name), books: w.b }).vouchers[0], x = inTally(p1, "tp1");
+  const synced = rowsOf({ sheet, vouchers: [x.voucher] });
+  const emps = sheet.map((r, i) => ({ name: r.name, category: i === 0 ? "Head Office" : "" }));
+  const w2 = world(synced, { sheet, emps, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv });
+  w2.env.g.Bridge.post = async (pl) => { w2.posts.push(pl); return { ok: true, results: [{ id: pl.vouchers[0].id, ok: true, created: 1, vchId: "77" }] }; };
+  let r = await w2.run(t.entry);
+  ok(!r.ok && r.stuck && r.canAccept && /Made Up Person 000’s cost category \(Primary Cost Category in Tally, Head Office now\)/.test(r.why) && /accept part 1 as it is in Tally and post the rest/.test(r.why) && !w2.posts.length,
+    "an employee's category changed since part 1: said exactly, accepting offered, nothing sent: " + r.why.slice(0, 160));
+  w2.run.extra = { accept: true };
+  r = await w2.run(t.entry);
+  const xs = w2.posts.map((pl) => pl.vouchers[0].xml).join("");
+  ok(r.ok && w2.posts.length === 1 && w2.posts[0].vouchers[0].id === "dc-tp-202610-2" && (xs.match(/<EMPLOYEEENTRIES\.LIST>/g) || []).length === 50 && !/Made Up Person 0\d\d</.test(xs) && /part 2 of 2/.test(xs),
+    "accepted: part 1 kept as it is in Tally; only the 50 employees not in it posted (part 2 of 2), nobody sent twice");
+  ok(w2.drafts["dc-tp-202610-1"].accepted && w2.drafts["dc-tp-202610-1"].accepted.by === "Made-up Person", "  the acceptance kept on part 1's draft (who)");
+  // amounts changed for someone in part 1: no accepting (the parts would not add up)
+  const sheet2 = sheet.map((r, i) => (i === 0 ? emp(r.name, 10500, 2000, { pt: 200 }) : r)), rows2 = rowsOf({ sheet: sheet2, vouchers: [x.voucher] }), t2 = night(rows2, { draftRecs: asRecs(w.drafts) });
+  const w3 = world(rows2, { sheet: sheet2, drafts: JSON.parse(JSON.stringify(w.drafts)), allocs: x.allocs, pv: x.pv });
+  r = await w3.run(t2.entry);
+  ok(t2.entry && !r.ok && r.stuck && !r.canAccept && /Made Up Person 000’s net \(₹11,800 in Tally, ₹12,300 now\)/.test(r.why) && /other amounts than the sheet/.test(r.why) && !w3.posts.length, "an amount changed in part 1: said, no accepting, nothing sent");
+}
+
+console.log("re-review 6: a part of FinCom's own not yet in the books here");
+{
+  const rows = rowsOf(), b = booksOf(rows), alloc = [{ guid: "ours", day: "20261031", head: "Basic Pay", employee: "Ravi Kumar", amt: -25000 }];
+  let p = TPost.prepare({ co: rows.co, ym: YM, rows: SHEET, pay: payOf(SHEET, { allocs: alloc, pv: { ours: { day: "20261031", type: "Payroll", no: "3", narr: "Salary | TDSDesk:dc-tp-202610-1" } } }), ledgers: rows.ledgers.map((l) => l.name), books: b });
+  ok(!p.problems.length && p.vouchers.length === 1, "Tally's payroll read has its narration (FinCom's id): FinCom's own, not refused");
+  p = TPost.prepare({ co: rows.co, ym: YM, rows: SHEET, pay: payOf(SHEET, { allocs: alloc, pv: { ours: { day: "20261031", type: "Payroll", no: "3" } } }), ledgers: rows.ledgers.map((l) => l.name), books: b });
+  ok(!p.vouchers.length && /does not have the payroll entry of Oct 2026 Tally has \(Payroll no\. 3 31-10-2026\) yet\. Read the books again/.test(p.problems[0]), "  with no narration either way: unknown, read the books again (never “not posted by FinCom”)");
+}
+
+console.log("re-review 8 and 9: dates masked by column; carrying over by code, PAN, then name");
+{
+  const sm = PS.samples(["Name", "DOB", "Joining", "Pay Month", "Basic"], [["Ravi", "01-01-1990", new Date(2015, 3, 1), new Date(2026, 9, 1), "25000"], ["Asha", new Date(1991, 0, 1), "01/04/2016", "Oct-2026", "9000"]]);
+  ok(/^DATE_\d$/.test(sm.rows[0][1]) && /^DATE_\d$/.test(sm.rows[1][1]) && /^DATE_\d$/.test(sm.rows[0][2]) && /^DATE_\d$/.test(sm.rows[1][2]), "a date of birth or joining on the 1st (01-01-1990, a date cell): masked in full");
+  ok(sm.rows[0][3] === "2026-10" && sm.rows[1][3] === "Oct-2026", "  the pay month column: the month kept");
+  const odd = PS.samples(["Name", "Remarks"], [["Ravi", "Oct-2026"]]);
+  ok(/^DATE_\d$/.test(odd.rows[0][1]), "  a month outside the pay month column: masked");
+  let S2 = null; try { S2 = await import("../server/assistant/sheetmap.ts"); } catch (e) { /* no TypeScript here */ }
+  if (S2) ok(S2.payrollMask("Ravi Kumar") === "TEXT" && S2.payrollMask("01-01-1990") === "DATE" && S2.payrollMask("Oct-2026") === "Oct-2026" && S2.payrollMask("TEXT_2") === "TEXT_2", "  the server masks a name in a cell itself");
+  const old = [Object.assign({}, SHEET[0], { code: "E1", pan: "ABCDE1234F", taxable: 300000, regime: "old" }), Object.assign({}, SHEET[1], { code: "E2", exempt: 5000 }), Object.assign({}, SHEET[2], { code: "E3", name: "Sunil Mehta (left)", pan: "", chapter6: 1000 })];
+  const fresh = [Object.assign({}, SHEET[0], { code: "EMP-001", pan: "ABCDE1234F" }), Object.assign({}, SHEET[1], { code: "EMP-002" }), Object.assign({}, SHEET[2], { code: "EMP-003" })];
+  const m = PS.mergeSalary(old, fresh), w = PS.replacing(old, fresh);
+  ok(m[0].taxable === 300000 && m[0].regime === "old" && m[1].exempt === 5000 && !m[2].chapter6, "codes changed: carried over by PAN (Ravi), then by name (Asha); Mehta (another name, no PAN) not");
+  ok(w.carried.join() === "Ravi Kumar,Asha Verma" && w.missed.join() === "Sunil Mehta (left)", "  the warning's figures: 2 carried over, the one not carried named");
+}
+
+console.log("re-review 7: Tally's payroll read leaves out merged and deleted ledgers, as the night does");
+{
+  const src = (await import("node:fs")).readFileSync(new URL("../src/js/73-payroll.js", import.meta.url), "utf8");
+  ok(/tally_ledgers\?select=name,pay_type,pay_stat_type,it_component,for_payroll&for_payroll=eq\.true&merged_into=is\.null&deleted_at=is\.null"/.test(src), "Payroll.into: the pay heads with merged_into and deleted_at null");
+  ok(/tally_vouchers\?select=guid,alter_id,day,vtype,vno,narration,/.test(src) && /narr: String\(v\.narration \|\| ""\)/.test(src), "  and each payroll entry's narration kept (re-review 6)");
 }
 
 console.log("the drafts the night reads carry the parts");

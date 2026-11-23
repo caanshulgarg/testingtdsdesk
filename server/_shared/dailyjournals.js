@@ -24,7 +24,7 @@
 // The input is nightchecks' input (server/assistant-night/nightinput.js) plus:
 //   gst        gstMonths' rows      drafts  Daily Check's journals already approved ([{dedupe, state, removed}])
 //   picks      a person's ledger choices ({role: ledger}), from prior ledger_pick findings
-import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries } from "./nightchecks.js";
+import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries, earningHead, notSalaryHeadName } from "./nightchecks.js";
 import { voucherId } from "./dailytrust.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
@@ -330,10 +330,13 @@ export function payrollPlain(rows) {
 // next-payroll: how the client books salary, as kept on the client (Payroll page: co.payrollMethod, co.payrollJournal,
 // co.payrollPayable, co.payrollVchType) and the pay heads Tally's payroll has (tally_ledgers.for_payroll): the night reads
 // them from the client's record, the page's second check from CO() and S.books.payroll (the same object both ways)
+// heads: the ledgers of Tally's payroll, as names or {name, type} (Tally's pay head type): heads keeps the earnings,
+// notEarn the rest (the employer's contributions, gratuity, deductions ...: never salary booked)
 export function payrollSettings(co, heads) {
-  const c = co || {}, m = (c.payrollMethod || {}).value;
+  const c = co || {}, m = (c.payrollMethod || {}).value, earn = new Set(), not = new Set();
+  (heads || []).forEach((h) => { const name = String(typeof h === "string" ? h : (h && h.name) || ""), type = typeof h === "string" ? "" : (h && (h.type || h.pay_type)) || ""; if (name) (earningHead(name, type) ? earn : not).add(name); });
   return { method: m === "tally" || m === "journal" ? m : "", journal: Object.assign({}, c.payrollJournal || {}), payable: String(c.payrollPayable || ""),
-    vchType: String(c.payrollVchType || ""), heads: Array.from(new Set((heads || []).map(String).filter(Boolean))).sort() };
+    vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort() };
 }
 export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<part>
 const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + "-");
@@ -342,10 +345,13 @@ const ownTp = (v, ym) => String(v.narr || "").includes("TDSDesk:" + TP_ID(ym) + 
 // a payroll-type voucher debits; FinCom's own Tally Payroll vouchers of the month left out when skipOwn (a split month
 // half posted is finished, not taken for salary booked by hand)
 function bookedFor(ym, inp, skipOwn) {
-  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []);
+  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []), ne = new Set(((inp.payroll || {}).notEarn) || []);
+  const not = (l) => ne.has(l) || notSalaryHeadName(l);
   const V = live(inp.books).filter((v) => !(skipOwn && ownTp(v, ym)));
-  const pt = new Set(); V.forEach((v) => { if (/payroll/i.test(String(v.type || ""))) (v.ent || []).forEach((e) => { if (e.a < 0 && A.isExpense(e.l)) pt.add(e.l); }); });
-  const cls = (l) => ((ph.has(l) || pt.has(l)) && A.isExpense(l) ? "yes" : salaryClass(A, l, sbase, inp.ledgers));
+  const pt = new Set(); V.forEach((v) => { if (/payroll/i.test(String(v.type || ""))) (v.ent || []).forEach((e) => { if (e.a < 0 && A.isExpense(e.l) && !not(e.l)) pt.add(e.l); }); });
+  // (re-review 1) the employer's contributions, gratuity and the like are never salary: an entry touching only them is not
+  // salary booked
+  const cls = (l) => (not(l) ? "" : (ph.has(l) || pt.has(l)) && A.isExpense(l) ? "yes" : salaryClass(A, l, sbase, inp.ledgers));
   return { cls, booked: salaryEntries(V, ym, (l) => cls(l) !== "") };
 }
 export function payrollOne(ym, rows, inp) {

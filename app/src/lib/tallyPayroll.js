@@ -129,6 +129,7 @@ export function payrollVouchers(o) {
     // never guessed between
     if (cands.length > 1 && exact.length !== 1) { say("Two employees in Tally, " + cands.slice(0, 3).map((e) => "“" + cleanText(e.name, 80) + "”").join(" and ") + ", match “" + cleanText(r.name, 80) + "” on the sheet. Rename one in Tally, or write the name on the sheet exactly as Tally has it"); return; }
     const te = cands.length > 1 ? exact[0] : cands[0], tallyName = te ? te.name : "";
+    if (tallyName && (o.skip || []).some((x) => fold(x) === fold(tallyName))) return;     // already in Tally in a part accepted as it is
     if (!tallyName) { say("Create the employee “" + cleanText(r.name, 80) + "” in Tally (Payroll), or correct the name on the sheet"); return; }
     const cat = String(te.category || "").trim() ? String(te.category) : category;
     if (cat !== category && !catWhy.has(cat)) { catWhy.add(cat); const why = nameProblem(cat, "cost category"); if (why) say(why); }
@@ -174,15 +175,17 @@ export function payrollVouchers(o) {
     cur.push(e); size += b;
   });
   if (cur.length) groups.push(cur);
-  const n = groups.length, idOf = o.idOf || ((i, k) => o.id + (k > 1 ? "-" + (i + 1) : ""));
+  // numbered after the parts already in Tally when some are accepted as they are (o.partNo(i): the part's number; o.parts:
+  // the month's count of parts)
+  const n = o.parts || groups.length, no = o.partNo || ((i) => i + 1), idOf = o.idOf || ((i, k) => o.id + (k > 1 ? "-" + (i + 1) : ""));
   const vouchers = groups.map((es, i) => {
     const net = -es.reduce((s, e) => s + e.p, 0);
     if (net > MAX_PAISE) say("The month’s net is too large for one Tally Payroll voucher (more than 10 digits of rupees)");
     const id = idOf(i, n), tag = " | TDSDesk:" + id;
-    const text = cleanText("Salary for " + (o.label || "") + " as per the salary sheet (" + es.length + " employee" + (es.length === 1 ? "" : "s") + (n > 1 ? ", part " + (i + 1) + " of " + n : "") + ")", MAX_NARRATION - chars(tag));
+    const text = cleanText("Salary for " + (o.label || "") + " as per the salary sheet (" + es.length + " employee" + (es.length === 1 ? "" : "s") + (n > 1 ? ", part " + no(i) + " of " + n : "") + ")", MAX_NARRATION - chars(tag));
     return { id, type, date: o.date, payable, category: es[0].cat, narration: text,
       employees: es.map((e) => ({ name: e.name, amount: e.p / 100, heads: e.al.map((x) => ({ head: x.head, earn: x.earn, amount: x.p / 100 })) })),
-      gross: -es.reduce((s, e) => s + e.al.filter((x) => x.earn).reduce((t, x) => t + x.p, 0), 0) / 100, net: net / 100, part: i + 1, parts: n };
+      gross: -es.reduce((s, e) => s + e.al.filter((x) => x.earn).reduce((t, x) => t + x.p, 0), 0) / 100, net: net / 100, part: no(i), parts: n };
   });
   if (problems.length) return { vouchers: [], problems };
   // the last word is the bridge's own rules: a voucher they would refuse is not offered

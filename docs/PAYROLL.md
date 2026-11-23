@@ -273,6 +273,18 @@ is the only stop: this branch never sends one (no `Bridge.post` from the Payroll
 - **Lows**: a part posted saves the next part again ("waiting") so the cloud's settle, which reads the latest draft,
   never approves a half-posted month; a net of zero is said tonight; the page says the employer's PF and ESI are booked
   separately; two Tally employees whose names fold to one are refused unless one is exactly the sheet's name.
+- **Re-review (23-Nov-2026)**: only earnings count as salary booked (Tally's pay head type, read with the pay heads;
+  with none, the name): the employer's contributions, gratuity, reimbursements and deductions never do, and an entry
+  touching only them is skipped (night and Approve). The resend guard's answer with no job is saved as posted without
+  Tally's voucher id, so "Not confirmed in Tally" follows after 24 hours. Approve reads last night's findings itself
+  (the owner's ledger picks), from the Payroll page too. A part in Tally that differs says exactly what changed (payable,
+  voucher type, an employee's pay heads, category, net, no longer on the sheet); when the rest can be built without
+  anyone in that part and the parts add up to the night's entry, the owner may accept it as it is in Tally and post the
+  rest (kept on the part's draft). The saves are ordered so the latest draft is never a posted part while another is to
+  go (the parts' answers saved after the last part is tried). Payroll.into reads each payroll entry's narration and
+  leaves out merged and deleted ledgers; an entry FinCom has no narration for asks to read the books again. Dates are
+  masked in full except in the pay month column; the server masks text cells itself. 24Q's figures carry over by code,
+  then PAN, then name, and the warning names who did not carry over.
 - **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
 - **Redeploy when published**: the `assistant-night` function (dailyjournals.js, nightinput.js, handler.ts) and
   `fincom-assistant` (sheetmap.ts). No SQL.
