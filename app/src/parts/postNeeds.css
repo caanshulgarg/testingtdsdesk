@@ -1,0 +1,12 @@
+/* entries not in Tally that need a person (parts/PostNeeds.jsx): the first thing on Home and on a client's pages */
+.pn-box { border: 1px solid color-mix(in oklab, var(--bad, #c0392b) 40%, var(--border, #ddd)); border-left: 4px solid var(--bad, #c0392b);
+  background: var(--bad-soft, #fdecea); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; display: grid; gap: 8px; font-size: 14px; }
+.pn-head { color: var(--bad, #c0392b); }
+.pn-co { display: grid; gap: 6px; }
+.pn-co + .pn-co { border-top: 1px solid color-mix(in oklab, var(--bad, #c0392b) 20%, transparent); padding-top: 8px; }
+.pn-name .pn-n { color: var(--muted, #666); font-size: 13px; }
+.pn-line { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.pn-line > span { flex: 1 1 auto; min-width: 0; }
+.pn-line > .btn { flex: 0 0 auto; }
+.pn-line.pn-r3 > span { color: var(--foreground, #222); }
+@media (max-width: 640px) { .pn-line { flex-direction: column; align-items: stretch; } .pn-line > .btn { align-self: flex-start; } }

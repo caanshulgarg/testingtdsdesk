@@ -320,7 +320,11 @@ function postStatus(entry, job, ids, marks, ctx){
         live && !acc ? null : {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live});
     }
     if (live){
-      if (job.status === "waiting" || (it && it.state === "waiting" && job.status !== "running")) return mk(4, (ctx.queue ? "Number " + ctx.queue + " in the queue" : "In the queue") + ": " + (postReasonText(job.message) || "waiting for the Tally computer to take it") + ".", job.status === "waiting" ? {kind: "cancel", label: "Cancel"} : null);
+      // next-posting-never-stuck: what its bridge said last (Tally closed, the company not open, the bridge off: "Open Tally
+      // and <company> on <computer> (<Windows user>)", app/src/lib/postNeeds.js), before the posting's own words
+      const wait = typeof postWaitWhy === "function" ? postWaitWhy(job) : "";
+      if (job.status === "waiting" || (it && it.state === "waiting" && job.status !== "running")) return mk(4, (ctx.queue ? "Number " + ctx.queue + " in the queue" : "In the queue") + ": " + (wait || postReasonText(job.message) || "waiting for the Tally computer to take it") + (wait ? "" : "."), job.status === "waiting" ? {kind: "cancel", label: "Cancel"} : null);
+      if (wait) return mk(5, "Stopped part-way: " + wait, null);
       return mk(5, "Tally is taking it now" + (job.message && !/^Taken by|^Posting$/i.test(job.message) ? " (" + postReasonText(job.message) + ")" : "") + ". Nothing to do.", null);
     }
     if (backInReview) return null;
