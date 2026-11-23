@@ -16,6 +16,7 @@ DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
 WORK_KEY = "work-key-" + "c" * 32
 CALLS = []
+QUERIES = []               # (method, path, query string) of every call (next-post-resume-2: which reads a beat makes)
 BCAST = []            # the Realtime broadcasts sent (POST /realtime/v1/api/broadcast), as JSON
 ARGS = {}             # function -> the arguments of each call (the names sent to the ingest functions, migration-23)
 RATE = []             # (bucket, key, when) of each try auth_rate_hit counted (migration-112)
@@ -218,7 +219,7 @@ class H(http.server.BaseHTTPRequestHandler):
         return "service" if t == SERVICE else USERS.get(t)
     def handle_any(self, method):
         u = urlparse(self.path); path = u.path; q = parse_qs(u.query, keep_blank_values=True); raw = self.body() if method in ("POST", "PATCH", "DELETE") else b""
-        CALLS.append((method, path))
+        CALLS.append((method, path)); QUERIES.append((method, path, u.query))
         if MAX_URL[0] and len(self.path) > MAX_URL[0]: return self.send(414, {"message": "URI Too Long"})
         if path == "/auth/v1/user":
             w = self.who(); return self.send(200, w) if isinstance(w, dict) else self.send(401, {"msg": "bad token"})

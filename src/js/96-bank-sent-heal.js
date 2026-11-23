@@ -289,7 +289,7 @@ async function reconDelete(which){
     body: '<p class="note">' + list.slice(0, 12).map(t => esc(fmtDate(t.date) + " " + [t.type, t.number].filter(Boolean).join(" ") + " " + t.party + " " + INR.format(Math.abs(t.eff)))).join("<br>") + (list.length > 12 ? "<br>and " + (list.length - 12) + " more" : "") +
       "<br><br>" + (which === "replace" ? "Each Tally entry is deleted and the statement line is posted again with the statement’s amount." : "Total " + INR.format(total) + ".") + " This cannot be undone from FinCom: take a Tally backup first if you have not.</p>"});
   if (!a || which === "replace" && !(await postClearReady())) return;
-  { const again = await linkGuid(CO(b.cid), R.company); if (again.guid !== lg.guid){ toast(again.why || LINK_UNREAD); return; } lg = lg.guid; }   // (asked again right before)
+  { const again = await linkGuid(CO(b.cid), R.company); if (again.guid !== lg.guid){ toast(again.why || LINK_CHANGED); return; } lg = lg.guid; }   // (asked again right before)
   let ok = 0, bad = 0;
   const why = [], gone = new Set();
   for (let k = 0; k < list.length; k++){
@@ -341,7 +341,7 @@ async function removeTallyDuplicates(which){
   const a = await askConfirm({title: "Remove " + what + " from " + d.company + "?", ok: "Remove them",
     body: '<p class="note">' + (which === "wrong" ? "Only the copies under the wrong date are removed. The lines then show as not posted, and Post puts them in with the right date." : "Only the later copy of each double entry is removed; the first stays.") + " This cannot be undone from FinCom, so take a Tally backup first if you have not.</p>"});
   if (!a || which === "wrong" && !(await postClearReady())) return;
-  { const again = await linkGuid(CO(cid), d.company); if (again.guid !== lg.guid){ toast(again.why || LINK_UNREAD); return; } lg = lg.guid; }   // (asked again right before)
+  { const again = await linkGuid(CO(cid), d.company); if (again.guid !== lg.guid){ toast(again.why || LINK_CHANGED); return; } lg = lg.guid; }   // (asked again right before)
   let ok = 0, bad = 0;
   const gone = new Set();
   for (let i = 0; i < list.length; i++){

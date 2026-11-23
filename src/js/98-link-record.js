@@ -151,7 +151,7 @@ const LinkRec = {
   async guidTo(co, name, fresh){
     const no = why => ({guid: "", why}), nm = (co && co.name) || "this client";
     const notLinked = () => no("Nothing was sent to Tally: " + nm + " is not linked to " + name + " in FinCom. Link it on the Tally page, then try again.");
-    if (!co) return no(LINK_UNREAD);
+    if (!co) return no("Nothing was sent to Tally: no client is open. Open the client, then try again.");
     if (!this.on()) return this.st.missing ? notLinked() : no("Nothing was sent to Tally: sign in to FinCom's cloud (the client's Tally link is kept there), then try again.");
     try { await this.load(!!fresh); } catch (e){ return no(LINK_UNREAD); }
     if (this.st.err || !Array.isArray(this.st.rows)) return no(LINK_UNREAD);

@@ -296,7 +296,7 @@ const Bridge = {
       outC.results = [].concat(outC.results || []).concat(refused);
       return words(outC);
     }
-    { const again = await linkGuid(coP, payload.company); if (again.guid !== lg.guid) return hold(again.why || LINK_UNREAD, refused); }
+    { const again = await linkGuid(coP, payload.company); if (again.guid !== lg.guid) return hold(again.why || LINK_CHANGED, refused); }
     payload = Object.assign({}, payload, {guid: lg.guid});
     let out = null;
     const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
@@ -1023,7 +1023,9 @@ function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].c
 /* ---------- taking an entry back out of Tally ---------- */
 const LINK_UNREAD = "Not sent: FinCom's cloud did not answer. Nothing went to Tally; try again in a minute.";
 // the words of an entry in a posting of FinCom's cloud still going (as last read), else ""
-function postLiveSay(cid, id){ const j = cid && typeof postJobOf === "function" ? postJobOf(cid, id) : null; return j && CloudJobs.live(j) ? (j.status === "waiting" ? "Waiting for Tally" : "Being posted on the Tally computer") + ": it stays queued and posts by itself." : ""; }
+const LINK_CHANGED = "Nothing was sent to Tally: this client's Tally link changed just now. Check it on the Tally page, then try again.";
+// (one held for checking: never "posts by itself")
+function postLiveSay(cid, id){ const j = cid && typeof postJobOf === "function" ? postJobOf(cid, id) : null; return !j || !CloudJobs.live(j) ? "" : j.checking && !["waiting", "taken", "running"].includes(j.status) ? "Held for checking in FinCom: not sent again until it is settled." : (j.status === "waiting" ? "Waiting for Tally" : "Being posted on the Tally computer") + ": it stays queued and posts by itself."; }
 // the linked company's GUID a posting or deletion straight to the bridge names, asked right before it: {guid} or {why}
 // (98's LinkRec.sendTo: the link record read afresh, the bridge's /status says linkGuid)
 async function linkGuid(co, name){ return typeof LinkRec === "object" ? LinkRec.sendTo(co, name) : {guid: "", why: LINK_UNREAD}; }
@@ -1042,7 +1044,7 @@ async function unpostFromTally(what, obj, cid, out){
     body: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
       " will be deleted from <b>" + esc(t.company || tname) + "</b>. It then comes back here as waiting to be posted.</p>"});
   if (!ans) return false;
-  { const again = await linkGuid(co, t.company || tname); if (again.guid !== lg.guid){ lg = again.why || LINK_UNREAD; toast(lg); if (out) out.why = lg; return false; } }
+  { const again = await linkGuid(co, t.company || tname); if (again.guid !== lg.guid){ lg = again.why || LINK_CHANGED; toast(lg); if (out) out.why = lg; return false; } }
   try {
     const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg.guid, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
     if (!j || j.ok === false){ toast("Tally would not remove it: " + plainMsg((j && (j.message || j.error)) || "")); return false; }
