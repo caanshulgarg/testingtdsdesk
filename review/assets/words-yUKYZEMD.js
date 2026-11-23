@@ -1,0 +1,1 @@
+const a={attention:["warn","To review · no ledger"],suggested:["warn","To review · suggested"],ready:["nl-ready","Ready"],sent:["ok","Done · in Tally"],intally:["ok","Done · already in Tally"],ignored:["no","Set aside"]},n={New:"slate","To review":"amber",Ready:"sky",Done:"emerald",Problem:"rose"},o=e=>n[String(e||"").split(" · ")[0]]||"slate";export{a as N,o as t};
