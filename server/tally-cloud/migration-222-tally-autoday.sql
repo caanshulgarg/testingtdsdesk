@@ -44,6 +44,10 @@
 -- the fetching sweep needs a whole ('day') list; the types of existing columns and the job names guarded.
 -- Re-review: the period days' kept upload words said plainly (a data step), the locked words of tally_period_entries and
 -- tally_period_next_paced too, and a locked period day read again once its month is unlocked.
+-- Ingest review: tally_days_claim(..., p_auto) and tally_check_next_open(..., p_auto): with p_auto false (a bridge before
+-- 2.5.16) only upload, check and fill days are claimed, so FinCom's own days are never held from a newer bridge; the
+-- 7- and 2-argument calls as before. A given-up period day (over2s, dates, shape, toomany, entries, payroll, other) is
+-- read again as a check day under the backoff and unmarked once that day is read whole.
 begin;
 set local lock_timeout = '10s';
 
@@ -67,11 +71,26 @@ begin
                                  ('tally_check_entries(uuid,date,jsonb,jsonb,jsonb)', 'ecf3e93ef5c2b0247c76057d8eb15f79'),
                                  ('tally_period_upload(uuid,date,text,text,text)', 'b2fb148cbf59ea6e8b8cb2da7d98af6f'),
                                  ('tally_period_entries(uuid,date,jsonb,jsonb,jsonb,jsonb)', 'b00e21e799c9e2b0eaf8226f4aed1dee'),
-                                 ('tally_period_next_paced(uuid,integer,boolean)', '9acd298c3746463a698fa7dd430840ff')) v(sig, h) loop
+                                 ('tally_period_next_paced(uuid,integer,boolean)', '9acd298c3746463a698fa7dd430840ff'),
+                                 ('tally_days_claim(uuid,uuid,uuid,text,text,integer,boolean)', 'de2ea89eeae9a6bd2265c0a8e866720e')) v(sig, h) loop
     if to_regprocedure('public.' || x.sig) is null then bad := bad || ('function ' || x.sig || ' (missing)');
     elsif not exists (select 1 from pg_proc p where p.oid = to_regprocedure('public.' || x.sig)
                        and (md5(p.prosrc) = x.h or coalesce(obj_description(p.oid, 'pg_proc'), '') = 'tally autoday (migration 222)')) then
       bad := bad || ('function ' || x.sig || ' (not the text staging runs)');
+    end if;
+  end loop;
+  -- tally_days_claim and tally_check_next_open: their own argument lists, and this migration's with p_auto; no other
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'tally_days_claim'
+              and p.oid not in (coalesce(to_regprocedure('public.tally_days_claim(uuid,uuid,uuid,text,text,integer,boolean)'), 0), coalesce(to_regprocedure('public.tally_days_claim(uuid,uuid,uuid,text,text,integer,boolean,boolean)'), 0))) then
+    bad := bad || 'function tally_days_claim (another argument list)'::text;
+  end if;
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'tally_check_next_open'
+              and p.oid not in (coalesce(to_regprocedure('public.tally_check_next_open(uuid,integer)'), 0), coalesce(to_regprocedure('public.tally_check_next_open(uuid,integer,boolean)'), 0))) then
+    bad := bad || 'function tally_check_next_open (another argument list)'::text;
+  end if;
+  for x in select * from (values ('tally_days_claim(uuid,uuid,uuid,text,text,integer,boolean,boolean)'), ('tally_check_next_open(uuid,integer,boolean)')) v(sig) loop
+    if to_regprocedure('public.' || x.sig) is not null and coalesce(obj_description(to_regprocedure('public.' || x.sig), 'pg_proc'), '') <> 'tally autoday (migration 222)' then
+      bad := bad || ('function ' || x.sig);
     end if;
   end loop;
   -- tally_check_heads: the 4-argument one above, and this migration's 5-argument one; no other
@@ -312,6 +331,20 @@ begin
     end if;
   end loop;
 
+  -- the period's days given up for another reason (a slow or odd day, entries FinCom could not take, payroll): read again
+  -- as a check day, under its backoff (6 lists unfinished: 1 h, 3 h, then 24 h); the period day unmarked once that day
+  -- is read whole. A payroll day keeps backing off to 24 h until payroll vouchers can be read
+  for rw in select d.day, d.upload_at from tally_period_days d
+             where d.book_id = p_book and d.upload_at is not null and d.upload_why in ('over2s', 'dates', 'shape', 'toomany', 'entries', 'payroll', 'other')
+               and d.day <= today and (b.from_date is null or d.day >= b.from_date)
+             order by d.day desc limit 100 loop
+    select * into c from tally_check_days where book_id = p_book and day = rw.day;
+    if c.book_id is not null and c.done_at is not null and c.done_at > rw.upload_at then
+      update tally_period_days set upload_at = null, upload_why = null, upload_type = null, upload_words = null where book_id = p_book and day = rw.day;
+    else
+      n := n + tally_autoday_put(p_book, f, rw.day, 'check', 5, rw.upload_at);
+    end if;
+  end loop;
   -- the period's days given up for a locked month: read again once the month is unlocked (as its words promise)
   for rw in select d.day from tally_period_days d where d.book_id = p_book and d.upload_at is not null and d.upload_why = 'locked' loop
     if tally_month_locked(p_book, array[rw.day]) is null then
@@ -395,7 +428,7 @@ end $function$;
 comment on function public.tally_autoday_pickup(uuid, date, text) is 'tally autoday (migration 222)';
 
 -- ---------------------------------------------------------------- 4. the hand-out, the stop (182's texts, lines marked 222)
-create or replace function public.tally_check_next_open(p_book uuid, p_max integer) returns jsonb
+create or replace function public.tally_check_next_open(p_book uuid, p_max integer, p_auto boolean) returns jsonb     -- 222: p_auto false (a bridge before 2.5.16): only upload, check, fill
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare r tally_check_runs%rowtype; p tally_period_pulls%rowtype; has_p boolean; ca timestamptz; out jsonb := '[]'::jsonb; d date; lim int := least(greatest(coalesce(p_max, 3), 0), 30);
   today date := (now() at time zone 'Asia/Kolkata')::date; ra timestamptz; n int := 0;
@@ -415,6 +448,7 @@ begin
   for d in select x.day from tally_check_days x where x.book_id = p_book and x.done_at is null and x.upload_at is null and x.day <= today
               and (ra is null or x.queued_at > ra)
               and x.parked_at is null and (x.next_at is null or x.next_at <= now()) and (d0 is null or x.day >= d0)     -- 222: not parked, not held back, not before the book
+              and (coalesce(p_auto, true) or x.source in ('upload', 'check', 'fill'))     -- 222: FinCom's own days only to a bridge that reads them
             order by least(x.prio, tally_autoday_prio(x.source)), (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit lim loop     -- 222: prio first
     out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true));
     n := n + 1;
@@ -423,7 +457,7 @@ begin
     perform 1 from tally_light_pace where book_id = p_book for update;
     if tally_light_may(p_book) then
       for d in select x.day from tally_check_days x where x.book_id = p_book and x.done_at is null and x.upload_at is null and x.day <= today and x.queued_at <= ra
-                  and x.parked_at is null and (x.next_at is null or x.next_at <= now()) and (d0 is null or x.day >= d0)     -- 222
+                  and x.parked_at is null and (x.next_at is null or x.next_at <= now()) and (d0 is null or x.day >= d0) and (coalesce(p_auto, true) or x.source in ('upload', 'check', 'fill'))     -- 222
                 order by least(x.prio, tally_autoday_prio(x.source)), (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit 1 loop     -- 222
         out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true));
         perform tally_light_took(p_book, d, 'check');
@@ -434,7 +468,68 @@ begin
    where x.book_id = p_book and x.day in (select to_date(e->>'day', 'YYYYMMDD') from jsonb_array_elements(out) e);
   return out;
 end $function$;
+comment on function public.tally_check_next_open(uuid, integer, boolean) is 'tally autoday (migration 222)';
+
+-- the 2-argument call as before: every source (p_auto true)
+create or replace function public.tally_check_next_open(p_book uuid, p_max integer) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  return tally_check_next_open(p_book, p_max, true);
+end $function$;
 comment on function public.tally_check_next_open(uuid, integer) is 'tally autoday (migration 222)';
+
+-- the claim (146's text, lines marked 222): p_auto false, for a bridge before 2.5.16, never claims FinCom's own days (held,
+-- delete, gap, future), so they are never held from a bridge that reads them. The 7-argument call as before (p_auto true).
+-- (No default on p_auto: with one, a 7-argument call would match both and fail as not unique.)
+create or replace function public.tally_days_claim(p_firm uuid, p_book uuid, p_device uuid, p_bridge text, p_kind text, p_max integer, p_night boolean, p_auto boolean)     -- 222: p_auto
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare lim int := least(greatest(coalesce(p_max, 3), 0), 30); others int; got jsonb; e jsonb; mine text[] := '{}'; want text[] := '{}'; ok text[]; out jsonb := '[]'::jsonb;
+  snap jsonb; back text[] := '{}';
+begin
+  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  if lim = 0 or p_kind not in ('period', 'check') or not tally_read_serves(p_firm, p_book, p_device, p_bridge) then return out; end if;
+  perform pg_advisory_xact_lock(hashtext('tally_days_claim:' || p_book::text || ':' || p_kind));
+  select count(*)::int into others from tally_work_claims c where c.book_id = p_book and c.kind = p_kind and c.until > now()
+     and not (c.device_id = p_device and c.bridge_id = p_bridge);
+  -- the asked stamps of the book's days as they are now: a day the call below lists but this bridge is not given gets its
+  -- own stamps back (never marked asked for a bridge that never got it)
+  if p_kind = 'period' then
+    select coalesce(jsonb_object_agg(to_char(x.day, 'YYYYMMDD'), jsonb_build_array(x.asked_at, x.first_asked_at)), '{}'::jsonb) into snap from tally_period_days x where x.book_id = p_book;
+  else
+    select coalesce(jsonb_object_agg(to_char(x.day, 'YYYYMMDD'), jsonb_build_array(x.asked_at, x.first_asked_at)), '{}'::jsonb) into snap from tally_check_days x where x.book_id = p_book;
+  end if;
+  got := case when p_kind = 'period' then tally_period_next_paced(p_book, least(30, lim + others), p_night) else tally_check_next_open(p_book, least(30, lim + others), p_auto) end;     -- 222: p_auto
+  for e in select x from jsonb_array_elements(coalesce(got, '[]'::jsonb)) x loop
+    if coalesce(e ->> 'day', '') !~ '^\d{8}$' then continue; end if;
+    if exists (select 1 from tally_work_claims c where c.book_id = p_book and c.kind = p_kind and c.unit = e ->> 'day' and c.until > now()
+                 and not (c.device_id = p_device and c.bridge_id = p_bridge)) then continue; end if;
+    if cardinality(want) >= lim then exit; end if;
+    want := want || (e ->> 'day');
+  end loop;
+  ok := tally_work_claim(p_firm, p_book, p_kind, want, p_device, p_bridge, 300);
+  for e in select x from jsonb_array_elements(coalesce(got, '[]'::jsonb)) x loop
+    if (e ->> 'day') = any(ok) and not ((e ->> 'day') = any(mine)) then out := out || jsonb_build_array(e); mine := mine || (e ->> 'day');
+    elsif coalesce(e ->> 'day', '') ~ '^\d{8}$' and not ((e ->> 'day') = any(mine)) then back := back || (e ->> 'day'); end if;
+  end loop;
+  if cardinality(back) > 0 then
+    if p_kind = 'period' then
+      update tally_period_days x set asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 0)::timestamptz, first_asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 1)::timestamptz
+       where x.book_id = p_book and to_char(x.day, 'YYYYMMDD') = any(back);
+    else
+      update tally_check_days x set asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 0)::timestamptz, first_asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 1)::timestamptz
+       where x.book_id = p_book and to_char(x.day, 'YYYYMMDD') = any(back);
+    end if;
+  end if;
+  return out;
+end $function$;
+comment on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean, boolean) is 'tally autoday (migration 222)';
+
+create or replace function public.tally_days_claim(p_firm uuid, p_book uuid, p_device uuid, p_bridge text, p_kind text, p_max integer, p_night boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  return tally_days_claim(p_firm, p_book, p_device, p_bridge, p_kind, p_max, p_night, true);
+end $function$;
+comment on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean) is 'tally autoday (migration 222)';
 
 create or replace function public.tally_check_stop(p_book uuid, p_day date, p_why text, p_words text, p_chosen_at timestamptz) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
@@ -861,6 +956,12 @@ grant execute on function public.tally_check_heads(uuid, date, jsonb, text, json
 -- the replaced functions' own grants, restated as their files made them
 revoke all on function public.tally_check_next_open(uuid, integer) from public, anon, authenticated;
 grant execute on function public.tally_check_next_open(uuid, integer) to service_role;
+revoke all on function public.tally_check_next_open(uuid, integer, boolean) from public, anon, authenticated;
+grant execute on function public.tally_check_next_open(uuid, integer, boolean) to service_role;
+revoke all on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean) from public, anon, authenticated;
+grant execute on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean) to service_role;
+revoke all on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean, boolean) from public, anon, authenticated;
+grant execute on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean, boolean) to service_role;
 revoke all on function public.tally_check_stop(uuid, date, text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.tally_check_stop(uuid, date, text, text, timestamptz) to service_role;
 revoke all on function public.tally_check_heads(uuid, date, jsonb, text) from public, anon, authenticated;

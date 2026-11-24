@@ -28,6 +28,9 @@ removed after; never a real database), with 221 applied first, made-up firm, boo
      words; a hand-out never a try, a reopened day afresh; an earlier book only when linked, the book's own pre-start
      days closed; no delete of an entry with a line being brought, an empty list deletes only on a third 10 minutes on;
      'bands' without bands as today; 31 dates re-checked; auto_tries reset; the jobs in UTC; types and job names guarded
+ 11. tally_days_claim / tally_check_next_open with p_auto false (an old bridge): only upload, check and fill days, so a
+     2.5.16+ bridge gets FinCom's own days at once; the 7- and 2-argument calls as before; a given-up period day (over2s,
+     dates, shape, toomany, entries, payroll, other) queued as a check day and unmarked once that day finishes
 RED_WITHOUT_222=1: the same checks without the file (they fail)."""
 import os, re, sys, json, hashlib, datetime, difflib
 os.environ["TMPDIR"] = os.environ.get("PG222_DIR") or "/tmp/tell222"
@@ -71,7 +74,12 @@ def marked(old, new, what):
     bad = [x for x in d if x.startswith("+") and not re.search(r"--.*\b222\b", x) and not re.match(r"^\+\s*--", x)]
     ok(bool(new) and d and not bad, "%s: its text with %d changed lines, each marked '222' (unmarked: %s)" % (what, len(d), bad[:1]))
 S = lambda f: open(os.path.join(T.SQLDIR, f)).read()
-marked(block(S("migration-182-gap-after-post.sql"), "tally_check_next_open"), block(text, "tally_check_next_open"), "tally_check_next_open (182's)")
+marked(block(S("migration-182-gap-after-post.sql"), "tally_check_next_open"), block(text, "tally_check_next_open", "p_book uuid, p_max integer, p_auto boolean)"), "tally_check_next_open (182's, now with p_auto)")
+marked(block(S("migration-146-reads-follow-company.sql"), "tally_days_claim"), block(text, "tally_days_claim", "p_firm uuid, p_book uuid, p_device uuid, p_bridge text, p_kind text, p_max integer, p_night boolean, p_auto boolean)"), "tally_days_claim (146's, now with p_auto)")
+for g in ("grant execute on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean, boolean) to service_role;", "revoke all on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean, boolean) from public, anon, authenticated;",
+          "grant execute on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean) to service_role;", "revoke all on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean) from public, anon, authenticated;",
+          "grant execute on function public.tally_check_next_open(uuid, integer, boolean) to service_role;", "revoke all on function public.tally_check_next_open(uuid, integer, boolean) from public, anon, authenticated;"):
+    ok(g in text, "the claim's and the hand-out's grants: " + g[:100])
 marked(block(S("migration-182-gap-after-post.sql"), "tally_check_stop"), block(text, "tally_check_stop"), "tally_check_stop (182's)")
 marked(block(S("migration-133-fetch-check.sql"), "tally_check_heads"), block(text, "tally_check_heads", "p_book uuid, p_day date, p_heads jsonb, p_via text)"), "tally_check_heads (133's)")
 marked(block(S("migration-196-recorder-no-held.sql"), "tally_recorder_fetching_sweep"), block(text, "tally_recorder_fetching_sweep"), "tally_recorder_fetching_sweep (196's)")
@@ -454,6 +462,44 @@ try:
     k = 5; db.sql("update tally_period_pulls set auto_tries = 2, state = 'going', chosen_at = now() - interval '1 hour' where book_id = %s" % q(BK[k]))
     db.sql("insert into tally_period_days (book_id, firm_id, day, tally_n, counted_at) values (%s, %s, %s, 1, now()) on conflict (book_id, day) do update set counted_at = now()" % (q(BK[k]), q(F), q(D(70).isoformat())))
     queue(k); ok(db.one("select auto_tries::text from tally_period_pulls where book_id = %s" % q(BK[k])) == "0", "a day counted after it started again: auto_tries 0")
+
+    print("== 11. an old bridge never holds FinCom's own days; given-up period days retried")
+    k = 7; OLD, NEW = "dddddddd-0000-4000-8000-0000000a1222", "dddddddd-0000-4000-8000-0000000a2222"; BO, BN = "go-0000aa111222", "go-0000aa222222"
+    for dv, br, ver in ((OLD, BO, "2.5.6"), (NEW, BN, "2.5.20")):
+        info = {"bridges": {br: {"at": NOW.strftime("%Y-%m-%dT%H:%M:%S.000Z"), "version": ver, "cos": [[CO(k), CG[k]]], "tallyState": "open"}}}
+        db.sql("insert into tally_devices (id, firm_id, name, key_hash, info, period_fetch, last_seen) values (%s, %s, %s, %s, %s, true, now())" % (q(dv), q(F), q("MADEUP-" + br), q("kh-" + br), js(info)))
+        db.sql("insert into tally_bridge_ids (bridge_id, device_id, firm_id) values (%s, %s, %s)" % (q(br), q(dv), q(F)))
+    db.sql("update tally_check_runs set state = 'going', stop_why = null where book_id = %s" % q(BK[k]))
+    db.sql("delete from tally_check_days where book_id = %s" % q(BK[k]))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'held'), (%s, %s, %s, 'fill')" % (q(BK[k]), q(F), q(D(1).isoformat()), q(BK[k]), q(F), q(D(2).isoformat())))
+    claim = lambda dv, br, auto=None: j("select tally_days_claim(%s, %s, %s, %s, 'check', 3, false%s)::text" % (q(F), q(BK[k]), q(dv), q(br), "" if auto is None else (", true" if auto else ", false")))
+    days = lambda r_: [x.get("day") for x in r_] if isinstance(r_, list) else ["error: %s" % r_]
+    ok(db.one("select count(*) from jsonb_array_elements(tally_read_serving(%s, %s))" % (q(F), q(BK[k]))) == "2", "(step) both bridges serve the book")
+    got_old = []
+    for i in range(3):     # the old bridge beats three times; its claims are never deleted
+        got_old.append(days(claim(OLD, BO, False)))
+        db.sql("update tally_check_days set asked_at = now() - interval '3 minutes' where book_id = %s" % q(BK[k]))
+    ok(all(g == [d8(D(2))] for g in got_old), "an old bridge (p_auto false): only the 'fill' day, never the held one, beat after beat (%s)" % got_old)
+    gn = days(claim(NEW, BN, True))
+    ok(gn == [d8(D(1))], "then a 2.5.16+ bridge: gets the stuck held day at once (%s)" % gn)
+    db.sql("delete from tally_work_claims where book_id = %s" % q(BK[k])); db.sql("update tally_check_days set asked_at = null where book_id = %s" % q(BK[k]))
+    g7 = days(claim(NEW, BN))
+    ok(sorted(g7) == sorted([d8(D(1)), d8(D(2))]), "the 7-argument call works as before: every source (%s)" % g7)
+    n2 = j("select tally_check_next_open(%s, 10)::text" % q(BK[k])); n3 = j("select tally_check_next_open(%s, 10, false)::text" % q(BK[k]))
+    ok(isinstance(n2, list) and isinstance(n3, list) and [x["day"] for x in n3] == [d8(D(2))], "tally_check_next_open(book, max, false): only upload / check / fill (%s; %s)" % (n2, n3))
+    # given-up period days: queued as check days (retried under the backoff), unmarked once the check day finishes
+    k = 6
+    for n_, why in ((80, "over2s"), (81, "payroll"), (82, "shape")):
+        db.sql("insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_words) values (%s, %s, %s, now() - interval '1 day', %s, 'FinCom could not read it from Tally by itself.') on conflict (book_id, day) do update set upload_at = excluded.upload_at, upload_why = excluded.upload_why"
+               % (q(BK[k]), q(F), q(D(n_).isoformat()), q(why)))
+    queue(k)
+    cs = {n_: cday(k, D(n_)) for n_ in (80, 81, 82)}
+    ok(all(c_.get("source") == "check" and c_.get("done") == "false" and c_.get("up") == "false" for c_ in cs.values()), "each given-up period day (over2s, payroll, shape): queued to be read as a check day (%s)" % cs)
+    db.sql("update tally_check_days set done_at = now(), listed_at = now(), via = 'day' where book_id = %s and day in (%s, %s)" % (q(BK[k]), q(D(80).isoformat()), q(D(82).isoformat())))
+    queue(k)
+    pr = {r_["day"]: r_["up"] for r_ in db.rows("select day::text as day, (upload_at is not null)::text as up from tally_period_days where book_id = %s and day in (%s, %s, %s)" % (q(BK[k]), q(D(80).isoformat()), q(D(81).isoformat()), q(D(82).isoformat())))}
+    ok(pr == {D(80).isoformat(): "false", D(81).isoformat(): "true", D(82).isoformat(): "false"}, "a check day finished: its period day unmarked; the payroll one still waiting (%s)" % pr)
+    queue(k); ok(cday(k, D(81)).get("done") == "false" and db.one("select count(*) from tally_check_days where book_id = %s and day = %s" % (q(BK[k]), q(D(80).isoformat()))) == "1", "queued again: the open one left as it is, the finished one not reopened")
 
     print("== 8. the words, the sweep")
     hs = j("select tally_held_status(null)::text", uid=OWNER, role="authenticated")
