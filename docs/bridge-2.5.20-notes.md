@@ -21,7 +21,8 @@ first, the typing gate. Use a test company with made-up entries only.
    (resentLook: 2 s stop, posting priority, whatever ReadDays says, the answer taken only when it is whole and for that
    date).
    - An entry that is found is posted and confirmed in Tally (its Tally id is kept). Found means made or altered by
-     this request: its AlterID is above Tally's voucher counter (ALTVCHID) from the company check before the request.
+     this request: its AlterID is above Tally's voucher counter (ALTVCHID), read again right before each part by the
+     approved company check (FinComCompany, at most 2 s). A check that gives no numbers leaves the counter not known.
      An older entry that carries the same mark is not counted as found and never makes an entry "posted" (review of
      383aef7c9: counted, it could hide an entry Tally made without its mark, which would then go twice).
    - An entry that is not found is "refused by Tally" only when all of these hold: Tally's reply gave errors or line

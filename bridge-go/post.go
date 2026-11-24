@@ -331,9 +331,12 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 		writeLog("Posting: posted-ids.json could not be saved to the disk (" + err.Error() + "); nothing was sent to Tally")
 		return importOutcome{err: errRecordNotFlushed}
 	}
-	// 2.5.20 review (P2): Tally's voucher counter as last read before this request (the job's company check): an entry
-	// this request made or altered has an AlterID above it; an older one carrying the same mark does not
-	preAlt, preKnown := companyAlterKnown(company)
+	// 2.5.20 review (P2): Tally's voucher counter right before this request: an entry this request made or altered has
+	// an AlterID above it; an older one carrying the same mark does not. Final review of ee9ab40d3: read again for each
+	// part (FinComCompany, the approved company check, under the 2 s stop with the posting's priority), so an entry a
+	// person altered since the job's own check is older than the part too; no answer or no numbers: not known (the
+	// part, if Tally makes it only partly, then needs review whole); the send itself never waits on it
+	preAlt, preKnown := partCounter(port, company, r.kind)
 	t0 := time.Now()
 	sentAt := t0.Format(time.RFC3339)
 	raw, err := invokeTally(fin, port, r.envelope(company), importTimeoutSec(len(r.items)))
@@ -462,6 +465,22 @@ func readBackTags(port int, company string, items []M, pre int64) (found, old ma
 		}
 	}
 	return found, old
+}
+
+// final review of ee9ab40d3: Tally's voucher counter read right before a part of vouchers goes (one FinComCompany
+// request, at most 2 s); known only when this very check gave the numbers
+func partCounter(port int, company, kind string) (int64, bool) {
+	if kind != "voucher" {
+		return 0, false
+	}
+	tc := *fin
+	tc.limitMs, tc.resentLook = resentLimitMs(), true
+	_, given, err := companyCheckNumbers(&tc, company, port)
+	if err != nil || !given {
+		writeLog("Posting: Tally's voucher counter could not be read before the part (" + or(errText(err), "no numbers") + "); a part Tally makes only partly needs review whole")
+		return 0, false
+	}
+	return companyAlterKnown(company)
 }
 
 // 2.5.20 P2: the most dates of one part read back (one FinComTag request a date; a part over it stays for review)

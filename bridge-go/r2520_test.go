@@ -544,3 +544,81 @@ func TestR2520FoundGUIDOld(t *testing.T) {
 		t.Fatalf("og2 (only an older entry carries its mark): %v", r)
 	}
 }
+
+// P2 (final review of ee9ab40d3): a person alters the older entry carrying dp3's mark after the job's company check
+// and before the part goes (its AlterID then above the job's counter; the counter is still at or above every AlterID).
+// Tally's counter is read again right before each part (FinComCompany), so that entry is still older than the part
+func TestR2520OldMarkEditedInWindow(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	old := f.add(td, fgParty, "DP-3", "earlier | TDSDesk:dp3", "3.00")
+	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:dp3") }
+	f.storeNarr = func(n string) string { return strings.ReplaceAll(n, "TDSDesk:dp2", "changed") }
+	standBridge(t, f, `,"PostPaceOff":true`)
+	n0, bumped := len(f.ids()), false
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if bumped {
+			return false
+		}
+		// the first request after the job's company check (the part's own check, or the import itself): the person's
+		// edit lands just before it
+		for i := n0; i < len(f.reqs)-1; i++ {
+			if f.reqs[i] == "FinComCompany" {
+				bumped = true
+				f.alter++
+				old.alter = f.alter
+				break
+			}
+		}
+		return false
+	}
+	p := r15Job(t, "job-r2520-window", r15Bills("dp", td, 3))
+	if !bumped {
+		t.Fatal("the edit in the window was not made")
+	}
+	rs := r15Results(p)
+	if r := rs["dp1"]; r["ok"] != true || r["verified"] != true {
+		t.Fatalf("dp1 made and found: %v", r)
+	}
+	for _, id := range []string{"dp2", "dp3"} {
+		r := rs[id]
+		if r["ok"] == true || r["needsReview"] != true || r["refusedByTally"] == true || acceptedInfo(id) == nil {
+			t.Fatalf("%s (an older entry with dp3's mark altered in the window): %v", id, r)
+		}
+	}
+	if str(rs["dp3"]["guid"]) == old.guid {
+		t.Fatal("dp3 is given the older entry's GUID")
+	}
+}
+
+// P2 (final review of ee9ab40d3): a company check that gives no numbers leaves the counter not known, so a counter
+// from an earlier check is never taken as Tally's now
+func TestR2520StaleCounterNotKnown(t *testing.T) {
+	f := newStandTally(t)
+	f.add(today(), fgParty, "X-1", "x", "1.00")
+	standBridge(t, f, "")
+	if _, err := companyCheck(fin, zz, f.port); err != nil {
+		t.Fatal(err)
+	}
+	if a, k := companyAlterKnown(zz); !k || a != f.alter {
+		t.Fatalf("after a check with numbers: %d known %v (Tally at %d)", a, k, f.alter)
+	}
+	f.add(today(), fgParty, "X-2", "x", "1.00")
+	f.mu.Lock()
+	f.cnMode = "none"
+	f.mu.Unlock()
+	_, _ = companyCheck(fin, zz, f.port)
+	if a, k := companyAlterKnown(zz); k {
+		t.Fatalf("after a check with no numbers (Tally at %d): %d taken as known", f.alter, a)
+	}
+	// and a part Tally made only partly then: every entry of it needs review (nothing judged on a stale counter)
+	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:sk2") }
+	p := r15Job(t, "job-r2520-stale", r15Bills("sk", today(), 2))
+	for id, r := range r15Results(p) {
+		if r["needsReview"] != true || r["accepted"] != true || acceptedInfo(id) == nil {
+			t.Fatalf("%s with the counter not known: %v", id, r)
+		}
+	}
+}

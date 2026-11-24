@@ -164,6 +164,22 @@ func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error)
 }
 
 func companyCheckAll(tc *TC, company string, port int) (string, bool, string, error) {
+	g, given, said, err := companyCheckAllRead(tc, company, port)
+	if err != nil || !given {
+		altUnknown(company) // final review of ee9ab40d3: no numbers this time: the counter held is not Tally's now
+	}
+	return g, given, said, err
+}
+
+// final review of ee9ab40d3: a company check that gave no change numbers (or no answer): the voucher counter held is
+// marked not known (its value kept for what reads it as a number), so the read back never takes a stale one as now
+func altUnknown(company string) {
+	altMu.Lock()
+	delete(companyAltsV, companyKey(company))
+	altMu.Unlock()
+}
+
+func companyCheckAllRead(tc *TC, company string, port int) (string, bool, string, error) {
 	// 2.2.0 (the owner's finding): the change numbers by the form kept for the company (a: NATIVEMETHOD; b: the report);
 	// form a answering the company without numbers: form b once. Each request 15 s at most (CompanyCheckSec)
 	sec := keepNum("CompanyCheckSec", 15)

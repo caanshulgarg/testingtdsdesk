@@ -1000,7 +1000,9 @@ func TestWindowValues(t *testing.T) {
 	if toI64(win["a0"]) != 2 || toI64(win["a1"]) != a1 || toInt(win["vouchersCreated"]) != 3 || toInt(win["mastersCreated"]) != 1 || str(win["guid"]) != "co-guid-1" {
 		t.Fatalf("the window: %v (a1 %d)", win, a1)
 	}
-	// the FinComCompany reads: one before the first import, one after the last, none between
+	// the FinComCompany reads: one before the first import, one after the last, and between them only each part of
+	// vouchers' own, right before it (2.5.20 final review of ee9ab40d3: Tally's counter for the read back); the window
+	// stays the job's (a0 before the job, a1 after it)
 	ids := f.ids()
 	first, last := -1, -1
 	for i, id := range ids {
@@ -1011,11 +1013,7 @@ func TestWindowValues(t *testing.T) {
 			last = i
 		}
 	}
-	for i := first; i <= last; i++ {
-		if ids[i] == "FinComCompany" {
-			t.Fatalf("a company check during the job: %v", ids[first:last+1])
-		}
-	}
+	partChecksOnly(t, f)
 	if !contains(ids[last:], "FinComCompany") || !contains(ids[:first], "FinComCompany") {
 		t.Fatalf("the company checks around the job: %v", ids)
 	}

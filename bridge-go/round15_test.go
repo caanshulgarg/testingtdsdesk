@@ -264,10 +264,11 @@ func TestPostNoReadBackRequests(t *testing.T) {
 	}
 	onlyPostingRequests(t, f, 0)
 	// 2.2.0 (plan round 20, b.4): the company check once before the job, and once after its last import (the posting
-	// window's a1), never between the imports
+	// window's a1). 2.5.20 final review of ee9ab40d3: and once right before each part of vouchers (Tally's counter for
+	// the read back), nowhere else between the imports
 	ids := f.ids()
-	if f.n("FinComCompany") != 2 || ids[len(ids)-1] != "FinComCompany" {
-		t.Fatalf("the company check went %d times (want once before the job and once after it): %v", f.n("FinComCompany"), ids)
+	if n := partChecksOnly(t, f); f.n("FinComCompany") != 2+n || ids[len(ids)-1] != "FinComCompany" {
+		t.Fatalf("the company check went %d times (want once before the job, once before each of its %d parts of vouchers and once after it): %v", f.n("FinComCompany"), n, ids)
 	}
 	if f.n("Import") != 3 { // the master, then the five bills as the pace sizes them (pacing on): 2 (not known yet), then 3
 		t.Fatalf("%d imports: %v", f.n("Import"), f.ids())
@@ -979,4 +980,38 @@ func TestImportNotReachedForgetsNotes(t *testing.T) {
 	if r["ok"] != true || r["alreadySent"] == true {
 		t.Fatalf("the retry: %v", r)
 	}
+}
+
+// 2.5.20 final review of ee9ab40d3: every import of vouchers comes right after its own company check (FinComCompany),
+// and no other company check falls between the job's first and last import; the number of voucher imports
+func partChecksOnly(t *testing.T, f *standTally) int {
+	t.Helper()
+	f.mu.Lock()
+	ids, bodies := append([]string{}, f.reqs...), append([]string{}, f.bodies...)
+	f.mu.Unlock()
+	first, last := -1, -1
+	for i, id := range ids {
+		if id == "Import" {
+			if first < 0 {
+				first = i
+			}
+			last = i
+		}
+	}
+	n, own := 0, map[int]bool{}
+	for i := first; i >= 0 && i <= last; i++ {
+		if ids[i] == "Import" && strings.Contains(bodies[i], "<VOUCHER") {
+			n++
+			if i == 0 || ids[i-1] != "FinComCompany" {
+				t.Fatalf("an import of vouchers without its company check right before it: %v", ids[first:last+1])
+			}
+			own[i-1] = true
+		}
+	}
+	for i := first; i >= 0 && i <= last; i++ {
+		if ids[i] == "FinComCompany" && !own[i] {
+			t.Fatalf("a company check between the imports that is not a part's own: %v", ids[first:last+1])
+		}
+	}
+	return n
 }
