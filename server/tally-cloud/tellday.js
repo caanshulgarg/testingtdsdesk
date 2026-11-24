@@ -131,3 +131,14 @@ export function noUploadAsk(words, tail = BRING_WORDS) {
   }
   return kept.length ? kept.join(" ") + " " + tail : tail;
 }
+
+// the owner's answer of 24-Nov-2026: a year before the book's first day is never added or read by itself (the page says
+// it once and offers "Add 2025-26"). A line's words for a day before the book's first day (day, from: yyyy-mm-dd) say so
+// instead of FinCom's promise to bring the day; other words, or a day on or after it, or either not known: as they are
+export const BEFORE_START_WORDS = "It is dated before this book's first day in FinCom.";
+const READS_AGAIN = "FinCom reads this day from Tally again by itself to settle it";
+export function beforeStartWhy(words, day, from) {
+  const w = typeof words === "string" ? words : "";
+  if (!w || !day || !from || String(day) >= String(from)) return w;
+  return w.split(BRING_WORDS).join(BEFORE_START_WORDS).split(READS_AGAIN).join("it is dated before this book's first day in FinCom");
+}

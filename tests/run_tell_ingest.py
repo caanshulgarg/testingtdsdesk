@@ -4,6 +4,8 @@ under Deno, against the stand-in for Supabase, fake_supabase.py). Checks:
   1. bridge 2.5.22's beat: skip, numbersWhy and addonSilent kept on info.bridges[<bridge>].tell, cleaned (known codes only,
      at most 50, names cut to 200), with its time; the bridge's own words never kept
   2. an older bridge (none of the keys, every company started): no tell; another bridge's tell kept as it was
+  4. a held line dated before the book's first day never says FinCom brings that day by itself (the owner, 24-Nov: an
+     earlier year is never added or read by itself)
   3. FinCom's words never ask for a Day Book upload: a day stopped for good, a day's list stopped, a day marked by the
      bridge, the pick-up reasons, the days the bridge lists, the renumbering alerts, and no such words left in index.ts
 Needs Deno (DENO). Made-up books only."""
@@ -31,6 +33,9 @@ def rpc(name, a):
         if name == "tally_period_gate": return True
         if name in ("tally_period_next", "tally_period_next_paced", "tally_check_next", "tally_check_next_open", "tally_days_claim", "tally_period_retry_days"): return []
         return {"ok": True}
+    if name in ("tally_recorder_send", "tally_recorder_apply"):
+        FS.ARGS.setdefault(name, []).append(a)
+        return {"results": [{"line_id": l.get("line_id"), "state": "held"} for l in a.get("p_lines") or []]}
     return real(name, a)
 FS.rpc = rpc
 FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "MADE UP CO", "client_id": "c1", "book_id": BOOK}]
@@ -104,6 +109,17 @@ try:
     code = [l for l in open(INDEX, encoding="utf-8").read().split("\n") if not l.lstrip().startswith("//")]
     asks = [l.strip()[:120] for l in code if re.search(r"(please upload|upload (the|that day's|this day's|the day's) day book|choose it again)", l.split(" // ")[0], re.I)]
     ok(not asks, "3. no ask for a Day Book upload left in index.ts (%s)" % asks)
+
+    print("== 4. a line dated before the book's first day (01-Apr-2026)")
+    HW = "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"
+    def dl(lid, d): return {"line_id": lid, "event": "deleted", "object_guid": "", "master_id": lid[1:], "alter_id": None, "vch_type": "Receipt", "vch_no": lid, "vch_date": d,
+                            "saved_at": "2026-11-24T10:00:00Z", "pc": "PC", "user": "TALLY User", "company_guid": CG, "ledgers": [], "narration": "", "fid": "", "xml": "", "source": "addon", "heldWhy": HW}
+    c, r = call({"kind": "recorder_lines", "version": "2.5.16", "bridge": GB, "company": "MADE UP CO", "company_guid": CG, "lines": [dl("D31", "20260331"), dl("D32", "20260402")]})
+    sent = {l["line_id"]: l for l in ((FS.ARGS.get("tally_recorder_send") or FS.ARGS.get("tally_recorder_apply") or [{}])[-1].get("p_lines") or [])}
+    w1, w2 = (sent.get("D31") or {}).get("heldWhy", ""), (sent.get("D32") or {}).get("heldWhy", "")
+    ok(c == 200 and w1 == "deleted in Tally; FinCom could not tell which entry. It is dated before this book's first day in FinCom.", "4. before the first day: no promise to read it (%s %s)" % (c, w1))
+    ok(((sent.get("D31") or {}).get("payload") or {}).get("heldWhy") == w1, "4. the payload's words the same")
+    ok(w2 == "deleted in Tally; FinCom could not tell which entry. FinCom brings this day from Tally by itself.", "4. within the book: FinCom brings it (%s)" % w2)
 finally:
     fn.terminate()
 if fails:

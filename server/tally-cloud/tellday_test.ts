@@ -7,7 +7,9 @@
 //      itself goes only through a claim (tally_days_claim: a bridge that serves the book)
 //   4. due: tally_autoday_queue at most once per book per 10 minutes
 //   5. noUploadAsk: FinCom's words never ask for a Day Book upload
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS } from "./tellday.js";
+//   6. beforeStartWhy: a line dated before the book's first day never says FinCom reads that day by itself (the owner, 24-Nov:
+//      an earlier year is never added or read by itself; the page offers "Add 2025-26")
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS } from "./tellday.js";
 
 function assert(c: unknown, w: string) { if (!c) throw new Error(w); }
 const T0 = Date.parse("2026-11-24T06:00:00Z");
@@ -114,4 +116,18 @@ Deno.test("noUploadAsk: the ask for an upload taken out, FinCom's own words in i
   assert(noUploadAsk("Tally is not open on this computer") === "Tally is not open on this computer", "other words as they are");
   assert(noUploadAsk("") === "" && noUploadAsk(null) === "" && noUploadAsk(undefined, "X") === "", "none: none");
   assert(noUploadAsk("Please upload that day's Day Book.", "FinCom tries again by itself.") === "FinCom tries again by itself.", "the words given in its place");
+});
+
+Deno.test("beforeStartWhy: a day before the book's first day: no promise to read it", () => {
+  const a = noUploadAsk("deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it");
+  const b = "the entry's details from Tally are incomplete (its lines do not add up): FinCom reads this day from Tally again by itself to settle it";
+  const x = beforeStartWhy(a, "2026-03-31", "2026-04-01");
+  assert(x === "deleted in Tally; FinCom could not tell which entry. " + BEFORE_START_WORDS, x);
+  const y = beforeStartWhy(b, "2025-10-05", "2026-04-01");
+  assert(y === "the entry's details from Tally are incomplete (its lines do not add up): it is dated before this book's first day in FinCom", y);
+  for (const w of [x, y]) assert(!/by itself|upload|brings|reads this day/i.test(w), "no promise, no upload: " + w);
+  assert(beforeStartWhy(a, "2026-04-01", "2026-04-01") === a && beforeStartWhy(b, "2026-05-01", "2026-04-01") === b, "on or after the first day: as they are");
+  assert(beforeStartWhy(a, null, "2026-04-01") === a && beforeStartWhy(a, "2026-03-01", "") === a, "a day or a first day not known: as they are");
+  assert(beforeStartWhy("", "2026-03-01", "2026-04-01") === "", "none: none");
+  assert(!/2025-26|added|add /i.test(BEFORE_START_WORDS) && BEFORE_START_WORDS.split(" ").length <= 14, "plain, 14 words at most, no year added by itself: " + BEFORE_START_WORDS);
 });

@@ -258,7 +258,7 @@ import { corsFor } from "../_shared/cors.ts";   // the one list of headers for e
 import { cloudReporter } from "../_shared/sentry.ts";
 // next-fix-devlookup (FINCOM-CLOUD-STAGING-8/B/C/9): the gateway's HTML error page as one short line, one more try for a read
 import { dbReport, readRetry } from "./dbgateway.js";
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk, beforeStartWhy } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
@@ -3642,6 +3642,30 @@ async function renumberList(book: string, body: any) {
   const more = listed.length > lim || (later || []).length > lim + 49;
   return reply(200, { ok: true, entries: listed.slice(0, lim), more, unknown });
 }
+// the owner's answer of 24-Nov-2026 (an earlier year is never added or read by itself; the page offers "Add 2025-26"): a
+// held line dated before the book's first day (tally_books.from_date, read at most every 5 minutes) never says FinCom
+// brings that day by itself (tellday.js beforeStartWhy); the book's first day not read: the words as they are
+const firstDayMemo = new Map<string, { d: string; t: number }>();
+async function beforeStartWords(book: string, send: Record<string, unknown>[]) {
+  if (!send.some((l: any) => l.heldWhy)) return;
+  let m = firstDayMemo.get(book);
+  if (!m || Date.now() - m.t >= 300000) {
+    try {
+      const { data, error } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle();
+      if (error) return;
+      m = { d: (data as any)?.from_date ? String((data as any).from_date).slice(0, 10) : "", t: Date.now() };
+      if (firstDayMemo.size > 5000) firstDayMemo.clear();
+      firstDayMemo.set(book, m);
+    } catch { return; }
+  }
+  for (const l of send as any[]) {
+    const w = typeof l.heldWhy === "string" ? l.heldWhy : "";
+    const x = w ? beforeStartWhy(w, l.vch_date, m.d) : w;
+    if (x === w) continue;
+    l.heldWhy = x;
+    if (l.payload && typeof l.payload === "object" && "heldWhy" in l.payload) l.payload.heldWhy = x;
+  }
+}
 async function recorderLines(dev: any, firm: string, book: string, body: any) {
   const me = bridgeOf(dev, body, false);
   const company = String(body.company || "").slice(0, 200);
@@ -3664,6 +3688,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   if (send.length) await shortBodies(firm, book, send);
   if (send.length) await ledgerWait(book, send);     // bridge 2.3.1 (masters): an entry naming a ledger FinCom does not have waits for it
   const found = send.length ? await guidsFromRecord(book, send, String(dev?.id || ""), me.id) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
+  if (send.length) await beforeStartWords(book, send);     // the owner, 24-Nov-2026: an earlier year is never read by itself
   // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
   // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
   // (pg_cron every 30 s) applies them in order and Sync activity shows each line's state. Round 21 (review 47/48 H1): ONE
