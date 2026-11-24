@@ -57,7 +57,7 @@ async function loadSales(cid, old, ids){
   if (!old){ S.sales = st; render(); }
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
   // (re-review of e9c90fa34: a save of this client's list still waiting is written first, never lost to this reading)
-  if (salesSavePending && salesSavePending.cid === cid) await salesSaveNow();
+  for (const p of [...salesPending]) if (p.cid === cid) await salesSaveNow(p);
   const [list0, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
   // (another read started since, a removal arriving while this one was reading: that one is drawn)
   if (S.sales !== st) return;
@@ -123,18 +123,41 @@ function saveSales(what){
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
   // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay;
   // re-review of e9c90fa34: waiting, salesSavePending, until it is written, so closing the page still writes it)
-  salesSavePending = {cid, s};
-  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(salesSaveNow); }, 500);
+  // (the review of 34de5bd26: another client's save still waiting is written first, in turn, never dropped)
+  const prev = salesSavePending;
+  if (prev && prev.cid !== cid) salesTurn(() => salesSaveNow(prev)); else if (prev) salesPending.delete(prev);
+  salesSavePending = {cid, s}; salesPending.add(salesSavePending);
+  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(() => salesSaveNow()); }, 500);
   if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))){ salesCfgStamp(s); salesCfgWrite(s); }
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
 }
 // the save waiting, written now: the list on screen if it is this client's and in, else the one saved (never a list not
 // yet loaded)
-async function salesSaveNow(){
-  const p = salesSavePending; if (!p) return;
+async function salesSaveNow(p){
+  p = p || salesSavePending; if (!p || !salesPending.has(p)) return;
   const n = SL(), src = n && n.cid === p.cid && !n.loading ? n : p.s;
   if (!src.loading) await BankDB.set("sales:" + p.cid, src.list.map(salesSynced));
-  if (salesSavePending === p) salesSavePending = null;
+  salesPending.delete(p); if (salesSavePending === p) salesSavePending = null;
+}
+// every save not yet written (the one waiting, and another client's handed to the queue)
+const salesPending = new Set();
+// an invoice the sync brings (data; null: removed), laid at once into every list of that client held here: the one on
+// screen and those of saves still waiting, so a save written after never puts an older copy over it (the review of
+// 34de5bd26: an edit made while a sync was applied lost the synced invoice). Never one removed here (sent or waiting)
+function salesLayPending(cid, id, data){
+  const ls = new Set(), k = "sales|" + cid + "|" + cid + ":" + id;
+  if (S.sales && S.sales.cid === cid && !S.sales.loading) ls.add(S.sales);
+  salesPending.forEach(p => { if (p.cid === cid && p.s && !p.s.loading) ls.add(p.s); });
+  const gone = typeof Cloud === "object" && (Cloud.marks()[k] === "gone" || k in Cloud.dels());
+  ls.forEach(s => { const l = s.list, i = l.findIndex(v => v.id === id);
+    if (data === null){ if (i >= 0) l.splice(i, 1); return; }
+    const n = clone(data); if (i >= 0){ const v = l[i]; Object.keys(v).forEach(x => { if (!(x in n)) delete v[x]; }); Object.assign(v, n); } else if (!gone) l.push(n); });
+}
+// a client's list once it is in (a list being loaded: waited for, up to 15 s); null when it is not on screen
+async function salesWhenIn(cid){
+  const t = Date.now();
+  while (S.sales && S.sales.cid === cid && S.sales.loading && Date.now() - t < 15000) await new Promise(ok => setTimeout(ok, 50));
+  return S.sales && S.sales.cid === cid && !S.sales.loading ? S.sales : null;
 }
 // a change to a client's sales list kept in this browser, in turn with the sync's own (cloudApply, src/js/27): the sync
 // reads the list, adds its rows and lays the list on screen afresh (loadSales); a save in between put the list as it was
@@ -217,7 +240,7 @@ let salesNoIdx = null;
 function salesOfNo(no){ return salesNoIdx ? salesNoIdx.get(normInvNo(no)) || [] : SL().list; }
 // the invoice as it is to be kept and sent: as it was before it was looked at again, while nothing else changed it
 function salesSynced(v){ const k = v.__vw; return k && JSON.stringify(v) === k.after ? JSON.parse(k.before) : v; }
-window.addEventListener("pagehide", () => { if (salesSavePending){ clearTimeout(salesSaveTimer); salesSaveTimer = null; salesSaveNow(); } });
+window.addEventListener("pagehide", () => { if (salesPending.size){ clearTimeout(salesSaveTimer); salesSaveTimer = null; [...salesPending].forEach(p => salesSaveNow(p)); } });
 function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
 
 /* ---------- ledgers (exact Tally names only) ---------- */

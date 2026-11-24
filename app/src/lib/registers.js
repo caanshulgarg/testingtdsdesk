@@ -1290,6 +1290,8 @@ const SheetImport = {
     if (docs.some(d => d.newLedger || d.newSled) && typeof loadBank === "function" && (!S.bank || S.bank.cid !== cid)) await loadBank(cid).catch(() => {});
     // (Sales: the client's own sales voucher type from its books, as the default for these new invoices, src/js/25)
     if (st.side === "sales" && typeof salesLearnVt === "function") salesLearnVt();
+    // (the review of 34de5bd26: never into a Sales list still loading, whose reading would replace what was added)
+    if (st.side === "sales" && typeof salesWhenIn === "function" && !(await salesWhenIn(cid))){ toast("The Sales list is still loading. Try Add again in a moment."); return; }
     const r = st.side === "sales" ? SheetPost.toSales(docs, cid, st.name) : SheetPost.toBills(docs, cid, st.name);
     st.result = r; st.step = "done"; render();
     const rest = st.rest || [];
@@ -1487,7 +1489,7 @@ PartyRecon.createEntry = function(run, t){
     e.partyLedger = run.ledger; e.readMode = "recon"; e.readNote = "Suggested by the reconciliation with " + run.ledger + ": in their statement, not in the books. Check it before approving.";
     finishNewEntry(e, cid, null); toast("Added to Purchase → To review: " + (no || run.ledger) + ". Nothing is posted until it is approved.");
   } else {
-    if (typeof SL !== "function" || !SL() || SL().cid !== cid){ toast("Open Sales once, then use Create entry again."); return; }
+    if (typeof SL !== "function" || !SL() || SL().cid !== cid || SL().loading){ toast("Open Sales once, then use Create entry again."); return; }
     const v = newInvoice({number: no || "REC-" + date, date, customerName: run.ledger, taxable: amt, total: amt, noteKind: t.amt < 0 ? "credit" : ""}, "recon", {fileName: run.file});
     v.customerLedger = run.ledger; v.userLedger = true; SL().list.push(v); mapInvoice(v); saveSales();
     toast("Added to Sales → To review: " + (no || run.ledger) + ". Nothing is posted until it is approved.");
