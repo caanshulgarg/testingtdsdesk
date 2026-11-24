@@ -43,7 +43,8 @@ function useAsk(fn, args, deps) {
     let live = true;
     if (!args) { setSt({ loading: false, data: null }); return undefined; }
     setSt((s) => ({ loading: true, data: s.data }));
-    rpc(fn, args).then((data) => live && setSt({ loading: false, data }), (e) => live && setSt({ loading: false, error: plain(e) }));
+    // a failed ask keeps what was there before (data), so a look-again that fails once does not blank the page
+    rpc(fn, args).then((data) => live && setSt({ loading: false, data }), (e) => live && setSt((s) => ({ loading: false, error: plain(e), data: s.data })));
     return () => { live = false; };
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
   return st;
@@ -59,12 +60,18 @@ export default function FinComBooks() {
   const go = (t) => { setTab(t); try { localStorage.setItem("fincom:fbTab", t); } catch (e) { /* only a convenience */ } };
   const books = (status.data && status.data.books) || [];
   const book = books.find((b) => b.book === bookPick) || books[0] || null;
-  // a book being built (Set up only enrols it; the catch-up builds it every 3 minutes): look again every 30 seconds until it is built
+  // a book being built (Set up only enrols it; the catch-up builds it every 3 minutes): look again every 30 seconds until it
+  // is built, only while the tab is shown (a hidden tab looks again at once when it is shown). A look-again that fails
+  // keeps the last figures on the page and the next one is tried as usual
   const building = books.some((b) => b.state === "setting_up");
   useEffect(() => {
     if (!building) return undefined;
-    const t = setTimeout(() => setTick((x) => x + 1), 30000);
-    return () => clearTimeout(t);
+    let t = null;
+    const shown = () => document.visibilityState !== "hidden";
+    if (shown()) t = setTimeout(() => setTick((x) => x + 1), 30000);
+    const seen = () => { clearTimeout(t); t = null; if (shown()) setTick((x) => x + 1); };
+    document.addEventListener("visibilitychange", seen);
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", seen); };
   }, [building, tick]);
 
   return <div className="fbk" data-fbooks="">
@@ -78,7 +85,7 @@ export default function FinComBooks() {
         <select value={book ? book.book : ""} onChange={(e) => setBookPick(e.target.value)} data-fb-book="">{books.map((b) => <option key={b.book} value={b.book}>{b.company + " (from " + dshow(b.from) + ")"}</option>)}</select></label>}
     </header>
     {status.loading && !status.data ? <p className="fbk-note" data-fb-loading="">Opening FinCom Books…</p>
-      : status.error ? <p className="fbk-banner" data-tone="bad" role="alert" data-fb-error="">{status.error}</p>
+      : status.error && !status.data ? <p className="fbk-banner" data-tone="bad" role="alert" data-fb-error="">{status.error}</p>
       : !book ? <NotSetUp canSetUp={!!(status.data && status.data.can_set_up)} cid={cid} onDone={() => setTick((x) => x + 1)} />
       : <>
         <StepBanner book={book} onChecked={() => setTick((x) => x + 1)} />
@@ -113,9 +120,13 @@ function StepBanner({ book, onChecked }) {
   let tone, head, text;
   if (book.state === "read_only") { tone = "bad"; head = "Read-only."; text = "FinCom Books’ own check found a problem: " + book.read_only_why; }
   else if (book.state === "setting_up") {
-    const b = book.build || {}, of = +b.of || 0, done = Math.min(+b.done || 0, of);
+    const b = book.build || {}, of = +b.of || 0, done = Math.min(+b.done || 0, of), stuck = +b.stuck || 0;
+    const sofar = of && done ? " So far " + COUNT.format(done) + " of " + COUNT.format(of) + " entries are in." : "";
     tone = "info";
-    if (of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = "FinCom is copying this client’s books from " + src + ", a few thousand entries every 3 minutes. This page fills in by itself."; }
+    // the catch-up's last run for this book failed: said plainly, without alarm (it is tried again every 3 minutes)
+    if (b.failed) { head = "Building stopped: " + String(b.failed.why || "an error").split("\n")[0].replace(/[.\s]+$/, "") + "."; text = "FinCom is trying again." + sofar; }
+    else if (stuck && of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = COUNT.format(stuck) + (stuck === 1 ? " entry" : " entries") + " could not be copied yet; FinCom is trying again. This page fills in by itself."; }
+    else if (of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = "FinCom is copying this client’s books from " + src + ", a few thousand entries every 3 minutes. This page fills in by itself."; }
     else { head = "Being built."; text = "FinCom starts copying this client’s books from " + src + (of ? " (" + COUNT.format(of) + " entries)" : "") + " within 3 minutes. This page fills in by itself."; }
   }
   // FinCom Books follows the copy within 10 minutes (owner decision 23-Nov-2026): "Updating" inside that window, "Not in

@@ -1,6 +1,6 @@
 -- Migration 218 (23-Nov-2026, branch next-fix-fbooks-setup). A DRAFT: written and tested here (tests/run_migration220.py
 -- on pg_stand, made-up books only); NOT run anywhere. Run it AFTER migration 220 (FinCom Books P1), and again after any
--- re-run of 220 (220 would put back the three functions below as they were).
+-- re-run of 220 (220 would put back the six functions below as they were).
 --
 -- "Set up FinCom Books" timed out for a client with about 7,300 entries ("canceling statement due to statement timeout"):
 -- fb_enroll built the book inside the person's click (every group and ledger, the openings, and up to 2,000 entries
@@ -11,12 +11,24 @@
 --                        the catch-up compares every entry (the sweep); nothing else changes for books already built
 --   fb_mirror_catchup    220's text with ONE step added at the top: a book being built whose masters are not there yet
 --                        (no seeded group) gets its groups, ledgers and openings first, in the timer's run (pg_cron, no
---                        8-second limit); its entries then follow a chunk at a time (fb_mirror_catchup_run takes books
---                        being built first, at most 5,000 entries a run, one transaction per book and chunk)
---   fb_status            220's text with ONE field added: 'build' {done, of} while a book is being built (entries in
---                        FinCom Books of the copy's entries in the window), so the page shows "Building: 2,400 of 7,300
---                        entries" and finishes by itself
--- ADD-ONLY in effect: no table, column, index, trigger or grant is added or removed; three functions are replaced with
+--                        8-second limit), and that call ends there, so the timer commits them on their own: a later
+--                        failure does not undo them and a retry does not write them again; its entries then follow a
+--                        chunk at a time (fb_mirror_catchup_run takes books being built first, at most 5,000 entries a run,
+--                        one transaction per book and chunk). When the book goes live, a check stored while it was half
+--                        built (before this migration) is cleared: "Not checked yet" until the next check
+--   fb_status            220's text with ONE field added: 'build' {done, of, failed, stuck} while a book is being built:
+--                        entries in FinCom Books of the copy's entries in the window (cancelled and deleted entries in
+--                        neither), so the page shows "Building: 2,400 of 7,300 entries" and finishes by itself; failed
+--                        {at (the last try), since, tries, why} when the catch-up's last run for the book failed, and
+--                        stuck: entries it could not copy yet (each tried again later)
+--   fb_tieout            220's text with ONE step added at the top (review of 24-Nov-2026): a book being built is not
+--                        tied out. It answers "being built" and stores nothing, so no half-built "Not in step" is kept,
+--                        and it calls no catch-up, so "Check now" builds nothing inside the person's click
+--   fb_tieout_all        220's text, passing over books being built (the nightly check; fb_tieout_ask and
+--                        fb_opening_signoff go through fb_tieout and get "being built")
+--   fb_mirror_run_failed 220's text, also noting the next try (retry_at, the next 3-minute run), so fb_status can say
+--                        when the last try was
+-- ADD-ONLY in effect: no table, column, index, trigger or grant is added or removed; six functions are replaced with
 -- the same arguments, result, SECURITY DEFINER, search_path (public, pg_temp), comment and grants. Each is replaced only
 -- when its text is migration 220's (as on staging, prosrc md5 below) or already this migration's; anything else stops the
 -- migration, naming it. One transaction, lock_timeout 10 s; safe to run twice.
@@ -29,14 +41,17 @@ begin
   if to_regclass('public.fb_books') is null or to_regclass('public.fb_mirror_state') is null or to_regprocedure('public.fb_mirror_masters(uuid)') is null then
     raise exception 'migration 218: FinCom Books (migration 220) is not on this database. Nothing was changed.';
   end if;
-  foreach f in array array['fb_enroll(text)', 'fb_mirror_catchup(uuid,integer)', 'fb_status(text)'] loop
+  foreach f in array array['fb_enroll(text)', 'fb_mirror_catchup(uuid,integer)', 'fb_status(text)', 'fb_tieout(uuid,text,uuid)', 'fb_tieout_all()', 'fb_mirror_run_failed(uuid,text)'] loop
     select md5(p.prosrc), coalesce(obj_description(p.oid, 'pg_proc'), '') into m, cm from pg_proc p where p.oid = to_regprocedure('public.' || f);
     if m is null then bad := bad || ('function ' || f || ' (not here)');
     elsif cm <> 'fincom books (migration 220)' then bad := bad || ('function ' || f || ' (not FinCom Books'')');
     elsif m <> all (case f
         when 'fb_enroll(text)'                 then array['cbeb231b1b4846581866430f9be899b8', 'a6e39f901386b3bcdf8b6b2f11ac5b23']   -- 220's (staging, 23-Nov-2026); this migration's
-        when 'fb_mirror_catchup(uuid,integer)' then array['c08a2e81784d0a250d59397847984d05', 'b2648d09d55954465ba1fb5331bd23c3']
-        else                                        array['63b397d0c426d0b6ef79c8ec381b03e1', '8e4a2800499720852f410a169d563268'] end) then
+        when 'fb_mirror_catchup(uuid,integer)' then array['c08a2e81784d0a250d59397847984d05', '05aab91850f5003ab0a32501be322446']
+        when 'fb_status(text)'                 then array['63b397d0c426d0b6ef79c8ec381b03e1', 'f45656f07abdf17cbd21511ff875e391']
+        when 'fb_tieout(uuid,text,uuid)'       then array['da56dade7636bfc089d04b60a82d47a4', '5fcefe6319a621b601fa2ec8773c719f']
+        when 'fb_tieout_all()'                 then array['a27208d85731f73f146ae65af37b4006', '8190e5a5e1c6a652e8ca5fd3bdb860f3']
+        else                                        array['a7128ef21b04bec3ffe40a76aac22941', '50be4fd96b4e584977315184cef95291'] end) then
       bad := bad || ('function ' || f || ' (changed since migration 220)');
     end if;
   end loop;
@@ -95,6 +110,12 @@ begin
   if b.state = 'setting_up' and not exists (select 1 from fb_groups sg where sg.book_id = p_book and sg.is_system) then
     perform fb_mirror_masters(p_book);
     perform fb_mirror_openings(p_book);
+    -- this call ends here (review of 24-Nov-2026): the timer commits the masters on their own, so a failure in the entries
+    -- after them does not undo them, and a retry finds them there and does not write them again. It counts as one step
+    -- done ('done' 1), so the timer gives the book its first chunk of entries in this same run, in a call of its own
+    select count(*) into left_n from tally_vouchers v where v.book_id = b.source_book_id and v.day >= b.mirror_from and v.deleted_at is null;
+    perform set_config('fincom.fb_actor', act, true);
+    return jsonb_build_object('done', 1, 'tried', 0, 'left', left_n, 'failed', 0, 'by', '{}'::jsonb, 'masters', true);
   end if;
   -- 1. the notes, one chunk in one subtransaction
   select array_agg(z.kind order by z.o), array_agg(z.key order by z.o), array_agg(z.seq order by z.o) into nk, nkey, nseq
@@ -186,7 +207,11 @@ begin
   left_n := left_n + (select count(*) from fb_mirror_dirty d where d.book_id = p_book);
   if left_n = 0 and swept then
     update fb_mirror_errors set resolved_at = now() where book_id = p_book and resolved_at is null and kind in ('catchup', 'tieout');
-    if b.state = 'setting_up' then update fb_books set state = 'live' where book_id = p_book; end if;
+    -- built: live. A check stored while it was half built (by 220's fb_tieout, before this migration) is not kept:
+    -- "Not checked yet" until the next one
+    if b.state = 'setting_up' then
+      update fb_books set state = 'live', in_step = null, in_step_at = null, last_tieout_id = null, not_in_step_since = null, not_in_step_why = '' where book_id = p_book;
+    end if;
   end if;
   if failed = 0 then update fb_mirror_state set mirrored_at = now() where book_id = p_book; end if;
   -- this call for the book worked: an earlier run's failure for it ('run') is over, even if entries are still waiting
@@ -203,9 +228,16 @@ begin
     select jsonb_agg(jsonb_build_object('book', b.book_id, 'source', b.source, 'company', b.company, 'state', b.state, 'read_only_why', b.read_only_why,
       'mirror_on', b.mirror_on, 'from', b.mirror_from, 'in_step', b.in_step, 'checked_at', b.in_step_at, 'since', b.not_in_step_since, 'why', b.not_in_step_why,
       'opening_signoff', b.opening_signoff,
-      -- 218: while a book is being built, how far: entries in FinCom Books of the copy's entries in the window
-      'build', case when b.state = 'setting_up' then jsonb_build_object('done', (select count(*) from fb_vouchers v where v.book_id = b.book_id),
-                'of', (select count(*) from tally_vouchers t where t.book_id = b.source_book_id and t.day >= b.mirror_from and t.deleted_at is null)) end,
+      -- 218: while a book is being built, how far: entries in FinCom Books of the copy's entries in the window, counted
+      -- alike (an entry cancelled in the copy, or deleted from it and kept here as cancelled, is in neither); failed: the
+      -- catch-up's last run for this book failed ('at' the last try; the next run tries again); stuck: entries it could
+      -- not copy yet (each tried again later)
+      'build', case when b.state = 'setting_up' then jsonb_build_object(
+                'done', (select count(*) from fb_vouchers v where v.book_id = b.book_id and v.source_ref is not null and not v.source_gone and v.status <> 'cancelled' and v.date >= b.mirror_from),
+                'of', (select count(*) from tally_vouchers t where t.book_id = b.source_book_id and t.day >= b.mirror_from and t.deleted_at is null and not coalesce(t.cancelled, false)),
+                'failed', (select jsonb_build_object('at', coalesce(e.retry_at - interval '3 minutes', e.at), 'since', e.at, 'tries', e.tries, 'why', left(e.error, 160))
+                             from fb_mirror_errors e where e.book_id = b.book_id and e.kind = 'catchup' and e.key = 'run' and e.resolved_at is null order by e.id desc limit 1),
+                'stuck', (select count(*) from fb_mirror_errors e where e.book_id = b.book_id and e.kind = 'catchup' and e.key <> 'run' and e.resolved_at is null)) end,
       -- how far behind the copy (owner decision 23-Nov-2026: FinCom Books follows within 10 minutes): within 10 minutes the
       -- page says "Updating"; beyond, "Not in step"
       'behind_since', fb_behind_since(b.book_id),
@@ -223,17 +255,156 @@ begin
       from fb_books b where b.client_id = p_client and b.book_id in (select fb_my_books())), '[]'::jsonb));
 end $f$;
 
+-- the tie-out: a book being built is not tied out (nothing stored, nothing built)
+create or replace function public.fb_tieout(p_book uuid, p_kind text default 'nightly', p_by uuid default null) returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
+declare b record; diffs jsonb := '[]'::jsonb; d jsonb; ins boolean; words text := ''; tid bigint; opsum numeric; sf record; held int; errs int; sent int;
+  copy_fig jsonb; fb_fig jsonb; grp record; ndiff int := 0; src_fig jsonb; word text; act text := coalesce(current_setting('fincom.fb_actor', true), '');
+begin
+  select k.* into b from fb_books k where k.book_id = p_book;
+  if b.book_id is null then raise exception 'no such book'; end if;
+  word := case when b.source = 'zoho' then 'Zoho' else 'Tally' end;
+  -- 218 (review of 24-Nov-2026): a book still being built is not tied out. Its figures are half there, and a result
+  -- stored now ("Not in step", with wrong differences) would stay after the build. Nothing is stored, and no catch-up is
+  -- called (asked, it would build the book inside the person's click): the 3-minute catch-up builds it
+  if b.state = 'setting_up' then
+    return jsonb_build_object('in_step', null, 'updating', true, 'building', true, 'words', 'FinCom Books is still being built from ' || word || '. It is checked once it is built.');
+  end if;
+  -- what the copy changed in the last minutes is mirrored first, so the check compares like with like. Asked by a member
+  -- (or with an opening sign-off), at most 500 entries, so the request stays short; still behind then: "Updating", and
+  -- nothing is stored (the book's step stays as it was)
+  if fb_behind_since(p_book) is not null or exists (select 1 from fb_mirror_state st where st.book_id = p_book and st.sweep_after is not null) then
+    perform fb_mirror_catchup(p_book, case when p_kind = 'asked' then 500 else 20000 end);
+    if p_kind = 'asked' and (fb_behind_since(p_book) is not null or exists (select 1 from fb_mirror_state st where st.book_id = p_book and st.sweep_after is not null)) then
+      perform set_config('fincom.fb_actor', act, true);
+      return jsonb_build_object('in_step', null, 'updating', true, 'words', 'FinCom Books is still bringing in the latest changes from ' || word || '. Check again in a few minutes.');
+    end if;
+  end if;
+  perform set_config('fincom.fb_actor', 'system:tieout', true);
+  -- 1. ledger by day: the copy against FinCom Books (to the paisa)
+  with c as (select w.ledger, w.day, sum(w.amount) as a from fb_copy_window(p_book) w group by 1, 2),
+  f as (select g.name as ledger, l.date as day, sum(l.amount) as a from fb_lines l join fb_vouchers v on v.id = l.voucher_id and v.version = l.version
+          join fb_ledgers g on g.id = l.ledger_id where l.book_id = p_book and v.status = 'posted' and not v.memo and l.date >= b.mirror_from group by 1, 2),
+  x as (select coalesce(c.ledger, f.ledger) as ledger, coalesce(c.day, f.day) as day, coalesce(c.a, 0) as copy, coalesce(f.a, 0) as fb
+          from c full join f on f.ledger = c.ledger and f.day = c.day where coalesce(c.a, 0) <> coalesce(f.a, 0))
+  select coalesce(jsonb_agg(jsonb_build_object('kind', 'ledger_day', 'ledger', x.ledger, 'day', x.day, 'copy', x.copy, 'fincom', x.fb, 'diff', x.fb - x.copy,
+           'group', coalesce((select coalesce(nullif(gg.reserved, ''), gg.name) from fb_ledgers lg join fb_groups gg on gg.id = lg.group_id where lg.book_id = p_book and lg.name = x.ledger), '')) order by x.ledger, x.day), '[]'::jsonb)
+    into d from x;
+  -- a day's difference that is exactly the held entries of that ledger and day is named as their cause
+  select coalesce(jsonb_agg(case when h.a is not null and h.a = -(e ->> 'diff')::numeric then e || jsonb_build_object('cause', 'held') else e end), '[]'::jsonb) into d
+    from jsonb_array_elements(d) e
+    left join lateral (select sum(-l.amount) as a from fb_vouchers v join tally_lines l on l.book_id = b.source_book_id and l.guid = v.source_ref
+                        where v.book_id = p_book and v.status = 'held' and v.date = (e ->> 'day')::date and l.ledger = e ->> 'ledger') h on true;
+  diffs := diffs || d;
+  -- 2. entries by type and month (every entry not deleted in the source)
+  with c as (select v.vtype, to_char(v.day, 'YYYY-MM') as m, count(*) as n from tally_vouchers v where v.book_id = b.source_book_id and v.deleted_at is null and v.day >= b.mirror_from group by 1, 2),
+  f as (select coalesce(t.name, '') as vtype, to_char(v.date, 'YYYY-MM') as m, count(*) as n from fb_vouchers v left join fb_vtypes t on t.id = v.vtype_id
+         where v.book_id = p_book and v.source_ref is not null and not v.source_gone group by 1, 2)
+  select coalesce(jsonb_agg(jsonb_build_object('kind', 'count', 'vtype', coalesce(c.vtype, f.vtype), 'month', coalesce(c.m, f.m), 'copy', coalesce(c.n, 0), 'fincom', coalesce(f.n, 0))), '[]'::jsonb)
+    into d from c full join f on f.vtype = c.vtype and f.m = c.m where coalesce(c.n, 0) <> coalesce(f.n, 0);
+  diffs := diffs || d;
+  -- 3. openings (Tally's opening plus the older entries, D20)
+  with c as (select w.name, w.amount as a from fb_copy_openings(p_book) w),
+  f as (select g.name, o.amount as a from fb_openings o join fb_ledgers g on g.id = o.ledger_id where o.book_id = p_book and o.as_on = b.mirror_from)
+  select coalesce(jsonb_agg(jsonb_build_object('kind', 'opening', 'ledger', coalesce(c.name, f.name), 'copy', coalesce(c.a, 0), 'fincom', coalesce(f.a, 0))), '[]'::jsonb)
+    into d from c full join f on f.name = c.name where coalesce(c.a, 0) <> coalesce(f.a, 0);
+  diffs := diffs || d;
+  -- 4. D7: a difference in opening balances keeps the book Not in step until the owner signs it off (that amount)
+  select coalesce(sum(o.amount), 0) into opsum from fb_openings o where o.book_id = p_book and o.as_on = b.mirror_from;
+  if opsum <> 0 and ((b.opening_signoff ->> 'amount') is null or (b.opening_signoff ->> 'amount')::numeric <> opsum) then
+    diffs := diffs || jsonb_build_array(jsonb_build_object('kind', 'opening_difference', 'amount', opsum));
+  end if;
+  -- 5. entries held (Dr and Cr differ in the copy) and changes the mirror could not apply
+  select count(*) into held from fb_vouchers v where v.book_id = p_book and v.status = 'held';
+  if held > 0 then
+    diffs := diffs || coalesce((select jsonb_agg(jsonb_build_object('kind', 'held', 'guid', v.source_ref, 'number', v.number, 'date', v.date, 'why', v.mirror_note) order by v.date)
+                                  from (select * from fb_vouchers v where v.book_id = p_book and v.status = 'held' order by v.date limit 50) v), '[]'::jsonb);
+  end if;
+  select count(*) into errs from fb_mirror_errors e where e.book_id = p_book and e.resolved_at is null;
+  if errs > 0 then diffs := diffs || jsonb_build_array(jsonb_build_object('kind', 'mirror_error', 'n', errs)); end if;
+  -- 6. Tally's own figures, once read (TODO D16 / bridge 2.5.19): each primary group's closing at the date read
+  select * into sf from fb_source_figures s where s.book_id = p_book and s.kind = 'group_closing' order by s.at desc limit 1;
+  if sf.id is not null then
+    with f as (select g.primary_name as grp, sum(c.bal) as a from fb_closing(p_book, sf.as_on) c join fb_ledgers l on l.id = c.ledger_id join fb_groups g on g.id = l.group_id group by 1),
+    s as (select key as grp, value::numeric as a from jsonb_each_text(sf.figures))
+    select coalesce(jsonb_agg(jsonb_build_object('kind', 'source_group', 'group', coalesce(s.grp, f.grp), 'as_on', sf.as_on, 'source', coalesce(s.a, 0), 'fincom', coalesce(f.a, 0),
+             'diff', coalesce(f.a, 0) - coalesce(s.a, 0)) order by coalesce(s.grp, f.grp)), '[]'::jsonb)
+      into d from s full join f on f.grp = s.grp where coalesce(s.a, 0) <> coalesce(f.a, 0);
+    diffs := diffs || d;
+    src_fig := jsonb_build_object('as_on', sf.as_on, 'read_at', sf.at, 'groups', sf.figures);
+  end if;
+  select count(*) into sent from fb_vouchers v where v.book_id = p_book and v.status = 'sent';
+  ins := jsonb_array_length(diffs) = 0;
+  -- the words: the biggest group difference first ("Sundry Debtors differs by ₹4,200.00")
+  if not ins then
+    select x.g, sum(x.d) as s, count(*) over () as n into grp from (
+      select coalesce(nullif(e ->> 'group', ''), e ->> 'ledger') as g, (e ->> 'diff')::numeric as d from jsonb_array_elements(diffs) e where e ->> 'kind' = 'ledger_day' and e ->> 'cause' is null
+      union all select e ->> 'group', (e ->> 'diff')::numeric from jsonb_array_elements(diffs) e where e ->> 'kind' = 'source_group') x
+     group by x.g having sum(x.d) <> 0
+     -- the biggest first; of equal ones, the balance sheet's group (Sundry Debtors before Sales Accounts)
+     order by abs(sum(x.d)) desc, coalesce((select sg.sort from fb_seed_groups sg where sg.name = x.g), 1000), x.g limit 1;
+    select count(*) into ndiff from jsonb_array_elements(diffs);
+    words := case
+      when grp.g is not null then grp.g || ' differs by ' || fb_inr(abs(grp.s)) || case when grp.n > 1 then ' (and ' || (grp.n - 1) || ' more)' else '' end
+      when exists (select 1 from jsonb_array_elements(diffs) e where e ->> 'kind' = 'opening_difference') then 'Difference in opening balances in ' || word || ': ' || fb_inr(abs(opsum)) || ' (the owner may accept it with a reason)'
+      when held > 0 then held || case when held = 1 then ' entry is' else ' entries are' end || ' held: Dr and Cr differ in the copy'
+      when errs > 0 then 'A change from ' || word || ' could not be applied (FinCom is looking into it)'
+      when exists (select 1 from jsonb_array_elements(diffs) e where e ->> 'kind' = 'count') then 'The number of entries differs (FinCom Books is still being built, or an entry is missing)'
+      else 'An opening balance differs' end;
+  end if;
+  select jsonb_build_object('ledgers', count(distinct w.ledger), 'entries', count(distinct w.guid), 'total_dr', coalesce(sum(w.amount) filter (where w.amount > 0), 0)) into copy_fig from fb_copy_window(p_book) w;
+  select jsonb_build_object('entries', count(*) filter (where v.status = 'posted' and not v.memo), 'memo', count(*) filter (where v.memo), 'held', held, 'sent', sent,
+           'cancelled', count(*) filter (where v.status = 'cancelled'), 'opening_total', opsum,
+           'alter_max', max(v.source_alter), 'copy_alter_max', (select max(t.alter_id) from tally_vouchers t where t.book_id = b.source_book_id))
+    into fb_fig from fb_vouchers v where v.book_id = p_book;
+  insert into fb_tieouts (book_id, firm_id, kind, asked_by, window_from, window_to, in_step, copy_figures, fb_figures, source_figures, differences, words)
+  values (p_book, b.firm_id, p_kind, p_by, b.mirror_from, current_date, ins, copy_fig, fb_fig, src_fig,
+          (select coalesce(jsonb_agg(e), '[]'::jsonb) from (select e from jsonb_array_elements(diffs) e limit 200) z), words)
+  returning id into tid;
+  update fb_books set in_step = ins, in_step_at = now(), last_tieout_id = tid,
+    not_in_step_since = case when ins then null else coalesce(not_in_step_since, now()) end,
+    not_in_step_why = case when ins then '' else words end
+   where book_id = p_book;
+  perform set_config('fincom.fb_actor', act, true);
+  return jsonb_build_object('id', tid, 'in_step', ins, 'words', words, 'differences', jsonb_array_length(diffs), 'source_read', sf.id is not null, 'sent', sent);
+end $f$;
+
+-- the nightly tie-out of every book: books being built are passed over
+create or replace function public.fb_tieout_all() returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
+declare b record; n int := 0; bad int := 0; r jsonb;
+begin
+  -- 218: a book being built is passed over (fb_tieout would answer "being built" for it too)
+  for b in select k.book_id from fb_books k where k.mirror_on and k.state <> 'setting_up' order by k.book_id loop
+    begin
+      r := fb_tieout(b.book_id, 'nightly'); n := n + 1; if not (r ->> 'in_step')::boolean then bad := bad + 1; end if;
+    exception when others then
+      insert into fb_mirror_errors (book_id, kind, error) values (b.book_id, 'tieout', left(sqlerrm, 500)); bad := bad + 1;
+    end;
+  end loop;
+  return jsonb_build_object('books', n, 'not_in_step', bad, 'being_built', (select count(*) from fb_books k where k.mirror_on and k.state = 'setting_up'));
+end $f$;
+
+-- a catch-up run that failed for a book: the next try noted (fb_status gives the last try)
+create or replace function public.fb_mirror_run_failed(p_book uuid, p_err text) returns void language plpgsql security definer set search_path to 'public', 'pg_temp' as $f$
+begin
+  -- 218: retry_at is the next try (the timer's next run, 3 minutes on), so fb_status can say when the last try was
+  update fb_mirror_errors e set tries = e.tries + 1, error = left(p_err, 500), retry_at = now() + interval '3 minutes'
+   where e.book_id = p_book and e.kind = 'catchup' and e.key = 'run' and e.resolved_at is null;
+  if not found then insert into fb_mirror_errors (book_id, kind, key, error, retry_at) values (p_book, 'catchup', 'run', left(p_err, 500), now() + interval '3 minutes'); end if;
+end $f$;
+
 -- the same comment and grants as 220 gave them (CREATE OR REPLACE keeps both; said again so that a re-run is exact)
 do $g$
 declare f text;
 begin
-  foreach f in array array['fb_enroll(text)', 'fb_mirror_catchup(uuid,integer)', 'fb_status(text)'] loop
+  foreach f in array array['fb_enroll(text)', 'fb_mirror_catchup(uuid,integer)', 'fb_status(text)', 'fb_tieout(uuid,text,uuid)', 'fb_tieout_all()', 'fb_mirror_run_failed(uuid,text)'] loop
     execute format('comment on routine %s is %L', to_regprocedure('public.' || f), 'fincom books (migration 220)');
     execute format('revoke all on routine %s from public, anon, authenticated, service_role', to_regprocedure('public.' || f));
   end loop;
   grant execute on function public.fb_enroll(text) to authenticated;
   grant execute on function public.fb_status(text) to authenticated, service_role;
   grant execute on function public.fb_mirror_catchup(uuid, integer) to service_role;
+  grant execute on function public.fb_tieout(uuid, text, uuid) to service_role;
+  grant execute on function public.fb_tieout_all() to service_role;
 end $g$;
 
 commit;
