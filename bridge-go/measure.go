@@ -190,7 +190,7 @@ func measureDatedTC(o measureOpts) *TC {
 	if o.oldDays {
 		return &TC{person: true}
 	}
-	if readDaysOn() {
+	if directReadsOn() { // 2.5.20 review A1: a direct read, only with ReadDays true
 		return fin
 	}
 	return nil

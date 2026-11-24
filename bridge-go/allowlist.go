@@ -64,7 +64,7 @@ var tallyAllowList = map[string]allowedReq{
 		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661: 50,000 ledgers in one request 405 ms worst (3.0), each chunk of 2,000 MasterIDs 107 ms worst; exact on every release)"},
 	// 2.5.2 (the owner's decision of 30-Oct-2026, "1"): the stock for the period a person chose, only on that person's click
 	// of "Bring stock from Tally" / "Ask Tally again" in FinCom (stock.go)
-	stockID: {purpose: "the stock for the period a person chose (2.5.2): Tally's Group collection, the reserved group Stock-in-Hand only (FILTERS $ReservedName), NAME, OPENINGBALANCE and CLOSINGBALANCE with SVFROMDATE / SVTODATE (yyyymmdd TYPE=\"Date\") the period; sent ONLY on a person's click in FinCom (no background read, no schedule, no retry), at most once per company and period (the answer kept; Ask Tally again asks once more), one request in flight, postings first, stopped at 2 s; over 2 s or Tally's window held 2 s: that company is not asked again until the next click, and FinCom says so; 2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in 2.5.19)", maxSec: 2.37,
+	stockID: {purpose: "the stock for the period a person chose (2.5.2): Tally's Group collection, the reserved group Stock-in-Hand only (FILTERS $ReservedName), NAME, OPENINGBALANCE and CLOSINGBALANCE with SVFROMDATE / SVTODATE (yyyymmdd TYPE=\"Date\") the period; sent ONLY on a person's click in FinCom (no background read, no schedule, no retry), at most once per company and period (the answer kept; Ask Tally again asks once more), one request in flight, postings first, stopped at 2 s; over 2 s or Tally's window held 2 s: that company is not asked again until the next click, and FinCom says so; 2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in 2.5.20)", maxSec: 2.37,
 		measuredOn: "2026-10-30 (real TallyPrime 3.0 and 7.1; tally-versions mode stockp, run 41009967960 (tally-versions 51fe89998, results 960d5b047), 4,000 items with godowns and batches, 32,000 entries over two years: a period's first ask 1.37 s worst, window held 0.97 s; the first request after Tally started 2.37 s, window held 2.05 s (the bridge stops it at 2 s and says so); asked again 2 ms; the opening and closing equal Tally's per-item total for every period)"},
 	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
 	"TDSDeskGroups":     {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
@@ -75,9 +75,12 @@ var tallyAllowList = map[string]allowedReq{
 	masterCheckID:       {purpose: "the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only"},
 	"Import":            {purpose: "a posting or a deletion (Import Data)"},
 	payrollImportID:     {purpose: "a month's salary as one Tally payroll voucher (Import Data; owner approved 22-Nov-2026)"},
-	sliceID:             {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
-	datesProbeID:        {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
-	editLogProbeID:      {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
+	// fix in place (the owner's approval of 23-Nov-2026, findings/fix-in-place-plan.md section 2.3; fixalter.go)
+	fixVoucherID:   {purpose: "fix in place: ONE existing voucher altered by its GUID, its date and type as read, only its number, place of supply or party GSTIN (Import Data; owner approved 23-Nov-2026)"},
+	fixLedgerID:    {purpose: "fix in place: ONE existing ledger altered by its name, only its GST registration (GSTIN and its state) or its PAN (Import Data; owner approved 23-Nov-2026)"},
+	sliceID:        {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
+	datesProbeID:   {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
+	editLogProbeID: {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
 	// next-fastfetch (the owner's approval of 07-Oct-2026 and decision of 08-Oct-2026): replaces FinComVoucherByMaster
 	vchObjectID: {purpose: "the entry request (next-fastfetch, replacing FinComVoucherByMaster): ONE voucher by its MasterID, Tally's object export ID:<MasterID> (keyed: it does not read every voucher of the company), its FETCHLIST the approved fields of FinComVoucherByMaster; Tally sends the whole voucher and the bridge keeps exactly those fields (ledger lines as ALLLEDGERENTRIES), dropping the rest before anything is logged, stored or sent; read only, no period; stopped at 2 s, a payroll voucher's at 3 s (2.4.4, the owner's decision of 12-Oct-2026)", maxSec: 2.2,
 		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475: a payroll entry of 500 employees, 2,189 ms worst (6.2), under its 3 s; push-design runs 37718386662 and 37747408916 (2026-10-08): 9-23 ms median, 61 ms worst for an ordinary entry at 4,000-100,000 vouchers, 1.7 s worst for a 500-item invoice)"},
@@ -145,6 +148,9 @@ func tallyRequestID(x string) string {
 		if isPayrollImport(x) { // 2.5.18: a payroll voucher's Import is held to its own exact shape
 			return payrollImportID
 		}
+		if id := fixImportID(x); id != "" { // fix in place: an Alter is never the plain Import's (fixalter.go)
+			return id
+		}
 		return "Import"
 	}
 	if id, ok := objectRequestID(x); ok {
@@ -211,7 +217,9 @@ type pinRefusedError struct{ id string }
 
 func (e *pinRefusedError) Error() string {
 	why := "the " + or(e.id, "request") + " request differs from what the bridge builds"
-	if e.id == payrollImportID {
+	if e.id == fixVoucherID || e.id == fixLedgerID {
+		why = "the change of an existing entry or ledger is not one of the two forms the owner approved"
+	} else if e.id == payrollImportID {
 		why = "the payroll posting is not one payroll voucher exactly as FinCom builds it"
 	} else if e.id == "Import" {
 		why = "the posting holds something other than vouchers, ledgers, groups or a voucher type's numbering, as FinCom sends them"
@@ -255,6 +263,8 @@ func allowListSamples() map[string]string {
 		editLogProbeID:       editLogProbeRequest(c, "1"),
 		"Import":             importEnvelope("Vouchers", c, ""),
 		payrollImportID:      payrollImportSample(c),
+		fixVoucherID:         fixVoucherSample(c),
+		fixLedgerID:          fixLedgerSample(c),
 		"FinComMeasureB":     measureReqB(c, a, z, 1),
 		"FinComMeasureC":     measureReqC(c, a, z, 1),
 		"FinComMeasureYear":  measureReqYear(c, a, z),

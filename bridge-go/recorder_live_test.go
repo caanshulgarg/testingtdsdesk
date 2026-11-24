@@ -1000,7 +1000,9 @@ func TestWindowValues(t *testing.T) {
 	if toI64(win["a0"]) != 2 || toI64(win["a1"]) != a1 || toInt(win["vouchersCreated"]) != 3 || toInt(win["mastersCreated"]) != 1 || str(win["guid"]) != "co-guid-1" {
 		t.Fatalf("the window: %v (a1 %d)", win, a1)
 	}
-	// the FinComCompany reads: one before the first import, one after the last, none between
+	// the FinComCompany reads: one before the first import, one after the last, and between them only each part of
+	// vouchers' own, right before it (2.5.20 final review of ee9ab40d3: Tally's counter for the read back); the window
+	// stays the job's (a0 before the job, a1 after it)
 	ids := f.ids()
 	first, last := -1, -1
 	for i, id := range ids {
@@ -1011,11 +1013,7 @@ func TestWindowValues(t *testing.T) {
 			last = i
 		}
 	}
-	for i := first; i <= last; i++ {
-		if ids[i] == "FinComCompany" {
-			t.Fatalf("a company check during the job: %v", ids[first:last+1])
-		}
-	}
+	partChecksOnly(t, f)
 	if !contains(ids[last:], "FinComCompany") || !contains(ids[:first], "FinComCompany") {
 		t.Fatalf("the company checks around the job: %v", ids)
 	}
@@ -1203,7 +1201,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.5.19" { // 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go); 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.5.20" { // 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go); 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")

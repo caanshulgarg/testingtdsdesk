@@ -139,8 +139,10 @@ func TestPostTrustsCreatedReply(t *testing.T) {
 	onlyPostingRequests(t, f, 0)
 }
 
-// --- A2. anything else in the reply: every entry of the request needs review, with Tally's counts and words; accepted
-// when Tally made any; those ids are recorded as sent and never sent again by this bridge; nothing is retried
+// --- A2. anything else in the reply: Tally's counts and words on every entry of the request. 2.5.20 P2 (the owner's
+// decision of 23-Nov-2026): a part Tally made only partly is read back by FinComTag (that part's date only): found =
+// posted (in Tally); not found with Tally's error = refused, off this computer's record (it may go again); the rest needs
+// review as before
 func TestPostNeedsReviewOnLineError(t *testing.T) {
 	td := today()
 	t.Run("errors in a batch", func(t *testing.T) {
@@ -148,44 +150,43 @@ func TestPostNeedsReviewOnLineError(t *testing.T) {
 		f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:nr3") } // Tally refuses the third (ERRORS 1)
 		standBridge(t, f, `,"PostPaceOff":true`)                                         // the fixed parts (postpace.go): this test is about the reply, not the pace
 		p := r15Job(t, "job-r15-review", r15Bills("nr", td, 3))
-		if f.n("Import") != 1 {
-			t.Fatalf("%d imports (nothing is retried by the bridge)", f.n("Import"))
+		if f.n("Import") != 1 || f.n("FinComTag") != 1 {
+			t.Fatalf("%d imports, %d read backs (want 1 and 1: the part's one date)", f.n("Import"), f.n("FinComTag"))
 		}
-		if str(p["status"]) != "done" || str(p["message"]) != "Posted 0 of 3; 3 need review" || p["checking"] == true {
+		if str(p["status"]) != "done" || !strings.HasPrefix(str(p["message"]), "Posted 2 of 3") || p["checking"] == true {
 			t.Fatalf("a request Tally made only partly ended %q %q (checking %v)", p["status"], p["message"], p["checking"])
 		}
 		rs := r15Results(p)
-		for _, id := range []string{"nr1", "nr2", "nr3"} {
+		for _, id := range []string{"nr1", "nr2"} {
 			r := rs[id]
-			if r["ok"] != false || r["needsReview"] != true || r["accepted"] != true || toInt(r["created"]) != 2 || toInt(r["errors"]) != 1 || str(r["lastVchId"]) == "" {
-				t.Fatalf("%s: %v", id, r)
-			}
-			if !strings.HasPrefix(str(r["message"]), "Tally's reply: created 2 of 3") || !strings.Contains(str(r["message"]), "errors 1") {
-				t.Fatalf("%s: the message %q", id, r["message"])
-			}
-			if itemState(r, false) != "needs_review" {
-				t.Fatalf("%s: state %q", id, itemState(r, false))
+			if r["ok"] != true || r["verified"] != true || r["needsReview"] == true || itemState(r, false) != "in_tally" || toInt(r["created"]) != 2 || toInt(r["errors"]) != 1 {
+				t.Fatalf("%s (found by its mark): %v", id, r)
 			}
 			if a := acceptedInfo(id); a == nil || a["sent"] != true {
 				t.Fatalf("%s accepted by Tally is not recorded as sent: %v", id, a)
 			}
 		}
-		for _, x := range arr(p["items"]) {
-			if e := obj(x); str(e["state"]) != "needs_review" || e["needsReview"] != true || !strings.HasPrefix(str(e["reason"]), "Tally's reply:") {
-				t.Fatalf("the item: %v", e)
-			}
+		if r := rs["nr3"]; r["ok"] != false || r["accepted"] != false || r["refusedByTally"] != true || itemState(r, false) != "failed" ||
+			!strings.HasPrefix(str(r["message"]), "Tally's reply: created 2 of 3") || !strings.Contains(str(r["message"]), "errors 1") || acceptedInfo("nr3") != nil {
+			t.Fatalf("nr3 (not found, Tally's error): %v", r)
 		}
-		// the same three again (Retry, or a new job): refused on this computer's record, nothing sent
+		// the same three again (Retry, or a new job): nr1 and nr2 refused on this computer's record; nr3 goes again
 		p = r15Job(t, "job-r15-review-2", r15Bills("nr", td, 3))
-		if f.n("Import") != 1 {
-			t.Fatalf("the second job sent an entry recorded as sent (%d imports)", f.n("Import"))
+		if f.n("Import") != 2 {
+			t.Fatalf("the second job: %d imports (want 2: nr3 alone again)", f.n("Import"))
 		}
 		for id, r := range r15Results(p) {
-			if r["alreadySent"] != true || !strings.HasPrefix(str(r["message"]), "already sent from this computer on ") {
+			if id != "nr3" && (r["alreadySent"] != true || !strings.HasPrefix(str(r["message"]), "already sent from this computer on ")) {
 				t.Fatalf("%s in the second job: %v", id, r)
 			}
 		}
-		onlyPostingRequests(t, f, 0)
+		for _, id := range f.ids() {
+			switch id {
+			case "TDSDeskCompanies", "TDSDeskCompanyInfo", "FinComCompany", "FinComFree", "Import", "FinComTag":
+			default:
+				t.Fatalf("a posting sent %q to Tally: %v", id, f.ids())
+			}
+		}
 	})
 	t.Run("a LINEERROR", func(t *testing.T) {
 		f := newStandTally(t)
@@ -193,8 +194,9 @@ func TestPostNeedsReviewOnLineError(t *testing.T) {
 			"<LINEERROR>Ledger &apos;Electricity Charges&apos; does not exist!</LINEERROR></DATA></BODY></ENVELOPE>")
 		standBridge(t, f, `,"PostPaceOff":true`) // the fixed parts (postpace.go): this test is about the reply, not the pace
 		r := postOne(t, "le1", finVoucher("le1", fgParty, "LE-1", td, "1.00"))
-		if r["ok"] != false || r["needsReview"] != true || r["accepted"] != true || str(r["lastVchId"]) != "501" {
-			t.Fatalf("a reply with a LINEERROR: %v", r)
+		// 2.5.20 P2: read back (once); Tally said it made 1 and none was found: not judged, needs review as before
+		if r["ok"] != false || r["needsReview"] != true || r["accepted"] != true || str(r["lastVchId"]) != "501" || f.n("FinComTag") != 1 {
+			t.Fatalf("a reply with a LINEERROR: %v (%d read backs)", r, f.n("FinComTag"))
 		}
 		le := strs(r["lineError"])
 		if len(le) != 1 || !strings.Contains(le[0], "Ledger 'Electricity Charges' does not exist!") || !strings.Contains(str(r["message"]), "Ledger 'Electricity Charges' does not exist!") {
@@ -262,10 +264,11 @@ func TestPostNoReadBackRequests(t *testing.T) {
 	}
 	onlyPostingRequests(t, f, 0)
 	// 2.2.0 (plan round 20, b.4): the company check once before the job, and once after its last import (the posting
-	// window's a1), never between the imports
+	// window's a1). 2.5.20 final review of ee9ab40d3: and once right before each part of vouchers (Tally's counter for
+	// the read back), nowhere else between the imports
 	ids := f.ids()
-	if f.n("FinComCompany") != 2 || ids[len(ids)-1] != "FinComCompany" {
-		t.Fatalf("the company check went %d times (want once before the job and once after it): %v", f.n("FinComCompany"), ids)
+	if n := partChecksOnly(t, f); f.n("FinComCompany") != 2+n || ids[len(ids)-1] != "FinComCompany" {
+		t.Fatalf("the company check went %d times (want once before the job, once before each of its %d parts of vouchers and once after it): %v", f.n("FinComCompany"), n, ids)
 	}
 	if f.n("Import") != 3 { // the master, then the five bills as the pace sizes them (pacing on): 2 (not known yet), then 3
 		t.Fatalf("%d imports: %v", f.n("Import"), f.ids())
@@ -634,6 +637,7 @@ func TestPostTimingsOnStand(t *testing.T) {
 // the job ends "done" when anything was posted or Tally created something ("Posted N of M; K need review"); only when
 // nothing was posted and nothing accepted does it end "failed" (a "failed" from the bridge stands in the cloud)
 func TestNeedsReviewJobEndsDone(t *testing.T) {
+	noReadBack(t) // 2.5.20 P2 off here: this test is about a part that stays needs review (r2520_test.go tests the read back)
 	td := today()
 	f := newStandTally(t)
 	standBridge(t, f, `,"PostBatchBills":3,"PostPaceOff":true`)                      // the fixed parts (postpace.go)
@@ -976,4 +980,38 @@ func TestImportNotReachedForgetsNotes(t *testing.T) {
 	if r["ok"] != true || r["alreadySent"] == true {
 		t.Fatalf("the retry: %v", r)
 	}
+}
+
+// 2.5.20 final review of ee9ab40d3: every import of vouchers comes right after its own company check (FinComCompany),
+// and no other company check falls between the job's first and last import; the number of voucher imports
+func partChecksOnly(t *testing.T, f *standTally) int {
+	t.Helper()
+	f.mu.Lock()
+	ids, bodies := append([]string{}, f.reqs...), append([]string{}, f.bodies...)
+	f.mu.Unlock()
+	first, last := -1, -1
+	for i, id := range ids {
+		if id == "Import" {
+			if first < 0 {
+				first = i
+			}
+			last = i
+		}
+	}
+	n, own := 0, map[int]bool{}
+	for i := first; i >= 0 && i <= last; i++ {
+		if ids[i] == "Import" && strings.Contains(bodies[i], "<VOUCHER") {
+			n++
+			if i == 0 || ids[i-1] != "FinComCompany" {
+				t.Fatalf("an import of vouchers without its company check right before it: %v", ids[first:last+1])
+			}
+			own[i-1] = true
+		}
+	}
+	for i := first; i >= 0 && i <= last; i++ {
+		if ids[i] == "FinComCompany" && !own[i] {
+			t.Fatalf("a company check between the imports that is not a part's own: %v", ids[first:last+1])
+		}
+	}
+	return n
 }

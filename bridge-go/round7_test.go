@@ -152,6 +152,7 @@ func TestPostsUpdateSeqIncreases(t *testing.T) {
 // the request needs review with Tally's counts, all three are recorded as sent (which ones Tally made is not known and
 // no voucher id is inferred), nothing is imported one by one, and a later job never sends them; Check Tally settles it
 func TestPartialBatchNeedsReview(t *testing.T) {
+	noReadBack(t) // 2.5.20 P2 off here: this test is about a part that stays needs review (r2520_test.go tests the read back)
 	td := today()
 	f := newStandTally(t)
 	f.ansi = true

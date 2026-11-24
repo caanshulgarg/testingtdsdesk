@@ -471,7 +471,7 @@ func getLedgerLines(co, ledger, from, to string, pin int) (M, error) {
 			a[i] = x
 		}
 		return M{"ok": true, "via": "copy", "vouchers": a}, nil
-	} else if !readDaysOn() {
+	} else if !directReadsOn() { // 2.5.20 review A1: a direct read, only with ReadDays true
 		// round 18 (the owner's decision of 04-Oct-2026): ReadDays off: from the copy only, never Tally; the answer
 		// says the copy does not cover the period
 		return M{"ok": true, "via": "copy", "vouchers": []any{}, "readDays": false,
