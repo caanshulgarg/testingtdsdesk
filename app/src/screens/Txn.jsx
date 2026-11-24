@@ -16,7 +16,7 @@ const STATUS = [["", "Any status"], ["ok", "In Tally"], ["warn", "Ready or held"
 function Doc({ r }) {
   if (!r.file) return "—";
   if (!r.hasFile) return <span className="note" title="The file was uploaded before documents were kept, or on another computer">{r.file.slice(0, 18)}</span>;
-  const key = r.kind === "bank" ? "st:" + r.stId : r.kind === "sale" ? "sv:" + r.id : r.id;
+  const key = r.kind === "bank" ? "st:" + r.stId : r.kind === "sale" ? "sv:" + ((r.v && r.v.docOf) || r.id) : r.id;
   return <>
     <button className="linkbtn" title={"Open " + r.file} onClick={() => txnOpenDoc(key, r.docPath, r.file)}>📎 {r.file.slice(0, 18)}</button>
     <div className="nr">{r.docPath ? <span className="tag ok" title="Anyone in the firm can open it, from any computer">in the firm account</span>
