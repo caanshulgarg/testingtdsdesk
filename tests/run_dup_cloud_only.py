@@ -384,25 +384,25 @@ with sync_playwright() as p:
     ok(vts == ["Credit Sales"], "salesBooksVts: only 'Credit Sales' is the client's sales type (%s)" % vts)
     A.evaluate("() => { const c = SL().cfg; [c.creditNoteType, c.debitNoteType] = window.__nt; if (!c.creditNoteType) delete c.creditNoteType; if (!c.debitNoteType) delete c.debitNoteType; }")
 
-    print("SALES 14e. a cash memo is a sale; an order or a delivery with a sales word is one; an order, a delivery note or challan, a purchase, a petty or expense cash memo, a proforma or a quotation never (the owner, 24-Nov-2026)")
+    print("SALES 14e. a cash memo is a sale; an order or a delivery with a sales word is one; an order, a delivery note, any challan (the owner, 24-Nov-2026: 'Delivery challan is not sales'), a purchase, a petty or expense cash memo, a proforma or a quotation never (the owner, 24-Nov-2026)")
     CM_SALE = ["Cash Memo", "Sales Cash Memo", "Sales (Cash Memo)", "CashMemo", "Home Delivery Sales", "Door Delivery Sales", "Sales (Free Delivery)", "Sales Order Invoice", "Sales Online Order", "Online Order Sales", "Sales Border",
-               # (review of 0d6a1b2e1: sales before it, sales again) a challan or a purchase word after "Sales", a delivery
-               # not in the delivery-note sense, an order invoice written "Inv"
-               "Sales Challan", "Challan Sales", "Sales Purchase", "Sales Purchases", "Sales Delivered", "Sales Deliveries", "Sales Order Inv", "Sales Order Inv.",
+               # (review of 0d6a1b2e1: sales before it, sales again) a purchase word after "Sales", a delivery not in the
+               # delivery-note sense, an order invoice written "Inv"
+               "Sales Purchase", "Sales Purchases", "Sales Delivered", "Sales Deliveries", "Sales Order Inv", "Sales Order Inv.",
                # (the owner, 24-Nov-2026) an invoice, a bill of supply, a sales delivery on its own
                "Tax Invoice", "Retail Invoice", "Bill of Supply", "Sales Delivery", "Sales - Delivery"]
     CM_NOT = ["Sales Order", "Sales Orders", "Sales Reorder", "Delivery Note", "Delivery Challan", "Sales Delivery Challan", "Sales Quotation", "Sales Memorandum", "Sales Memo", "Cash Memorandum", "Purchase Cash Memo", "Cash Memo Return",
-              "Petty Cash Memo", "Expense Cash Memo", "Purchase Invoice", "Purchases Invoice", "Purchase", "Proforma Invoice", "Pro-forma Invoice", "Delivery", "Sales Delivery Note"]
+              "Petty Cash Memo", "Expense Cash Memo", "Sales Challan", "Challan Sales", "Sales_Challan", "Challans", "Purchase Invoice", "Purchases Invoice", "Purchase", "Proforma Invoice", "Pro-forma Invoice", "Delivery", "Sales Delivery Note"]
     for i, t in enumerate(CM_SALE):
         a, st, sent = one("ZS/16%02d" % i, G["k"], sv("ZS/16%02d" % i, typ=t))
         ok(st == "intally " + t and sent == [], "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
     for i, t in enumerate(CM_NOT):
         a, st, sent = one("ZS/17%02d" % i, G["k"], sv("ZS/17%02d" % i, typ=t))
         ok(st == "posted" and sent == [[a]], "cloud copy: '%s', the same GSTIN: never the sale, posted (%s)" % (t, st))
-    for i, t in enumerate(["Cash Memo", "Door Delivery Sales", "Sales Order Invoice", "Sales Online Order", "Tax Invoice", "Sales Challan", "Sales Order Inv"]):
+    for i, t in enumerate(["Cash Memo", "Door Delivery Sales", "Sales Order Invoice", "Sales Online Order", "Tax Invoice", "Sales Order Inv"]):
         a, st, sent = own("ZS/18%02d" % i, G["k"], mine=t)
         ok(st == "intally" and sent == [], "FinCom's own: an invoice In Tally as '%s', another 'Sales' invoice of that number, the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
-    for i, t in enumerate(["Sales Order", "Delivery Challan", "Sales Quotation", "Sales Memorandum", "Purchase Invoice", "Petty Cash Memo", "Proforma Invoice"]):
+    for i, t in enumerate(["Sales Order", "Delivery Challan", "Sales Quotation", "Sales Memorandum", "Purchase Invoice", "Petty Cash Memo", "Proforma Invoice", "Sales Challan", "Challan Sales"]):
         a, st, sent = own("ZS/19%02d" % i, G["k"], mine=t)
         ok(st == "posted" and sent == [[a]], "FinCom's own: the one of that number is a '%s': never the sale, posted (%s)" % (t, st))
     cls = A.evaluate("(ts) => ts.map(t => salesTypeClasses([])(t))", CM_SALE + CM_NOT)

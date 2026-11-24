@@ -605,7 +605,8 @@ function salesDupOf(v){
 }
 // a voucher type that is never a sale, by a word of its name (spaces, "_", "-", brackets between words): a credit or
 // debit note (also "Cr Note", "Dr Note", CN, DN, a note alone), a Journal, a receipt, a payment, a contra, Rtn or Ret, a
-// petty or an expense one ("Petty Cash Memo"); or by any part of it: a delivery challan, a proforma, a self invoice
+// petty or an expense one ("Petty Cash Memo"); or by any part of it: a challan (the owner, 24-Nov-2026: "Delivery
+// challan is not sales": "Sales Challan", "Challan Sales", "Sales Delivery Challan" never), a proforma, a self invoice
 // (reverse charge, an inward supply), a return
 // ("SalesReturn", "Returnable"), a quotation or a memo ("Sales Memorandum": not in the books), but a cash memo is a sale
 // (the owner, 24-Nov-2026: "Cash Memo", "Sales Cash Memo"; a sales word as "sales" is); a purchase first ("Purchase
@@ -613,9 +614,9 @@ function salesDupOf(v){
 // "invoice" ("Inv") after it, or a home, door, online or free one with either ("Sales Order Invoice", "Sales Online
 // Order"), never alone ("Sales Order"; "Sales Border" is no order); a delivery ("Delivery", "Deliveries", not
 // "Delivered") only with a sales word ("Sales Delivery", "Door Delivery Sales"; never "Delivery Note", "Sales Delivery
-// Challan"). A challan alone is no reason ("Sales Challan"). "Credit" or "Debit" alone is a sale ("Credit Sales");
+// Challan"). "Credit" or "Debit" alone is a sale ("Credit Sales");
 // salesBooksVts and salesTypeClasses use this one test (salesNotSale, with the client's own note types)
-const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra|petty|expenses?)(?=$|[^a-z0-9])|deliver(?:y|ies)?[\s_-]*challans?|pro[\s_-]*forma|self[\s_-]*invoice|return|quotation|memo/i;
+const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra|petty|expenses?)(?=$|[^a-z0-9])|challan|pro[\s_-]*forma|self[\s_-]*invoice|return|quotation|memo/i;
 // (a note type set the same as the client's sales type is no note: never a reason to post a sale again)
 function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x || "").toLowerCase().trim(), n = l(t), m = n.replace(/cash[\s_-]*memo(?!r)/g, "cash sales");
   // (a sales word of the name itself: a cash memo is none, "Cash Memo Purchase", "Cash Memo Delivery" never a sale)
