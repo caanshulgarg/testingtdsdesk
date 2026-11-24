@@ -276,6 +276,9 @@ type TC struct {
 	// round 19 (review finding 1): a request a person started (the tray's read test, the measuring tool with ReadDays on
 	// or --old-days typed at the console): the only requests carrying a period that go while ReadDays is off
 	person bool
+	// 2.5.20 review A1: a request of the background Day Book round (keep.go step), under the 2 s stop: the only dated
+	// requests the default (no ReadDays in the settings) turns on; FinCom's direct reads stay off unless ReadDays is true
+	dayRound bool
 	// round 19: the recorder trial's time saving (trial.go): its imports are not noted as postings (no read-back, nothing
 	// for the cloud)
 	bench bool
@@ -370,6 +373,8 @@ var requestClass = map[string]string{
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	payrollImportID:    "import",
+	fixVoucherID:       "import",
+	fixLedgerID:        "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
 	ledListID: "ledgerPeriod", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
@@ -477,7 +482,11 @@ func datedRefused(tc *TC, x string) error {
 			return readsOffErr()
 		}
 	}
-	if tc.person || readDaysOn() {
+	if tc.person || directReadsOn() {
+		return nil
+	}
+	// 2.5.20 review A1: the background Day Book round's own requests under the 2 s stop go with the default (no ReadDays)
+	if tc.dayRound && tc.limitMs > 0 && tc.limitMs <= 2000 && readDaysOn() {
 		return nil
 	}
 	switch requestClass[id] {

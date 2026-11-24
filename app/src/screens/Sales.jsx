@@ -71,7 +71,7 @@ function salesCols(s, list, nSel) {
       {(v.taxPicks || []).map((t, i) => <div key={i} className="nr" data-tax-led={t.kind} title={t.why ? t.ledger + ": " + t.why : t.ledger}>{t.ledger}</div>)}</> },
     { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel hideIdle t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
       cell: (v, p) => p.editable ? <>
-        {v.postError && v.status !== "intally" && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
+        {v.postError && v.status !== "intally" && <span className="src bad" title={postCloudSay(v.postError)} data-sales-posterr="">Tally: {postCloudSay(v.postError)}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
           placeholder="Select customer ledger" aria-label={"Customer ledger for " + (v.x.number || "invoice")} onCommit={(val) => salesSetCust(v.id, val)} />
         {v.hold && v.status === "review" && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
@@ -172,7 +172,7 @@ function Detail({ v }) {
   return (
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
-      {v.postError && v.status !== "intally" && <div className="bk-alert bad">Tally: {v.postError}</div>}
+      {v.postError && v.status !== "intally" && <div className="bk-alert bad" data-sales-posterr="">Tally: {postCloudSay(v.postError)}</div>}
       {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
       {/* next-dup-cloud-only: the duplicate check's one small line (an old FinCom cloud copy, or it did not answer), on the panel only: src/js/26-sales-invoice.js salesCheckSafe */}
       {v.copyCheck && <div className="bk-alert info" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}

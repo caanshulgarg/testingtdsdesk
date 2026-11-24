@@ -9,7 +9,7 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : fn === "tally_post_owner_release" ? "174" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : fn === "tally_post_owner_release" ? "174" : "36b") + ")." : postCloudSay(m.replace(/^ERROR:\s*/i, "")));
     }
     if (typeof PostChecks === "object") PostChecks.load(cid, true);
     if (typeof PostMarks === "object") PostMarks.load(cid, true);
@@ -253,7 +253,7 @@ Object.assign(PostOwner, {
       const j = await TCloud.rpc("tally_post_owner_release", {p_job: job, p_id: String(e.id), p_why: o.why});
       if (!j || j.ok === false) throw new Error((j && j.error) || "not released");
       delete e.ownerRelease; Store.saveEntry(cid, e); toast("Released in FinCom’s cloud: it can be posted once more.");
-    } catch (err){ o.job = job; Store.saveEntry(cid, e); toast("FinCom’s cloud did not release it: " + String((err && err.message) || err).replace(/^ERROR:\s*/i, "") + ". It waits under Post to Tally › Errors."); }
+    } catch (err){ o.job = job; Store.saveEntry(cid, e); toast("FinCom’s cloud did not release it: " + postCloudSay(String((err && err.message) || err).replace(/^ERROR:\s*/i, "")).replace(/\.$/, "") + ". It waits under Post to Tally › Errors."); }
     render();
   },
   // "Not this Tally entry": the entry kept on the line (notTally), never matched again; the line waits for a person
