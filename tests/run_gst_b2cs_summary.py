@@ -8,7 +8,7 @@ Rs 5,93,206.01, was flagged on GSTR-1 > What to fix as "Invoice number too long"
   2. a consolidated B2C entry goes in B2CS even when it is inter-state and above the B2C large limit: (a) by itself when
      its number is a range and the party has no GSTIN; (b) by the party ledger's switch "Consolidated B2C (summary of many
      sales)" (b.map[ledger].b2cSum, FinCom's own, kept over a refresh of the ledger list); (c) per entry on What to fix
-     ("This is a summary of many B2C sales", b.gstPosFix[id].b2cs, or "Not a summary" to undo the range rule); the
+     ("Mark as a summary of many B2C sales", b.gstPosFix[id].b2cs, or "Not a summary" to undo the range rule); the
      entry says which rule made it B2CS;
   3. table 13: a range number counts the range's documents (155 to 182 = 28) in its series;
   4. the year's grid and What to fix count the same (GSTR.errorsFor / errorChecks).
@@ -49,7 +49,7 @@ COUNTS = "(a) => { const e = GSTR.errorsFor(a[0], a[1]), l = GSTR.errorChecks(a[
 
 try:
     with sync_playwright() as p:
-        br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
+        br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}, device_scale_factor=2 if os.environ.get("TDSDESK_SHOTS") else 1); pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500)
         base = pg.evaluate(COUNTS, [YM, REG])
@@ -129,7 +129,15 @@ try:
         pg.click('#app [data-cell="GSTR-1|%s"]' % YM); pg.wait_for_timeout(800)
         pg.evaluate("(w) => { const g = Array.from(document.querySelectorAll('#app [data-fix-group]')).find(x => x.dataset.fixGroup === w); if (g && !g.querySelector('[data-fix-row]')) g.querySelector('[data-fix-toggle]').click(); }", NUMCHK[0]); pg.wait_for_timeout(300)
         btn = pg.evaluate("(id) => !!document.querySelector('#app [data-fix-row][data-id=\"' + id + '\"] [data-b2cs-mark]')", l)
-        ok(btn, "What to fix: the B2C large row offers 'This is a summary of many B2C sales'")
+        ok(btn, "What to fix: the B2C large row offers 'Mark as a summary of many B2C sales'")
+        # next-fix-false-errors (the owner, 23-Nov-2026, read "This is a summary of many B2C sales" under a B2B invoice as
+        # FinCom saying it is one): the button says what it does
+        bt = pg.evaluate("(id) => (document.querySelector('#app [data-fix-row][data-id=\"' + id + '\"] [data-b2cs-mark]') || {}).innerText || ''", l)
+        ok(bt == "Mark as a summary of many B2C sales", "the button reads as an action, not a status (%s)" % bt)
+        if os.environ.get("TDSDESK_SHOTS"):
+            os.makedirs(os.environ["TDSDESK_SHOTS"], exist_ok=True)
+            pg.locator('#app [data-fix-row][data-id="%s"]' % l).first.scroll_into_view_if_needed(); pg.wait_for_timeout(300)
+            pg.screenshot(path=os.path.join(os.environ["TDSDESK_SHOTS"], "gst-fix-mark-summary.png"))
         sm = pg.evaluate("() => Array.from(document.querySelectorAll('#app [data-b2cs-sum] [data-b2cs-row]')).map(r => [r.dataset.b2csRow, r.dataset.why, r.innerText.replace(/\\s+/g, ' ')])")
         ok(any(x[0] == b and x[1] == "range" and "range" in x[2] for x in sm) and any(x[0] == g and x[1] == "entry" for x in sm), "What to fix lists the entries reported as B2C summaries, each with the rule that made it so (%s)" % sm)
         # the other entry marked "not a summary": it is B2C large with its number errors, so the month keeps errors (the tab stays)
