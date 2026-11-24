@@ -56,7 +56,24 @@ export const SPECIAL = { s111A: 0.2, s112A: 0.125, s112AExempt: 125000, s112: 0.
 export const P44AD = { limit: 20000000, limitLowCash: 30000000, cashShare: 0.05, digital: 0.06, other: 0.08, src: "Section 44AD(1) and its proviso (6% of receipts by account payee cheque / draft / ECS / other prescribed electronic modes received by the due date of 139(1)); section 44AB(a) proviso (Rs 3 crore when cash receipts are not more than 5%)" };
 export const P44ADA = { limit: 5000000, limitLowCash: 7500000, cashShare: 0.05, rate: 0.5, src: "Section 44ADA(1) (50%; Rs 75 lakh when cash receipts are not more than 5%, Finance Act 2023)" };
 export const P44AE = { heavyKg: 12000, perTonMonth: 1000, perVehicleMonth: 7500, maxVehicles: 10, src: "Section 44AE(1), (2): Rs 1,000 per ton of gross vehicle weight a month for a heavy goods vehicle, Rs 7,500 a month for any other; not more than ten goods carriages" };
-export const ITR4_MAX_INCOME = 5000000;      // ITR-4 (Sugam): total income not more than Rs 50 lakh (schema maximum 51,25,000 with 112A)
+// ITR-1 (Sahaj): who may file it (pick.js). Rule 12(1)(a) and its proviso, as in the AY 2026-27 form's instructions: a
+// resident individual with total income up to Rs 50 lakh, and not one who is a director in a company, has held unlisted
+// equity shares at any time during the previous year, or has agricultural income above Rs 5,000
+export const ITR1 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(a) of the Income-tax Rules and its proviso (AY 2026-27 ITR-1 instructions): not for a director in a company, one who held unlisted equity shares at any time in the previous year, or agricultural income above Rs 5,000" };
+// ITR-4 (Sugam): who may file it (pick.js). Rule 12(1)(b) and its proviso, as in the AY 2026-27 form's instructions and
+// the portal's ITR-4 FAQ: a resident individual, HUF or firm (other than an LLP) with business or professional income on
+// a presumptive basis (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not an individual or HUF who is a director
+// in a company; not an individual, HUF or firm that has held unlisted equity shares at any time during the previous
+// year; not one with agricultural income above Rs 5,000. The proviso's other bars for ITR-1 and ITR-4 (pick.js models
+// those FinCom has data for): not ordinarily resident or non-resident, assets (or income) outside India, TDS under
+// section 194N, a loss brought forward or to be carried forward
+export const ITR4 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(b) of the Income-tax Rules and its proviso (AY 2026-27 ITR-4 instructions; the portal's ITR-4 FAQ): for a resident individual, HUF or firm other than an LLP with presumptive income (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not for an individual or HUF who is a director in a company, nor for an individual, HUF or firm that held unlisted equity shares at any time in the previous year, nor for agricultural income above Rs 5,000; nor for assets outside India, TDS under section 194N or a loss brought forward" };
+// ITR-4's house properties, by assessment year, as each year's schema allows them (IncomeDeductions/PropertyDetails
+// maxItems): AY 2026-27 (ITR-4_2026_Main_V1.1) two, the portal's FAQ the same; the years before took one (a year whose
+// schema is not checked here: one, the stricter)
+export const ITR4_HOUSES = { "2026-27": 2 };
+export const itr4Houses = (ay) => ITR4_HOUSES[ay || AY] || 1;
+export const ITR4_MAX_INCOME = ITR4.maxIncome; // total income not more than Rs 50 lakh (schema maximum 51,25,000 with 112A)
 
 // Section 40(b): partners' remuneration and interest (Finance (No. 2) Act 2024, from AY 2025-26)
 export const S40B = { first: 600000, firstMin: 300000, firstRate: 0.9, restRate: 0.6, interest: 0.12, src: "Section 40(b)(iv) and (v) as amended by the Finance (No. 2) Act 2024: on the first Rs 6 lakh of book profit or a loss, Rs 3 lakh or 90% of book profit, whichever is more; on the balance 60%; interest at most 12% simple a year" };

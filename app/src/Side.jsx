@@ -259,10 +259,11 @@ export default function Side() {
   // up or down. The date line is fixed at the sidebar's foot (steady.css)
   return (
     <div key={home ? "firm" : "client"} className="side-tree" style={{ display: "contents" }}>
-      <div className="side-brand"><span className="side-mark" aria-hidden="true">F</span><span className="side-name">FinCom</span>
+      {/* the brand and the client card stay at the top while the menu scrolls under them (src/css/app.css, .side-top) */}
+      <div className="side-top"><div className="side-brand"><span className="side-mark" aria-hidden="true">F</span><span className="side-name">FinCom</span>
         <button type="button" className="side-fold" onClick={fold} aria-label={folded ? "Show the menu's words" : "Fold the menu to its icons"} title={folded ? "Show the menu's words" : "Fold the menu to its icons"}>
           {folded ? <PanelLeftOpen width={16} height={16} strokeWidth={1.75} aria-hidden="true" /> : <PanelLeftClose width={16} height={16} strokeWidth={1.75} aria-hidden="true" />}</button></div>
-      {open && <ClientCard open={open} home={home} />}
+      {open && <ClientCard open={open} home={home} />}</div>
       {home && <div className="side-firm-label">Firm</div>}
       <Groups groups={groups} />
       {/* the phone bar's fifth: More (hidden on a computer, where every item shows) */}
