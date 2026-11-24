@@ -123,8 +123,9 @@ function StepBanner({ book, onChecked }) {
     const b = book.build || {}, of = +b.of || 0, done = Math.min(+b.done || 0, of), stuck = +b.stuck || 0;
     const sofar = of && done ? " So far " + COUNT.format(done) + " of " + COUNT.format(of) + " entries are in." : "";
     tone = "info";
-    // the catch-up's last run for this book failed: said plainly, without alarm (it is tried again every 3 minutes)
-    if (b.failed) { head = "Building stopped: " + String(b.failed.why || "an error").split("\n")[0].replace(/[.\s]+$/, "") + "."; text = "FinCom is trying again." + sofar; }
+    // the catch-up's last run for this book failed: plain words, no alarm and never the error itself (it stays in
+    // fb_status build.failed.why for staff); the catch-up tries again every 3 minutes
+    if (b.failed) { head = "Building paused."; text = "FinCom carries on by itself in a few minutes; nothing for you to do." + sofar; }
     else if (stuck && of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = COUNT.format(stuck) + (stuck === 1 ? " entry" : " entries") + " could not be copied yet; FinCom is trying again. This page fills in by itself."; }
     else if (of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = "FinCom is copying this client’s books from " + src + ", a few thousand entries every 3 minutes. This page fills in by itself."; }
     else { head = "Being built."; text = "FinCom starts copying this client’s books from " + src + (of ? " (" + COUNT.format(of) + " entries)" : "") + " within 3 minutes. This page fills in by itself."; }
@@ -186,7 +187,7 @@ function Trial({ book, openLedger }) {
   return <section className="fbk-card" data-fb-tb="">
     <div className="fbk-card-head">
       <label className="fbk-field">As on<input type="date" value={on} min={book.from} onChange={(e) => e.target.value && setOn(e.target.value)} data-fb-on="" /></label>
-      {tb && <span className="fbk-chip" data-tone={tb.ties ? "ok" : "warn"} data-fb-ties={tb.ties ? "1" : "0"}>{tb.ties ? "Debit = Credit" : "Debit and Credit differ by " + rs(Math.abs(tb.dr - tb.cr))}</span>}
+      {tb && book.state !== "setting_up" && <span className="fbk-chip" data-tone={tb.ties ? "ok" : "warn"} data-fb-ties={tb.ties ? "1" : "0"}>{tb.ties ? "Debit = Credit" : "Debit and Credit differ by " + rs(Math.abs(tb.dr - tb.cr))}</span>}
     </div>
     {st.error ? <p className="fbk-banner" data-tone="bad">{st.error}</p> : !tb ? <p className="fbk-note">Working out the trial balance…</p> : <>
       <p className="fbk-note">{"Worked out just now from " + INRF.format(tb.entries).replace(".00", "") + " posted entries and the openings at " + dshow(tb.from) + "."}</p>

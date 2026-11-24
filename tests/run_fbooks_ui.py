@@ -16,11 +16,14 @@ staff / a look-only member for check 6). The page itself has nothing test-only.
      Books" (owner decision 23-Nov-2026) and it sets it up at once (migration 218): "Being built", then "Building: n of
      m entries" as the 3-minute catch-up builds it, then the book by itself, with no error and no warning. While it is
      built (review of 24-Nov-2026): one look-again that fails keeps the figures shown and the page keeps looking; a
-     hidden tab does not look again (it does at once when shown); a build that stops says so plainly, with no alarm
-     ("Building stopped: <why>. FinCom is trying again.")
+     hidden tab does not look again (it does at once when shown); a build that stops says so in plain words, with no
+     alarm and no error text ("Building paused. FinCom carries on by itself in a few minutes; nothing for you to do. So
+     far n of m entries are in."; the error itself is kept in fb_status for staff, never shown); while it is built the
+     trial balance shows no "Debit = Credit" (nor a difference) on the part-built figures
   7. a phone's width: nothing scrolls sideways; no page error anywhere; the page is its own lazy chunk, which keeps the
      MIT notice of the ported rules; no test hook in the built app
-FB_SHOTS=<dir>: also saves the design screenshots there (deviceScaleFactor 2, 1440 and 390 wide).
+FB_SHOTS=<dir>: also saves the design screenshots there (deviceScaleFactor 2, 1440 and 390 wide); FB_SCHEME=dark shows
+them in the dark colour scheme, FB_NEWLOOK=1 with the "New look" on.
 Run on app/dist-test (or TDSDESK_SITE). PG_PORT (55622), FB_PORT (8396)."""
 import os, sys, json, threading, functools, http.server, glob
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -113,7 +116,8 @@ try:
         br = p.chromium.launch()
         errs = []
         def page(w, h=1000):
-            ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, timezone_id="Asia/Kolkata")
+            ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, timezone_id="Asia/Kolkata", color_scheme=os.environ.get("FB_SCHEME") or "light")
+            if os.environ.get("FB_NEWLOOK"): ctx.add_init_script("try { localStorage.setItem('fincom:newlook:local', 'on'); } catch (e) {}")
             pg = ctx.new_page(); pg.on("pageerror", lambda e: errs.append(str(e)[:200])); return ctx, pg
         ctx, pg = page(1440)
         start(pg)
@@ -210,6 +214,10 @@ try:
         waitfor(lambda: "Building: 12 of" in step())
         ban = step()
         ok("Building: 12 of" in ban and "fills in by itself" in ban and pg.locator("[data-fbooks] [role=alert]").count() == 0, "6. the page shows how far, by itself: '%s'" % ban.split("\n")[0][:120])
+        settle(pg)
+        tbt = text(pg, "[data-fb-tb]")
+        ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-ties]").count() == 0 and "Debit = Credit" not in tbt and "differ by" not in tbt,
+           "6. while it is built the trial balance shows no 'Debit = Credit' (nor a difference) on the part-built figures")
         shot(pg, "p1-13-building", full=False)
         # a hidden tab does not look again; shown again, it looks at once
         vis = "(v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); Object.defineProperty(document, 'hidden', { configurable: true, get: () => v === 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); }"
@@ -231,11 +239,17 @@ try:
         db.sql("""create function zz_fail_trg() returns trigger language plpgsql as $z$ begin raise exception 'made-up failure for the test'; end $z$;
           create trigger zz_fail before update on fb_mirror_state for each row when (new.book_id = '%s') execute function zz_fail_trg();""" % bk9)
         db.sql("call fb_mirror_catchup_run(5000)")
-        pg.clock.fast_forward(31000); waitfor(lambda: "Building stopped" in step())
+        pg.clock.fast_forward(31000); waitfor(lambda: "Building paused" in step())
         ban = step()
-        ok("Building stopped: made-up failure for the test. FinCom is trying again." in ban and pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.tone") == "info"
+        why9 = ((json.loads(db.one("set role authenticated; select fb_status('c9')", STAFF))["books"][0].get("build") or {}).get("failed") or {}).get("why") or ""
+        ok("made-up failure for the test" in why9, "6. ... the error itself is kept in fb_status for staff ('%s')" % why9[:80])
+        ok("Building paused. FinCom carries on by itself in a few minutes; nothing for you to do. So far 17 of " in ban and " entries are in." in ban
+           and pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.tone") == "info"
            and pg.locator("[data-fbooks] [role=alert]").count() == 0 and pg.locator("[data-fb-error]").count() == 0,
-           "6. a build that stops says so plainly, no alarm: '%s'" % ban.split("\n")[0][:120])
+           "6. a build that stops says so in plain words, no alarm: '%s'" % ban.split("\n")[0][:160])
+        whole = text(pg, "[data-fbooks]")
+        bad = [w for w in ("made-up failure", "stopped", "error", "Error", "exception", "failed", "trigger", "SQL", "ERROR") if w in whole]
+        ok(not bad and pg.locator("[data-fb-ties]").count() == 0, "6. ... and no error text anywhere on the page%s" % (" (found: " + ", ".join(bad) + ")" if bad else ""))
         shot(pg, "p1-15-build-stopped", full=False)
         db.sql("drop trigger zz_fail on fb_mirror_state; drop function zz_fail_trg();")
         db.sql("call fb_mirror_catchup_run(5000)")   # the timer's next run finishes it
