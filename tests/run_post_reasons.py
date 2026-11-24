@@ -61,6 +61,24 @@ out.reasons = {
   notcreated: [R("Tally did not create it.")],
   many: [R("Waiting for Tally: GARG SHEKHAR & COMPANY is open in more than one Tally — close it in all but one, or choose your Tally in FinCom > Settings > Tally Bridge; it will be posted automatically")]
 };
+// migration 54 and its successors (tally_post_reroute, 174, 185): a posting meant for another Tally computer, never "Tally
+// said", never a computer or a Windows user named
+const CO_ = "Demo Builders Pvt Ltd", NOT = "Not posted into " + CO_ + ": ";
+const TAIL = ", and no other bridge of the same Windows user on that computer may post. ";
+out.elsewhere = [
+  NOT + "the computer it was for (PC-DEMO1) has no FinCom Bridge that may post just now (each is set to Changes only or only reads Tally). Ask the firm's owner to make one of its bridges the main one or switch Changes only off for it (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post.",
+  NOT + "the computer it was for (a computer removed from FinCom) has no FinCom Bridge that may post just now (each is set to Changes only or only reads Tally). Ask the firm's owner to make one of its bridges the main one or switch Changes only off for it (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post.",
+  NOT + "the FinCom Bridge it was for (PC-DEMO1 · DEMO\\asha) is set to Changes only" + TAIL + "Ask the firm's owner to switch Changes only off for that bridge (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post.",
+  NOT + "the FinCom Bridge it was for (PC-DEMO1 · DEMO\\asha) has not been heard from on its computer for a long time" + TAIL + "Start that FinCom Bridge on its computer, then Retry; or post these entries again so FinCom chooses a bridge that may post.",
+  NOT + "the FinCom Bridge it was for (go-aaa111) only reads Tally now: another bridge of the same Windows user is the main one on its computer" + TAIL + "Make that bridge the main one again (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post.",
+  NOT + "the FinCom Bridge it was for (PC-DEMO1 · DEMO\\asha) is in test mode" + TAIL + "Switch that bridge out of test mode, then Retry; or post these entries again so FinCom chooses a bridge that may post.",
+  "Moved to PC-DEMO1 · DEMO\\asha (the same Windows user, the same computer): the bridge it was for can no longer post",
+  "Queued: posts by itself when " + CO_ + " is opened in Tally on PC-DEMO1 (D:\\Tally\\Data) with FinCom Bridge"].map(R);
+out.startedelsewhere = [
+  "Started on PC-DEMO1 · DEMO\\asha, and that FinCom Bridge can no longer post; it is never moved to another bridge (part of it may be in Tally). Make that bridge able to post again (the main bridge again, or Changes only off), or check in Tally by hand: Mark posted what is there, then post the rest again.",
+  "Started on the computer that took it, and that FinCom Bridge can no longer post; it is never moved to another bridge (part of it may be in Tally). Make that bridge able to post again (the main bridge again, or Changes only off), or check in Tally by hand: Mark posted what is there, Cancel this posting, then post the rest again.",
+  "Held: PC-DEMO1 · DEMO\\asha was posting this and can no longer post (not the main bridge any more, or Changes only); how far it got is not known: held for checking, not sent again."].map(R);
+out.nolink = [NOT + "the link of this client no longer says where " + CO_ + " is kept in Tally (its Tally identity and data folder, read by a FinCom Bridge 2.x), or posting into it is not allowed. Open " + CO_ + " in Tally on a computer with FinCom Bridge and check the client's link on the Tally page, then Retry."].map(R);
 const un = R("Kuch aur hua: 0x80004005"); const un2 = R("Kuch aur hua: 0x80004005");
 out.unmapped = {r: un, logged: logged.length, audited: audited.length};
 out.table = POST_REASONS.map(r => r.id);
@@ -151,6 +169,14 @@ for k, (kind, again, reason, fix) in WANT.items():
     good = got and all(g and g["id"] == k and g["kind"] == kind and g["again"] is again and reason.lower() in g["reason"].lower() and fix.lower() in g["fix"].lower() for g in got)
     ok(good, "D. %-11s %d real message(s) -> '%s' / fix '%s' / post again %s (%s)" % (k, len(got), reason, fix, again, [(g or {}).get("id") for g in got] if not good else (got[0] or {}).get("reason")))
 ok(o["reasons"]["ledger"][0]["reason"] == "The ledger “Professional Fees” is not in Tally", "D. the ledger is named in the reason (%s)" % o["reasons"]["ledger"][0]["reason"])
+for k, (kind, again, reason, fix) in {"elsewhere": ("stopped", True, "meant for another Tally computer", "from the computer where this company is open"),
+        "startedelsewhere": ("stopped", False, "started on another Tally computer", "Check Tally first"),
+        "nolink": ("stopped", True, "where this company is kept in Tally", "check the client's link")}.items():
+    got = o[k]
+    bad = [g for g in got if not (g and g["id"] == k and g["kind"] == kind and g["again"] is again and reason.lower() in g["reason"].lower() and fix.lower() in g["fix"].lower())]
+    ok(not bad, "D. %s: %d message(s) of migration 54 and after -> '%s' / fix '%s' (%s)" % (k, len(got), reason, fix, [(g or {}).get("reason") for g in bad] or got[0]["reason"]))
+    names = [g["reason"] + " " + g["fix"] for g in got if re.search(r"PC-DEMO1|asha|go-aaa111|Tally said|D:\\\\|^Tally\b", g["reason"] + " " + g["fix"])]
+    ok(not names, "D. %s: no computer, Windows user or bridge named, and Tally not blamed (%s)" % (k, names))
 u = o["unmapped"]
 ok(u["r"]["id"] == "unmapped" and u["r"]["reason"] == "Tally said: Kuch aur hua: 0x80004005" and u["r"]["again"] is False, "D. unmapped: 'Tally said: <message>', not posted again until read (%s)" % u["r"]["reason"])
 ok(u["logged"] == 1 and u["audited"] == 1, "D. unmapped: logged once to the console and once to the activity log, not twice (%s, %s)" % (u["logged"], u["audited"]))

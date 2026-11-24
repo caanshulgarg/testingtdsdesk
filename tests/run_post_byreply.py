@@ -203,14 +203,16 @@ with sync_playwright() as p:
     # posting's pre-check for bills already in Tally then says "check not possible" and the posting goes on (FinCom's own
     # checks stand: its records and the id lock); it never fails the posting
     E("""() => { window.__mk("f1", "Alpha Consultants", "F/1", 1500); window.__tcOld = window.tallyCall; window.__postedIds = [];
-      window.tallyCall = async (co, path) => { if (/^\/vouchers/.test(path)) throw new Error("Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."); return window.__tcOld(co, path); };
+      window.__pathsF = []; window.tallyCall = async (co, path) => { window.__pathsF.push(path); if (/^\/vouchers/.test(path)) throw new Error("Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."); return window.__tcOld(co, path); };
       window.__bpOld = Bridge.post; Bridge.post = async (p) => { window.__postedIds = p.vouchers.map(v => v.id);
         return {ok: true, company: p.company, results: p.vouchers.map(v => ({id: v.id, ok: true, byReply: true, verified: false, vchId: "26400", batchN: 1, batchEnd: "26400", state: "posted", created: 1}))}; }; }""")
     E("() => postBillsToTally(['f1'])"); pg.wait_for_timeout(1200)
     rf = E("(() => ({ids: window.__postedIds, err: (S.billPost && S.billPost.error) || '', exp: !!D().entries.f1.exportedAt, note: (S.billPost && S.billPost.checkNote) || ''}))()")
     E("() => { window.tallyCall = window.__tcOld; Bridge.post = window.__bpOld; }")
     ok(rf["ids"] == ["f1"] and not rf["err"] and rf["exp"], "(f) with reading off on the bridge, the pre-check is skipped and the bill is posted (%s)" % rf)
-    ok("could not be checked" in rf["note"], "(f) and the result says the check against Tally could not be made (%s)" % rf["note"])
+    # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow"): Tally is never read before posting (FinCom's cloud
+    # copy only) and nothing is said when the check is not made
+    ok(not rf["note"] and not any(re.match(r"/vouchers", p) for p in E("window.__pathsF || []")), "(f) Tally not read before posting; nothing said (%s)" % rf["note"])
     # next-post-queue-anyway (review H1, plan item A): an entry held by a posting still going on in FinCom's cloud (waiting
     # for Tally, or an earlier posting has it) is NOT failed: the bill is not sent back to review, the bank line keeps its
     # release, and auto-posting reads it as queued
@@ -246,7 +248,7 @@ with sync_playwright() as p:
     g1 = E("(() => { const b = B(), r = b.rows.find(x => x.id === 's1-2'), r1 = b.rows.find(x => x.id === 's1-1'), rep = b.postReport || {}; return {gone: b.gone ? b.gone.ids : null, st: r.state, s1: r1.state, sent: window.__cpRun, note: rep.checkNote || '', wide: !!lsGet(wideCheckKey()), dup: !!S.dupFind}; })()")
     ok(not g1["gone"] and g1["s1"] == "sent", "(g1) a copy that does not cover the dates marks no posted line as no longer in Tally (%s)" % g1)
     ok(g1["sent"] == ["s1-2"] and g1["st"] == "sent" and not g1["dup"], "(g1) the ready line is posted (%s)" % g1)
-    ok("could not be checked" in g1["note"] and not g1["wide"], "(g1) the report says Tally could not be checked, and the once-per-statement check is not taken as done (%s)" % g1)
+    ok(not g1["note"] and not g1["wide"] and not any(re.match(r"/(ledgerlines|vouchers|tags)", p) for p in E("window.__paths")), "(g1) Tally not read before posting, nothing said, and the once-per-statement check is not taken as done (next-dup-cloud-only) (%s)" % g1)
     E("() => { S.view = 'company'; S.tab = 'bank'; render(); }"); pg.wait_for_timeout(300)
     E("() => findTallyDuplicates()"); pg.wait_for_timeout(800)
     g2 = E("(() => ({nc: (S.dupFind && S.dupFind.notChecked) || '', wide: !!lsGet(wideCheckKey()), txt: (document.querySelector('#app') || document.body).innerText}))()")
