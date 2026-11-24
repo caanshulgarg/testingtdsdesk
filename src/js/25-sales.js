@@ -525,6 +525,12 @@ function salesProblemsNow(v, lines){
   }
   return p;
 }
+// every GST rate there is (the usual ones, and 0.1% to a merchant exporter, 1% / 1.5% / 6% / 7.5%), for the items check
+const GST_ALL_RATES = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40];
+function salesRateOk(it){
+  const r = num(it.gstRate), t = num(it.taxable), heads = ["igst", "cgst", "sgst"].filter(h => num(it[h]));
+  return GST_ALL_RATES.some(R => Math.abs(r - R) <= 0.05 || (heads.length > 0 && heads.every(h => Math.abs(num(it[h]) - t * R / (h === "igst" ? 100 : 200)) <= 0.02)));
+}
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
   if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)
@@ -567,9 +573,11 @@ function invoiceProblems(v){
   if (v.refused) p.push("Refused by Tally" + (v.refused.single ? " (sent on its own)" : "") + ": " + (v.refused.hint || v.refused.said || "Tally created nothing"));
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
-  // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong) is never posted
-  const odd = Array.from(new Set((x.items || []).filter(it => num(it.taxable) || num(it.qty)).map(it => num(it.gstRate)).filter(r => !SALES_RATES.includes(r)))).sort((a, b) => a - b);
-  if (odd.length) p.push("GST at " + odd.map(r => r + "%").join(" and ") + " is not a GST rate: check the rates on the sheet or the items");
+  // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong) is never posted. (Review of
+  // b2a451774) every GST rate counts, not only the usual list; an item within 0.05% of one (17.99%), or whose own tax is
+  // that rate's to two paise a head (a line of 1.30), is at it
+  const odd = Array.from(new Set((x.items || []).filter(it => num(it.taxable) || num(it.qty)).filter(it => !salesRateOk(it)).map(it => num(it.gstRate)))).sort((a, b) => a - b);
+  if (odd.length) p.push("GST at " + odd.map(r => r + "%").join(" and ") + (odd.length > 1 ? " are not usual rates" : " is not a usual rate") + ": check the rates on the sheet or the items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
   // (two not yet posted of one number and year: one is a mistake; one already posted or In Tally holds nothing)
   const dup = salesOfNo(x.number).find(o => o.id !== v.id && !["ignored", "posted", "intally"].includes(o.status) && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));

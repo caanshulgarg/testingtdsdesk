@@ -217,6 +217,13 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   ok(w.hold === "SubTotal cannot be split by GST rate: the rows carry tax but the sheet gives no rate. Check the invoice in Zoho", "A2 with no rate on the rows: held, said plainly (" + both(w) + ")");
   w = rd(HD2, a2(true, "13500.00"))[0] || {};
   ok(w.hold === "SubTotal 13500.00 does not match the taxable values worked out from each GST rate (13000.00). Check the invoice in Zoho", "A2 whose rates do not add up to SubTotal: held (" + both(w) + ")");
+  // (review of b2a451774) a nil-rated row the sheet gives a rate (0%) is a rate of its own: it takes what is left of
+  // SubTotal. SubTotal 10,000 less 1,000 off: 5,400 at 5% (tax 270) and 3,600 nil
+  w = rd(HD2, [row({no: "C1", v: {cgst: "135.00", sgst: "135.00", "cgstrate%": "2.5", "sgstrate%": "2.5", subtotal: "10000.00", total: "9270.00", entitydiscountamount: "1000.00"}}),
+    row({no: "C1", v: {cgst: "0.00", sgst: "0.00", "cgstrate%": "0", "sgstrate%": "0", subtotal: "10000.00", total: "9270.00", entitydiscountamount: "1000.00"}})])[0] || {};
+  ok(its(w) === "0:3600:0,5:5400:270" && w.taxable === 9000 && w.check.ok && !w.hold, "C: 5% and a nil row, SubTotal and a discount: 5,400 at 5% and 3,600 nil, never one line at 3% (" + both(w) + ")");
+  w = rd(HD2, [row({no: "C2", v: {cgst: "135.00", sgst: "135.00", "cgstrate%": "2.5", "sgstrate%": "2.5", subtotal: "5400.00", total: "5670.00"}})])[0] || {};
+  ok(!its(w) && w.taxable === 5400 && w.rate === 5 && w.check.ok && !w.hold, "one row at 5%: one line (" + both(w) + ")");
   // a saved mapping of SubTotal on a header that has Item Total: Item Total
   const zfp2 = F.fingerprint(HD, "Invoice"), sv = (map) => { co.sheetFormats = [{id: "sv", name: "Mine", side: "sales", fp: zfp2, cols: HD.length, headers: HN, map, transforms: {date: "ymd", groupByNo: true}}]; return F.find(HD, "Invoice", "c1", "sales").fmt; };
   const s7 = [row({no: "S7", v: {itemtotal: "6000.00", cgst: "150.00", sgst: "150.00", subtotal: "13000.00", total: "14560.00"}}), row({no: "S7", v: {itemtotal: "7000.00", cgst: "630.00", sgst: "630.00", subtotal: "13000.00", total: "14560.00"}})];
@@ -233,10 +240,12 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   ok(fb.map.total === "total" && w.total === 1180 && w.check.ok, "saved total = Balance: the rule's Total (" + JSON.stringify(fb.map) + both(w) + ")");
   fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", cess: "total"});
   ok(fb.map.cess === "cess", "an invoice-level column for another field (cess = Total): not read, the rule's CESS instead (" + JSON.stringify(fb.map) + ")");
-  // the fill-in: one tax column (it may carry the cess): no CESS added; the full tax in one head: no other head added
+  // (review of b2a451774, E) a saved single tax column (it carries the cess too): Zoho's own CGST / SGST / IGST / CESS
+  // columns are read instead, so the cess is never put in CGST + SGST (400 as 200 + 200 at 40%)
   fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", tax: "itemtaxamount", total: "total"});
   w = rd(HD, [row({no: "S1", v: {itemtotal: "1000.00", cgst: "140.00", sgst: "140.00", cess: "120.00", itemtaxamount: "400.00", subtotal: "1000.00", total: "1400.00"}})], fb)[0] || {};
-  ok(!fb.map.cess && !fb.map.cgst && !fb.map.igst && w.check.ok, "saved one tax column: no CESS / CGST / SGST / IGST filled in; adds up (" + JSON.stringify(fb.map) + both(w) + ")");
+  ok(!fb.map.tax && fb.map.cgst === "cgst" && fb.map.sgst === "sgst" && fb.map.igst === "igst" && fb.map.cess === "cess" && w.cgst === 140 && w.sgst === 140 && w.cess === 120 && w.rate === 28 && w.check.ok,
+    "saved one tax column: Zoho's CGST 140 + SGST 140 at 28% and CESS 120 read instead (" + JSON.stringify(fb.map) + both(w) + JSON.stringify([w.cess, w.rate]) + ")");
   fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", igst: "itemtaxamount", total: "total"});
   ok(!fb.map.cgst && !fb.map.sgst && fb.map.igst === "itemtaxamount", "saved the full tax in IGST: no CGST / SGST filled in (" + JSON.stringify(fb.map) + ")");
   co.sheetFormats = [];

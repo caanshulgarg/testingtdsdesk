@@ -18,7 +18,7 @@ const {load, HTML} = require("./harness");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "INR", "money", "xesc", "GSTIN_RE", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_STATES", "SALES_RATES", "stateOfGstin", "fyLabel", "rateTag",
   "salesOwnGstins", "salesPan", "salesGstinOfPan", "salesOwnStates", "salesIsOwn", "salesSeriesKeys", "salesRegOf", "salesLearnReg",
-  "salesTotals", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
+  "salesTotals", "GST_ALL_RATES", "salesRateOk", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
   "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
   "inv", "blankItem", "salesIrnLocked", "startDraft", "recalcDraft", "draftProblems", "saveDraft", "salesSetField", "salesSetKind", "EINV"];
 const {ctx, x} = load(HTML, NAMES);
@@ -55,7 +55,19 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
 
   // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong): held, said in plain words
   const odd = add({taxable: 1800, cgst: 93.15, sgst: 93.15, total: 1986.3, items: [it(900, 16.2), it(900, 4.5)]});
-  ok(odd.status !== "ready" && odd.problems.some(p => p === "GST at 4.5% and 16.2% is not a GST rate: check the rates on the sheet or the items"), "items at 16.2% and 4.5%: held, said plainly (" + JSON.stringify(odd.problems) + ")");
+  ok(odd.status !== "ready" && odd.problems.some(p => p === "GST at 4.5% and 16.2% are not usual rates: check the rates on the sheet or the items"), "items at 16.2% and 4.5%: held, said plainly (" + JSON.stringify(odd.problems) + ")");
+  // (review of b2a451774) real GST rates that are not FinCom's usual list (0.1%, 1%, 1.5%, 6%, 7.5%) are never held, nor
+  // a rate a sheet rounded (17.99%); 16.2% alone is
+  const two = (a, b) => { const t = Math.round(1000 * a) / 100 + Math.round(1000 * b) / 100; return {taxable: 2000, cgst: r2(t / 2), sgst: r2(t - r2(t / 2)), total: r2(2000 + t), items: [it(1000, a), it(1000, b)]}; };
+  const r2 = (v) => Math.round(v * 100) / 100;
+  [[0.1, 0], [1, 18], [1.5, 3], [6, 18], [7.5, 12]].forEach(([a, b]) => { const v = add(two(a, b));
+    ok(!v.problems.some(p => /check the rates on the sheet/.test(p)), "items at " + a + "% and " + b + "%: a GST rate, not held (" + JSON.stringify(v.problems) + ")"); });
+  const r1799 = add({taxable: 2000, cgst: 115, sgst: 115, total: 2230, items: [it(1000, 17.99), it(1000, 5)]});
+  ok(!r1799.problems.some(p => /check the rates on the sheet/.test(p)), "an item at 17.99% (a sheet's rounding): 18%, not held (" + JSON.stringify(r1799.problems) + ")");
+  const tiny = add({taxable: 6, cgst: 0.54, sgst: 0.54, total: 7.08, items: [it(1.3, 18.46, {cgst: 0.12, sgst: 0.12, tax: 0.24}), it(4.7, 18, {cgst: 0.42, sgst: 0.42, tax: 0.84})]});
+  ok(!tiny.problems.some(p => /check the rates on the sheet/.test(p)), "a line of 1.30 whose tax 0.12 + 0.12 is 18% to the paisa: not held (" + JSON.stringify(tiny.problems) + ")");
+  const r162 = add({taxable: 2000, cgst: 106, sgst: 106, total: 2212, items: [it(1000, 16.2), it(1000, 5)]});
+  ok(r162.problems.includes("GST at 16.2% is not a usual rate: check the rates on the sheet or the items"), "an item at 16.2%: held (" + JSON.stringify(r162.problems) + ")");
   const std = add({taxable: 1000, cgst: 7.5, sgst: 7.5, total: 1015, items: [it(500, 3), it(500, 0)]});
   ok(!std.problems.some(p => /not a GST rate/.test(p)), "items at 3% and 0%: no such hold (" + JSON.stringify(std.problems) + ")");
 

@@ -173,6 +173,8 @@ const SheetFmt = {
       if (map.taxable === "subtotal" && b.map.taxable === "itemtotal") map.taxable = "itemtotal";
       Object.keys(map).forEach(f => { if (DOC.includes(map[f]) && !(f === "taxable" && map[f] === "subtotal")) delete map[f]; });
       if (b.map.total) map.total = b.map.total;
+      // (review of b2a451774) a saved single tax column carries the cess too: Zoho's own CGST / SGST / IGST / CESS read instead
+      if (map.tax && (b.map.cgst || b.map.igst)) delete map.tax;
       const used = new Set(Object.values(map).filter(Boolean)), ownTax = !!map.tax || ["igst", "cgst", "sgst"].some(f => map[f] && map[f] !== b.map[f]);
       Object.entries(b.map).forEach(([f, n]) => { if (n && !map[f] && !used.has(n) && !(ownTax && ["igst", "cgst", "sgst"].includes(f)) && !(map.tax && f === "cess")){ map[f] = n; used.add(n); } });
       map.status = b.map.status;
@@ -424,10 +426,13 @@ const SheetFmt = {
       // a rate (taxable, rate, tax), never one line at a rate that is none of them
       // (review of 1352e5dfb) a Zoho row's own GST rate: "IGST Rate %", else "CGST Rate %" + "SGST Rate %"
       const zr = t.zoho ? this.amount(zc(r, "rIg")) || r2(this.amount(zc(r, "rCg")) + this.amount(zc(r, "rSg"))) : 0;
-      const rr = rate || zr || this.rateOf(taxable, igst + cgst + sgst);
-      if (taxable || igst || cgst || sgst){
+      // (review of b2a451774) SubTotal read once: every row is a part of its own rate, a row the sheet gives a rate (0% too)
+      // or one charged no tax (nil), so a nil row takes what is left of SubTotal, never blended into the others
+      const zGiven = !!t.zoho && ["rIg", "rCg", "rSg"].some(k => zc(r, k) !== ""), nilRow = !!t.docTaxable && !igst && !cgst && !sgst;
+      const rr = rate || zr || (nilRow ? 0 : this.rateOf(taxable, igst + cgst + sgst));
+      if (taxable || igst || cgst || sgst || t.docTaxable){
         const pt = (d.parts = d.parts || {})[rr] || (d.parts[rr] = {rate: rr, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
-        if (rate || zr) pt.known = true;
+        if (rate || zr || zGiven || nilRow) pt.known = true;
         pt.gross = r2((pt.gross || 0) + gross);
         pt.taxable = r2(pt.taxable + taxable); pt.igst = r2(pt.igst + igst); pt.cgst = r2(pt.cgst + cgst); pt.sgst = r2(pt.sgst + sgst); pt.cess = r2(pt.cess + cess);
       }
