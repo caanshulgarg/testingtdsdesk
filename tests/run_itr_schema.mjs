@@ -112,5 +112,17 @@ console.log("coverage: a schedule with figures FinCom does not fill blocks the J
     const k4 = coverage({ form: "ITR-4", model, comp, profile: {} }, {}).map((x) => x.key);
     ok(k4.includes("cf_itr4"), "ITR-4 with a loss to carry forward: blocked"); }
 }
+console.log("ITR-4 houses: up to the schema's own limit (the review of 24-Nov-2026 (2))");
+{
+  const LW = await import("../app/src/lib/itr/law.js");
+  const sch = schemaOf("ITR-4"), max = ((((sch.definitions || {}).IncomeDeductions || {}).properties || {}).PropertyDetails || {}).maxItems;
+  ok(max === 2 && LW.itr4Houses && LW.itr4Houses(LW.AY) === max, "ITR-4 AY 2026-27: PropertyDetails maxItems " + max + ", law.js the same (" + (LW.itr4Houses && LW.itr4Houses(LW.AY)) + ")");
+  const D = await demo("ITR-4"), files = Object.entries(D.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v)), imports = importsOf(files);
+  const house = (i) => ({ id: "h" + i, kind: "L", rent: 120000, municipal: 0 });
+  const keys = (n) => { const st = Object.assign({}, D.booksObj.itr["2026|state"], { houses: Array.from({ length: n }, (_, i) => house(i)) }); const model = buildModel({ entity: "P", client: D.client, imports, state: st, books: D.books }); const comp = compute(model);
+    return coverage({ form: "ITR-4", model, comp, profile: {} }, {}).map((x) => x.key); };
+  ok(!keys(2).includes("hp_itr4"), "ITR-4 with two houses: not blocked");
+  ok(keys(3).includes("hp_itr4"), "ITR-4 with three houses: blocked");
+}
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);
