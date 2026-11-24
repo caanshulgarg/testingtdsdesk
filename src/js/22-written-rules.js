@@ -749,7 +749,8 @@ function forgetUndoRule(){
   saveBank({rules: true});
 }
 // Multiple selection
-function bankSelected(){ const b = B(); return b.rows.filter(r => b.sel.has(r.id)); }
+// (a ticked line now older than 24 hours, off the page: untick it, so nothing hidden is acted on)
+function bankSelected(){ const b = B(); return b.rows.filter(r => b.sel.has(r.id) && (!bankOld(r) || !b.sel.delete(r.id))); }
 function bulkAction(kind, ledger){
   const b = B(), rows = bankSelected();
   if (!rows.length) return;

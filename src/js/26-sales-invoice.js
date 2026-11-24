@@ -300,7 +300,7 @@ function salesLinePick(id, role, rate, ledger){
 function salesBulkLine(role, rate, ledger){
   const s = SL(), l = exactLedger(ledger);
   if (!l){ toast("\u201c" + ledger + "\u201d is not a Tally ledger. Choose one from the list."); return null; }
-  const rows = s.list.filter(v => s.sel.has(v.id)), before = [];
+  const rows = salesSel(), before = [];
   let changed = 0, skipped = 0;
   rows.forEach(v => {
     if (!["review", "ready"].includes(v.status)){ skipped++; return; }

@@ -397,6 +397,7 @@ export function healRows(b) {
 
 // spacious layout (01-Nov-2026): the slim rail (parts/bank/Rail.jsx) on the Bank page, whatever the page shows
 export default function Bank() {
+  if (B() && B().rows) bankSelected();   // a ticked line now older than 24 hours is unticked (src/js/22)
   return <><Rail /><BankPage /></>;
 }
 // the statement open: the spacious layout on (html.bk-spacious, parts/bank/Spacious.jsx)
@@ -522,7 +523,7 @@ export function BankPage() {
         {top}
         <OverlapPanel st={st} />
         <Gone /><DupFind /><BankFocus />
-        {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
+        {tab === "done" && !b.focus && live() && tc.done + tc.old > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
         {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
           <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}
       </div>
@@ -553,6 +554,7 @@ export function BankBar() {
     return () => o.disconnect();
   });
   if (!b || b.loading || !curStmt()) return null;
+  bankSelected();
   const tc = tabCounts(bankRangeRows()), nsel = b.sel.size;
   // review of 02-Oct-2026: with no Tally ledger chosen for this bank account nothing can be posted, and nothing can be
   // said about which lines are in Tally ("184 no longer in Tally · post them again" was shown for lines of an account

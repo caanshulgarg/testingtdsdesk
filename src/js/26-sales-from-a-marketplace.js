@@ -506,9 +506,11 @@ function setCustomerLedger(v, ledger){
   saveSales();
   return true;
 }
+// the invoices ticked (one now older than 24 hours, off the page, is unticked: nothing hidden is acted on)
+function salesSel(){ const s = SL(); return s.list.filter(v => s.sel.has(v.id) && (!salesOld(v) || !s.sel.delete(v.id))); }
 function salesBulk(kind, ledger){
   // (an invoice with a live IRN is never ignored or deleted: the IRN is cancelled first, review of b4ff11b10)
-  const s = SL(), sel = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v)), live = /^(ignore|delete)$/.test(kind) ? sel.filter(v => v.x.irnStatus === "active") : [], rows = sel.filter(v => !live.includes(v));
+  const s = SL(), sel = salesSel().filter(v => !salesInTally(v)), live = /^(ignore|delete)$/.test(kind) ? sel.filter(v => v.x.irnStatus === "active") : [], rows = sel.filter(v => !live.includes(v));
   if (live.length) toast(live.length + " with an IRN kept: cancel the IRN first.");
   if (!rows.length) return;
   const before = rows.map(salesSnapshot);
@@ -612,7 +614,7 @@ function salesClick(t){
     case "salesBulkConfirm": salesBulk("confirm"); return true;
     case "salesBulkIgnore": salesBulk("ignore"); return true;
     case "salesBulkDelete": salesBulk("delete"); return true;   // Undo in the bar (spec K9, round 2)
-    case "salesBulkPrint": { const rows = s.list.filter(v => s.sel.has(v.id)); const co = CO(s.cid);
+    case "salesBulkPrint": { const rows = salesSel(); const co = CO(s.cid);
       withPart("invoice", "invoiceHtml", () => {
       const html = rows.map(v => invoiceHtml(v.x, co, s.cfg)).join("").replace(/<\/body><\/html><!doctype html><html lang="en"><head>[\s\S]*?<body>(<p class="noprint"[\s\S]*?<\/p>)?/g, '<div style="page-break-before:always"></div>');
       printInvoiceHtml(html, rows.length + "-invoices"); }); return true; }

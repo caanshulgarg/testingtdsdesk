@@ -1066,6 +1066,11 @@ function postingLine(pj, tname){
   return head + (pj.message && !/^(Posting|Starting|Resuming|Finding)/.test(pj.message) ? " \u2014 " + pj.message : "\u2026");
 }
 function refreshBusy(){ softRender(); }
+// the answers of a posting onto the same lines of the statement reloaded meanwhile (matchedAt: when one was found in Tally)
+function bankPostCarry(rows, into){
+  const was = new Map(rows.map(r => [r.id, r]));
+  into.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "matchedAt", "postedVia", "postError", "postedOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
+}
 async function postBankToTally(ids){
   const b = B(), co = CO(b.cid), st = curStmt();
   if (!st) return;
@@ -1293,8 +1298,7 @@ async function postBankToTally(ids){
     // the page reloaded the statement while Tally worked (a sync from FinCom's cloud): the answers go onto the lines shown
     const nb = B();
     if (nb && nb !== b && nb.cid === b.cid && nb.cur === st.id && Array.isArray(nb.rows)){
-      const was = new Map(rows.map(r => [r.id, r]));
-      nb.rows.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "postedVia", "postError", "postedOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
+      bankPostCarry(rows, nb.rows);
       nb.postedTags = Object.assign({}, b.postedTags || {}, nb.postedTags || {});
     }
     saveBank({rows: true, newLed: true, posted: true});

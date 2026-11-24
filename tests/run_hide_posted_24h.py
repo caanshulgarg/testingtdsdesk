@@ -186,6 +186,52 @@ with sync_playwright() as p:
         go(pg, "goClient('sales'); salesTabGo('done');", 1000)
         ok(m == ["intally", True] and "SI-s5" in pg.inner_text("#app table.bk-table tbody"), look + "Sales: an invoice found in Tally now (It is this invoice) is timed and under In Tally: %s" % m)
         ctx.close()
+    # ---- review 3 (24-Nov-2026): what else reads the posted entries
+    for nl in (False, True):
+        look = "[review 3%s] " % (", new look" if nl else "")
+        ctx, pg = page(br, nl=nl)
+        H = "const h = (n) => new Date(Date.now() - n * 3600e3).toISOString(); "
+        # 1. Bank, Posted tab, everything posted older than 24 hours: "Check they are still in Tally" is still offered
+        go(pg, H + "const b = B(); b.rows.find(r => r.id === 'r0').tally.at = h(30); b.rows.find(r => r.id === 'r8').matchedAt = h(30); window.__br = [Bridge.on, Bridge.up]; Bridge.on = () => true; Bridge.up = () => true; goClient('bank'); bankTabGo('done');", 1200)
+        tc = pg.evaluate("tabCounts(B().rows)")
+        ok(tc["done"] == 0 and tc["old"] == 4 and pg.get_by_role("button", name="Check they are still in Tally").count() == 1, look + "Bank: every posted line older than 24 hours: Check they are still in Tally is still there (%s)" % {k: tc.get(k) for k in ("done", "old")})
+        go(pg, "Bridge.on = window.__br[0]; Bridge.up = window.__br[1]; const b = B(); b.rows.find(r => r.id === 'r0').tally.at = new Date(Date.now() - 2 * 3600e3).toISOString(); b.rows.find(r => r.id === 'r8').matchedAt = new Date(Date.now() - 3 * 3600e3).toISOString(); render();", 600)
+        # 2. the statement reloaded while Tally worked: a line found in Tally keeps when it was found
+        m = pg.evaluate("""() => { const at = new Date().toISOString(), r = {id: "q1", state: "intally", matchedAt: at, tallyHow: "posted by FinCom earlier"}, q = {id: "q1", state: "ready"};
+          if (typeof bankPostCarry !== "function") return "no bankPostCarry"; bankPostCarry([r], [q]); return [q.state, q.matchedAt === at]; }""")
+        ok(m == ["intally", True], look + "Bank: the statement reloaded mid-post: the line's state and when it was found go onto the reloaded line: %s" % m)
+        # 3. Post page code 2 (found in Tally): 24 hours from when FinCom found it, else from the posting
+        m = pg.evaluate(H + """(() => { if (typeof postRowOld !== "function") return "no postRowOld";
+          const e = {id: "b9", status: "approved", exportedAt: h(40), postVerified: true, tally: {at: h(40)}, x: {vendorName: "Vendor B9", invoiceNo: "INV-b9", invoiceDate: "2026-10-05", total: 1180}};
+          const job = {id: "j9", client_id: window.__cid, status: "done", created_at: h(40), updated_at: h(40), entry_ids: ["b9"], results: [{id: "b9", ok: true, verified: true}]};
+          const st2 = postStatus(e, job, {matched_at: h(2)}, [], {id: "b9"}), st2old = postStatus(e, job, {matched_at: h(30)}, [], {id: "b9"});
+          return [st2.code, postRowOld({st: st2, e}), postRowOld({st: st2old, e}), postRowOld({st: {tab: "posted", code: 2, posted: h(2)}, e}), postRowOld({st: {tab: "posted", code: 2, posted: h(30)}, e})]; })()""")
+        ok(m == [2, False, True, False, True], look + "Post: found in Tally (code 2) counts 24 hours from when it was found (2 h: listed, 30 h: not), else from the posting: %s" % m)
+        # 4. the Posted count before the bills load: postings older than 24 hours are not counted; Invoices counts
+        m = pg.evaluate(H + """(() => { const cid = window.__cid, keep = CloudJobs.list, d = S.data[cid];
+          CloudJobs.list = [{id: "j1", client_id: cid, status: "done", created_at: h(2), updated_at: h(2), entry_ids: ["x1"], results: [{id: "x1", ok: true, verified: true}], n: 1},
+            {id: "j2", client_id: cid, status: "done", created_at: h(30), updated_at: h(30), entry_ids: ["x2"], results: [{id: "x2", ok: true, verified: true}], n: 1}];
+          perRenderClear && perRenderClear(); d.loaded = false; const pre = postTabCounts(cid).posted; d.loaded = true; CloudJobs.list = keep; perRenderClear && perRenderClear();
+          return [pre, postTabCounts(cid).posted]; })()""".replace("perRenderClear && perRenderClear();", "(typeof perRenderClear === 'function' && perRenderClear());"))
+        ok(m == [1, 2], look + "Post: the Posted count before the bills load leaves out the posting of 30 hours ago; after, the 2 bills of the last 24 hours: %s" % m)
+        go(pg, "S.step = null; S.tab = 'invoices'; S.filter = 'approved'; S.selected = null; render();", 900)
+        n = pg.evaluate("[...document.querySelectorAll('#app ul.queue > li')].length")
+        ok(n == 3, look + "Purchase: the approved bills listed are the 3 not hidden: %s" % n)
+        # 5. ticked lines that are now hidden are dropped, so nothing hidden is acted on
+        go(pg, "goClient('bank'); bankTabGo('done'); const b = B(); b.sel.add('r0'); b.sel.add('r8'); bankLightRefresh && bankLightRefresh();", 600)
+        m = pg.evaluate(H + "(() => { const b = B(); b.rows.find(r => r.id === 'r8').matchedAt = h(30); render(); return [...b.sel].sort().join(); })()")
+        pg.wait_for_timeout(600)
+        sel = pg.evaluate("[[...B().sel].sort().join(), bankSelected().map(r => r.id).join()]")
+        ok(sel == ["r0", "r0"], look + "Bank: a ticked line that is now older than 24 hours is no longer ticked: %s" % sel)
+        go(pg, "B().sel.clear(); goClient('sales'); salesTabGo('done'); const s = SL(); s.sel.add('s1'); s.sel.add('s6'); render();", 900)
+        go(pg, H + "SL().list.find(v => v.id === 's6').matchedAt = h(30); render();", 900)
+        sel = pg.evaluate("[...SL().sel].sort().join()")
+        ok(sel == "s1" and "2 selected" not in pg.inner_text("#app"), look + "Sales: a ticked invoice that is now older than 24 hours is no longer ticked: %s" % sel)
+        # 6. an Optional voucher in Tally leaves the page after 24 hours like any other
+        go(pg, H + "SL().sel.clear(); const v = SL().list.find(x => x.id === 's1'); v.postedOptional = true; v.postedAt = h(30); render();", 900)
+        t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
+        ok("SI-s1" not in t and pg.evaluate("salesOld(SL().list.find(x => x.id === 's1'))"), look + "Sales: an Optional voucher posted 30 hours ago is off the page too")
+        ctx.close()
     # ---- the phone
     for nl in (False, True):
         look = "[phone%s] " % (", new look" if nl else "")

@@ -411,6 +411,7 @@ export default function Sales() {
   const co = CO(), s = SL();
   if (!s || s.cid !== co.id) { loadSales(co.id); return <Loading what="sales invoices" page="table" />; }
   if (s.loading) return <Loading what="sales invoices" page="table" />;
+  salesSel();   // a ticked invoice now older than 24 hours is unticked (src/js/26)
   if (s.view === "create" && s.draft) return <Create />;
   ensureFileInputs();
   const all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
@@ -485,10 +486,9 @@ export function SalesBar() {
       <div className="ab-right"><button className="btn" onClick={() => salesAct("salesCancel")}>Cancel</button><button className="btn" onClick={() => salesAct("salesPrintDraft")}>Preview / Print</button><button className="btn primary" onClick={() => salesAct("salesSave")}>Save invoice</button></div>
     </div>) : null;
   if (!s.list.length) return null;
-  const tc = salesCounts(), nsel = s.sel.size;
+  const rows = salesSel(), tc = salesCounts(), nsel = s.sel.size;
   let left, right;
   if (nsel) {
-    const rows = s.list.filter((v) => s.sel.has(v.id));
     left = <><b>{nsel} selected</b> <span className="muted">· {money(r2(rows.reduce((a, v) => a + num(v.x.total), 0)))}</span> <button className="linkbtn" onClick={() => salesAct("salesSelNone")}>Clear</button></>;
     right = <>
       {/* a ledger picked from the list, or Enter, applies it (src/js/23, 26) */}

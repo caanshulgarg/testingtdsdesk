@@ -287,7 +287,7 @@ function postStatus(entry, job, ids, marks, ctx){
         return Object.assign(mk(3, "Marked posted by " + (you ? "you" : postWhoSay(who) || "an owner") + (when ? " on " + postWhenSay(when) : "") + (tid.typed ? "; Tally id typed: " + tid.typed : "") + "." + (tid.suspect ? " The Tally id typed is the bill number, not Tally's id" + (tid.vch ? "; Tally's reply said " + tid.vch : "") + ": correct it." : ""),
           tid.suspect ? {kind: "correctId", label: "Correct the Tally id"} : null, {id: tid, posted: at, markedBy: who, markedAt: when}), {words: "Posted, marked by " + (you ? "you" : postWhoSay(who) || "an owner")});
       }
-      if (ids && ids.matched_at) return mk(2, "Nothing to do. FinCom found it in Tally" + (ids.matched_vch ? " (Tally id " + ids.matched_vch + ")" : "") + " on " + postWhenSay(ids.matched_at) + ".", null, {id: tid, posted: at});
+      if (ids && ids.matched_at) return mk(2, "Nothing to do. FinCom found it in Tally" + (ids.matched_vch ? " (Tally id " + ids.matched_vch + ")" : "") + " on " + postWhenSay(ids.matched_at) + ".", null, {id: tid, posted: at, since: ids.matched_at});
       return mk(1, (idSay ? idSay + ". " : "") + "Nothing to do.", tid.suspect ? {kind: "correctId", label: "Correct the Tally id"} : null, {id: tid, posted: at});
     }
     // Tally may have it: its reply needs a look, no answer came, it said CREATED and FinCom could not find it, or the
@@ -617,13 +617,13 @@ function postRowRemoveBlock(x){
     return "Cannot be removed: it is being posted.";
   return "";
 }
+// Posted: an entry posted (1; 2, found in Tally: from when it was found; 3, marked posted by a person: from the mark) more
+// than 24 hours ago is in Transactions only (postedOld)
+function postRowOld(x){ return x.st.tab === "posted" && x.st.code <= 3 && postedOld(x.st.since || (x.st.code === 3 && (x.st.markedAt || (x.e && x.e.tally && x.e.tally.byOwnerAt))) || x.st.posted); }
 // the rows of a tab as the person sees them: {shown, hidden, removed} (search applied by the page)
 function postTabRows(cid, tab){
   const all = postEntryRows(cid) || [];
-  // Posted: an entry posted (1, 2; 3, marked posted by a person: from the mark) more than 24 hours ago is in Transactions
-  // only (postedOld)
-  const old = x => x.st.tab === "posted" && x.st.code <= 3 && postedOld((x.st.code === 3 && (x.st.markedAt || (x.e && x.e.tally && x.e.tally.byOwnerAt))) || x.st.posted);
-  const mine = all.filter(x => x.st.tab === tab && !old(x));
+  const old = postRowOld, mine = all.filter(x => x.st.tab === tab && !old(x));
   const gone = x => !!PostFlags.removedNow(x);
   return {shown: mine.filter(x => !PostFlags.isHidden(x.key) && !gone(x)), hidden: mine.filter(x => PostFlags.isHidden(x.key) && !gone(x)), removed: mine.filter(gone), old: tab === "posted" ? all.filter(old).length : 0};
 }
