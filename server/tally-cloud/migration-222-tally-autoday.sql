@@ -42,6 +42,8 @@
 -- with a recorder line still being brought, nor from an empty list before a third one 10 minutes on; the sweep 5 s a run;
 -- 31 days for the daily re-check; the period's auto_tries reset once it reads again; no word asks for an upload;
 -- the fetching sweep needs a whole ('day') list; the types of existing columns and the job names guarded.
+-- Re-review: the period days' kept upload words said plainly (a data step), the locked words of tally_period_entries and
+-- tally_period_next_paced too, and a locked period day read again once its month is unlocked.
 begin;
 set local lock_timeout = '10s';
 
@@ -63,7 +65,9 @@ begin
                                  ('tally_check_status_of(uuid)', 'a42410209eda217c9713d61ede864027'),
                                  ('tally_period_day_stop(uuid,date,text)', '4a6af131af1ea7b85fa489971ce24f53'),
                                  ('tally_check_entries(uuid,date,jsonb,jsonb,jsonb)', 'ecf3e93ef5c2b0247c76057d8eb15f79'),
-                                 ('tally_period_upload(uuid,date,text,text,text)', 'b2fb148cbf59ea6e8b8cb2da7d98af6f')) v(sig, h) loop
+                                 ('tally_period_upload(uuid,date,text,text,text)', 'b2fb148cbf59ea6e8b8cb2da7d98af6f'),
+                                 ('tally_period_entries(uuid,date,jsonb,jsonb,jsonb,jsonb)', 'b00e21e799c9e2b0eaf8226f4aed1dee'),
+                                 ('tally_period_next_paced(uuid,integer,boolean)', '9acd298c3746463a698fa7dd430840ff')) v(sig, h) loop
     if to_regprocedure('public.' || x.sig) is null then bad := bad || ('function ' || x.sig || ' (missing)');
     elsif not exists (select 1 from pg_proc p where p.oid = to_regprocedure('public.' || x.sig)
                        and (md5(p.prosrc) = x.h or coalesce(obj_description(p.oid, 'pg_proc'), '') = 'tally autoday (migration 222)')) then
@@ -119,6 +123,12 @@ update public.tally_check_days set upload_at = null, upload_words = null, lists 
 update public.tally_period_day_retry r set retry_at = now()
   from public.tally_period_days d where d.book_id = r.book_id and d.day = r.day and d.upload_why = 'slow3' and d.upload_at is not null;
 update public.tally_period_days set upload_at = null, upload_why = null, upload_type = null, upload_words = null where upload_why = 'slow3' and upload_at is not null;
+-- every other period day's kept words that ask for an upload: said plainly (a locked month's: read again once unlocked,
+-- tally_autoday_queue_of)
+update public.tally_period_days set upload_words = 'FinCom did not bring in ' || to_char(day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month; FinCom then reads this day by itself.'
+ where upload_at is not null and upload_why = 'locked' and coalesce(upload_words, '') ~* 'upload';
+update public.tally_period_days set upload_words = 'FinCom could not read ' || to_char(day, 'DD-Mon-YYYY') || ' from Tally by itself.'
+ where upload_at is not null and coalesce(upload_why, '') <> 'locked' and coalesce(upload_words, '') ~* 'upload';
 
 -- ---------------------------------------------------------------- 2. helpers (granted to nobody)
 -- B.5: after a 2 s stop the day waits 1 h, then 3 h, then 24 h, and every 24 h after
@@ -299,6 +309,13 @@ begin
              done_at = null, upload_at = null, upload_words = null, tries = 0, next_at = null, last_why = null
        where book_id = p_book and day = rw.day;
       n := n + 1;
+    end if;
+  end loop;
+
+  -- the period's days given up for a locked month: read again once the month is unlocked (as its words promise)
+  for rw in select d.day from tally_period_days d where d.book_id = p_book and d.upload_at is not null and d.upload_why = 'locked' loop
+    if tally_month_locked(p_book, array[rw.day]) is null then
+      update tally_period_days set upload_at = null, upload_why = null, upload_type = null, upload_words = null where book_id = p_book and day = rw.day;
     end if;
   end loop;
 
@@ -708,6 +725,129 @@ begin
 end $function$;
 comment on function public.tally_period_upload(uuid, date, text, text, text) is 'tally autoday (migration 222)';
 
+-- the period's entries of a day and its hand-out (98's and 182's texts, one line each marked 222): a locked month's
+-- words never ask for an upload
+create or replace function public.tally_period_entries(p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_seen jsonb, p_gone jsonb) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare d tally_period_days%rowtype; pp tally_period_pulls%rowtype; pr record; lk date; vs jsonb; ls jsonb; g text[]; stale int; res jsonb; h record; sn jsonb := '{}'::jsonb; hd jsonb; k text; w text;
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  select * into d from tally_period_days where book_id = p_book and day = p_day;
+  if not found or d.heads is null then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
+  -- review 245 R3: only while the pull goes, for a day of the part chosen
+  select * into pp from tally_period_pulls where book_id = p_book;
+  if not found or pp.state <> 'going' then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
+  select d_from, d_to into pr from tally_period_range(pp.fy_start, pp.part);
+  if p_day < pr.d_from or p_day > pr.d_to then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
+  if exists (select 1 from jsonb_array_elements(coalesce(p_vouchers, '[]'::jsonb)) v where coalesce(v->>'day', '') <> to_char(p_day, 'YYYY-MM-DD')) then
+    return jsonb_build_object('ok', false, 'error', 'an entry of another date');
+  end if;
+  lk := tally_month_locked(p_book, array[p_day]);
+  if lk is not null then
+    -- review 245 R1: never fetched again; the one quiet line asks for the day to be uploaded once the month is unlocked
+    w := 'FinCom did not bring in ' || to_char(p_day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month; FinCom then reads this day by itself.';     -- 222
+    update tally_period_days set upload_at = coalesce(upload_at, now()), upload_why = 'locked', upload_words = w where book_id = p_book and day = p_day;
+    return jsonb_build_object('ok', true, 'locked', true, 'upload', w, 'stored', 0);
+  end if;
+  -- entries Tally gave that FinCom keeps no entry of (no ledger line): held as seen at their AlterID
+  for k in select jsonb_object_keys(coalesce(case when jsonb_typeof(p_seen) = 'object' then p_seen end, '{}'::jsonb)) loop
+    if length(k) between 1 and 100 and coalesce(p_seen->>k, '') ~ '^[0-9]{1,15}$' then sn := sn || jsonb_build_object(k, (p_seen->>k)::bigint); end if;
+  end loop;
+  -- MasterIDs Tally gave no entry for (p_gone): NOT taken out of the day's list (review 245 R2: one empty answer is no
+  -- proof); a day whose entry is really gone ends when it is counted again (its fresh list no longer names it)
+  hd := d.heads;
+  -- an entry FinCom holds at a higher AlterID than Tally's answer gave: left as it is
+  select coalesce(jsonb_agg(v), '[]'::jsonb) into vs from jsonb_array_elements(coalesce(p_vouchers, '[]'::jsonb)) v
+   where not exists (select 1 from tally_vouchers t where t.book_id = p_book and t.guid = v->>'guid' and coalesce(t.alter_id, 0) > coalesce((v->>'alter')::bigint, 0));
+  stale := jsonb_array_length(coalesce(p_vouchers, '[]'::jsonb)) - jsonb_array_length(vs);
+  select coalesce(array_agg(v->>'guid'), '{}') into g from jsonb_array_elements(vs) v;
+  select coalesce(jsonb_agg(l), '[]'::jsonb) into ls from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) l where l->>0 = any(g);
+  if jsonb_array_length(vs) > 0 then
+    res := tally_ingest_entries(p_book, vs, ls, true, false);
+    if not coalesce((res->>'ok')::boolean, false) then
+      return jsonb_build_object('ok', false, 'error', coalesce(res->>'error', 'not stored'), 'locked', coalesce((res->>'locked')::boolean, false));
+    end if;
+  end if;
+  select * into h from tally_period_held(p_book, hd, 0, d.seen || sn);
+  -- (the heads and the count are the latest tally_period_heads stored; only FinCom's side is written here)
+  update tally_period_days set seen = seen || sn, held_n = h.held,
+         done_at = case when h.held >= coalesce(tally_n, 0) then coalesce(done_at, now()) end where book_id = p_book and day = p_day;
+  return jsonb_build_object('ok', true, 'stored', jsonb_array_length(vs), 'stale', stale, 'n', jsonb_array_length(hd), 'held', h.held, 'done', h.held >= jsonb_array_length(hd));
+end $function$;
+comment on function public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb) is 'tally autoday (migration 222)';
+
+create or replace function public.tally_period_next_paced(p_book uuid, p_max integer, p_night boolean) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare p tally_period_pulls%rowtype; r record; fy_to date; today date := (now() at time zone 'Asia/Kolkata')::date; out jsonb := '[]'::jsonb; d date; n int := 0;
+  types jsonb; fetch boolean := false; lim int := least(greatest(coalesce(p_max, 3), 0), 30); rc timestamptz; nr int := 0;
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  select * into p from tally_period_pulls where book_id = p_book;
+  if not found or p.state <> 'going' or lim = 0 then return out; end if;
+  -- ROUND 103 (the owner's decision of 21-Oct-2026, evening): tally-ingest asks 3 by day, up to 30 outside the computer's
+  -- office hours; the pace kept for the status line
+  update tally_period_pulls set pace = case when coalesce(p_night, lim > 3) then 'night' else 'day' end, pace_at = now() where book_id = p_book;
+  fy_to := (p.fy_start + interval '1 year' - interval '1 day')::date;
+  -- 182 (B): the book's gap open 2 minutes whose own days Tally's Day Book matches (the changes are on older dates): a day
+  -- counted before FinCom first saw Tally's number now is counted again, once a book and number, one light day at a time
+  -- (the computer idle, paced: tally_light_may), after the days never counted
+  select case when cu.gap_at <= now() - interval '2 minutes' and tally_gap_own_read(p_book, cu.gap) then gn.first_at end into rc
+    from tally_sync_cursor cu join tally_gap_numbers gn on gn.book_id = cu.book_id and gn.altvchid::text = cu.gap->>'tally_altvchid'
+   where cu.book_id = p_book and cu.gap is not null;
+  select d_from, d_to into r from tally_period_range(p.fy_start, p.part);
+  -- counting: the year's days with no count yet
+  for d in select g::date from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
+            where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null))
+            order by exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and x.asked_at > now() - interval '2 minutes'), g desc
+            limit lim loop
+    out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false, 'chosenAt', p.chosen_at));
+    n := n + 1;
+  end loop;
+  if n = 0 and rc is not null then perform 1 from tally_light_pace where book_id = p_book for update; end if;
+  if n = 0 and rc is not null and tally_light_may(p_book) then
+    for d in select x.day from tally_period_days x
+              where x.book_id = p_book and x.day between p.fy_start and least(fy_to, today) and x.tally_n is not null and x.upload_at is null
+                and coalesce(x.counted_at, '-infinity'::timestamptz) < rc
+              order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit 1 loop
+      out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', false, 'chosenAt', p.chosen_at));
+      nr := 1;
+      perform tally_light_took(p_book, d, 'period');
+    end loop;
+  end if;
+  if n = 0 and not exists (select 1 from generate_series(least(fy_to, today), p.fy_start, interval '-1 day') g
+                            where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date and (x.tally_n is not null or x.upload_at is not null))) then
+    -- the year is counted: the part's days FinCom does not hold whole; a locked month's days marked to upload, not fetched
+    update tally_period_days x set upload_at = now(), upload_why = 'locked',
+           upload_words = 'FinCom did not bring in ' || to_char(x.day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month; FinCom then reads this day by itself.'     -- 222
+     where x.book_id = p_book and x.day between r.d_from and least(r.d_to, today) and x.tally_n > 0 and x.done_at is null and x.upload_at is null
+       and tally_month_locked(p_book, array[x.day]) is not null;
+    for d in select x.day from tally_period_days x
+              where x.book_id = p_book and x.day between r.d_from and least(r.d_to, today) and x.tally_n > 0 and x.done_at is null and x.upload_at is null
+              order by (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit greatest(lim - nr, 0) loop
+      out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', p.chosen_at));
+      n := n + 1;
+    end loop;
+  end if;
+  n := n + nr;
+  if n > 0 then
+    -- the types (only when a day is listed): the six first, then the book's own, the most used first
+    select coalesce(jsonb_agg(t order by o, c desc, t), '[]'::jsonb) into types from (
+      select t, min(o) as o, sum(c) as c from (
+        select unnest(array['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra']) as t, 0 as o, 0::bigint as c
+        union all select v.vtype, 1, count(*) from tally_vouchers v where v.book_id = p_book group by v.vtype
+        union all select h->>3, 1, count(*) from tally_period_days x, jsonb_array_elements(coalesce(x.heads, '[]'::jsonb)) h
+                   where x.book_id = p_book and x.day between p.fy_start and fy_to and jsonb_typeof(h) = 'array' group by h->>3) a
+       where t is not null and t <> '' and t !~ '["[:cntrl:]]' and length(t) <= 60 and t = btrim(t)
+       group by t order by min(o), sum(c) desc, t limit 40) z;
+    select coalesce(jsonb_agg(e || jsonb_build_object('types', types)), '[]'::jsonb) into out from jsonb_array_elements(out) e;
+    insert into tally_period_days (book_id, firm_id, day, asked_at, first_asked_at)
+    select p_book, p.firm_id, to_date(e->>'day', 'YYYYMMDD'), now(), now() from jsonb_array_elements(out) e
+    on conflict (book_id, day) do update set asked_at = now(), first_asked_at = coalesce(tally_period_days.first_asked_at, now());
+  end if;
+  return out;
+end $function$;
+comment on function public.tally_period_next_paced(uuid, integer, boolean) is 'tally autoday (migration 222)';
+
 -- ---------------------------------------------------------------- 8. grants (explicit)
 revoke all on function public.tally_autoday_backoff(integer), public.tally_autoday_prio(text), public.tally_autoday_fy(date), public.tally_autoday_words(text, date),
   public.tally_autoday_fresh_post(uuid, text), public.tally_autoday_bands_whole(jsonb, jsonb), public.tally_autoday_put(uuid, uuid, date, text, integer, timestamptz),
@@ -735,6 +875,10 @@ grant execute on function public.tally_period_day_stop(uuid, date, text) to serv
 revoke all on function public.tally_check_entries(uuid, date, jsonb, jsonb, jsonb) from public, anon, authenticated;
 grant execute on function public.tally_check_entries(uuid, date, jsonb, jsonb, jsonb) to service_role;
 revoke all on function public.tally_period_upload(uuid, date, text, text, text) from public, anon, authenticated;
+revoke all on function public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb) to service_role;
+revoke all on function public.tally_period_next_paced(uuid, integer, boolean) from public, anon, authenticated;
+grant execute on function public.tally_period_next_paced(uuid, integer, boolean) to service_role;
 grant execute on function public.tally_period_upload(uuid, date, text, text, text) to service_role;
 
 -- ---------------------------------------------------------------- 9. the jobs (pg_cron where it is there)
