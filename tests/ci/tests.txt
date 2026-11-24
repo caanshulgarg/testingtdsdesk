@@ -684,4 +684,5 @@ run_fbooks_ui.py                      600  TDSDESK_SITE=../app/dist-test
 # the company not open, the Tally computer off; never a computer or Windows user named), and the cloud's waiting words
 post_wait_test.mjs                    60
 run_post_wait_ui.py                   240  TDSDESK_SITE=../app/dist-test
+run_post_retry_words.py               240  TDSDESK_SITE=../app/dist-test
 run_post_wait_words_ingest.py         300

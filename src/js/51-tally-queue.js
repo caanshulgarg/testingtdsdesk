@@ -69,7 +69,7 @@ const CloudPost = {
     // migration 184 (item C): the entries an earlier posting holds (r.dupes: [{id, job, status}]) are not queued again:
     // each is followed in the posting that holds it (every one of them, not only the first), beside the new posting
     const dup = new Map([].concat((r && r.dupes) || []).map(d => [d.id, d]));
-    if (!(r && r.none && dup.size) && (!r || !r.ok)) throw {code: "cloud_post", message: (r && r.error) || "The entries could not be queued."};
+    if (!(r && r.none && dup.size) && (!r || !r.ok)) throw {code: "cloud_post", message: r && r.error ? postCloudSay(r.error) : "The entries could not be queued."};
     const own = r.none ? "" : id, jobOf = x => dup.has(x) ? dup.get(x).job : own, rows = new Map();
     ids.forEach(x => { if (jobOf(x)){ rows.set(jobOf(x), null); postMarkNew(cid, [x], jobOf(x)); } });
     // (re-review 22-Nov-2026: an automatic run is told only its own posting, the new id when every entry is held by an
@@ -83,9 +83,9 @@ const CloudPost = {
     const tell = j => { try { onProgress && onProgress(j); } catch (e){} };
     tell({done: 0, total: ids.length, job: id});   // next-payroll (seventh review): the posting's id the moment it is queued
     const t0 = Date.now(), fin = j => !!j && ["done", "failed", "cancelled"].includes(j.status), far = j => /^Queued: posts/.test((j && j.message) || "");
-    // waiting for Tally: the cloud's own words when it is queued for no computer (migration 185), else the company and
-    // the computer it waits for
-    const waits = j => far(j) ? j.message : "Waiting for " + ((j && j.company) || payload.company) + " to be opened in Tally on " + ((trow && trow.computer) || "the Tally computer");
+    // waiting for Tally: the cloud's own words when it is queued for no computer (migration 185), else the company; never
+    // a computer named (review of b3a99b3a8)
+    const waits = j => far(j) ? String(j.message).replace(/( is opened in Tally on ).+?( with FinCom Bridge)/, "$1a computer$2") : "Waiting for " + ((j && j.company) || payload.company) + " to be opened in Tally on the Tally computer";
     let j = null;
     for (;;){
       await sleep(j ? 2500 : 1200);
@@ -108,7 +108,7 @@ const CloudPost = {
       const o = {id: x, ok: false, job: jobOf(x), status: jj.status};
       if (!fin(jj)) return Object.assign(o, {held: true, message: (!jj.status ? "Not heard from the cloud for 30 minutes" : jj.status === "waiting" ? waits(jj) : "Being posted " + (dup.has(x) ? "in an earlier posting" : "on the Tally computer")) + ": it stays queued and posts by itself."});
       if (dup.has(x) && jj.status === "done") return Object.assign(o, {held: true, message: "Already posted in an earlier posting (it stays queued there until its result is marked here); not sent twice."});
-      return Object.assign(o, {message: jj.status === "done" ? "Not posted." : (jj.message || "The posting stopped.")});
+      return Object.assign(o, {message: jj.status === "done" ? "Not posted." : (jj.message ? postCloudSay(jj.message) : "The posting stopped.")});
     });
     const results = resultsOf();
     if (j.checking){
@@ -218,7 +218,7 @@ const CloudJobs = {
       if (!r || !r.ok) throw new Error((r && r.error) || "It could not be queued again.");
       delete this.refused[j.id];
       toast("Queued again for the Tally computer.");
-    } catch (e){ this.refused[j.id] = "Retry not possible: " + plainMsg((e && e.message) || String(e)); toast(this.refused[j.id]); }
+    } catch (e){ this.refused[j.id] = "Retry not possible: " + postCloudSay(plainMsg((e && e.message) || String(e))); toast(this.refused[j.id]); }
     await this.load(true);
   },
   // Dismiss (request of 02-Oct-2026): a failed or cancelled posting off the list; kept on the server with who and when
@@ -227,7 +227,7 @@ const CloudJobs = {
       const r = await TCloud.rpc("tally_post_dismiss", {p_id: j.id, p_auto: !!auto});
       if (!r || !r.ok) throw new Error(r && /Only a failed or cancelled/.test(r.error || "") ? "FinCom’s cloud can dismiss only failed postings until migration-27 is applied." : (r && r.error) || "It could not be dismissed.");
       if (!auto) toast("Dismissed. It stays under “Show older and dismissed”.");
-    } catch (e){ if (!auto) toast((e && e.message) || String(e)); }
+    } catch (e){ if (!auto) toast(postCloudSay((e && e.message) || String(e))); }
     await this.load(true);
   },
   // a failed or cancelled posting whose every entry a later posting put in: dismissed by FinCom (the server checks it again)

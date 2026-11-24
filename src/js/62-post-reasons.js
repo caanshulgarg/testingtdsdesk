@@ -22,17 +22,17 @@ const POST_REASONS = [
   // the cloud's own words for a posting meant for another Tally computer (migration 54 tally_post_reroute and
   // tally_post_stranded_words, 174, 185): plain, never a computer, a Windows user or a bridge named, never "Tally said"
   {id: "elsewhere", kind: "stopped", again: true,
-    re: /^Not posted into .+?: the (?:computer|FinCom Bridge) it was for \(|^Moved to .+? \(the same Windows user, the same computer\)|^Queued: posts by itself when .+ is opened in Tally on /i,
+    re: /^Not (?:posted into|queued again for) .+?: the (?:computer|FinCom Bridge) it was for \(|^Moved to .+? \(the same Windows user, the same computer\)|^Queued: posts by itself when .+ is opened in Tally on |^This posting was meant for another Tally computer/i,
     seen: "Not posted into X: the computer it was for (…) has no FinCom Bridge that may post · the FinCom Bridge it was for (…) is set to Changes only … · Moved to … · Queued: posts by itself when X is opened in Tally on …",
     reason: "This posting was meant for another Tally computer",
     fix: "Post it again: it goes from the computer where this company is open in Tally."},
   {id: "startedelsewhere", kind: "stopped", again: false,
-    re: /^Started on .+?, and that FinCom Bridge can no longer post|^Held: .+? was posting this and can no longer post/i,
+    re: /^(?:Not (?:posted into|queued again for) .+?: )?Started on .+?, and that FinCom Bridge can no longer post|^Held: .+? was posting this and can no longer post|^This posting was started on another Tally computer/i,
     seen: "Started on …, and that FinCom Bridge can no longer post · Held: … was posting this and can no longer post",
     reason: "This posting was started on another Tally computer, which can no longer post; part of it may be in Tally",
     fix: "Check Tally first: mark posted what is there, then post the rest again; it goes from the computer where this company is open in Tally."},
   {id: "nolink", kind: "stopped", again: true,
-    re: /^Not posted into .+?: the link of this client no longer says where/i,
+    re: /^Not (?:posted into|queued again for) .+?: the link of this client no longer says where|^FinCom no longer knows where this company is kept/i,
     seen: "Not posted into X: the link of this client no longer says where X is kept in Tally …",
     reason: "FinCom no longer knows where this company is kept in Tally",
     fix: "Open the company in Tally on a computer with FinCom Bridge and check the client's link on the Tally page, then post again."},
@@ -143,6 +143,17 @@ const POST_REASONS = [
     reason: "The posting stopped before anything was sent",
     fix: "Put right what the message says, then post again."}
 ];
+// a refusal of FinCom's cloud (a Retry, a posting, Cancel, Dismiss), for a toast or the row: never a computer or a Windows
+// user named (review of b3a99b3a8). Its words for another Tally computer (migrations 54, 174, 185: "Not queued again for X:
+// the FinCom Bridge it was for (PC · user) …", "…: Started on PC · user …", the link): the plain reason; "Nobody can post
+// into X …" (tally_post_nobody_words, tally_post_own_words) without the bridges listed; any other naming a computer the
+// app knows: plain (postWaitMsg)
+function postCloudSay(m){
+  const s = postReasonText(m), r = POST_REASONS.find(x => /^(elsewhere|startedelsewhere|nolink)$/.test(x.id) && x.re.test(s));
+  if (r) return r.reason + ". " + r.fix;
+  const t = s.replace(/(that (?:has|have) it open|a computer that may post|your FinCom Bridge) \([^)]*\)/g, "$1");
+  return (typeof postWaitMsg === "function" ? postWaitMsg({message: t}) : t) || "FinCom\u2019s cloud did not do it. Open the company in Tally on a computer with FinCom Bridge, then try again.";
+}
 // HTML entities in a message (the bridge's XML words) without the page (plainMsg needs a document)
 function postReasonText(m){
   return String(m == null ? "" : m).replace(/&#13;|&#10;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim()
@@ -612,7 +623,7 @@ const PostFlags = {
     } catch (e){
       const m = String((e && e.message) || e);
       if (this.missing(m)){ this.ok = false; toast("FinCom's cloud is not ready for this yet (migration 49)."); }
-      else toast(m.replace(/^ERROR:\s*/i, ""));
+      else toast(postCloudSay(m.replace(/^ERROR:\s*/i, "")));
       if (typeof render === "function") render();
       return false;
     }
