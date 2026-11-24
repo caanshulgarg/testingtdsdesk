@@ -10,8 +10,10 @@ itr form should be there and there should recommendation of itr form which is to
   4. the review of 24-Nov-2026: a client with no PAN and no kind of taxpayer: no form picked, no JSON, said plainly
      ("FinCom needs the PAN or the kind of taxpayer to pick the form"), the chooser still there; an individual with
      only a salary: ITR-2 until it is said that they are not a director in a company, held no unlisted equity shares and
-     have no agricultural income above Rs 5,000 (rule 12), then ITR-1; a Yes to any keeps ITR-2. Classic light and New
-     look dark.
+     have no agricultural income above Rs 5,000 (rule 12), then ITR-1; a Yes to any keeps ITR-2. The heading shows no
+     kind of taxpayer (never "Other") while it is not known. The same individual with presumptive business income:
+     ITR-3 while rule 12 is not answered (ITR-4 is not for a director, unlisted shares or agricultural income above
+     Rs 5,000), ITR-4 once all three are No, ITR-3 again for a director. Classic light and New look dark.
 TDSDESK_SHOTS=<dir> keeps the screenshots (deviceScaleFactor 2). Run on the React build:
 TDSDESK_SITE=../app/dist-test python3 run_side_itr_ui.py"""
 import os, threading, functools, http.server
@@ -133,6 +135,7 @@ with sync_playwright() as p:
         ok(NOKIND in warn, look + "no PAN: said plainly: " + warn)
         ok("No form recommended" in pg.inner_text("[data-itr-why]") and "(recommended)" not in " ".join(pg.eval_on_selector_all("[data-itr-form] option", "os => os.map(o => o.textContent)")), look + "no PAN: no form recommended on a guess")
         ok(head().startswith("ITR form not picked") and pg.locator("[data-itr-use-rec]").count() == 0, look + "no PAN: the heading says no form is picked (%s)" % head().split("\n")[0])
+        ok("Other" not in head() and head().strip() == "ITR form not picked" and pg.locator(".itr-head [data-itr-kind]").count() == 0, look + "no PAN: no kind of taxpayer shown next to it until it is known (%r)" % head())
         if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "nopan-%s-%s.png" % ("newlook" if nl else "classic", scheme)))
         for f in ("ITR-6", "ITR-3"):
             pg.select_option("[data-itr-form]", f); pg.wait_for_timeout(500)
@@ -150,6 +153,25 @@ with sync_playwright() as p:
         ok(head().startswith("ITR-2") and "not for someone who is a director in a company" in why, look + "a director in a company: ITR-2, said: " + why)
         if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "itr2-director-%s-%s.png" % ("newlook" if nl else "classic", scheme)))
         pg.select_option("[data-itr-q1=director]", ""); pg.wait_for_timeout(300)
+        # presumptive business income: ITR-4 only once rule 12 is answered; until then ITR-3, said why
+        for k in ("unlisted", "agriOver"): pg.select_option("[data-itr-q1=%s]" % k, ""); pg.wait_for_timeout(300)
+        pg.select_option("[data-itr-presq]", "y"); pg.wait_for_timeout(500)
+        why = pg.inner_text("[data-itr-why]")
+        ok(head().startswith("ITR-3") and "Individual" in head() and "Recommended: ITR-3" in why and "business or profession" in why and "does not know yet" in why and "ITR-4 is not for such a person" in why
+           and "director" in why and "unlisted" in why and "agricultural" in why, look + "presumptive income, rule 12 not answered: ITR-3, and why in plain words: " + why)
+        ok(pg.locator("[data-itr-q1]").count() == 3 and pg.locator("[data-itr-form-warn]").count() == 0, look + "the three questions asked, no warning for ITR-3")
+        if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "itr3-%s-%s.png" % ("newlook" if nl else "classic", scheme)))
+        for k in ("director", "unlisted", "agriOver"): pg.select_option("[data-itr-q1=%s]" % k, "n"); pg.wait_for_timeout(400)
+        why = pg.inner_text("[data-itr-why]")
+        ok(head().startswith("ITR-4") and "Recommended: ITR-4" in why, look + "presumptive income, all three No: ITR-4: " + why)
+        pg.select_option("[data-itr-q1=director]", "y"); pg.wait_for_timeout(400)
+        why = pg.inner_text("[data-itr-why]")
+        ok(head().startswith("ITR-3") and "ITR-4 is not for someone who is a director in a company" in why, look + "presumptive income, a director: ITR-3, said: " + why)
+        opts = pg.eval_on_selector_all("[data-itr-form] option", "os => os.map(o => o.textContent)")
+        ok("ITR-4 (not for this client)" in opts, look + "a director: ITR-4 marked not for this client (%s)" % opts)
+        pg.select_option("[data-itr-form]", "ITR-4"); pg.wait_for_timeout(500)
+        warn = pg.inner_text("[data-itr-form-warn]") if pg.locator("[data-itr-form-warn]").count() else ""
+        ok("ITR-4 is not for someone who is a director in a company" in warn and pg.eval_on_selector("[data-itr-pick]", "e => e.dataset.json") == "0", look + "ITR-4 chosen by hand for a director: no JSON, said: " + warn)
         ctx.close()
     print("3. on a phone (390 px): the chooser and its questions fit the width")
     ctx = br.new_context(viewport={"width": 390, "height": 800}, device_scale_factor=2, is_mobile=True, has_touch=True)

@@ -4,7 +4,7 @@
 // form + formSet). A form FinCom's JSON does not cover (forms.js ROOT) is said plainly, never built as another form.
 // Pure: the tests give it the facts (tests/run_itr_formpick.mjs).
 import { ROOT } from "./forms.js";
-import { ITR1 } from "./law.js";
+import { ITR1, ITR4 } from "./law.js";
 
 export const ALL_FORMS = ["ITR-1", "ITR-2", "ITR-3", "ITR-4", "ITR-5", "ITR-6", "ITR-7"];
 // the forms whose official JSON FinCom makes (forms.js maps them, the schemas are in itr-schema/)
@@ -16,13 +16,23 @@ const LIMIT = ITR1.maxIncome; // ITR-1 and ITR-4: total income up to Rs 50 lakh
 // no PAN and no kind of taxpayer in Client setup: no form is picked and no JSON made (the review of 24-Nov-2026)
 export const NO_KIND = "FinCom needs the PAN or the kind of taxpayer to pick the form. Add the PAN, or choose the kind of taxpayer, in Client setup; until then no JSON is made.";
 const orList = (a) => (a.length > 1 ? a.slice(0, -1).join(", ") + " or " + a[a.length - 1] : a[0] || "");
-// ITR-1's rule 12 facts (law.js ITR1): what rules it out, and what is not known yet (never taken as No)
-function itr1Bars(f) {
-  const agri = f.agriIncome != null && f.agriIncome !== "" ? +f.agriIncome > ITR1.agriMax : f.agriOver;
+// rule 12's facts for ITR-1 and ITR-4 (law.js ITR1, ITR4): what rules the form out, and what is not known yet (never
+// taken as No). The director and unlisted-share bars are for an individual or HUF (person); a firm has the agricultural one
+function rule12(f, agriMax, person) {
+  const agri = f.agriIncome != null && f.agriIncome !== "" ? +f.agriIncome > agriMax : f.agriOver;
   const unl = f.unlistedSold === true ? true : f.unlisted;
-  const facts = [[f.director, "is a director in a company", "whether the person is a director in a company"], [unl, "has held unlisted equity shares in the year", "whether unlisted equity shares were held in the year"],
-    [agri, "has agricultural income above Rs 5,000", "whether agricultural income is above Rs 5,000"]];
+  const facts = (person ? [[f.director, "is a director in a company", "whether the person is a director in a company"], [unl, "has held unlisted equity shares in the year", "whether unlisted equity shares were held in the year"]] : [])
+    .concat([[agri, "has agricultural income above Rs 5,000", "whether agricultural income is above Rs 5,000"]]);
   return { no: facts.filter((x) => x[0] === true).map((x) => x[1]), unknown: facts.filter((x) => x[0] !== true && x[0] !== false).map((x) => x[2]) };
+}
+// who a rule 12 bar is said of
+const BARRED_WHO = { P: "someone who", H: "a HUF that", F: "a firm that" };
+// the forms rule 12 rules out on what is known: {form: [what rules it out]}
+function barredForms(f, code) {
+  const b = {};
+  if (code === "P") { const n = rule12(f, ITR1.agriMax, true).no; if (n.length) b["ITR-1"] = n; }
+  if (code === "P" || code === "H" || (code === "F" && f.llp !== true)) { const n = rule12(f, ITR4.agriMax, code !== "F").no; if (n.length) b["ITR-4"] = n; }
+  return b;
 }
 
 // the kind of person: Client setup's choice first, else the PAN's fourth letter (the GSTIN carries the PAN)
@@ -51,31 +61,44 @@ export function allowedForms(code, llp) {
 // unanswered), business (the books or presumptive figures), presumptive, audit, resident, salary, houses (how many),
 // capitalGains (other than 112A up to Rs 1.25 lakh), foreign, ti (total income, when worked out); ITR-1's rule 12 facts:
 // director, unlisted (held unlisted equity shares), unlistedSold (one among the gains), agriIncome or agriOver (above
-// Rs 5,000): true, false or not known}
-// -> {form, why, code, by, allowed}
+// Rs 5,000): true, false or not known; ITR-4's (rule 12(1)(b)): the same three for an individual or HUF, the agricultural
+// income alone for a firm}
+// -> {form, why, code, by, allowed, barred} (barred: the forms rule 12 rules out on what is known, with why; not in allowed)
 export function recommendForm(f) {
   f = f || {};
-  const e = entityFrom(f.entity, f.pan, f.gstin), code = e.code, allowed = allowedForms(code, f.llp);
+  const e = entityFrom(f.entity, f.pan, f.gstin), code = e.code, barred = barredForms(f, code), allowed = allowedForms(code, f.llp).filter((x) => !barred[x]);
   const who = e.by === "set" ? "Client setup says this is " + KIND[code] + "." : e.by === "pan" ? "The PAN's fourth letter is " + code + ": " + KIND[code] + "." : "";
-  const out = (form, why) => ({ form, why: (who ? who + " " : "") + why, code, by: e.by, allowed });
+  const out = (form, why) => ({ form, why: (who ? who + " " : "") + why, code, by: e.by, allowed, barred });
   const within = !(f.ti > LIMIT), resident = f.resident !== false;
   const presOk = f.presumptive && !f.audit && within && resident && !f.capitalGains;
   switch (code) {
     case "P": case "H":
       if (f.business) {
-        if (presOk) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh: ITR-4.");
+        if (presOk) {
+          // rule 12 (law.js ITR4): never ITR-4 on a guess; ITR-3 fits either way
+          const bar = rule12(f, ITR4.agriMax, true);
+          if (!bar.no.length && !bar.unknown.length) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh; not a director in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4.");
+          if (bar.no.length) return out("ITR-3", "Business income is declared on a presumptive basis, but ITR-4 is not for " + BARRED_WHO[code] + " " + orList(bar.no) + ", so ITR-3 for the income from business or profession.");
+          return out("ITR-3", "There is income from business or profession, so ITR-3. FinCom does not know yet " + orList(bar.unknown) + ", and ITR-4 is not for such a person. Answer the questions below to see if ITR-4 fits.");
+        }
         return out("ITR-3", "There is income from business or profession (the books), so ITR-3." + (f.presumptive ? " ITR-4 does not fit: " + (f.audit ? "a tax audit applies." : !within ? "the total income is above Rs 50 lakh." : !resident ? "not a resident." : "there are capital gains.") : ""));
       }
       if (code === "P" && resident && within && !f.capitalGains && !f.foreign && !(f.houses > 2)) {
-        const bar = itr1Bars(f);
+        const bar = rule12(f, ITR1.agriMax, true);
         if (!bar.no.length && !bar.unknown.length) return out("ITR-1", "No business income: salary, up to two houses and other sources, total income within Rs 50 lakh; not a director in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-1.");
-        if (bar.no.length) return out("ITR-2", "No business income, but ITR-1 is not for someone who " + orList(bar.no) + ": ITR-2.");
+        if (bar.no.length) return out("ITR-2", "No business income, but ITR-1 is not for " + BARRED_WHO.P + " " + orList(bar.no) + ": ITR-2.");
         return out("ITR-2", "No business income. FinCom does not know yet " + orList(bar.unknown) + ", and ITR-1 is not for such a person, so ITR-2. Answer the questions below to see if ITR-1 fits.");
       }
       return out("ITR-2", "No business income" + (code === "H" ? " (ITR-1 is for individuals only)" : "") + ": " + (code === "H" ? "ITR-2." : f.capitalGains ? "there are capital gains, so ITR-2." : f.houses > 2 ? "more than two houses, so ITR-2." : f.foreign ? "assets outside India, so ITR-2." : !resident ? "not a resident, so ITR-2." : "the total income is above Rs 50 lakh, so ITR-2."));
     case "F":
       if (f.llp === true) return out("ITR-5", "An LLP files ITR-5.");
-      if (f.business && presOk) return out("ITR-4", "A partnership firm with presumptive income (44AD, 44ADA, 44AE) and total income within Rs 50 lakh: ITR-4.");
+      if (f.business && presOk) {
+        // rule 12 (law.js ITR4): a firm's agricultural income above Rs 5,000 rules ITR-4 out; not known, ITR-5
+        const bar = rule12(f, ITR4.agriMax, false);
+        if (!bar.no.length && !bar.unknown.length) return out("ITR-4", "A partnership firm with presumptive income (44AD, 44ADA, 44AE), total income within Rs 50 lakh and agricultural income Rs 5,000 or less: ITR-4.");
+        if (bar.no.length) return out("ITR-5", "A partnership firm with presumptive income, but ITR-4 is not for " + BARRED_WHO.F + " " + orList(bar.no) + ": ITR-5.");
+        return out("ITR-5", "A firm files ITR-5. FinCom does not know yet " + orList(bar.unknown) + ", and ITR-4 is not for such a firm. Answer the question below to see if ITR-4 fits.");
+      }
       return out("ITR-5", "A firm files ITR-5" + (f.llp == null ? " (ITR-4 only for a partnership firm, not an LLP, with presumptive income)." : "."));
     case "C":
       if (f.exempt === true) return out("ITR-7", "It claims exemption under section 11 (a section 8 company): ITR-7.");
@@ -106,7 +129,9 @@ export function formStatus(form, rec) {
   const fits = !!rec.code && rec.allowed.includes(form), notFirm = form === "ITR-5" && "ABJLGT".includes(rec.code || "-");
   const json = JSON_FORMS.includes(form) && fits && !notFirm;
   let text = "";
+  const bar = !fits && rec.code && rec.barred && rec.barred[form];
   if (!rec.code) text = NO_KIND;
+  else if (bar) text = form + " is not for " + BARRED_WHO[rec.code] + " " + orList(bar) + ". Use " + rec.allowed.join(" or ") + " (recommended: " + rec.form + "). FinCom makes no JSON for a form that does not fit.";
   else if (!fits) text = form + " is not for " + SHORT[rec.code] + ". Use " + rec.allowed.join(" or ") + " (recommended: " + rec.form + "). FinCom makes no JSON for a form that does not fit.";
   else if (!JSON_FORMS.includes(form)) text = "FinCom cannot make the JSON for " + form + " yet (it makes " + JSON_FORMS.join(", ") + "). The computation and the checks are shown; prepare this return in Winman.";
   else if (notFirm) text = "FinCom's ITR-5 JSON is made for firms and LLPs only; for " + SHORT[rec.code] + " it cannot make it yet. The computation and the checks are shown; prepare this return in Winman.";

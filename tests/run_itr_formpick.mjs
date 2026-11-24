@@ -34,7 +34,9 @@ T("company", () => {
 });
 T("individual", () => {
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true }).form, "ITR-3", "individual with business income (the books): ITR-3");
-  eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-4", "individual, presumptive, income within 50 lakh: ITR-4");
+  const r12 = { director: false, unlisted: false, agriOver: false };
+  eq(recommendForm(Object.assign({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }, r12)).form, "ITR-4", "individual, presumptive, income within 50 lakh, rule 12 answered No: ITR-4");
+  eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-3", "individual, presumptive, but rule 12 not answered: ITR-3 (never ITR-4 on a guess)");
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 6000000 }).form, "ITR-3", "presumptive but income above 50 lakh: ITR-3");
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, audit: true }).form, "ITR-3", "presumptive with a tax audit: ITR-3");
   eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0 }).form, "ITR-1", "salary only, within 50 lakh, not a director, no unlisted shares or agricultural income: ITR-1");
@@ -47,12 +49,17 @@ T("individual", () => {
 });
 T("HUF", () => {
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true }).form, "ITR-3", "HUF with business: ITR-3");
+  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriOver: false }).form, "ITR-4", "HUF, presumptive, rule 12 answered No: ITR-4");
+  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-3", "HUF, presumptive, rule 12 not answered: ITR-3");
+  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: true, unlisted: false, agriOver: false }).form, "ITR-3", "HUF, presumptive, a director (its karta): ITR-3");
   eq(recommendForm({ pan: "ZZZHX1234Z", salary: false }).form, "ITR-2", "HUF without business: ITR-2 (ITR-1 is for individuals only)");
   ok(!allowedForms("H").includes("ITR-1"), "ITR-1 not right for a HUF");
 });
 T("firm", () => {
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true }).form, "ITR-5", "firm: ITR-5");
-  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000 }).form, "ITR-4", "a partnership firm, presumptive, within 50 lakh: ITR-4");
+  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, agriOver: false }).form, "ITR-4", "a partnership firm, presumptive, within 50 lakh, agricultural income Rs 5,000 or less: ITR-4");
+  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000 }).form, "ITR-5", "a partnership firm, presumptive, agricultural income not answered: ITR-5");
+  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, agriOver: true }).form, "ITR-5", "a partnership firm with agricultural income above Rs 5,000: ITR-5");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: true }).form, "ITR-5", "an LLP is never ITR-4: ITR-5");
   ok(!allowedForms("F", true).includes("ITR-4"), "ITR-4 not right for an LLP");
 });
@@ -73,6 +80,8 @@ T("choice", () => {
   eq(chosenForm({ form: "ITR-5" }, rec), "ITR-6", "ITR-5 saved for a company before the chooser (not chosen by the person): the recommendation");
   eq(chosenForm({ form: "ITR-5", formSet: true }, rec), "ITR-5", "ITR-5 chosen by the person: kept");
   eq(chosenForm({ form: "ITR-4" }, recommendForm({ pan: "ZZZPX1234Z", business: true })), "ITR-4", "an individual's ITR-4 saved before: kept (it fits)");
+  eq(chosenForm({ form: "ITR-4" }, recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, director: true })), "ITR-3", "an ITR-4 saved before for one now said to be a director: not kept silently, ITR-3");
+  eq(chosenForm({ form: "ITR-4", formSet: true }, recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, director: true })), "ITR-4", "ITR-4 chosen by the person: kept (the page says it does not fit)");
 });
 
 console.log("4. what the JSON covers: a form it does not cover is said plainly, never built as another form");

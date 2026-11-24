@@ -84,7 +84,7 @@ function useItr() {
   const checks = verify({ model, main: comp, imports, books, gst, tds: bk ? bk.tds : null, form3cd: bk ? bk.form3cd : null, pfBooks: pfBooks(books), esiBooks: bk ? bk.esiBooks : null, pfAdminCharges: state.pfAdmin,
     pf36va: model.pf36va, dues43B: bk ? model.dues43B : null, msme: bk ? model.msme : null, prior43B: model.prior43B, pfProof: bk ? bk.pfProof : null, due, answers: state.paidOn || {},
     nrAsk: bk ? bk.nrAsk : [], coverage: json ? json.coverage : [], accepted: state.accepted || {} });
-  return { D, store, client, files, state, imports, books, form, rec, fstat, model, profile, comp, second, checks, sch, json };
+  return { D, store, client, files, state, imports, books, facts, form, rec, fstat, model, profile, comp, second, checks, sch, json };
 }
 // what the recommendation needs to know, before the computation
 function factsOf(client, st, books) {
@@ -93,7 +93,7 @@ function factsOf(client, st, books) {
   return { entity: client.entity, pan: client.pan, gstin: client.gstin, llp: st.llp === true || st.llp === false ? st.llp : client.llp, exempt: st.exempt11, audit: !!st.audit, resident: st.resident !== false,
     business: !!(books && books.ok) || presumptive, presumptive, salary: !!((st.salaries || []).length || (st.salary && +st.salary.gross)), houses: (st.houses || []).length,
     capitalGains: !!((st.cgRows || []).length || st.cg), foreign: (st.profile || {}).foreignAssets === "YES",
-    // ITR-1's rule 12 (law.js ITR1): asked on the form box, never taken as No when not answered
+    // rule 12 for ITR-1 and ITR-4 (law.js ITR1, ITR4): asked on the form box, never taken as No when not answered
     director: st.director, unlisted: st.unlisted, unlistedSold: (st.cgRows || []).some((r) => r && r.kind === "unlisted"), agriOver: st.agriOver };
 }
 // capital gains other than 112A up to Rs 1.25 lakh (ITR-1 and ITR-4 take only those)
@@ -111,12 +111,14 @@ export default function ITR() {
   if (!co && !window.__itrDemo) return null;
   const g = gate(X.checks, json ? (json.asks.length ? { ok: false, errors: json.asks.map((a) => ({ path: a.path, msg: "to answer" })) } : json.schema) : null);
   const open = X.checks.filter(isOpen);
-  const ent = { P: "Individual", H: "HUF", F: X.model.llp === true ? "LLP" : X.model.llp === false ? "Firm" : "Firm or LLP", C: "Company", A: "AOP", B: "BOI", J: "Artificial juridical person", L: "Local authority", G: "Government", T: "Trust" }[X.rec.code] || "Other";
+  // the kind of taxpayer: none shown until it is known (no PAN, no kind chosen)
+  const ent = { P: "Individual", H: "HUF", F: X.model.llp === true ? "LLP" : X.model.llp === false ? "Firm" : "Firm or LLP", C: "Company", A: "AOP", B: "BOI", J: "Artificial juridical person", L: "Local authority", G: "Government", T: "Trust" }[X.rec.code] || "";
+  const sub = [ent, X.client.pan].filter(Boolean).join(" · ");
   return <div className="itr" data-itr="" data-itr-step={step}>
     <header className="itr-head">
       <div>
         <div className="itr-eyebrow">AY 2026-27 · FY 2025-26</div>
-        <h1>{X.rec.code || X.state.formSet ? X.form : "ITR form not picked"}<span className="itr-sub">{" " + ent + (X.client.pan ? " · " + X.client.pan : "")}</span></h1>
+        <h1>{X.rec.code || X.state.formSet ? X.form : "ITR form not picked"}{sub && <span className="itr-sub" data-itr-kind={X.rec.code || ""}>{" " + sub}</span>}</h1>
       </div>
       <div className="itr-head-r">
         {g.ok ? <span className="itr-chip" data-tone="ok" data-itr-ready="">JSON ready</span> : <span className="itr-chip" data-tone="warn" data-itr-open={open.length}>{open.length ? open.length + " to look at" : "Not ready"}</span>}
@@ -145,8 +147,11 @@ const ny = (v) => (v === "y" ? true : v === "n" ? false : undefined);
 function FormPick({ X, refresh }) {
   const rec = X.rec, fs = X.fstat, code = rec.code, set = (p) => { X.store.setState(p); refresh(); };
   const exemptQ = "CTABJLG".includes(code || "-"), presQ = (code === "P" || code === "H" || (code === "F" && X.state.llp !== true));
-  // ITR-1's rule 12 (pick.js): an individual is asked what rules ITR-1 out; unanswered, ITR-2 is recommended
-  const q1 = code === "P" ? [["director", "A director in a company at any time in the year"], ["unlisted", "Held unlisted equity shares at any time in the year"], ["agriOver", "Agricultural income above Rs 5,000"]] : [];
+  // rule 12 (pick.js): an individual is asked what rules ITR-1 and ITR-4 out (unanswered: ITR-2, or ITR-3 for business
+  // income); a HUF with presumptive income the same for ITR-4; a firm (not an LLP) with it the agricultural income only (ITR-5)
+  const Q12 = [["director", "A director in a company at any time in the year"], ["unlisted", "Held unlisted equity shares at any time in the year"], ["agriOver", "Agricultural income above Rs 5,000"]];
+  const pres = !!(X.facts && X.facts.presumptive);
+  const q1 = code === "P" || (code === "H" && pres) ? Q12 : code === "F" && X.facts.llp !== true && pres ? Q12.slice(2) : [];
   const tag = (f) => (code && f === rec.form ? " (recommended)" : code && !rec.allowed.includes(f) ? " (not for this client)" : !JSON_FORMS.includes(f) ? " (no JSON yet)" : "");
   return <section className="itr-pick" data-itr-pick="" data-fits={fs.fits ? "1" : "0"} data-json={fs.json ? "1" : "0"}>
     <div className="itr-pick-row">

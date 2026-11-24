@@ -60,7 +60,12 @@ export const P44AE = { heavyKg: 12000, perTonMonth: 1000, perVehicleMonth: 7500,
 // resident individual with total income up to Rs 50 lakh, and not one who is a director in a company, has held unlisted
 // equity shares at any time during the previous year, or has agricultural income above Rs 5,000
 export const ITR1 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(a) of the Income-tax Rules and its proviso (AY 2026-27 ITR-1 instructions): not for a director in a company, one who held unlisted equity shares at any time in the previous year, or agricultural income above Rs 5,000" };
-export const ITR4_MAX_INCOME = 5000000;      // ITR-4 (Sugam): total income not more than Rs 50 lakh (schema maximum 51,25,000 with 112A)
+// ITR-4 (Sugam): who may file it (pick.js). Rule 12(1)(b) and its proviso, as in the AY 2026-27 form's instructions: a
+// resident individual, HUF or firm (other than an LLP) with business or professional income on a presumptive basis (44AD,
+// 44ADA, 44AE) and total income up to Rs 50 lakh; not an individual or HUF who is a director in a company or has held
+// unlisted equity shares at any time during the previous year; not one with agricultural income above Rs 5,000
+export const ITR4 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(b) of the Income-tax Rules and its proviso (AY 2026-27 ITR-4 instructions): for a resident individual, HUF or firm other than an LLP with presumptive income (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not for an individual or HUF who is a director in a company or held unlisted equity shares at any time in the previous year, nor for agricultural income above Rs 5,000" };
+export const ITR4_MAX_INCOME = ITR4.maxIncome; // total income not more than Rs 50 lakh (schema maximum 51,25,000 with 112A)
 
 // Section 40(b): partners' remuneration and interest (Finance (No. 2) Act 2024, from AY 2025-26)
 export const S40B = { first: 600000, firstMin: 300000, firstRate: 0.9, restRate: 0.6, interest: 0.12, src: "Section 40(b)(iv) and (v) as amended by the Finance (No. 2) Act 2024: on the first Rs 6 lakh of book profit or a loss, Rs 3 lakh or 90% of book profit, whichever is more; on the balance 60%; interest at most 12% simple a year" };
