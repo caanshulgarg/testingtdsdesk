@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.21 - TEST SHEET (2.5.20's sheet, docs/bridge-2.5.20-test-sheet.txt, still applies; 2.5.21's changes here)
 
 File:        FinComBridge-Setup-2.5.21.exe
-Fingerprint: (filled in at the build: the .sha256 file next to the setup)
+Fingerprint: SHA-256 22cf6355a7ced575de8c6c8a9510a7406fca813036865a6fb9eb57696cd2bc75 (FinComBridge-Setup-2.5.21.exe, built 24-Nov-2026 19:25 UTC at a3b92296d, POSTONLY=any, staging site; compare with the .sha256 file next to the setup); program FinComBridge-2.5.21.exe SHA-256 6d6fad804c6c49c426eb22977ff35ad1a38994a7d5bc1ced942cbc4859e15f63. A staging download only: its update list is NOT signed, so no bridge updates itself to it; not to be handed out to clients until the ZZ TEST checks below are done
              The paper: docs/bridge-2.5.21-notes.md. Branch next-bridge-2521-rel (next-bridge-reupload).
 
 2.5.21 makes no new request of Tally: the look below is FinComTag, the request a posting already uses before an entry
