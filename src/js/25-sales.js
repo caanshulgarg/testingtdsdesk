@@ -527,15 +527,35 @@ function salesProblemsNow(v, lines){
 }
 // every GST rate there is (the usual ones, and 0.1% to a merchant exporter, 1% / 1.5% / 6% / 7.5%), for the items check
 const GST_ALL_RATES = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40];
-// the GST rate an item is at: the listed rate within 0.05% of its own, else the nearest whose tax is its own to two
-// paise a head (a line of 1.30 with 0.12 + 0.12: 18%, not 18.46%); null when none
-function salesRateSnap(it){
-  const r = num(it.gstRate), t = num(it.taxable), heads = ["igst", "cgst", "sgst"].filter(h => num(it[h]));
-  const near = l => l.length ? l.reduce((a, b) => Math.abs(r - b) < Math.abs(r - a) ? b : a) : null;
-  const a = near(GST_ALL_RATES.filter(R => Math.abs(r - R) <= 0.05));
-  return a !== null ? a : near(heads.length ? GST_ALL_RATES.filter(R => heads.every(h => Math.abs(num(it[h]) - t * R / (h === "igst" ? 100 : 200)) <= 0.02)) : []);
+// an item's own tax heads (IGST, CGST, SGST it carries), and whether that tax is rate R's: to two paise a head, or a
+// rupee an item (review of c48ce8de8)
+function salesItemHeads(it){ return ["igst", "cgst", "sgst"].filter(h => num(it[h])); }
+function salesRateFit(it, R){
+  const t = num(it.taxable), heads = salesItemHeads(it), own = heads.reduce((a, h) => a + num(it[h]), 0);
+  return heads.every(h => Math.abs(num(it[h]) - t * R / (h === "igst" ? 100 : 200)) <= 0.02) || Math.abs(own - t * R / 100) <= 1;
 }
-function salesRateOk(it){ return salesRateSnap(it) !== null; }
+// the GST rate an item is at, or null. An item with no tax of its own (a PDF's: the tax is worked out again): the listed
+// rate within 0.05% of its own (17.99%: 18%). One that carries its own tax: its stated rate only when that tax is the
+// rate's (1,00,000 at 17.96% with IGST 17,960 is not 18%: ₹40 short); a stated rate that is no listed rate, the listed
+// rate its tax is (a line of 1.30 with 0.12 + 0.12: 18%, not 18.46%)
+function salesRateSnap(it){
+  const r = num(it.gstRate), t = num(it.taxable), heads = salesItemHeads(it), own = heads.reduce((a, h) => a + num(it[h]), 0);
+  const near = l => l.length ? l.reduce((a, b) => Math.abs(r - b) < Math.abs(r - a) ? b : a) : null;
+  const listed = near(GST_ALL_RATES.filter(R => Math.abs(r - R) <= 0.05));
+  if (!heads.length) return listed;
+  if (listed !== null) return salesRateFit(it, listed) ? listed : null;
+  const fit = GST_ALL_RATES.filter(R => salesRateFit(it, R));
+  return fit.length ? fit.reduce((a, b) => Math.abs(own - t * b / 100) < Math.abs(own - t * a / 100) ? b : a) : null;
+}
+// (H, review of c48ce8de8) an item at a listed rate whose own tax is not that rate's: said, with the rate its tax is
+function salesRateClash(it){
+  const r = num(it.gstRate), t = num(it.taxable), heads = salesItemHeads(it);
+  const listed = GST_ALL_RATES.find(R => Math.abs(r - R) <= 0.05);
+  if (!heads.length || listed === undefined || salesRateFit(it, listed)) return "";
+  const own = r2(heads.reduce((a, h) => a + num(it[h]), 0)), fit = GST_ALL_RATES.filter(R => salesRateFit(it, R));
+  const is = fit.length ? fit.reduce((a, b) => Math.abs(own - t * b / 100) < Math.abs(own - t * a / 100) ? b : a) : null;
+  return "Item at " + r + "% carries " + money(own) + " tax, which is " + (is !== null ? is + "%" : "not " + listed + "%") + ": check the rate on the sheet";
+}
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
   if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)
@@ -581,7 +601,9 @@ function invoiceProblems(v){
   // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong) is never posted. (Review of
   // b2a451774) every GST rate counts, not only the usual list; an item within 0.05% of one (17.99%), or whose own tax is
   // that rate's to two paise a head (a line of 1.30), is at it
-  const odd = Array.from(new Set((x.items || []).filter(it => num(it.taxable) || num(it.qty)).filter(it => !salesRateOk(it)).map(it => num(it.gstRate)))).sort((a, b) => a - b);
+  const its = (x.items || []).filter(it => num(it.taxable) || num(it.qty)), clash = its.map(salesRateClash).filter(Boolean);
+  Array.from(new Set(clash)).forEach(m => p.push(m));
+  const odd = Array.from(new Set(its.filter(it => !salesRateClash(it) && salesRateSnap(it) === null).map(it => num(it.gstRate)))).sort((a, b) => a - b);
   if (odd.length) p.push("GST at " + odd.map(r => r + "%").join(" and ") + (odd.length > 1 ? " are not usual rates" : " is not a usual rate") + ": check the rates on the sheet or the items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
   // (two not yet posted of one number and year: one is a mistake; one already posted or In Tally holds nothing)

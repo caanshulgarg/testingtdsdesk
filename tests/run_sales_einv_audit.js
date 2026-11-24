@@ -18,7 +18,7 @@ const {load, HTML} = require("./harness");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "INR", "money", "xesc", "GSTIN_RE", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_STATES", "SALES_RATES", "stateOfGstin", "fyLabel", "rateTag",
   "salesOwnGstins", "salesPan", "salesGstinOfPan", "salesOwnStates", "salesIsOwn", "salesSeriesKeys", "salesRegOf", "salesLearnReg",
-  "salesTotals", "GST_ALL_RATES", "salesRateSnap", "salesRateOk", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
+  "salesTotals", "GST_ALL_RATES", "salesItemHeads", "salesRateFit", "salesRateSnap", "salesRateClash", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
   "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "postNamesKnown", "postNameScrub", "POST_REASONS", "postReasonText", "postCloudSay", "salesSel", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
   "inv", "blankItem", "salesIrnLocked", "startDraft", "recalcDraft", "draftProblems", "saveDraft", "salesSetField", "salesSetKind", "EINV"];
 const {ctx, x} = load(HTML, NAMES);
@@ -73,6 +73,30 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   const made = add({taxable: 1.3, cgst: 0.12, sgst: 0.12, total: 1.54, items: [it(1.3, 18.46, {cgst: 0.12, sgst: 0.12, tax: 0.24})]});
   made.source = "created"; made.x.items[0].gstRate = 18.46; x.mapInvoice(made);
   ok(made.x.items[0].gstRate === 18.46, "an invoice made here: its own rate kept (" + made.x.items[0].gstRate + ")");
+  // (review of c48ce8de8) G: an item that carries its own tax is at a listed rate only when that tax is the rate's, to
+  // two paise a head or a rupee an item; H: its own tax is checked against the rate it states
+  const own = (t, r, ig) => it(t, r, {igst: ig, cgst: 0, sgst: 0, tax: ig});
+  const sh = (o) => { const v = add(Object.assign({pos: "29", customerGstin: CKA}, o)); v.source = "sheet"; x.mapInvoice(v); return v; };
+  const rateP = (v) => v.problems.filter(p => /check the rate/.test(p));
+  const g1 = sh({taxable: 101000, igst: 18010, total: 119010, items: [own(100000, 17.96, 17960), own(1000, 5, 50)]});
+  ok(g1.x.items[0].gstRate === 17.96 && g1.status !== "ready" && rateP(g1).includes("Item at 17.96% carries ₹17,960.00 tax, which is not 18%: check the rate on the sheet"), "G: 1,00,000 at 17.96% with IGST 17,960 (₹40 short of 18%): not taken as 18%, held (" + g1.x.items[0].gstRate + " " + JSON.stringify(g1.problems) + ")");
+  const g2 = sh({taxable: 101000, igst: 18090, total: 119090, items: [own(100000, 18.04, 18040), own(1000, 5, 50)]});
+  ok(g2.x.items[0].gstRate === 18.04 && rateP(g2).length === 1, "G: 18.04% with ₹40 over: held (" + JSON.stringify(rateP(g2)) + ")");
+  const g3 = add({pos: "29", customerGstin: CKA, taxable: 101000, igst: 18050, total: 119050, items: [it(100000, 17.96), it(1000, 5)]});
+  ok(g3.x.items[0].gstRate === 18 && !rateP(g3).length, "G: a PDF item at 17.96% with no tax of its own (worked out again): 18% (" + g3.x.items[0].gstRate + " " + JSON.stringify(g3.problems) + ")");
+  const g4 = sh({taxable: 1900, igst: 212, total: 2112, items: [own(900, 16.2, 162), own(1000, 5, 50)]});
+  ok(g4.x.items[0].gstRate === 18 && !rateP(g4).length, "a stated 16.2% whose tax is 18% exactly: 18% (" + g4.x.items[0].gstRate + " " + JSON.stringify(g4.problems) + ")");
+  const g5 = sh({taxable: 1000.5, igst: 50.2, total: 1050.7, items: [own(0.5, 40, 0.2), own(1000, 5, 50)]});
+  ok(g5.x.items[0].gstRate === 40 && !rateP(g5).length, "a line of 0.50 at 40% with tax 0.20: as it is (" + JSON.stringify(g5.problems) + ")");
+  const h1 = sh({taxable: 1900, igst: 212, total: 2112, items: [own(900, 12, 162), own(1000, 5, 50)]});
+  ok(h1.x.items[0].gstRate === 12 && h1.status !== "ready" && rateP(h1).includes("Item at 12% carries ₹162.00 tax, which is 18%: check the rate on the sheet"), "H: stated 12%, IGST 162 on 900 (18%): held, said plainly (" + JSON.stringify(h1.problems) + ")");
+  const h2 = sh({taxable: 1900, igst: 200, total: 2100, items: [own(900, 12, 150), own(1000, 5, 50)]});
+  ok(rateP(h2).includes("Item at 12% carries ₹150.00 tax, which is not 12%: check the rate on the sheet"), "H: stated 12%, IGST 150 on 900 (no rate): held (" + JSON.stringify(h2.problems) + ")");
+  const h3 = add({pos: "29", customerGstin: CKA, taxable: 1900, igst: 212, total: 2112, items: [own(900, 12, 162), own(1000, 5, 50)]});
+  h3.source = "created"; x.mapInvoice(h3);
+  ok(rateP(h3).includes("Item at 12% carries ₹162.00 tax, which is 18%: check the rate on the sheet"), "H: on an invoice made here too (" + JSON.stringify(h3.problems) + ")");
+  const h4 = sh({taxable: 1900, igst: 212.3, total: 2112.3, items: [own(900, 18, 162.3), own(1000, 5, 50)]});
+  ok(!rateP(h4).length, "18% with 30 paise of rounding in its tax: as it is (" + JSON.stringify(h4.problems) + ")");
   const r162 = add({taxable: 2000, cgst: 106, sgst: 106, total: 2212, items: [it(1000, 16.2), it(1000, 5)]});
   ok(r162.problems.includes("GST at 16.2% is not a usual rate: check the rates on the sheet or the items"), "an item at 16.2%: held (" + JSON.stringify(r162.problems) + ")");
   const std = add({taxable: 1000, cgst: 7.5, sgst: 7.5, total: 1015, items: [it(500, 3), it(500, 0)]});
