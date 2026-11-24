@@ -720,7 +720,7 @@ async function reconcileBank(opts){
     b.postedTags = b.postedTags || {};
     rows.forEach(r => {
       if (pairOf.has(r.id)){
-        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; const t = T[pairOf.get(r.id)]; r.tallyHow = t.tag && t.tag === fpHash(r.fp || r.id) ? "posted by FinCom earlier" : "found in Tally when reconciling"; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
+        if (["ready", "attention", "suggested"].includes(r.state)){ r.prevState = r.state; r.state = "intally"; r.matchedAt = new Date().toISOString(); const t = T[pairOf.get(r.id)]; r.tallyHow = t.tag && t.tag === fpHash(r.fp || r.id) ? "posted by FinCom earlier" : "found in Tally when reconciling"; if (t.guid) r.tallyKey = t.guid; r.tallyRef = [t.type, t.number, t.party].filter(Boolean).join(" · "); }
         if (r.state === "intally" || r.state === "sent") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + now;
       }
     });
@@ -1067,6 +1067,11 @@ function postingLine(pj, tname){
   return head + (pj.message && !/^(Posting|Starting|Resuming|Finding)/.test(pj.message) ? " \u2014 " + pj.message : "\u2026");
 }
 function refreshBusy(){ softRender(); }
+// the answers of a posting onto the same lines of the statement reloaded meanwhile (matchedAt: when one was found in Tally)
+function bankPostCarry(rows, into){
+  const was = new Map(rows.map(r => [r.id, r]));
+  into.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "matchedAt", "postedVia", "postError", "postedOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
+}
 async function postBankToTally(ids){
   const b = B(), co = CO(b.cid), st = curStmt();
   if (!st) return;
@@ -1104,7 +1109,7 @@ async function postBankToTally(ids){
   b.rows.forEach(r => {
     if (r.state !== "ready" || (ids && !ids.includes(r.id))) return;
     const tag = fpHash(r.fp || r.id);
-    if (b.postedTags[tag] && !/^optional:/.test(b.postedTags[tag])){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
+    if (b.postedTags[tag] && !/^optional:/.test(b.postedTags[tag])){ r.prevState = r.state; r.state = "intally"; r.matchedAt = new Date().toISOString(); r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
   });
   // guard 2 (next-dup-cloud-only, the owner, 23-Nov-2026, "it should flow"): never a read of Tally before posting. This
   // bank ledger is looked at in FinCom's cloud copy only (dupCopy), around the dates being posted: a line the copy already
@@ -1242,8 +1247,7 @@ async function postBankToTally(ids){
     // the page reloaded the statement while Tally worked (a sync from FinCom's cloud): the answers go onto the lines shown
     const nb = B();
     if (nb && nb !== b && nb.cid === b.cid && nb.cur === st.id && Array.isArray(nb.rows)){
-      const was = new Map(rows.map(r => [r.id, r]));
-      nb.rows.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "postedVia", "postError", "postedOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
+      bankPostCarry(rows, nb.rows);
       nb.postedTags = Object.assign({}, b.postedTags || {}, nb.postedTags || {});
     }
     saveBank({rows: true, newLed: true, posted: true});
