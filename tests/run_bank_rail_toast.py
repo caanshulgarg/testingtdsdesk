@@ -1,5 +1,6 @@
 """python3 run_bank_rail_toast.py - the message at the bottom (the toast) on the Bank page beside the bank's rail (html.bk-rail,
-parts/bank/Rail.jsx): on a desktop it sat at left 12px, under the 72px rail, cut off. It must start right of the rail.
+parts/bank/Rail.jsx): on a desktop it sat at left 12px, under the 72px rail, cut off, and its foot under the bar at the
+foot of the page ("Posting waits…"). It must start right of the rail and end above the bar.
 Offline, a made-up statement. Screenshot (deviceScaleFactor 2, 1440 wide) into SHOTS. UI_PORT (8495)."""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -32,6 +33,12 @@ with sync_playwright() as p:
     rail = pg.evaluate("(() => { const r = document.querySelector('.bkr'); return r ? r.getBoundingClientRect().right : 72; })()")
     left = pg.evaluate("document.getElementById('toast').getBoundingClientRect().left")
     ok(left >= rail, "the message starts right of the rail (left %.0f, rail ends at %.0f)" % (left, rail))
+    bottom = pg.evaluate("document.getElementById('toast').getBoundingClientRect().bottom")
+    bar = pg.evaluate("(() => { const a = document.querySelector('.actionbar'); return a ? a.getBoundingClientRect().top : innerHeight; })()")
+    ok(pg.locator(".actionbar").count() == 1 and "Posting waits" in pg.inner_text(".actionbar"), "the bar at the foot says posting waits")
+    ok(bottom <= bar, "the message ends above the bar at the foot (bottom %.0f, bar starts at %.0f)" % (bottom, bar))
+    # no new body:has(...) rule for it: the offsets come from CSS variables
+    ok(pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--toast-left').trim()") == "84px", "the rail gives the message its left offset (--toast-left)")
     if SHOTS:
         os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "bank-rail-toast.png"))
     br.close()

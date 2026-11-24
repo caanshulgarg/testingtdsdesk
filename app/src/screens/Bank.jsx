@@ -551,11 +551,14 @@ export function BankBar() {
   // the table's box ends where this bar starts (spacious layout): measured again whenever the bar is drawn or changes size
   const barRef = useRef(null);
   useLayoutEffect(() => { fill(); });
+  // the message at the bottom (the toast) stays above this bar: its height as --toast-lift (styles/arc-look.css)
   useEffect(() => {
-    const el = barRef.current;
-    if (!el || typeof ResizeObserver !== "function") return undefined;
-    const o = new ResizeObserver(fillSoon); o.observe(el);   // the next frame (fillSoon: FINCOM-APP-STAGING-E)
-    return () => o.disconnect();
+    const el = barRef.current, h = document.documentElement;
+    const lift = () => { if (el && el.offsetHeight) h.style.setProperty("--toast-lift", el.offsetHeight + "px"); else h.style.removeProperty("--toast-lift"); };
+    lift();
+    if (!el || typeof ResizeObserver !== "function") return () => h.style.removeProperty("--toast-lift");
+    const o = new ResizeObserver(() => { fillSoon(); lift(); }); o.observe(el);   // the next frame (fillSoon: FINCOM-APP-STAGING-E)
+    return () => { o.disconnect(); h.style.removeProperty("--toast-lift"); };
   });
   if (!b || b.loading || !curStmt()) return null;
   bankSelected();
