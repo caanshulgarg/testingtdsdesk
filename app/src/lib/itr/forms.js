@@ -272,6 +272,9 @@ export function coverage(X, map) {
   // the earlier years' rows of Schedule CFL need each year's date of filing (and whether it was in time, section 80)
   const Lx = M.losses || {}, undated = ["business", "hp", "stcl", "ltcl"].filter((k) => (Lx[k] || []).some((x) => N(x.amt) && (!x.filed || (k !== "hp" && x.inTime == null))));
   if (undated.length) add("cfl_prior", "Schedule CFL, earlier years", "Losses of earlier years (" + undated.map((k) => ({ business: "business", hp: "house property", stcl: "short-term capital", ltcl: "long-term capital" })[k]).join(", ") + "): give the date each year's return was filed and whether it was filed by its due date (section 80), on Schedules.");
+  // presumptive income on ITR-3 / ITR-5 without books: computed (model.js), but the P&L's no-books lines (44AD, 44ADA,
+  // 44AE) are not filled by FinCom yet: the JSON is held
+  if ((f === "ITR-3" || f === "ITR-5") && S.presumptive && !M.business) add("pres_nobooks", "Presumptive income without books (" + f + ")", "Income under 44AD / 44ADA / 44AE without books: FinCom fills it in ITR-4; in " + f + " its lines (Part A-P&L, no books of account) are not filled yet.");
   if (f !== "ITR-4" && M.business && N(M.business.itDep) && !((M.business.itBlocks || []).length)) add("dep", "Schedules DPM / DOA (depreciation by block)", "Depreciation under section 32 of " + R(M.business.itDep) + " has no block detail: fill Statements › Fixed assets.");
   if (f !== "ITR-4" && M.business && (M.business.itBlocks || []).length && R((M.business.itBlocks || []).filter((b) => BLOCK_PATH[b.key]).reduce((a, b) => a + N(b.dep), 0)) !== R(M.business.itDep)) add("dep_sum", "Schedules DPM / DOA add up", "The blocks' depreciation does not add up to the depreciation claimed.");
   if (M.audit && f !== "ITR-4" && !(P.auditor && P.auditor.firm && P.auditor.reportDate && P.auditor.ack)) add("audit_info", "Audit report details", "A tax audit applies: give the auditor's firm, PAN, the date of the report and its acknowledgement number on Data.");
@@ -545,6 +548,8 @@ function itr3(X) {
   put(o, "PartA_GEN1/FilingStatus/IncFrmBusOrProf", "Y");
   put(o, "PartA_GEN1/FilingStatus/ItrFilingDueDate", M.tp ? "2026-11-30" : M.audit ? "2026-10-31" : "2026-08-31");
   put(o, "PartA_GEN1/FilingStatus/OptOldRegimeCurrAY", M.regime === "old" ? "Y" : "N");
+  // the residential status chosen on the form box (RES, NOR, NRI); not chosen: asked with the JSON, as before
+  if (M.resStatus) put(o, "PartA_GEN1/FilingStatus/ResidentialStatus", M.resStatus);
   put(o, "PartA_GEN2/AuditInfo/LiableSec44AAflg", "Y");
   put(o, "PartA_GEN2/AuditInfo/LiableSec44ABflg", M.audit ? "Y" : "N");
   put(o, "PartA_GEN2/AuditInfo/LiableSec92Eflg", M.tp ? "Y" : "N");

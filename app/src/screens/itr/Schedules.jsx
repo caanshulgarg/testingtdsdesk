@@ -67,7 +67,7 @@ export default function Schedules({ X, refresh, schema }) {
       note="An unlisted company: its land and buildings, shares and securities, loans given and taken, vehicles and jewellery at the year end. Checked against the balance sheet." />}
     {f === "ITR-6" && (st.profile || {}).indAs === true && <Oci X={X} set={set} />}
     <Other X={X} set={set} />
-    {f !== "ITR-4" && <Losses X={X} set={set} />}
+    {(f !== "ITR-4" || hasLosses(st.losses)) && <Losses X={X} set={set} />}
     {M.form === "ITR-4" && <p className="itr-note">ITR-4 takes up to two houses (AY 2026-27) and long-term gains under 112A up to Rs 1.25 lakh; anything more needs ITR-3.</p>}
   </div>;
 }
@@ -185,6 +185,9 @@ function proviso(X, id) {
 }
 
 // ---------------- Losses of earlier years (CFL) ----------------
+// ITR-4 carries no losses, but an entry there bars it: the card stays on ITR-4 while there is one, so it can be removed
+// (the review of 24-Nov-2026 (3))
+const hasLosses = (L) => !!L && (+L.unabsorbedDep > 0 || ["business", "hp", "stcl", "ltcl", "ud"].some((k) => (L[k] || []).length > 0));
 const LKIND = [["business", "Business loss (72)"], ["hp", "House property loss (71B)"], ["stcl", "Short-term capital loss (74)"], ["ltcl", "Long-term capital loss (74)"], ["ud", "Unabsorbed depreciation (32(2), no time limit)"]];
 const LAYS = ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"], UDAYS = Array.from({ length: 25 }, (_, i) => String(2001 + i));
 function Losses({ X, set }) {
@@ -269,6 +272,7 @@ function Foreign({ X, set, schema }) {
   return <Card k="fa" title="Foreign assets (Schedule FA)" chip={yes ? (count ? count + " entered" : "Needed") : null} note="For a resident: any asset, account or interest outside India held at any time in calendar year 2025 (January to December), in rupees at the SBI telegraphic transfer buying rate.">
     <Sel label="Held any asset outside India in 2025?" k="fa-yn" v={own.foreignAssets || ""} opts={[["", "Choose"], ["NO", "No"], ["YES", "Yes"]]} on={(x) => set({ profile: Object.assign({}, own, { foreignAssets: x || undefined }) })} />
     {yes && (schema ? <ListsOf X={XX} path="ScheduleFA" value={v} on={(nv) => set({ fa: nv })} /> : <p className="itr-note">Loading the official schema…</p>)}
+    {!yes && count > 0 && <p className="itr-note" data-itr-fa-left="">{"Schedule FA still has " + count + (count === 1 ? " row" : " rows") + " from before. "}<button className="linkbtn" data-itr-fa-remove="" onClick={() => set({ fa: {} })}>Remove these rows</button></p>}
   </Card>;
 }
 // ---------------- other sources not in the books (Schedule OS) ----------------

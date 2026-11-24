@@ -232,5 +232,15 @@ ok(!gate(r.cs, null).ok, "the schema not loaded: not offered");
 const r3 = run({ accepted: acc, comp: (c) => { c.key = Object.assign({}, c.key, { cess: c.key.cess + 1 }); } });
 ok(!gate(r3.cs, ok1).ok, "the computations apart: not offered");
 
+console.log("Schedule FA: for an ordinarily resident only (NOR and NRI flagged)");
+{ const fa = { DtlsForeignBank: [{ CountryName: "DEMO" }] };
+  for (const [res, want] of [["NRI", "needs"], ["NOR", "needs"], ["RES", "absent"], [false, "needs"]]) {
+    const z = run({ state: { resident: res, fa, profile: { foreignAssets: "YES" } } });
+    ok(z.by("fa_nr").status === want, "Schedule FA rows, residential status " + res + ": fa_nr " + z.by("fa_nr").status + " (expected " + want + ")");
+  }
+  const z = run({ state: { resident: "NOR", fa, profile: { foreignAssets: "YES" } } });
+  ok(/not ordinarily resident/.test(z.by("fa_nr").title || ""), "the NOR's check says so: " + z.by("fa_nr").title);
+}
+
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);
