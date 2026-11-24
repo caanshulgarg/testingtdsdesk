@@ -79,7 +79,8 @@ async function uploadSales(files){
       await salesTurn(async () => {
         const up = (CloudDocs.sv || {})[cid + "|sv:" + (v.docOf || v.id)]; if (up){ v.docPath = up[0]; v.docSize = up[1]; }
         const s = await live();
-        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = salesSavePending = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
+        // (written now, in this turn: salesSaveNow; another client's save still waiting goes in its own turn, saveSales)
+        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await salesSaveNow(); }
         else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
       });
       added++;
@@ -106,14 +107,19 @@ async function salesIngest(cid, file, r, hash){
     : salesFromFree({j: r.j}, co, r.j && r.j.salesText);
   x.noteKind = x.noteKind || (r.j && r.j.noteKind) || noteKindOf(String((r.j && (r.j.salesText || r.j.hint)) || "").split(/\n| {3,}/));
   const v = newInvoice(x, "upload", {hash, fileName: file.name, method: r.method || "", needsMap: true, trace: r.trace || []});
-  if (S.sales && S.sales.cid === cid){
-    if (S.sales.list.some(o => o.hash === hash || salesTwin(o, x))) return false;
-    S.sales.list.push(v); v.needsMap = false; mapInvoice(v); saveSales(); render();
+  // (the review of 34de5bd26: a list still loading is waited for, never pushed into: its save does nothing and its
+  // reading replaces it. Not on screen: into the kept list, in turn with the sync)
+  const s = S.sales && S.sales.cid === cid ? await salesWhenIn(cid) : null;
+  if (s && s === S.sales){
+    if (s.list.some(o => o.hash === hash || salesTwin(o, x))) return false;
+    s.list.push(v); v.needsMap = false; mapInvoice(v); saveSales(); render();
   } else {
-    const list = (await BankDB.get("sales:" + cid)) || [];
-    if (list.some(o => o.hash === hash || salesTwin(o, x))) return false;
-    list.push(v);
-    await BankDB.set("sales:" + cid, list);
+    const twin = await salesTurn(async () => {
+      const list = (await BankDB.get("sales:" + cid)) || [];
+      if (list.some(o => o.hash === hash || salesTwin(o, x))) return true;
+      list.push(v); await BankDB.set("sales:" + cid, list); return false;
+    });
+    if (twin) return false;
   }
   S.files["sv:" + v.id] = file;
   return true;

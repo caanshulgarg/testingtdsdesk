@@ -724,6 +724,7 @@ async function cloudApplySales(r){
     await BankDB.set("saleshist:" + cid, (r.data || {}).hist || {});
     return;
   }
+  if (typeof salesLayPending === "function") salesLayPending(cid, id, r.deleted ? null : r.data);
   const list = (await BankDB.get("sales:" + cid)) || [];
   const i = list.findIndex(v => v.id === id);
   if (r.deleted){ if (i >= 0){ list.splice(i, 1); await BankDB.set("sales:" + cid, list); } return; }
