@@ -304,6 +304,7 @@ function MakeNow({ co, ym, tally, onState, saved }) {
   const k = said ? said.kind : ex ? "already" : "";
   const state = (said && said.state) || (ex && ex.state) || "";
   const done = { approved: " and approved", approving: " and is being approved", rejected: ", and rejected on Daily Check" }[state] || "";
+  // (review 6) Daily Check › Entries lists an entry ready or being approved only: an approved or rejected one has no "Open it"
   // (re-review 1) the running month, still ready or held: made again from the salary kept now (the same entry, new figures)
   const again = running && (state === "ready" || state === "held") && canWrite() && <> <button type="button" className="linkbtn" disabled={busy} onClick={make} data-make-again="">{busy ? "Making…" : "Make the " + what + " now again"}</button></>;
   const youLink = <button type="button" className="linkbtn" onClick={() => openDaily("you")} data-now-you="">Open Needs you</button>;
@@ -311,7 +312,7 @@ function MakeNow({ co, ym, tally, onState, saved }) {
     {auto ? <p className="pr-line note" data-now-busy="">Updating the {what} for {label} with the new figures…</p>
       : (k === "updated" || k === "made") && said.auto ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>The {what} for {label} is updated with the new figures.</b> {where} {open(said.id)}</p>
       : k === "made" || k === "updated" ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>{k === "updated" ? "Made again from the salary kept now." : "Made."}</b> {where} It goes to Tally only when you approve it.{said.running ? " " + said.words : ""} {open(said.id)}{again}</p>
-      : k === "already" ? <p className="pr-line" data-now-said="">The {what} for {label} is already made{done}. {done ? "" : where} {open((said && said.id) || ex.id)}{again}</p>
+      : k === "already" ? <p className="pr-line" data-now-said="">The {what} for {label} is already made{done}. {done ? "" : where} {state !== "approved" && state !== "rejected" && open((said && said.id) || ex.id)}{again}</p>
       : k === "you" ? <p className="pr-line" data-now-said="">{said.words} It is on Daily Check › Needs you. <button type="button" className="linkbtn" onClick={() => openDaily("you")} data-now-you="">Open Daily Check</button></p>
       : k === "kept" && said.client ? <p className="pr-line" data-now-said="">{said.words || "Waiting for the client’s answer for " + label + " on Daily Check › From clients."} <button type="button" className="linkbtn" onClick={() => openDaily("clients")} data-now-clients="">Open From clients</button></p>
       : k === "kept" ? <p className="pr-line" data-now-said="">{said.words || "Daily Check needs you for " + label + "."} {youLink}</p>

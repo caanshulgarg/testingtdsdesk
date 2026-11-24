@@ -372,6 +372,12 @@ def now_flow(br, w, kind, nl):
     if pg.locator("[data-now-open]").count(): pg.click("[data-now-open]"); settle(pg, 500)
     pg.wait_for_timeout(600)
     ok(pg.evaluate("() => S.view === 'home' && S.homeTab === 'daily'") and (pg.locator("[data-tab=entries][aria-selected=true]").count() == 1 or pg.locator("[data-daily]").count() >= 1), kind + " 12. Open it: Daily Check, its Entries")
+    # (review 6) approved or rejected: Daily Check › Entries lists neither, so no "Open it" that leads nowhere
+    for stt, words in (("approved", "already made and approved."), ("rejected", "already made, and rejected on Daily Check.")):
+        pg.evaluate("(s) => { window.__now.entries['202610'].state = s; S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }", stt); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+        if pg.locator("[data-kept-open='202610']").count(): pg.click("[data-kept-open='202610']"); settle(pg, 500)
+        said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
+        ok(words in said and pg.locator("[data-now-open]").count() == 0 and "Approve it" not in said, kind + " 12. already " + stt + ": said, no Open it to a list without it: " + said[:160])
     ctx.close()
     # the running month, and Tally Payroll
     ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
@@ -654,7 +660,7 @@ else {
     out = Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {}, made.nosalary ? { nosalary: true } : {});
   } else {
     const a = await applyNow({ rest, firm: F, cid: "c1", night: today.slice(0, 4) + "-" + today.slice(4, 6) + "-" + today.slice(6, 8), by: "u-made-up", press: body.press === true }, made);
-    const words = a.kind === "kept" ? (a.client ? "Waiting for the client’s answer for " + mon + " on Daily Check › From clients." : "Daily Check needs you for " + mon + ".") : made.words || "";
+    const words = a.kind === "kept" ? (a.client ? (a.question === "asked" || a.question === "answered" ? "Waiting for the client’s answer for " + mon + " on Daily Check › From clients." : "The question for " + mon + " is on Daily Check › From clients.") : "Daily Check needs you for " + mon + ".") : made.words || "";
     out = Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a);
   }
 }
@@ -663,7 +669,7 @@ process.stdout.write(JSON.stringify({ out, db }));
 DBMOCK = """() => { window.__now = {calls: [], flushed: 0};
   try { BookItems.on = () => true; BookItems.flush = async () => { window.__now.flushed++; }; } catch (e) {}
   Cloud.on = () => true;
-  Cloud.api = async (path) => { path = String(path); if (path.startsWith("night_entries")) return JSON.parse(await window.__dbEntries(path)); if (path.startsWith("rpc/")) return {ok: true}; return []; };
+  Cloud.api = async (path) => { path = String(path); if (path.startsWith("night_entries") || path.startsWith("night_findings") || path.startsWith("client_asks")) return JSON.parse(await window.__dbEntries(path)); if (path.startsWith("rpc/")) return {ok: true}; return []; };
   Cloud.fn = async (name, body) => { window.__now.calls.push([name, body]); return JSON.parse(await window.__srvDb(JSON.stringify((@STATE@)()), JSON.stringify(body))); };
   return true; }""".replace("@STATE@", STATE)
 def run_now_words(br, w, kind):
@@ -675,6 +681,17 @@ def run_now_words(br, w, kind):
     def db_entries(path):
         import urllib.parse
         q = urllib.parse.parse_qs(path.split("?", 1)[1]) if "?" in path else {}
+        if not path.startswith("night_entries"):
+            # (review 6) Daily Check's own reads (night_findings, client_asks): eq. and in.() filters, the rest ignored
+            t = path.split("?", 1)[0]
+            def hit(r):
+                for k, vs in q.items():
+                    if k in ("select", "order", "limit", "offset"): continue
+                    v = vs[0]
+                    if v.startswith("eq.") and str(r.get(k)) != v[3:]: return False
+                    if v.startswith("in.(") and str(r.get(k)) not in v[4:-1].split(","): return False
+                return True
+            return json.dumps([dict(r, client_id=r.get("client_id") or "c1") for r in DB.get(t, []) if hit(r)])
         dd = urllib.parse.unquote((q.get("dedupe") or ["eq."])[0])[3:]
         sts = ((q.get("state") or ["in.()"])[0])[4:-1].split(",")
         return json.dumps([e for e in DB["night_entries"] if e.get("dedupe") == dd and e.get("state") in sts])
@@ -749,6 +766,28 @@ def run_now_words(br, w, kind):
     try: pg.wait_for_selector("[data-tab=clients][aria-selected=true]", timeout=10000)
     except Exception: pass
     ok(pg.evaluate("() => S.view === 'home' && S.homeTab === 'daily'") and pg.locator("[data-tab=clients][aria-selected=true]").count() == 1, kind + " 15. Open From clients: Daily Check › From clients (that tab open)")
+    listed = lambda fid: pg.locator("[data-daily] .dc-body [data-row='%s'] .dc-dot.asked" % fid).count() == 1
+    try: pg.wait_for_selector("[data-daily] .dc-body [data-row='%s']" % Fd(YM)["id"], timeout=8000)
+    except Exception: pass
+    ok(listed(Fd(YM)["id"]), kind + " 15. the month's question listed under From clients (Asked)")
+    pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    # (review 6) set aside on Daily Check ("Not needed") with the client's question Asked: From clients lists only a finding
+    # that is a question ("ask"), so the press moves it back there (guarded: only while still set aside), makes nothing,
+    # logs it as reopened, and the From clients link shows the month with its question
+    Fd(YM).update({"state": "dismissed", "decided_by": "u-other", "decided_at": "2026-11-20T05:00:00Z", "undone_at": None, "undone_by": None})
+    if pg.locator("[data-kept-open='%s']" % YM).count(): pg.click("[data-kept-open='%s']" % YM); settle(pg, 800)
+    n_log = len(DB["daily_log"])
+    press()
+    fd = Fd(YM)
+    ok(fd.get("state") == "ask" and fd.get("decided_by") is None and fd.get("undone_by") == "u-made-up" and fd.get("undone_at") and E(YM)[0]["state"] == "withdrawn" and len(E(YM)) == 1, kind + " 15. set aside, the client asked, pressed: back to the question (ask), nothing made: " + json.dumps({k: fd.get(k) for k in ("state", "decided_by", "undone_by")}))
+    ok(any((l.get("evidence") or {}).get("kind") == "reopened" and (l.get("evidence") or {}).get("was") == "dismissed" and (l.get("evidence") or {}).get("by") == "u-made-up" for l in DB["daily_log"][n_log:]), kind + " 15. logged as reopened, by who pressed")
+    ok(("Waiting for the client’s answer for %s on Daily Check › From clients." % mon) in said() and pg.locator("[data-now-clients]").count() == 1 and pg.locator("[data-now-you]").count() == 0 and "Made" not in said(), kind + " 15. said: waiting for the client's answer, Open From clients: " + said()[:200])
+    shot(pg, "27c-set-aside-question", kind)
+    if pg.locator("[data-now-clients]").count(): pg.click("[data-now-clients]"); settle(pg, 600)
+    try: pg.wait_for_selector("[data-daily] .dc-body [data-row='%s']" % fd["id"], timeout=8000)
+    except Exception: pass
+    ok(pg.locator("[data-tab=clients][aria-selected=true]").count() == 1 and listed(fd["id"]), kind + " 15. Open From clients: the set-aside month's question is listed there (Asked)")
+    shot(pg, "27d-from-clients-listed", kind)
     pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
     # the salary kept here not in FinCom's cloud yet (the server has none for the month): said so, never "No salary is kept"
     DB["client_asks"].clear(); Fd(YM).update({"state": "resolved", "undone_at": None, "undone_by": None}); E(YM)[0]["state"] = "ready"; LAG[0] = True

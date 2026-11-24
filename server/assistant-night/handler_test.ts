@@ -259,9 +259,35 @@ Deno.test("payroll now: a press and the client's question: asked or answered kep
     const d = payStand({ findings: dismissed() });
     d.db.client_asks = [{ id: "q1", finding_id: "f1", state: qs }];
     const r = await payNow(mk(d), { client_id: "c1", ym: "202610", press: true });
-    eq([r.j.kind, r.j.reopened, d.db.night_entries.length, d.db.night_findings[0].state, d.db.night_findings[0].decided_by, d.db.client_asks[0].state], ["kept", undefined, 0, "dismissed", ME, qs], "dismissed, a question " + qs + ": kept (the client's to answer), nothing made");
+    // (review 6) From clients lists only questions whose finding is "ask": the month set aside is moved back there (as
+    // undone: the night never resolves it by itself), so the page's "Open From clients" shows it with its question
+    const f0 = d.db.night_findings[0];
+    eq([r.j.kind, r.j.reopened, d.db.night_entries.length, f0.state, f0.decided_by, f0.decided_at, f0.undone_by, !!f0.undone_at, d.db.client_asks[0].state], ["kept", "dismissed", 0, "ask", null, null, ME, true, qs], "dismissed, a question " + qs + ": back to the client's question (ask), nothing made");
+    eq(d.calls.paths.filter((x: string) => x.startsWith("PATCH /rest/v1/night_findings")), ["PATCH /rest/v1/night_findings?id=eq.f1&state=in.(dismissed)"], "the move guarded: only while still set aside");
     eq([r.j.client, r.j.words], [true, "Waiting for the client’s answer for Oct 2026 on Daily Check › From clients."], "dismissed, a question " + qs + ": said as waiting for the client's answer (From clients), not Needs you");
+    const lg = d.db.daily_log.find((l: any) => l.evidence && l.evidence.kind === "reopened");
+    eq([lg && lg.ref, lg && lg.evidence.by, lg && lg.evidence.was, lg && lg.evidence.state], ["f1", ME, "dismissed", "ask"], "logged as reopened, by who pressed");
+    // pressed again: it is the client's question now (no second move, nothing made)
+    const r2 = await payNow(mk(d), { client_id: "c1", ym: "202610", press: true });
+    eq([r2.j.kind, r2.j.client, r2.j.reopened, d.db.night_entries.length, d.db.night_findings[0].state], ["kept", true, undefined, 0, "ask"], "pressed again: still the client's, said so");
+    // the update after a save (no press) never moves it
+    const n = payStand({ findings: dismissed() });
+    n.db.client_asks = [{ id: "q1", finding_id: "f1", state: qs }];
+    const rn = await payNow(mk(n), { client_id: "c1", ym: "202610" });
+    eq([rn.j.kind, n.db.night_findings[0].state, n.db.night_findings[0].decided_by, n.db.daily_log.some((l: any) => l.evidence && l.evidence.kind === "reopened")], ["kept", "dismissed", ME, false], "no press: set aside as it was, not logged");
+    // new figures that need a person (Needs you): the same, never "It is on Needs you" for a finding that is not there
+    const y = payStand({ findings: dismissed() });
+    y.db.client_asks = [{ id: "q1", finding_id: "f1", state: qs }];
+    const ry = await payNow(mk(y, { kind: "you", finding: Object.assign({}, ready.finding, { state: "you" }), picks: [], words: "Payroll Oct 2026: the sheet does not add up" }), { client_id: "c1", ym: "202610", press: true });
+    eq([ry.j.kind, ry.j.client, ry.j.words, y.db.night_findings[0].state], ["kept", true, "Waiting for the client’s answer for Oct 2026 on Daily Check › From clients.", "ask"], "Needs you figures, a question " + qs + ": From clients, where it is");
   }
+  // (review 6) the client asked by a person's choice (Ask client: ask, decided): From clients, never Needs you
+  const ak = payStand({ findings: [{ id: "f5", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "ask", decided_by: ME, decided_at: "2026-11-20T05:00:00Z", evidence: [] }] });
+  ak.db.client_asks = [{ id: "q5", finding_id: "f5", state: "draft" }];
+  const rak = await payNow(mk(ak), { client_id: "c1", ym: "202610", press: true });
+  eq([rak.j.kind, rak.j.client, rak.j.words, ak.db.night_entries.length, ak.db.night_findings[0].state], ["kept", true, "The question for Oct 2026 is on Daily Check › From clients.", 0, "ask"], "asked of the client by a person, a Draft: its question on From clients, nothing made");
+  ak.db.client_asks[0].state = "asked";
+  eq((await payNow(mk(ak), { client_id: "c1", ym: "202610", press: true })).j.words, "Waiting for the client’s answer for Oct 2026 on Daily Check › From clients.", "and once asked: waiting for the client's answer");
   const ua = payStand({ findings: undone() });
   ua.db.client_asks = [{ id: "q1", finding_id: "f3", state: "answered" }];
   const rua = await payNow(mk(ua), { client_id: "c1", ym: "202610", press: true });
