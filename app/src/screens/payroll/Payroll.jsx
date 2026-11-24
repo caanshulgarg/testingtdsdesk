@@ -313,6 +313,7 @@ function MakeNow({ co, ym, tally, onState, saved }) {
       : k === "made" || k === "updated" ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>{k === "updated" ? "Made again from the salary kept now." : "Made."}</b> {where} It goes to Tally only when you approve it.{said.running ? " " + said.words : ""} {open(said.id)}{again}</p>
       : k === "already" ? <p className="pr-line" data-now-said="">The {what} for {label} is already made{done}. {done ? "" : where} {open((said && said.id) || ex.id)}{again}</p>
       : k === "you" ? <p className="pr-line" data-now-said="">{said.words} It is on Daily Check › Needs you. <button type="button" className="linkbtn" onClick={() => openDaily("you")} data-now-you="">Open Daily Check</button></p>
+      : k === "kept" && said.client ? <p className="pr-line" data-now-said="">{said.words || "Waiting for the client’s answer for " + label + " on Daily Check › From clients."} <button type="button" className="linkbtn" onClick={() => openDaily("clients")} data-now-clients="">Open From clients</button></p>
       : k === "kept" ? <p className="pr-line" data-now-said="">{said.words || "Daily Check needs you for " + label + "."} {youLink}</p>
       : <>
         <div className="pr-acts"><button type="button" className="btn small primary" disabled={busy || !canWrite()} onClick={make} data-make-now="">{busy ? "Making…" : "Make the " + what + " now"}</button>

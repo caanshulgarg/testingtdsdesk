@@ -5,7 +5,8 @@
 // service-role PostgREST call.
 //   existingNow(rest, firm, cid, ym)  the month's entry already made (by the night or this button), or null
 //   applyNow({rest, firm, cid, night, by, press}, res)  -> {kind: made | updated | already | you | kept | none, id?, state?,
-//     withdrawn?: the running month's open entry taken back (you, kept), reopened?: dismissed | undone (press only)}
+//     withdrawn?: the running month's open entry taken back (you, kept), reopened?: dismissed | undone (press only),
+//     client?: kept, held by a question asked of the client (press only)}
 //   withdrawNow(rest, firm, cid, ym, by, why)  (review 3) the running month's open entry taken back: its id, or ""
 //   keepNow(rest, firm, cid, months, seen)  (review B2, re-review 2) for tonight's run: the entries made now for a month the
 //     night does not make itself (the running month), as dedupes for night_apply to keep, and that month's open findings
@@ -24,23 +25,27 @@ export async function existingNow(rest, firm, cid, ym) {
 // (review 4) a person pressed Make now (press): their new decision on the month. One they set aside ("Not needed",
 // dismissed), or undid and left a question to no one (ask, undone, no question to the client open), is opened again as
 // FinCom finds it now (its old choice and undo cleared), so the entry is made as normal. Never by the update after a save
-// (no press): that keeps the person's choice. Their id: the one opened again, or ""
+// (no press): that keeps the person's choice. (review 5) Either way, a question asked of the client (Asked, or Answered)
+// keeps the finding the client's to answer; a Draft never sent to the client does not hold the press back (and is left as
+// it is). Their id: the one opened again, or "" ("client": held by a question asked of the client)
+const CLIENTS = ["asked", "answered"];
 async function reopenFinding(rest, firm, cid, cur) {
-  if (cur.state === "dismissed") return cur.id;
-  if (!(cur.undone_at && cur.state === "ask" && !cur.decided_by)) return "";
+  if (!(cur.state === "dismissed" || (cur.undone_at && cur.state === "ask" && !cur.decided_by))) return "";
   const qs = await rest("/rest/v1/client_asks?select=id,state&finding_id=eq." + enc(cur.id));
   if (!Array.isArray(qs)) throw new Error("the client's questions could not be read");
-  return qs.some((q) => q && q.state !== "closed") ? "" : cur.id;
+  return qs.some((q) => q && CLIENTS.includes(q.state)) ? "client" : cur.id;
 }
 // one finding, by night_apply's rule: a person's choice stays (decided, or dismissed); one undone is never resolved again
 async function putFinding(rest, firm, cid, night, f, press) {
   const cur = ((await rest("/rest/v1/night_findings?select=id,state,evidence,decided_by,undone_at,last_seen&" + where(firm, cid) + "&kind=eq." + enc(f.kind) + "&key=eq." + enc(f.key))) || [])[0];
   let st = f.state, ev = st === "resolved" ? (f.evidence || []) : [];
-  const again = cur && press ? await reopenFinding(rest, firm, cid, cur) : "";
+  const again0 = cur && press ? await reopenFinding(rest, firm, cid, cur) : "", client = again0 === "client", again = client ? "" : again0;
   if (again) {
     const was = cur.state === "dismissed" ? "dismissed" : "undone";
-    await rest("/rest/v1/night_findings?id=eq." + enc(cur.id), "", { method: "PATCH", body: JSON.stringify({ facts: f.facts || {}, state: st, evidence: ev, candidates: st === "you" ? (f.candidates || []) : [],
+    // (review 5) only while it is still set aside or undone: a decision made on Daily Check at the same moment stays (kept)
+    const done = await rest("/rest/v1/night_findings?id=eq." + enc(cur.id) + "&state=in.(dismissed,ask)", "", { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ facts: f.facts || {}, state: st, evidence: ev, candidates: st === "you" ? (f.candidates || []) : [],
       decided_by: null, decided_at: null, undone_by: null, undone_at: null, last_seen: cur.last_seen && String(cur.last_seen) > night ? cur.last_seen : night }) });
+    if (!(Array.isArray(done) && done.length)) return { id: cur.id, state: cur.state, undone: !!cur.undone_at, raced: true };
     return { id: cur.id, state: st, undone: false, reopened: was };
   }
   if (cur) {
@@ -49,7 +54,7 @@ async function putFinding(rest, firm, cid, night, f, press) {
     const patch = { facts: f.facts || {}, state: st, evidence: ev, last_seen: cur.last_seen && String(cur.last_seen) > night ? cur.last_seen : night };
     if (st === "you" && !cur.decided_by) patch.candidates = f.candidates || [];
     await rest("/rest/v1/night_findings?id=eq." + enc(cur.id), "", { method: "PATCH", body: JSON.stringify(patch) });
-    return { id: cur.id, state: st, undone: !!cur.undone_at };
+    return Object.assign({ id: cur.id, state: st, undone: !!cur.undone_at }, client ? { client: true } : {});
   }
   const row = { firm_id: firm, client_id: cid, kind: f.kind, key: f.key, facts: f.facts || {}, state: st, evidence: ev, candidates: st === "you" ? (f.candidates || []) : [], first_seen: night, last_seen: night };
   const made = await rest("/rest/v1/night_findings", "", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
@@ -94,12 +99,12 @@ export async function applyNow(ctx, res) {
   const f = await putFinding(rest, firm, cid, night, res.finding, ctx.press === true);
   // (review 4) opened again by the person's press: logged, with who pressed
   if (f.reopened) await log("payroll_now", f.id, { ym, by, kind: "reopened", was: f.reopened, state: f.state });
-  if (res.kind === "you" || f.state !== "resolved" || f.undone) {
+  if (res.kind === "you" || f.state !== "resolved" || f.undone || f.raced) {
     // the new figures need a person (or a person set the month aside, or undid it, on Daily Check): the running month's
     // entry made from the old ones is taken back (never approved so), and said (withdrawn: its id)
     const gone = open ? await takeBack(rest, cur.id) : "";
     await log("payroll_now", res.finding.key, Object.assign({ ym, by, kind: res.kind === "you" ? "you" : "kept", state: f.state }, gone ? { withdrawn: gone } : {}));
-    return Object.assign({ kind: res.kind === "you" ? "you" : "kept", state: f.state }, gone ? { withdrawn: gone } : {});
+    return Object.assign({ kind: res.kind === "you" ? "you" : "kept", state: f.state }, gone ? { withdrawn: gone } : {}, f.client && res.kind !== "you" ? { client: true } : {});
   }
   const e = res.entry;
   const row = { firm_id: firm, client_id: cid, finding_id: f.id, source: e.source, dedupe: e.dedupe, work_ref: e.work_ref || "", voucher: e.voucher || {}, reason: e.reason || "", why: e.why || "",

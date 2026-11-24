@@ -240,7 +240,8 @@ export function handler(deps: Deps) {
     // opened again and made); the update after a save and the second check at Approve send none and keep the choice
     const a = await applyNow({ rest, firm, cid, night: istDay(now()), by: String(user.id), press: body.press === true }, made);
     // (review 3) kept (the month set aside or undone on Daily Check): Needs you, never the note of an entry made
-    const words = a.kind === "kept" ? "Daily Check needs you for " + monYear(ym) + "." : a.kind === "you" ? String(made.words || "") : made.words || "";
+    // (review 5) held by a question asked of the client: waiting for the client's answer (From clients), not Needs you
+    const words = a.kind === "kept" ? (a.client ? "Waiting for the client’s answer for " + monYear(ym) + " on Daily Check › From clients." : "Daily Check needs you for " + monYear(ym) + ".") : a.kind === "you" ? String(made.words || "") : made.words || "";
     return [200, Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a)] as const;
   }
 

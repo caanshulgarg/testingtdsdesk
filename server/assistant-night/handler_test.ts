@@ -250,6 +250,46 @@ Deno.test("payroll now: a press on a month set aside or undone: opened again and
   const rn = await payNow(mk(n, nov), { client_id: "c1", ym: "202611", press: true });
   eq([rn.j.kind, rn.j.id, n.db.night_entries[0].state, n.db.night_entries[0].voucher.lines.length, n.db.night_findings[0].state], ["updated", "e9", "ready", 1, "resolved"], "the running month, pressed: its entry made again (ready), never taken back");
 });
+// (review 5) the client's question, the same for a month set aside as for one undone: asked or answered, it is the
+// client's to answer (kept); a Draft never sent to the client does not hold the press back, and stays as it is
+Deno.test("payroll now: a press and the client's question: asked or answered kept; a draft never sent does not block", async () => {
+  const dismissed = () => [{ id: "f1", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "dismissed", decided_by: ME, decided_at: "2026-11-20T05:00:00Z", evidence: [] }];
+  const undone = () => [{ id: "f3", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "ask", decided_by: null, undone_by: ME, undone_at: "2026-11-21T05:00:00Z", evidence: [] }];
+  for (const qs of ["asked", "answered"]) {
+    const d = payStand({ findings: dismissed() });
+    d.db.client_asks = [{ id: "q1", finding_id: "f1", state: qs }];
+    const r = await payNow(mk(d), { client_id: "c1", ym: "202610", press: true });
+    eq([r.j.kind, r.j.reopened, d.db.night_entries.length, d.db.night_findings[0].state, d.db.night_findings[0].decided_by, d.db.client_asks[0].state], ["kept", undefined, 0, "dismissed", ME, qs], "dismissed, a question " + qs + ": kept (the client's to answer), nothing made");
+    eq([r.j.client, r.j.words], [true, "Waiting for the client’s answer for Oct 2026 on Daily Check › From clients."], "dismissed, a question " + qs + ": said as waiting for the client's answer (From clients), not Needs you");
+  }
+  const ua = payStand({ findings: undone() });
+  ua.db.client_asks = [{ id: "q1", finding_id: "f3", state: "answered" }];
+  const rua = await payNow(mk(ua), { client_id: "c1", ym: "202610", press: true });
+  eq([rua.j.kind, rua.j.client, ua.db.night_entries.length], ["kept", true, 0], "undone, the client answered: kept, the client's");
+  const dd = payStand({ findings: dismissed() });
+  dd.db.client_asks = [{ id: "q1", finding_id: "f1", state: "draft" }];
+  const rd = await payNow(mk(dd), { client_id: "c1", ym: "202610", press: true });
+  eq([rd.j.kind, rd.j.reopened, dd.db.night_entries.length, dd.db.night_findings[0].state, dd.db.client_asks[0].state], ["made", "dismissed", 1, "resolved", "draft"], "dismissed, a Draft never sent: made; the Draft stays as it is");
+  const ud = payStand({ findings: undone() });
+  ud.db.client_asks = [{ id: "q1", finding_id: "f3", state: "draft" }];
+  const ru = await payNow(mk(ud), { client_id: "c1", ym: "202610", press: true });
+  eq([ru.j.kind, ru.j.reopened, ud.db.night_entries.length, ud.db.night_findings[0].state, ud.db.client_asks[0].state], ["made", "undone", 1, "resolved", "draft"], "undone, a Draft never sent: made; the Draft stays as it is");
+  eq(ud.calls.paths.some((x: string) => x.startsWith("PATCH /rest/v1/client_asks")) || dd.calls.paths.some((x: string) => x.startsWith("PATCH /rest/v1/client_asks")), false, "the Draft is not written to");
+});
+// (review 5) the reopen only while the finding is still set aside or undone: a decision made at the same moment stays
+Deno.test("payroll now: a press races a decision on Daily Check: the decision stays, nothing made", async () => {
+  const s = payStand({ findings: [{ id: "f1", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "dismissed", decided_by: ME, evidence: [] }] });
+  const f0 = s.fetch;
+  s.fetch = (async (url: any, init: RequestInit = {}) => {
+    if ((init.method || "").toUpperCase() === "PATCH" && String(url).includes("/rest/v1/night_findings")) Object.assign(s.db.night_findings[0], { state: "you", decided_by: "u-other" });
+    return f0(url, init);
+  }) as typeof globalThis.fetch;
+  const r = await payNow(mk(s), { client_id: "c1", ym: "202610", press: true });
+  eq(s.calls.paths.some((x: string) => x.startsWith("PATCH /rest/v1/night_findings?id=eq.f1&state=in.(dismissed,ask)")), true, "the reopen guarded: only while dismissed or ask");
+  eq([r.j.kind, r.j.reopened, s.db.night_entries.length, s.db.night_findings[0].state, s.db.night_findings[0].decided_by], ["kept", undefined, 0, "you", "u-other"], "the decision made meanwhile stays; nothing made");
+  eq([r.j.client, r.j.words], [undefined, "Daily Check needs you for Oct 2026."], "said as Needs you");
+  eq(s.db.daily_log.some((l: any) => l.evidence && l.evidence.kind === "reopened"), false, "not logged as opened again");
+});
 // (review 4) no salary in the cloud for the month: said so in a way the page can tell (nosalary)
 Deno.test("payroll now: no salary in the cloud: marked for the page", async () => {
   const r = await payNow(mk(payStand({}), { kind: "none", nosalary: true, words: "No salary is kept with the books for Oct 2026." }), { client_id: "c1", ym: "202610" });

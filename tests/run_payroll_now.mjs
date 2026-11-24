@@ -312,15 +312,30 @@ console.log("9. (review 4) a press is the person's new decision; the update afte
   const words = "Nov 2026 isn’t over yet. This is made from the salary kept now.";
   const srv = (x) => async () => x;
   const s1 = await atA(odd, { payrollNow: srv({ ok: true, kind: "already", id: "e31", state: "ready", words }), entryOf: async () => ({ voucher: odd.voucher }) });
-  ok(s1 === words, "the cloud's entry as here, the difference not the salary: the server's own words, never an update: " + s1);
+  // (review 5) the plain words, never the server's running-month note (r.words) for made, updated or already
+  const PLAIN = "FinCom’s cloud has this entry as it is shown; the books here make it differently. Open the client again and approve.";
+  ok(s1 === PLAIN, "the cloud's entry as here, the difference not the salary: plain words, never an update nor the running-month note: " + s1);
   const s2 = await atA(odd, { payrollNow: srv({ ok: true, kind: "updated", id: "e31", state: "ready", words }), entryOf: async () => ({ voucher: odd.voucher }) });
-  ok(s2 === words, "retried, the same mismatch again (made again the same): the server's own words, no loop: " + s2);
+  ok(s2 === PLAIN, "retried, the same mismatch again (made again the same): plain words, no loop: " + s2);
+  const s2m = await atA(odd, { payrollNow: srv({ ok: true, kind: "made", id: "e31", state: "ready", words }), entryOf: async () => ({ voucher: odd.voucher }) });
+  ok(s2m === PLAIN, "made again the same (made): plain words, not the running-month note: " + s2m);
   const s3 = await atA(odd, { payrollNow: srv({ ok: true, kind: "none", nosalary: true, words: "No salary is kept with the books for Nov 2026." }) });
   ok(s3 === NOT_YET, "no salary in the cloud, the books here have it: " + s3);
   // 2. the race: after the claim, the entry read again; made again meanwhile: not posted (released by the caller), said
   ok(await stillAsChecked(e, async () => ({ id: "e31", voucher: JSON.parse(JSON.stringify(e.voucher)) })) === "", "after the claim, the entry as checked: goes on");
   ok(await stillAsChecked(e, async () => ({ id: "e31", voucher: again.entry.voucher })) === "Updated to the salary kept now; check and approve.", "made again between the second check and the claim: Updated to the salary kept now; check and approve.");
-  ok(/could not read/.test(await stillAsChecked(e, async () => { throw new Error("HTTP 500"); })), "not read: said, not posted");
+  const UNREAD = "FinCom could not read this entry again. Try Approve again in a moment.";
+  ok(await stillAsChecked(e, async () => { throw new Error("HTTP 500"); }) === UNREAD, "not read: said, not posted");
+  // (review 5) a read that gives back no row, null or an empty body is a read error too, never "as checked"
+  for (const [what, read] of [["null", async () => null], ["undefined", async () => undefined], ["an empty body", async () => ({})], ["a row with no voucher", async () => ({ id: "e31" })]])
+    ok(await stillAsChecked(e, read) === UNREAD, "after the claim, the read gave back " + what + ": not read, not posted");
+  for (const [what, rows] of [["an empty list", []], ["null", null], ["another entry's row", [{ id: "e99", voucher: e.voucher }]]]) {
+    globalThis.Cloud = { api: async () => rows };
+    try { ok(await stillAsChecked(e) === UNREAD, "the cloud's own read (Daily Check) gave back " + what + ": not read, not posted"); }
+    finally { delete globalThis.Cloud; }
+  }
+  globalThis.Cloud = { api: async () => [{ id: "e31", voucher: JSON.parse(JSON.stringify(e.voucher)) }] };
+  try { ok(await stillAsChecked(e) === "", "the cloud's own read gave back the row as checked: goes on"); } finally { delete globalThis.Cloud; }
 }
 
 console.log(fails ? "\n" + fails + " of " + n + " FAILED" : "\nall " + n + " passed");

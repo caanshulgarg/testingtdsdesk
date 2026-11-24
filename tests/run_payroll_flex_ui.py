@@ -193,10 +193,11 @@ MOCK = """(v) => { window.__ap = {rpc: [], posts: [], order: [], entry: null};
   const LED = Object.keys(S.books.under || {});
   Cloud.on = () => true;
   Cloud.api = async (path) => { path = String(path); const A = window.__ap;
-    if (path.startsWith("night_entries")) return A.entry ? [A.entry] : [];
+    if (path.startsWith("night_entries")) { if (A.blankNext) { A.blankNext = false; return []; } return A.entry ? [A.entry] : []; }
     if (path.startsWith("rpc/")) { const fn = path.slice(4); A.rpc.push(fn); if (fn !== "save_book_items") A.order.push(fn);
       if (fn === "entry_claim") A.entry = Object.assign({}, A.entry, {state: "approving", updated_at: new Date().toISOString()}, A.race ? {voucher: Object.assign({}, A.entry.voucher, A.race)} : {});
       if (fn === "entry_claim" && A.race) A.race = null;
+      if (fn === "entry_claim" && A.blank) { A.blank = false; A.blankNext = true; }
       if (fn === "entry_release") A.entry = Object.assign({}, A.entry, {state: "ready"});
       if (fn === "entry_approved") A.entry = Object.assign({}, A.entry, {state: "approved"});
       return fn === "save_book_items" ? {ok: true, items: []} : {ok: true}; }
@@ -597,6 +598,14 @@ def run_now_approve(br, w, kind, tally):
     order = [x for x in a["order"] if x == "post" or x.startswith("entry_")]
     ok("Updated to the salary kept now; check and approve." in said and order == ["entry_claim", "entry_release"] and a["entry"]["state"] == "ready" and a["entry"]["voucher"].get("narration") == "Made again meanwhile", kind + " 14. made again between the check and the claim: " + " > ".join(order) + ", nothing posted: " + said[:160].replace("\n", " "))
     if w > 600: shot(pg, "23b-race-released" + ("-tally" if tally else ""), kind)
+    # (review 5) claimed, then the read again gives back no row (an empty list): not read, so released, nothing posted
+    pg.evaluate("() => { window.__ap.blank = true; return true; }")
+    posts0 = A()["posts"]
+    said = approve()
+    a = A()
+    order = [x for x in a["order"] if x == "post" or x.startswith("entry_")]
+    ok("FinCom could not read this entry again. Try Approve again in a moment." in said and order == ["entry_claim", "entry_release"] and a["entry"]["state"] == "ready" and not a.get("blankNext") and not a["posts"][len(posts0):], kind + " 14. claimed, then the entry read again as nothing: " + " > ".join(order) + ", nothing posted: " + said[:160].replace("\n", " "))
+    if w > 600: shot(pg, "23c-empty-read-released" + ("-tally" if tally else ""), kind)
     made2 = made3
     said = approve()
     a = A()
@@ -645,7 +654,7 @@ else {
     out = Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {}, made.nosalary ? { nosalary: true } : {});
   } else {
     const a = await applyNow({ rest, firm: F, cid: "c1", night: today.slice(0, 4) + "-" + today.slice(4, 6) + "-" + today.slice(6, 8), by: "u-made-up", press: body.press === true }, made);
-    const words = a.kind === "kept" ? "Daily Check needs you for " + mon + "." : made.words || "";
+    const words = a.kind === "kept" ? (a.client ? "Waiting for the client’s answer for " + mon + " on Daily Check › From clients." : "Daily Check needs you for " + mon + ".") : made.words || "";
     out = Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a);
   }
 }
@@ -727,16 +736,19 @@ def run_now_words(br, w, kind):
     press()
     e = E(YM)
     ok(len(e) == 1 and e[0]["state"] == "ready" and gross(e[0]) == 37000 and Fd(YM).get("state") == "resolved" and Fd(YM).get("undone_at") is None and "Made" in said(), kind + " 15. undone and asked of no one, pressed: the entry made (ready, gross ₹37,000): " + said()[:120])
-    # undone with a question to the client open: Needs you, the link; never the 'Kept. Daily Check makes...' line beside it
+    # undone with a question to the client open: waiting for the client's answer, the From clients link (review 5); never
+    # Needs you, nor the 'Kept. Daily Check makes...' line beside it
     E(YM)[0]["state"] = "withdrawn"; Fd(YM).update({"state": "ask", "undone_by": "u-other", "undone_at": "2026-11-22T05:00:00Z"})
     DB["client_asks"].append({"id": "q1", "finding_id": Fd(YM)["id"], "state": "asked"})
     pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); settle(pg, 300)
     if pg.locator("[data-kept-open='%s']" % YM).count(): pg.click("[data-kept-open='%s']" % YM); settle(pg, 800)
     press()
-    ok(("Daily Check needs you for %s." % mon) in said() and pg.locator("[data-now-you]").count() == 1 and nxt() == "" and E(YM)[0]["state"] == "withdrawn", kind + " 15. a question to the client open: Daily Check needs you, the link, and no 'Kept. Daily Check makes...' line: " + (said() + " | " + nxt())[:200])
+    ok(("Waiting for the client’s answer for %s on Daily Check › From clients." % mon) in said() and pg.locator("[data-now-clients]").count() == 1 and "Open From clients" in said() and pg.locator("[data-now-you]").count() == 0 and "needs you" not in said().lower() and nxt() == "" and E(YM)[0]["state"] == "withdrawn", kind + " 15. a question to the client open: waiting for the client's answer, Open From clients (not Needs you), no 'Kept. Daily Check makes...' line: " + (said() + " | " + nxt())[:200])
     shot(pg, "27-kept-question", kind)
-    if pg.locator("[data-now-you]").count(): pg.click("[data-now-you]"); settle(pg, 600)
-    ok(pg.evaluate("() => S.view === 'home' && S.homeTab === 'daily'"), kind + " 15. Open Needs you: Daily Check")
+    if pg.locator("[data-now-clients]").count(): pg.click("[data-now-clients]"); settle(pg, 600)
+    try: pg.wait_for_selector("[data-tab=clients][aria-selected=true]", timeout=10000)
+    except Exception: pass
+    ok(pg.evaluate("() => S.view === 'home' && S.homeTab === 'daily'") and pg.locator("[data-tab=clients][aria-selected=true]").count() == 1, kind + " 15. Open From clients: Daily Check › From clients (that tab open)")
     pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
     # the salary kept here not in FinCom's cloud yet (the server has none for the month): said so, never "No salary is kept"
     DB["client_asks"].clear(); Fd(YM).update({"state": "resolved", "undone_at": None, "undone_by": None}); E(YM)[0]["state"] = "ready"; LAG[0] = True

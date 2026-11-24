@@ -37,14 +37,16 @@ export async function payrollNowCall(cid, ym, extra) {
 const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
 // (review 4) after the claim: the entry read again. Made again meanwhile (the update after a save, on this page or another
 // computer, between the second check and the claim): not what was checked, so not posted: UPDATED (the caller releases
-// the claim). Not read (an error): said, the claim released too. "" goes on (no row given back to compare: as checked).
-// read(id): the row ({voucher}), else the cloud's own
+// the claim). Not read (an error, or (review 5) no row, null or an empty body given back): UNREAD, the claim released
+// too, nothing posted. "" goes on (the row as checked). read(id): the row ({voucher}), else the cloud's own
+export const UNREAD = "FinCom could not read this entry again. Try Approve again in a moment.";
 export async function stillAsChecked(e, read) {
   let rows;
   try { rows = read ? [await read(e.id)] : await Cloud.api("night_entries?select=id,voucher&id=eq." + encodeURIComponent(e.id)); }
-  catch (x) { return "FinCom could not read this entry again. Nothing was posted; try again in a minute."; }
-  const row = (Array.isArray(rows) ? rows : []).find((x) => x && "voucher" in x && (!x.id || x.id === e.id));
-  return !row || canon(row.voucher || {}) === canon(e.voucher || {}) ? "" : UPDATED;
+  catch (x) { return UNREAD; }
+  const row = (Array.isArray(rows) ? rows : []).find((x) => x && x.voucher && typeof x.voucher === "object" && (!x.id || x.id === e.id));
+  if (!row) return UNREAD;
+  return canon(row.voucher) === canon(e.voucher || {}) ? "" : UPDATED;
 }
 // the salary amounts of a voucher (gross, net and the deductions; a journal: its amounts), whatever the ledgers or the date
 const amounts = (v) => !v ? "" : v.kind === "tallyPayroll" ? [P(v.gross), P(v.net)].concat(["tds", "pt", "pf", "esi", "other"].map((k) => P((v.ded || {})[k]))).join("|")
@@ -56,7 +58,8 @@ const SAID = new Map();
 async function remade(e, ym, o, now) {
   let r = (await (o.payrollNow || payrollNowCall)(e.client_id, ym)) || {};
   if (noSalary(r) && now) r = Object.assign({}, r, { words: NOT_YET });
-  const words = () => String(r.words || "") || "FinCom’s cloud has this entry as it is shown; the books here make it differently. Open the client again and approve.";
+  // (review 5) made, updated or already: plain words, never r.words (the server's running-month note)
+  const words = () => "FinCom’s cloud has this entry as it is shown; the books here make it differently. Open the client again and approve.";
   if (r.kind === "already" && (r.state === "approved" || r.state === "approving")) return "It is already approved.";
   if (r.kind !== "updated" && r.kind !== "made" && r.kind !== "already") return String(r.words || "") || "FinCom could not make it again just now. Try again in a minute.";
   let v = null;
