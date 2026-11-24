@@ -1,0 +1,21 @@
+FINCOM BRIDGE 2.5.21 - TEST SHEET (2.5.20's sheet, docs/bridge-2.5.20-test-sheet.txt, still applies; 2.5.21's changes here)
+
+File:        FinComBridge-Setup-2.5.21.exe
+Fingerprint: (filled in at the build: the .sha256 file next to the setup)
+             The paper: docs/bridge-2.5.21-notes.md. Branch next-bridge-2521-rel (next-bridge-reupload).
+
+2.5.21 makes no new request of Tally: the look below is FinComTag, the request a posting already uses before an entry
+is sent again. The same rules as before: each request stopped at 2 s, one request at a time, postings first, never
+while someone is typing in Tally. Use the test company ZZ TEST with made-up entries only.
+
+ 1. An entry FinCom sends again, whose earlier voucher is Optional in Tally: sent again.
+    Check: in ZZ TEST, Client setup with the Optional tick OFF. Post a made-up sales invoice from FinCom; in Tally open
+    that voucher, mark it Optional (Ctrl+L) and save. In FinCom press "Not in Tally? Post again" on the
+    invoice once FinCom's copy shows it Optional. You should see: the bridge's log says "its mark is in Tally only on an
+    Optional voucher ... sent again"; Tally has a new regular voucher; the invoice is Posted.
+ 2. The same with a cancelled voucher: sent again (a cancelled voucher never counts).
+ 3. A client posting Optional vouchers by its setting: never sent twice.
+    Check: Client setup with the Optional tick ON. Post a made-up invoice (Tally makes it Optional). Hand it back the same
+    way. You should see: "Already in Tally (voucher no. ...)"; no second voucher in Tally.
+ 4. An ordinary repost of an entry this computer sent before (no release): refused on this computer's record, as before
+    ("already sent from this computer on ..."); nothing is asked of Tally.
