@@ -7,7 +7,8 @@ on the Post press itself. Made-up data only.
   1. the Post press, the cloud holding the invoice for an earlier, finished posting: FinCom's cloud decides by its copy
      (tally_post_copy_resend, migration 219): only an Optional voucher there: released and that posting handed back, the
      invoice queued on it (marked Posted when it answers); a regular voucher: Posted before (that posting's date), In
-     Tally, nothing sent; nothing in the copy, or the cloud not ready: Posted before, not sent again, said why
+     Tally, nothing sent; nothing in the copy, the copy not up to date since the send ("unsure"), or the cloud not
+     ready: Posted before, not sent again, said why
   2. "Not in Tally? Post again" on a posted invoice (row and panel): the posting that holds it found, the same decision
   3. the same on a purchase bill and a bank line FinCom posted
   4. nothing is ever asked of Tally or FinCom Bridge for it
@@ -99,6 +100,10 @@ with sync_playwright() as p:
     A.evaluate("""() => { window.__copy = () => ({throw: "Could not find the function public.tally_post_copy_resend(p_id, p_job) in the schema cache"}); }""")
     vd = press("ZR/0460"); st = A.evaluate(STATE, vd); t = A.evaluate(LAST)
     ok(st["note"] == "Posted before by FinCom, not sent again" and "migration 219" in t, "said plainly (%s)" % t)
+    print(" e. FinCom's copy not up to date since the posting's send (the reviews of 24-Nov-2026): nothing sent, said so")
+    A.evaluate("""() => { window.__copy = (a) => ({ok: false, state: "unsure", copy: "optional", job: a.p_job, id: a.p_id, error: "FinCom's copy of Tally is not up to date for this company, so it cannot tell whether this entry is still in Tally. Nothing was sent."}); }""")
+    ve = press("ZR/0461"); st = A.evaluate(STATE, ve); t = A.evaluate(LAST)
+    ok(st["st"] == "posted" and st["note"] == "Posted before by FinCom, not sent again" and "not up to date for this company" in t and "Nothing was sent" in t, "posted before, not sent again, the copy's age said plainly (%s)" % t)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally (%s)" % A.evaluate("() => window.__bridgeCalls"))
 
     print("2. Not in Tally? Post again on a posted invoice")

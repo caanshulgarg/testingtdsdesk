@@ -10,7 +10,9 @@
 //   only deleted, Optional or cancelled vouchers there: the id released (an owner's release, the copy's state as the
 //     reason) and the earlier posting handed back to send that entry alone; the posting computer's record lets it go once;
 //   a regular voucher there: In Tally (posted before); nothing is sent;
-//   nothing there (or the cloud cannot answer yet): said plainly; nothing is sent.
+//   nothing there, the copy not up to date since the posting's send or Tally's acceptance newer than its deletion
+//     ("unsure": a stale copy never releases an entry that may be in Tally), or the cloud cannot answer yet: said plainly,
+//     in the cloud's own words; nothing is sent.
 // On the Post press (salesEarlier, from postSalesRun), and by "Not in Tally? Post again" on a posted invoice, bill or bank
 // line (the same rule, for one marked posted before this).
 const NotInTally = {
