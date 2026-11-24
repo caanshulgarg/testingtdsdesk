@@ -517,6 +517,18 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return nil, err
 		}
 		return getVouchers(co, qs.Get("from"), qs.Get("to"), qs.Get("ledger"), qs.Get("types"), qint(qs, "port"))
+	case "/fix":
+		// fix in place (the owner's approval of 23-Nov-2026; fixalter.go): one change of an existing entry or ledger,
+		// asked by a person's Save in FinCom; the answer says done, held (Tally closed or in use: FinCom keeps it and asks
+		// again), changed since (nothing sent), or Tally's own words
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		return runFix(o), nil
 	case "/unpost":
 		if why := readOnlyWhy(); why != "" {
 			return nil, errors.New(why)

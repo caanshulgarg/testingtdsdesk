@@ -263,11 +263,11 @@ function mastersFor(list){
   list.forEach(v => salesLines(v).forEach(l => used.add(String(l.ledger).toLowerCase())));
   return B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
 }
-// sales vouchers already in Tally (same number and amount) are set aside
+// sales vouchers already in Tally (the same entry: salesSameEntry) are set aside
 // (the most entries the cloud copy answers in one read, server/tally-cloud tally_vouchers_in: an answer of that many may
-// have stopped short, so nothing is posted on it)
+// have stopped short: before a posting that check counts as not made, and the invoices go all the same, salesCheckSafe)
 const SALES_CHECK_CAP = 20000;
-// (call: how Tally is read, tallyCall when not said; the cloud copy's CloudTally.call when reads are off here: salesCheckSafe)
+// (call: how Tally is read, tallyCall when not said; before a posting FinCom's cloud copy only: salesCheckSafe)
 async function salesCheckTally(list, call){
   const co = CO(SL().cid);
   if (!(call || tallyVia(co)) || !list.length) return 0;
@@ -278,34 +278,42 @@ async function salesCheckTally(list, call){
   // type, "Sales UP", is not known before), the Sales-class ones kept here (salesTypeClasses)
   const cfg = SL().cfg, lc = s => String(s || "").toLowerCase().trim(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
   const got = await salesVouchersIn(co, addDays(dates[0], -1), addDays(dates[dates.length - 1], 1), call);
-  const all = got.filter(v => !/^yes$/i.test(v.cancelled || ""));
+  // (never a cancelled or an Optional voucher: not in the books, the owner's case of 24-Nov-2026)
+  const all = got.filter(v => !/^yes$/i.test(v.cancelled || "") && !/^yes$/i.test(v.optional || ""));
+  // the copy's last read (as salesCopyAt): a voucher of a copy not read since FinCom's own earlier posting of that entry
+  // is no evidence by itself; the earlier posting then is, and only when Tally confirmed it as a regular voucher
+  const bk = typeof dupCopy === "function" && call === dupCopy && typeof TCloud === "object" && TCloud.book ? TCloud.book(co.id) : null, bst = (bk && bk.state) || {};
+  const copyAt = bk ? Math.max(0, ...[bst.readAt, bst.seen, bk.daysAt].map(x => Date.parse(x || "") || 0)) : Infinity;
   const own = list.filter(v => !v.x.noteKind).map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales");
   const isInv = salesTypeClasses(own), noteTypes = new Set(notes.concat(list.filter(v => v.x.noteKind).map(v => salesVt(v.x))).map(lc));
-  const vs = all.filter(x => !x.type || isInv(x.type) || noteTypes.has(lc(x.type)));
+  const vs = all.filter(x => !x.type || isInv(x.type) || noteTypes.has(lc(x.type)) || own.some(t => lc(t) === lc(x.type)));
   const by = new Map();
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
   let n = 0;
   // a voucher a person said is not this invoice's (Not this Tally entry) is never matched to it again
-  const keep = SL().cfg.notTally || {};
   const info = x => ({key: salesTallyKey(x), date: String(x.date || ""), number: String(x.number || ""), type: String(x.type || ""), party: String(x.party || ""), amount: salesTallyAmount(x)});
-  list.forEach(v => { const no = normInvNo(v.x.number), not = (v.notTally || []).concat(keep[no] || []);
+  const d8 = x => String(x.date || "").replace(/-/g, "").slice(0, 8), iso = x => /^\d{8}$/.test(d8(x)) ? d8(x).replace(/^(\d{4})(\d\d)(\d\d)$/, "$1-$2-$3") : "";
+  list.forEach(v => { const no = normInvNo(v.x.number), not = salesNotOf(v);
+    // (one already marked In Tally, by FinCom's own posting first: salesCheckSafe; its match kept)
+    if (v.status === "intally") return;
     // (a note is matched to a voucher of its own type only, an invoice to a Sales-class voucher, or one of no type said)
-    const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type));
+    const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type) || lc(x.type) === lc(salesVt(v.x)));
     const any = no ? (by.get(no) || []).filter(kind) : [], same = !not.includes("num:" + no) ? any.filter(x => !not.includes(salesTallyKey(x))) : [];
+    // (a hold of the old rule, 16-Nov-2026, kept on an invoice saved before: it ends here)
     const had = !!v.dupBlock; delete v.dupBlock;
     // (this invoice's duplicate check has run again: an answer not confirmed before no longer holds it, item 3)
     if (v.needsCheck){ delete v.needsCheck; mapInvoice(v); }
-    // a person pressed "Post duplicate anyway" and confirmed it for this number: nothing of that number holds it
-    // (good for the one post attempt it was given for: salesOverrideSpent ends it after that attempt)
-    if (v.dupOverride && v.dupOverride.no === no){ if (had) mapInvoice(v); return; }
-    // the number AND the amount (to ₹1): In Tally. The number alone is never enough to call it this invoice; but it is
-    // never posted again without a person's "Post duplicate anyway" (the owner, 16-Nov-2026), also after "Not this
-    // Tally entry": held, with Tally's voucher said
-    // (an invoice posted before as a duplicate on a person's say-so: a voucher of its number and amount may be the one
-    // that attempt made, or the one it duplicated; never taken for it by itself: the person is asked again)
-    const hit = v.dupOverrideLog ? null : same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
+    // the same entry (salesSameEntry, as FinCom's own posted invoices are matched, salesDupOf): the number, the voucher
+    // type (any Sales-class one when both GSTINs match), the year, the amount (to ₹1), the customer: In Tally, quietly. Anything less is not this
+    // invoice: nothing holds it, it is posted. Nor the Tally entry of a FinCom invoice a person said is not this one
+    const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
+    const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
+    const prior = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id));
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""};
+      if (!salesSameEntry(me, e, isInv) || gone.some(g => salesSameEntry(g, e, isInv))) return false;
+      const was = prior.filter(o => salesSameEntry(salesEntryOf(o), e, isInv) && Date.parse(o.postedAt || "") >= copyAt);
+      return !was.length || was.some(salesInBooks); });
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
-    else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
     else if (had) mapInvoice(v);
   });
   return n;
@@ -329,11 +337,12 @@ async function salesVouchersIn(co, from, to, call){
 }
 // whether a voucher type of Tally's answer is of the Sales class, for an invoice: the client's own sales type (Sales
 // settings, the invoices' own), Tally's "Sales", or a type with "sales" in its name; never a Journal, Receipt, Payment,
-// Contra, a note, a return or an order, whatever its entries
+// Contra, a note, a return or an order, whatever its entries; nor a type with any of those words in its name ("Sales CN",
+// "Sales Journal", "Sales Advance Receipt", "Sales Rtn", "Sales Note", "SalesReturn"), nor the client's own credit or debit
+// note type (salesNotSale)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  const never = /^(journal|receipt|payment|contra|credit\s*note|debit\s*note)$|return|order|quotation|delivery|memo/i;
-  return t => { const n = lc(t); if (!n || never.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
+  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
@@ -364,7 +373,7 @@ async function salesQueuedSync(){
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     // (the bridge's "already" refusal: said on the invoice, as a direct post says it)
     else if (r && r.already){ n++; delete v.postJob; v.postError = plainMsg(r.message) || "Tally did not confirm this invoice."; maybeIn = true; }
-    else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = plainMsg((r && r.message) || j.message); delete v.postJob; }
+    else if (j && ["failed", "cancelled"].includes(j.status)){ n++; v.postError = postCloudSay(plainMsg((r && r.message) || j.message)); delete v.postJob; }
     // (not posted, its IRN cancelled: no sale any more, CGST Rules r.48(4), so set aside, nothing to cancel in Tally)
     if (!v.postJob && !maybeIn && v.status !== "posted" && v.x.irnStatus === "cancelled"){ v.status = "ignored"; delete v.x.irnCancelInTally; }
   }
@@ -396,23 +405,20 @@ async function postSalesRun(){
   await syncLedgersFromTally(true);
   let list = salesPostScope(s.list.filter(v => v.status === "ready"));
   if (!list.length) return withPart("invoice", "salesWhy", () => toast("No invoice is ready to post" + (salesWhy() ? ": " + salesWhy().text : "") + "."));   // never silent
-  s.busy = "Checking Tally for invoices already booked\u2026"; render();
-  let sent = [];
+  s.busy = "Checking FinCom\u2019s copy of Tally for invoices already booked\u2026"; render();
   try {
-    const asked = list.slice();
-    // (reads off here: checked against the cloud copy, said when that copy is old; none: nothing sent; an invoice on a day
-    // the copy does not hold: held, Ready with a red note: src/js/26-sales-invoice.js)
-    const chk = await salesCheckSafe(list), note = chk.note ? " " + chk.note : "", held = chk.held ? ", " + chk.held : "";
-    list = list.filter(v => v.status === "ready" && !v.copyHeld);
+    const asked = list.slice(), inT = () => asked.filter(v => v.status === "intally").length;
+    // (checked on FinCom's cloud copy only, never Tally: one found there is In Tally, quietly; the rest go, also when the
+    // copy has nothing or does not answer: src/js/26-sales-invoice.js salesCheckSafe)
+    await salesCheckSafe(list);
+    list = list.filter(v => v.status === "ready");
     const probs = salesReadyProblems(list);
-    // (a number already in Tally or posted from FinCom: skipped, listed with "Post duplicate anyway")
-    s.dupSkipped = asked.filter(v => v.status !== "ready" && salesDupOf(v)).map(v => v.id);
-    list = list.filter(v => v.status === "ready" && !v.copyHeld);
-    if (!list.length){ s.busy = ""; saveSales(); toast((held ? "0 posted" + held + "." : probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally.") + note); render(); return; }
+    s.dupSkipped = [];
+    list = list.filter(v => v.status === "ready");
+    if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : inT() ? inT() + " already in Tally: marked In Tally, not posted again." : "No invoice is ready to post."); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
     const tn = tallyCoName(co);
-    sent = list;
     const j = await Bridge.post({company: tn, client: co.id,
       masters: masters.map(l => ({id: "led:" + l.name, xml: (/sundry/i.test(l.group || "sundry") ? customerMasterXml : ledgerMasterXml)(l)})),
       vouchers: list.map(v => ({id: v.id, xml: salesVoucherXml(v, co)}))}, pj => { s.busy = postingLine(pj, tn); refreshBusy(); });
@@ -421,34 +427,21 @@ async function postSalesRun(){
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
     let ok = 0, bad = 0, queued = 0, refusedN = 0;
     let optionalN = 0;
-    sent = [];
     list.forEach(v => { const r = by.get(v.id), no = salesRefusal(r);
       // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
       if (r && r.ok && !postTaken(r)){ bad++; v.postError = salesUnconfirmed(r); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
-    salesOverrideSpent(list);
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + held + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
-      (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + "." + note);
-    if (!bad && !queued && !refusedN && !held) s.filter = "done";
+    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
+      (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + ".");
+    if (!bad && !queued && !refusedN) s.filter = "done";
     else if (refusedN && !bad && !queued) s.filter = "review";
     syncLedgersFromTally(true);
-  } catch (e){ s.busy = ""; salesOverrideSpent(sent); saveSales(); toast(e.code === "check_off" ? e.message : "Posting failed: " + e.message); }
+  } catch (e){ s.busy = ""; saveSales(); toast("Posting failed: " + e.message); }
   render();
-}
-// a "Post duplicate anyway" is good for one post attempt: after it (posted, no answer, not confirmed, refused, failed),
-// it is ended (kept in the invoice's log), and an invoice not posted waits for the duplicate check to run again
-// ("Not confirmed"), which asks again if the number is in Tally (review of d487be4c1)
-function salesOverrideSpent(list){
-  [].concat(list || []).forEach(v => {
-    if (!v || !v.dupOverride) return;
-    v.dupOverrideLog = (v.dupOverrideLog || []).concat([Object.assign({}, v.dupOverride, {spentAt: new Date().toISOString(), result: v.status})]);
-    delete v.dupOverride;
-    if (v.status !== "posted" && !v.postJob){ v.needsCheck = true; v.status = "review"; mapInvoice(v); }
-  });
 }
 // next-fix-sales-upload (item 4): Tally's answer "created 0 of N" with exceptions and no line error (the bridge's words,
 // bridge-go/post.go replyLine; its own fallback "Tally reported an exception" is lost when the request held several):

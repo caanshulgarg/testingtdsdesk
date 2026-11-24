@@ -888,7 +888,8 @@ function bankPosted(cid, r, x, tname, now, o){
   const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
   r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; delete r.postJobNew; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
   r.postByReply = x.verified !== true && x.byReply === true;
-  if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now; }
+  // (an Optional voucher is not in the books: its tag "optional:", never a reason to call the line In Tally again)
+  if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = (x.optional ? "optional:" : "") + now; }
   if (!o.quiet) logPosting({what: "bank", id: r.id, action: "posted", co: cid, ref: String(r.narr || "").slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: who});
   r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: tname};
   // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
@@ -1089,9 +1090,7 @@ async function postBankToTally(ids){
   } } catch (e){}
   if (Bridge.st.allowImport === false){ toast("Posting is switched off in the bridge settings (AllowImport)."); return; }
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
-  const heavy = b.checkBeforePost === true;
-  let checkNote = "";
-  b.busy = heavy ? "Loading ledgers and this bank ledger from Tally\u2026" : "Checking the ledgers\u2026"; render();
+  b.busy = "Checking the ledgers\u2026"; render();
   const readyBefore = new Set(b.rows.filter(r => r.state === "ready").map(r => r.id));
   const inTallyBefore = b.rows.filter(r => r.state === "intally").length;
   const ledgerAge = Date.now() - new Date((b.ledgers || {}).importedAt || 0).getTime();
@@ -1099,84 +1098,34 @@ async function postBankToTally(ids){
   // posting uses the confirmed ledger only (src/js/60): not chosen, guessed, or gone from Tally → nothing is posted
   if (!acc || !bankLedgerReady(co, acc)){ b.busy = ""; toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first (the set-up line at the top)."); render(); return; }
   acc.ledger = bankLedgerReady(co, acc);
-  if (heavy) await syncBankBookFromTally(true);
-  // guard 1: this computer's own record of lines already posted, whatever happened to the statement since
+  // guard 1: this computer's own record of lines already posted, whatever happened to the statement since (never one
+  // posted as an Optional voucher: not in the books, next-posting-followups)
   b.postedTags = b.postedTags || {};
   b.rows.forEach(r => {
     if (r.state !== "ready" || (ids && !ids.includes(r.id))) return;
     const tag = fpHash(r.fp || r.id);
-    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
+    if (b.postedTags[tag] && !/^optional:/.test(b.postedTags[tag])){ r.prevState = r.state; r.state = "intally"; r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
   });
-  // guard 2: look in Tally itself around the dates being posted, for our own entries and for ones typed in by hand
+  // guard 2 (next-dup-cloud-only, the owner, 23-Nov-2026, "it should flow"): never a read of Tally before posting. This
+  // bank ledger is looked at in FinCom's cloud copy only (dupCopy), around the dates being posted: a line the copy already
+  // has (FinCom's tag, the reference or the amount near its date: matchTallyBook) is In Tally quietly, with Tally's
+  // voucher, not posted; the others go. No data, the copy not there or not answering: all go, nothing said
   const toCheck = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
-  // bridge 1.12.3+: ONE read of this bank ledger covers both looks (these dates, and anything FinCom put in before),
-  // and is reused for 30 minutes, so posting the next batch starts at once
-  const oneRead = tallyVia(co) === "cloud" || bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
-  if (toCheck.length && !heavy && oneRead){
-    try {
-      const look = b.tallyLook && b.tallyLook.sid === st.id && Date.now() - b.tallyLook.at < 30 * 60000 ? b.tallyLook : null;
-      let pre = look && look.data;
-      const dsAll = b.rows.map(r => r.date).filter(Boolean).sort(), today = new Date().toISOString().slice(0, 10);
-      const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
-      if (!pre){
-        b.busy = "Looking at " + acc.ledger + " in Tally before posting\u2026"; render();
-        pre = await tallyCall(co, ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
-        b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
-      }
-      if (copyNotCovered(pre)){ checkNote = COPY_NOT_COVERED; b.tallyLook = null; }
-      else {
-      const g = markedGone(pre, from, to);
-      if (g.ids.length){ g.sid = st.id; g.ledger = acc.ledger; g.company = tname; b.gone = g; }
+  if (toCheck.length){
+    const dsAll = toCheck.map(r => r.date).filter(Boolean).sort(), today = new Date().toISOString().slice(0, 10);
+    const from = addDays(dsAll[0], -15), to = addDays(dsAll[dsAll.length - 1] > today ? dsAll[dsAll.length - 1] : today, 7);
+    let pre = null;
+    b.busy = "Looking at " + acc.ledger + " in FinCom\u2019s copy of Tally before posting\u2026"; render();
+    try { pre = await dupCopy(co, ledgerLinesUrl(tname, acc.ledger, from, to)); } catch (e){ pre = null; }
+    // (never a cancelled or an Optional voucher: not in the books, the owner's case of 24-Nov-2026)
+    if (pre && Array.isArray(pre.vouchers)) pre = Object.assign({}, pre, {vouchers: pre.vouchers.filter(v => !/^yes$/i.test((v && v.cancelled) || "") && !/^yes$/i.test((v && v.optional) || ""))});
+    // (only what the copy has is matched: a copy with nothing for these days leaves the bank book as it was, and a look
+    // before posting never marks a posted line as gone from Tally: the copy may simply not hold that day)
+    if (pre && !copyNotCovered(pre) && [].concat(pre.vouchers || []).length) try {
       await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
-      toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
+      toCheck.forEach(r => { const k = fpHash(r.fp || r.id); if (r.state === "intally" && (!b.postedTags[k] || /^optional:/.test(b.postedTags[k]))) b.postedTags[k] = "tally:" + new Date().toISOString(); });
       saveBank({posted: true});
-      if (!lsGet(wideCheckKey())){
-        const d = await scanStatementInTally({tname, pre, from, to});
-        if (d.extra.length || d.wrongDate.length){
-          S.dupFind = d; b.busy = ""; b.tallyLook = null;
-          toast("Nothing was posted: Tally already has entries from this statement under the wrong date or twice. Sort them out below, then post.");
-          render(); return;
-        }
-        lsSet(wideCheckKey(), String(Date.now()));
-      }
-      }
-    } catch (e){
-      b.busy = ""; b.tallyLook = null; render();
-      toast("Tally could not be checked before posting (" + e.message + "), so nothing was posted. Try again in a moment.");
-      return;
-    }
-  }
-  if (toCheck.length && !heavy && !oneRead){
-    const ds = toCheck.map(r => r.date).sort();
-    const wide = toCheck.some(r => r.dec && r.dec.mode === "CHQ") ? 15 : 4;
-    try {
-      b.busy = "Checking Tally for these dates\u2026"; render();
-      await syncBankBookFromTally(true, {from: addDays(ds[0], -wide), to: addDays(ds[ds.length - 1], wide), rows: toCheck});
-      toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
-      saveBank({posted: true});
-    } catch (e){
-      b.busy = ""; render();
-      toast("Tally could not be checked for these dates (" + e.message + "), so nothing was posted. Try again in a moment.");
-      return;
-    }
-  }
-  // guard 2b: once per statement, look through Tally well beyond these dates for entries FinCom put under another date,
-  // or put in twice; if there are any, nothing is posted until they are sorted out
-  if (toCheck.length && !oneRead && !lsGet(wideCheckKey())){
-    try {
-      b.busy = "Checking Tally for earlier postings of this statement (once per statement)\u2026"; render();
-      const d = await scanStatementInTally({tname});
-      if (d.extra.length || d.wrongDate.length){
-        S.dupFind = d; b.busy = "";
-        toast("Nothing was posted: Tally already has entries from this statement under the wrong date or twice. Sort them out below, then post.");
-        render(); return;
-      }
-      lsSet(wideCheckKey(), String(Date.now()));
-    } catch (e){
-      b.busy = ""; render();
-      toast("Tally could not be checked (" + e.message + "), so nothing was posted. Try again in a moment.");
-      return;
-    }
+    } catch (e){ /* posted all the same */ }
   }
   // guard 3: a line that does not agree with the statement's running balance was probably misread, so it is not posted
   const misread = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && r.balOk === false);
@@ -1309,7 +1258,7 @@ async function postBankToTally(ids){
       saveBank({rows: true, posted: true});
     }
     const aN = already ? already.n : 0;
-    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking, checkNote,
+    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, checking: !!j.checking,
       already: aN, alreadyLine: aN ? bankAlreadyLine(already) : "", review: failed.filter(f => f.review).length,
       // the posting went straight to the bridge and FinCom's cloud did not keep its record: said, never quiet
       unrecorded: j.recorded === false ? (j.recordWhy || "FinCom's cloud did not keep a record of this posting.") : ""};
@@ -1392,26 +1341,26 @@ async function postBillsToTally(opts){
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
   blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id, {force: true}); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
   let todo = list.filter(e => !blocked.includes(e));
-  S.billPost = {busy: "Checking Tally for bills already booked…"}; render();
+  S.billPost = {busy: "Checking FinCom’s copy of Tally for bills already booked…"}; render();
   try {
-    const dates = todo.map(e => e.x.invoiceDate).filter(Boolean).sort();
     const now = new Date().toISOString();
     let dup = [], checkNote = "";
-    if (dates.length){
+    // next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow"): never a read of Tally before posting. Bills already
+    // in Tally are looked for in FinCom's cloud copy only (dupCopy): one found there is marked In Tally quietly, not posted;
+    // the others go. No data, the copy not there or not answering: all go, nothing said
+    const ds = todo.map(e => e.x.invoiceDate).filter(Boolean).sort();
+    if (ds.length){
       const vt = co.voucherType || "Journal";
-      // round 18 (owner, 04-Oct-2026: reading is prospective only): bridge 2.1.9 refuses reading entries from Tally. Then
-      // this check is not possible and the posting goes on: FinCom's own checks stand (its records, the cloud's id lock)
-      let j0;
-      try { j0 = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([...new Set([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"])].join(",")) + Bridge.pinQ());
-      } catch (e){
-        if (!/Reading entries from Tally is off/i.test(String((e && e.message) || e))) throw e;
-        j0 = {vouchers: []}; checkNote = "Bills already in Tally could not be checked (reading entries from Tally is off on this computer); FinCom's own records were checked.";
-      }
-      const vs0 = [].concat(j0.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
-      const seen = new Set(vs0.map(v => norm(v.reference) + "|" + norm(v.party)).concat(vs0.flatMap(v => [].concat(v.entries || []).flatMap(en => [].concat(en.bills || []).map(bl => norm(bl.name) + "|" + norm(en.ledger))))));
-      const marks = vs0.map(v => String(v.narration || "")).join("\n");
-      dup = todo.filter(e => seen.has(norm(e.x.invoiceNo) + "|" + norm(e.partyLedger)) || marks.includes("TDSDesk:" + e.id));
-      dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
+      let j0 = null;
+      try { j0 = await dupCopy(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(ds[0], -5)) + "&to=" + isoToTally(addDays(ds[ds.length - 1], 5)) + "&types=" + encodeURIComponent([...new Set([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"])].join(","))); } catch (e){ j0 = null; }
+      // (never a cancelled or an Optional voucher: not in the books, the owner's case of 24-Nov-2026)
+      const vs0 = [].concat((j0 && j0.vouchers) || []).filter(v => !/^yes$/i.test(v.cancelled || "") && !/^yes$/i.test(v.optional || ""));
+      const has = (v, e) => String(v.narration || "").includes("TDSDesk:" + e.id) || [].concat(v.entries || []).some(en => norm(en.ledger) === norm(e.partyLedger) && [].concat(en.bills || []).some(bl => norm(bl.name) === norm(e.x.invoiceNo)))
+        || (norm(v.reference) === norm(e.x.invoiceNo) && norm(v.party) === norm(e.partyLedger));
+      todo.forEach(e => {
+        const v = vs0.find(x => has(x, e)); if (!v) return;
+        e.postNote = "Already in Tally"; e.postedInto = tname; PostCheck.markIn(co, e, v); dup.push(e);
+      });
       todo = todo.filter(e => !dup.includes(e));
     }
     let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, byReplyN = 0, replyWords = "";

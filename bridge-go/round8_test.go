@@ -16,6 +16,7 @@ import (
 // last id are noted, no voucher id is inferred): after the job ends failed and the cloud frees the ids, a new job never
 // sends them, and says why with the earlier job
 func TestPartialBatchNotedOnDisk(t *testing.T) {
+	noReadBack(t) // 2.5.20 P2 off here: this test is about a part that stays needs review (r2520_test.go tests the read back)
 	td := today()
 	f := newStandTally(t)
 	f.ansi = true

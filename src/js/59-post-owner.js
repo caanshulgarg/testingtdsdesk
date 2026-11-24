@@ -9,7 +9,7 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : fn === "tally_post_owner_release" ? "174" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : fn === "tally_post_owner_release" ? "174" : "36b") + ")." : postCloudSay(m.replace(/^ERROR:\s*/i, "")));
     }
     if (typeof PostChecks === "object") PostChecks.load(cid, true);
     if (typeof PostMarks === "object") PostMarks.load(cid, true);
@@ -253,7 +253,7 @@ Object.assign(PostOwner, {
       const j = await TCloud.rpc("tally_post_owner_release", {p_job: job, p_id: String(e.id), p_why: o.why});
       if (!j || j.ok === false) throw new Error((j && j.error) || "not released");
       delete e.ownerRelease; Store.saveEntry(cid, e); toast("Released in FinCom’s cloud: it can be posted once more.");
-    } catch (err){ o.job = job; Store.saveEntry(cid, e); toast("FinCom’s cloud did not release it: " + String((err && err.message) || err).replace(/^ERROR:\s*/i, "") + ". It waits under Post to Tally › Errors."); }
+    } catch (err){ o.job = job; Store.saveEntry(cid, e); toast("FinCom’s cloud did not release it: " + postCloudSay(String((err && err.message) || err).replace(/^ERROR:\s*/i, "")).replace(/\.$/, "") + ". It waits under Post to Tally › Errors."); }
     render();
   },
   // "Not this Tally entry": the entry kept on the line (notTally), never matched again; the line waits for a person
@@ -304,8 +304,8 @@ Object.assign(PostOwner, {
       if (!ok || v.status !== "intally") return;
       // back to review: a person confirms it before it is posted
       v.notTally = (v.notTally || []).concat(key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); delete v.tallyMatch; v.postNote = "";
-      // (the owner, 16-Nov-2026: not that entry, but its number and type are in Tally: never posted without "Post duplicate anyway")
-      v.status = "review"; if (m.key || m.number) v.dupBlock = m; mapInvoice(v); v.status = "review";
+      // (not that entry: back to To review for a person to confirm; nothing else holds it, the owner, 23-Nov-2026)
+      v.status = "review"; mapInvoice(v); v.status = "review";
       auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + words, s.cid);
       saveSales(); toast("Marked as not that Tally entry: it is not matched to it again."); render();
     });

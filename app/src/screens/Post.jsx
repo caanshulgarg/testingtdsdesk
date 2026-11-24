@@ -31,6 +31,8 @@ import "../../../src/js/97-postto-link.js";
 import "../../../src/js/98-post-register.js";
 // who holds a posting (PostOwner: src/js/59-post-owner.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/59-post-owner.js";
+// why a posting waits (Tally closed, the company not open, the Tally computer off): postWaitWhy for 62's words
+import "../lib/postWait.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
@@ -281,7 +283,9 @@ function Line2({ x, owner }) {
 function RawReply({ x }) {
   const [open, setOpen] = useState(false);
   const raw = typeof postReplyRaw === "function" ? postReplyRaw(x.r, x.it) || (x.st.reason && x.st.reason.said) || "" : "";
-  if (!raw) return null;
+  // (the cloud's words for a posting meant for another Tally computer, migration 54 and after: not Tally's, and they name
+  // the computer and its Windows user, so never shown: src/js/62-post-reasons.js)
+  if (!raw || /^(elsewhere|startedelsewhere|nolink)$/.test((x.st.reason && x.st.reason.id) || "")) return null;
   return <>{" "}<button className="linkbtn" data-show-reply="" onClick={() => setOpen(!open)}>{open ? "Hide Tally's reply" : "Show Tally's reply"}</button>
     {open && <pre className="pe-raw" data-reply-raw="">{raw}</pre>}</>;
 }
@@ -300,7 +304,7 @@ function RowActs({ co, x, canPost }) {
   // 30-Oct-2026: a bank line posted straight to the bridge, not in Tally (src/js/62): to its line on the Bank page, where
   // Check with Tally settles a partly made batch
   if (a && a.kind === "bankLine") out.push(<button key="bl" className="btn small" data-open-bank="" data-bank-line-act={a.label} onClick={() => txnGo("bank", x.id)}>{a.label === "Check with Tally" ? "Check with Tally on the Bank page" : "Open the bank line"}</button>);
-  if (a && a.kind === "cancel") out.push(<button key="c" className="btn small" data-cancel-post="" onClick={async () => { try { const r = await TCloud.rpc("tally_post_cancel", { p_id: job.id }); toast((r && r.warn) || "Cancelled; nothing is sent to Tally."); } catch (err) { toast(String((err && err.message) || err)); } CloudJobs.load(true); }}>Cancel</button>);
+  if (a && a.kind === "cancel") out.push(<button key="c" className="btn small" data-cancel-post="" onClick={async () => { try { const r = await TCloud.rpc("tally_post_cancel", { p_id: job.id }); toast((r && r.warn && postCloudSay(r.warn)) || "Cancelled; nothing is sent to Tally."); } catch (err) { toast(postCloudSay(String((err && err.message) || err))); } CloudJobs.load(true); }}>Cancel</button>);
   if (a && a.kind === "restore" && bill && e.status === "deleted") out.push(<button key="rs" className="btn small" data-restore="" onClick={() => billRestore(e.id)}>Restore the bill</button>);
   if (a && a.kind === "ledger" && x.miss && x.miss.length) out.push(<LedgerPick key="l" name={x.miss[0].ledger} role={x.miss[0].role} />);
   if (a && a.kind === "settle") {

@@ -117,7 +117,18 @@ var (
 	altMu        sync.Mutex
 	companyAlts  = map[string]int64{}
 	companyAltsM = map[string]int64{}
+	// 2.5.20 review (P2 read back): ALTVCHID was a number in the company's last check (an empty tag is not a 0)
+	companyAltsV = map[string]bool{}
 )
+
+// 2.5.20 review (P2 read back): the company's ALTVCHID as its last check gave it, and whether that check gave it as a
+// number at all (false: not known; 0 with true: a company with no entry yet)
+func companyAlterKnown(company string) (int64, bool) {
+	altMu.Lock()
+	defer altMu.Unlock()
+	k := companyKey(company)
+	return companyAlts[k], companyAltsV[k]
+}
 
 func companyAlter(company string) int64 {
 	altMu.Lock()
@@ -153,6 +164,22 @@ func companyCheckNumbers(tc *TC, company string, port int) (string, bool, error)
 }
 
 func companyCheckAll(tc *TC, company string, port int) (string, bool, string, error) {
+	g, given, said, err := companyCheckAllRead(tc, company, port)
+	if err != nil || !given {
+		altUnknown(company) // final review of ee9ab40d3: no numbers this time: the counter held is not Tally's now
+	}
+	return g, given, said, err
+}
+
+// final review of ee9ab40d3: a company check that gave no change numbers (or no answer): the voucher counter held is
+// marked not known (its value kept for what reads it as a number), so the read back never takes a stale one as now
+func altUnknown(company string) {
+	altMu.Lock()
+	delete(companyAltsV, companyKey(company))
+	altMu.Unlock()
+}
+
+func companyCheckAllRead(tc *TC, company string, port int) (string, bool, string, error) {
 	// 2.2.0 (the owner's finding): the change numbers by the form kept for the company (a: NATIVEMETHOD; b: the report);
 	// form a answering the company without numbers: form b once. Each request 15 s at most (CompanyCheckSec)
 	sec := keepNum("CompanyCheckSec", 15)
@@ -257,12 +284,14 @@ func cnFormMiss(company string, heads []string) {
 // the change numbers of a COMPANY element: noted; true when they are numbers above 0. Never 0 or empty as a starting
 // point (the owner's finding: the real Tally answered empty tags)
 func setCompanyAlts(company string, c *Node) bool {
-	v, m := toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
+	vd := re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")
+	v, m := toI64(vd), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
 	if v <= 0 && m <= 0 {
 		return false
 	}
 	altMu.Lock()
 	companyAlts[companyKey(company)] = v
+	companyAltsV[companyKey(company)] = vd != ""
 	companyAltsM[companyKey(company)] = m
 	altMu.Unlock()
 	// round 18: the company's starting point (once, never at 0), and its latest numbers for the heartbeat (startpoint.go)
