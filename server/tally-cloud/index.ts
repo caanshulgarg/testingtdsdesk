@@ -641,8 +641,8 @@ async function fetchOnFor(dev: any): Promise<boolean> {
 // Bridge 2.3.1 (2.2.2 review L-F): a line whose "<line id>:resolved" already reached FinCom is left out, as refetch does
 // (a 2.2.1 bridge resolved it and kept no mark, so a later bridge asked Tally again and sent a duplicate ":resolved"); the
 // same exception as refetch (2.3.1 H1: the only ":resolved" row held for want of a complete body) keeps it listed
-async function heldLinesFor(dev: any, firm: string, bridge: string, version = "", follow?: Map<string, Set<string>>) {
-  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true, fastBridge(version), follow);
+async function heldLinesFor(dev: any, firm: string, bridge: string, version = "", follow?: Map<string, Set<string>>, light?: Light | null) {
+  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true, fastBridge(version), follow, light);
   return out.length ? out : null;
 }
 // 06-Oct-2026 (the owner, NWS144 lines 4, 17 and 18: "the bridge must ask again for held lines of its own user and settle
@@ -656,12 +656,12 @@ async function heldLinesFor(dev: any, firm: string, bridge: string, version = ""
 // which the database applies once and marks the held line 'replaced' (migrations 50-52). An older bridge ignores the
 // field. Left out when none or on any error: the beat never fails for it
 const REFETCH_MAX = 20;
-async function refetchFor(dev: any, firm: string, bridge: string, version = "", follow?: Map<string, Set<string>>) {
+async function refetchFor(dev: any, firm: string, bridge: string, version = "", follow?: Map<string, Set<string>>, light?: Light | null) {
   const out = await heldOwnLines(dev, firm, bridge, REFETCH_MAX, (r) => {
     const g = String(r?.object_guid ?? "").trim(), b = r?.body;
     const noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
     return noBody || !g || /-0{8}$/.test(g);
-  }, "refetch", true, fastBridge(version), follow);
+  }, "refetch", true, fastBridge(version), follow, light);
   return out.length ? out : null;
 }
 // bridge 2.3.1, part B (masters): ledgersWanted, the ledgers this bridge's own held lines wait for (held with the words
@@ -671,11 +671,13 @@ async function refetchFor(dev: any, firm: string, bridge: string, version = "", 
 // ledger, FinComLedgerByName) and sends what Tally has as kind ledger_changes; the line is then listed for refetch. Left out
 // when none or on any error: the beat never fails for it
 const LEDGERS_WANTED_MAX = 20;
-async function ledgersWantedFor(dev: any, firm: string, bridge: string) {
+async function ledgersWantedFor(dev: any, firm: string, bridge: string, light?: Light | null) {
   try {
     if (!bridge) return null;
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
-    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, book_id, received_at, bridge, device_id, held_why, payload")
+    // next-db-load-2: from the beat's one light read (migration 216); nothing waits for a ledger: nothing to work out
+    if (light && !light.waiting) return null;
+    const { data, error } = light ? { data: lightPick(light.own, { since }).slice(0, 400), error: null } : await db.from("tally_recorder_lines").select("line_id, company, company_guid, book_id, received_at, bridge, device_id, held_why, payload")
       .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).in("state", ["held", "fetching"]).gt("received_at", since).order("received_at", { ascending: true }).limit(400);
     if (error || !Array.isArray(data)) return null;
     const rows = (data as any[]).filter((r) => r && String(r.device_id ?? "") === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && waitsFor(r).length)
@@ -806,11 +808,67 @@ function fastBridge(version: unknown): boolean {
 // sends "<line id>:resolved", which replaces the held line in its book by its line id (migrations 50-53). Each such line
 // is claimed by ONE serving bridge (tally_work_claim, kind held): a person is asked for a Day Book upload only once no
 // live bridge with the company open could settle it
-async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false, fast = false, follow?: Map<string, Set<string>>) {
+// next-db-load-2 (migration 216; staging, 23-Nov-2026: ~25,000 reads of tally_recorder_lines by the beat in under 4 hours,
+// up to 2,600 buffers each, nearly all of it bodies and payloads the bridge is never sent): ONE call a heartbeat
+// (tally_held_light) brings what heldLines, refetch and ledgersWanted read - this bridge's own held and fetching lines, the
+// followed books' held lines, the ":resolved" rows of both - in light columns (a body as "has entries", a payload as its
+// waitLedgers: all these rules look at), with a fingerprint. The same fingerprint as the last heartbeat's: the database
+// answers {same} and nothing more, and what was worked out from it then is given again (at most 2 minutes, so the 7- and
+// 30-day windows, the links and the claims of followed lines move on - a claim, renewed by the database only under half
+// its 600 s, so never has under about 180 s left while the bridge beats: migration 216; never while a line waits for a
+// ledger, whose list
+// the fingerprint does not cover). A cloud without 216 (said once, asked again 10 minutes later) or any error: the reads
+// as before
+type Light = { fp: string; own: any[]; follow: any[]; resolved: any[]; waiting: boolean; outs: Map<string, { at: number; out: Record<string, unknown>[] }>; err?: boolean };
+const LIGHT_KEEP_MS = 120000;
+const lightMemo = new Map<string, Light>();
+let heldLightMissing = 0;
+async function heldLightFor(dev: any, firm: string, bridge: string, follow?: Map<string, Set<string>>): Promise<Light | null> {
+  if (!bridge || Date.now() - heldLightMissing < 600000) return null;
+  try {
+    const books = follow && follow.size ? [...follow.keys()].slice(0, 100) : [];
+    const k = firm + "|" + String(dev.id) + "|" + bridge + "|" + books.join(","), m = lightMemo.get(k);
+    const { data, error } = await db.rpc("tally_held_light", { p_firm: firm, p_device: dev.id, p_bridge: bridge, p_books: books, p_seen: m ? m.fp : "" });
+    if (error) {
+      if (missingFn(String(error.message || "")) || (error as any).code === "PGRST202") { if (!heldLightMissing) console.log("tally-ingest beat: the held lines read as before: migration 216 is not applied"); heldLightMissing = Date.now(); }
+      else fail("held_light", error);
+      return null;
+    }
+    const d = data as any;
+    if (!d || d.ok !== true) return null;
+    if (d.same === true) return m && m.fp === d.fp ? m : null;
+    if (!Array.isArray(d.own) || !Array.isArray(d.follow) || !Array.isArray(d.resolved)) return null;
+    const L: Light = { fp: String(d.fp || ""), own: d.own, follow: d.follow, resolved: d.resolved, outs: new Map(),
+      waiting: [...d.own, ...d.follow, ...d.resolved].some((r: any) => waitsFor(r).length > 0) };
+    if (lightMemo.size > 2000) lightMemo.clear();
+    lightMemo.set(k, L);
+    return L;
+  } catch (e) { fail("held_light", e); return null; }
+}
+// the rows a read of tally_recorder_lines would give, from the light snapshot: held or fetching, oldest first (as the reads)
+const CAI = ["created", "altered", "imported"];
+function lightPick(rows: any[], o: { cai?: boolean; since?: string; books?: string[]; why?: string; ids?: Set<string> }) {
+  const t = o.since ? Date.parse(o.since) : -Infinity, w = o.why ? o.why.toLowerCase() : "";
+  return rows.filter((r) => ["held", "fetching"].includes(String(r?.state ?? "")) && (!o.cai || CAI.includes(String(r.event ?? ""))) && Date.parse(String(r.received_at)) > t
+      && (!o.books || o.books.includes(String(r.book_id ?? ""))) && (!w || String(r.held_why ?? "").toLowerCase().includes(w)) && (!o.ids || o.ids.has(String(r.line_id ?? ""))))
+    .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)) || Number(a.id || 0) - Number(b.id || 0))
+    .map((r) => ({ ...r }));     // copies: the rules mark rows (_follow, _old, _waits), never the snapshot kept for the next heartbeat
+}
+async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false, fast = false, follow?: Map<string, Set<string>>, light?: Light | null) {
+  if (!light) return await heldOwnLinesNow(dev, firm, bridge, max, want, what, unresolved, fast, follow, null);
+  const fk = follow ? [...follow].map(([b, v]) => b + ":" + [...v].sort().join("+") + ":" + String((follow as any).guid?.get?.(b) ?? "")).sort().join(",") : "";
+  const ck = what + "|" + max + "|" + (unresolved ? 1 : 0) + (fast ? 1 : 0) + "|" + fk, c = light.outs.get(ck);
+  if (c && !light.waiting && Date.now() - c.at < LIGHT_KEEP_MS) return c.out.map((x) => ({ ...x }));
+  light.err = false;
+  const out = await heldOwnLinesNow(dev, firm, bridge, max, want, what, unresolved, fast, follow, light);
+  if (!light.err) light.outs.set(ck, { at: Date.now(), out: out.map((x) => ({ ...x })) });
+  return out;
+}
+async function heldOwnLinesNow(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved: boolean, fast: boolean, follow: Map<string, Set<string>> | undefined, light: Light | null) {
   try {
     if (!bridge) return [];
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
-    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
+    const { data, error } = light ? { data: lightPick(light.own, { cai: true, since }).slice(0, 400), error: null } : await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
       .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).in("state", ["held", "fetching"]).in("event", ["created", "altered", "imported"]).gt("received_at", since)
       .order("received_at", { ascending: true }).limit(400);
     if (error || !Array.isArray(data)) return [];
@@ -818,7 +876,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
     if (follow && follow.size) {
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
-      const { data: fd, error: fe } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
+      const { data: fd, error: fe } = light ? { data: lightPick(light.follow, { cai: true, since: since30, books: [...follow.keys()].slice(0, 100) }).slice(0, 400), error: null as any } : await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
         .eq("firm_id", firm).in("book_id", [...follow.keys()].slice(0, 100)).in("state", ["held", "fetching"]).in("event", ["created", "altered", "imported"]).gt("received_at", since30)
         .order("received_at", { ascending: true }).limit(400);
       if (fe) { fail("held_follow", fe); console.log("tally-ingest beat: " + what + ": the lines of the books read here not read:", String(fe.message || "").slice(0, 200)); }
@@ -845,7 +903,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       let bad = "";
       const ids = new Set<string>();
       for (const w of SLOW_END_WORDS) {
-        const { data: d1, error: e1 } = await base().ilike("held_why", "%" + w + "%").gt("received_at", since30).order("received_at", { ascending: true }).limit(400);
+        const { data: d1, error: e1 } = light ? { data: lightPick(light.own, { cai: true, since: since30, why: w }).slice(0, 400), error: null as any } : await base().ilike("held_why", "%" + w + "%").gt("received_at", since30).order("received_at", { ascending: true }).limit(400);
         if (e1) { bad = String(e1.message || ""); break; }
         for (const r of (d1 || []) as any[]) {
           const lid = String(r?.line_id || "");
@@ -855,7 +913,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // the ":resolved" rows read above came with the slow words: their own lines, 60 ids a call
       const need = [...ids].filter((x) => x && !got.some((r) => String(r.line_id) === x));
       for (let i = 0; !bad && i < need.length; i += 60) {
-        const { data: d2, error: e2 } = await base().in("line_id", need.slice(i, i + 60));
+        const { data: d2, error: e2 } = light ? { data: lightPick(light.own, { cai: true, ids: new Set(need.slice(i, i + 60)) }), error: null as any } : await base().in("line_id", need.slice(i, i + 60));
         if (e2) { bad = String(e2.message || ""); break; }
         got.push(...((d2 || []) as any[]));
       }
@@ -886,7 +944,8 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // quietly to an empty list); a failure is logged. 2.3.1 (masters): id, payload and received_at for the ledger wait
       const rs: any[] = [];
       for (let i = 0; i < rids.length; i += 60) {
-        const { data: d, error: re } = await db.from("tally_recorder_lines").select("id, line_id, state, held_why, body, payload, received_at").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
+        const part = new Set(rids.slice(i, i + 60));
+        const { data: d, error: re } = light ? { data: light.resolved.filter((x: any) => part.has(String(x?.line_id ?? ""))).map((x: any) => ({ ...x })), error: null as any } : await db.from("tally_recorder_lines").select("id, line_id, state, held_why, body, payload, received_at").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
         if (re) { fail("held_resolved", re); console.log("tally-ingest beat: " + what + ": the lines already resolved not read:", String(re.message || "").slice(0, 200)); return []; }
         rs.push(...(d || []));
       }
@@ -963,6 +1022,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     for (const c of cand) if (!c.r._follow || keep.has(c.r)) out.push(c.e);
     return out;
   } catch (e) {
+    if (light) light.err = true;
     fail("held_lines", e); console.log("tally-ingest beat: " + what + " not read:", String((e as Error)?.message || e).slice(0, 200));
     return [];
   }
@@ -5167,12 +5227,14 @@ Deno.serve(sentry.wrap(async (req) => {
         // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
         // reliability audit C4: the held lines and then the refetch (one after the other: both claim lines), beside them
         // the ledgers wanted and the older-entries switch (fetchOnFor, explained below): reads that depend on neither
+        // next-db-load-2 (migration 216): the three from one light read of the held lines
+        const light = await heldLightFor(dev, firm, me.id, gate.follow);
         const [[heldLines, refetch], held, periodFetch] = await Promise.all([
           (async () => {
-            const h = await heldLinesFor(dev, firm, me.id, me.entry.version, gate.follow);
-            return [h, await refetchFor(dev, firm, me.id, me.entry.version, gate.follow)] as const;
+            const h = await heldLinesFor(dev, firm, me.id, me.entry.version, gate.follow, light);
+            return [h, await refetchFor(dev, firm, me.id, me.entry.version, gate.follow, light)] as const;
           })(),
-          ledgersWantedFor(dev, firm, me.id),
+          ledgersWantedFor(dev, firm, me.id, light),
           fetchOnFor(dev)]);
         // migration 196: the candidate search's asks first, then the refetch, 20 together (the bridge takes 20)
         const probes = await probesFor(dev, firm, me.id, quiet.idle);
