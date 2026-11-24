@@ -21,6 +21,13 @@
 // imported entry carrying FinCom's own tag); Tally's own words when it refuses. A ledger: read by its name first
 // (FinComLedgerByName, approved), its GSTIN or PAN compared with the one FinCom showed, read again and sent as the
 // ledger list sends it. No AI.
+//
+// The review of 595554fbe (24-Nov-2026): the entry's date and type FinCom sends must be the ones just read, else
+// "changed since" and nothing is sent; the typing gate is looked at again right before the send; what Tally changed
+// beyond what was asked is said in the answer (alsoChanged); a ledger fix needs the ledger's AlterID; /fix never
+// changes a voucher's PARTYGSTIN (decision 5: the ledger only; the approved form keeps the field, unused); the
+// registration type goes as read (Regular only when there is none); the recorder line's source is "fix"; an ACTION
+// with '&' in its value is refused by the posting rule (post.go cannotSend)
 package main
 
 import (
@@ -65,6 +72,12 @@ var (
 	reFixPAN    = regexp.MustCompile(`^[A-Z]{5}\d{4}[A-Z]$`)
 	reFixNumber = regexp.MustCompile(`^[A-Za-z0-9/-]{1,16}$`)
 	reFixGUID   = regexp.MustCompile(`^[A-Za-z0-9-]{1,100}$`)
+	// review of 595554fbe: the ledger's registration type goes as Tally gave it (Regular, Composition,
+	// Unregistered/Consumer, ...): letters, digits, spaces, / ( ) and -, 1 to 40
+	reFixRegType = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /()-]{0,39}$`)
+	// review of 595554fbe: an ACTION attribute whose value holds a character reference ('&'): never sent (Tally would
+	// read "&#65;lter" as Alter, which the plain Import's rule would not see)
+	reActionAmp = regexp.MustCompile(`(?i)\bACTION\s*=\s*(?:"[^"]*&|'[^']*&|[^\s"'>]*&)`)
 )
 
 // a GSTIN of the form with its check digit right and a known state
@@ -141,12 +154,12 @@ func fixLedgerGSTRequest(company, name, from, regType, gstin string) (string, st
 		return "", "no company or ledger name"
 	case !isTallyDate(from) || !prRealDate(from):
 		return "", "no date the registration applies from"
-	case regType != "Regular" && regType != "Composition":
-		return "", "the registration type is not Regular or Composition"
+	case !reFixRegType.MatchString(regType):
+		return "", "the registration type is not one Tally gives"
 	case !fixGSTINOK(gstin):
 		return "", "the GSTIN is not valid"
 	}
-	o := h + "<LEDGSTREGDETAILS.LIST>\n<APPLICABLEFROM>" + from + "</APPLICABLEFROM>\n<GSTREGISTRATIONTYPE>" + regType +
+	o := h + "<LEDGSTREGDETAILS.LIST>\n<APPLICABLEFROM>" + from + "</APPLICABLEFROM>\n<GSTREGISTRATIONTYPE>" + esc(regType) +
 		"</GSTREGISTRATIONTYPE>\n<GSTIN>" + gstin + "</GSTIN>\n<PLACEOFSUPPLY>" + esc(fixStates[gstin[:2]]) + "</PLACEOFSUPPLY>\n</LEDGSTREGDETAILS.LIST>\n" +
 		"<PARTYGSTIN>" + gstin + "</PARTYGSTIN>\n</LEDGER>\n"
 	return importEnvelope("All Masters", company, fixMsg(o)), ""
@@ -342,14 +355,18 @@ func runFix(p M) M {
 	switch str(p["target"]) {
 	case "voucher":
 		for k := range f {
-			if k != "number" && k != "pos" && k != "gstin" {
-				return M{"ok": false, "message": "Only an entry's number, place of supply or party GSTIN is changed here."}
+			if k == "gstin" {
+				// decision 5 (23-Nov-2026): a GSTIN is changed on the party ledger only, never on an entry
+				return M{"ok": false, "message": "Not sent: a GSTIN is changed on the party ledger, not on an entry."}
+			}
+			if k != "number" && k != "pos" {
+				return M{"ok": false, "message": "Only an entry's number or place of supply is changed here."}
 			}
 		}
 		if strings.TrimSpace(str(p["alterId"])) == "" {
 			return M{"ok": false, "message": "Open the entry again: FinCom needs its change number from Tally first."}
 		}
-		ff := fixFields{number: strings.TrimSpace(str(f["number"])), pos: strings.TrimSpace(str(f["pos"])), gstin: strings.ToUpper(strings.TrimSpace(str(f["gstin"])))}
+		ff := fixFields{number: strings.TrimSpace(str(f["number"])), pos: strings.TrimSpace(str(f["pos"]))}
 		if n, ok := fixStates[ff.pos]; ok { // FinCom names the state by its GST code; Tally's spelling is the bridge's
 			ff.pos = n
 		}
@@ -363,13 +380,17 @@ func runFix(p M) M {
 				return M{"ok": false, "message": "Only a party's GSTIN or PAN is changed here."}
 			}
 		}
+		if onlyDigits(strings.TrimSpace(str(p["alterId"]))) == "" {
+			// the plan's AlterID check for a ledger (section 2.4 step 3): FinCom sends the ledger's ALTERID
+			return M{"ok": false, "message": "Open the party again: FinCom needs its change number from Tally first."}
+		}
 		g, pan := strings.ToUpper(strings.TrimSpace(str(f["gstin"]))), strings.ToUpper(strings.TrimSpace(str(f["pan"])))
 		if (g == "") == (pan == "") || (g != "" && !fixGSTINOK(g)) || (pan != "" && !reFixPAN.MatchString(pan)) {
 			return M{"ok": false, "message": "Not sent: give one valid GSTIN or one valid PAN."}
 		}
 		return fixOne(p, func(port int, company string) M { return fixLedger(p, g, pan, port, company) })
 	}
-	return M{"ok": false, "message": "Only an entry's number, place of supply or party GSTIN, or a party's GSTIN or PAN, is changed here."}
+	return M{"ok": false, "message": "Only an entry's number or place of supply, or a party's GSTIN or PAN, is changed here."}
 }
 
 // the gates every fix passes: typing, postings first, this user's own Tally and the linked company, one at a time
@@ -414,13 +435,18 @@ func fixVoucher(p M, ff fixFields, port int, company string) M {
 	if !strings.EqualFold(str(now["guid"]), guid) {
 		return M{"ok": false, "message": "Tally gives another entry for this id. Nothing was changed."}
 	}
-	if str(now["alterId"]) != strings.TrimSpace(str(p["alterId"])) {
+	// review of 595554fbe (B1): the AlterID, and the date and type FinCom sent, must be what was just read; the
+	// request carries the date and type, so any other is "changed since" and nothing is sent
+	if str(now["alterId"]) != strings.TrimSpace(str(p["alterId"])) || str(now["date"]) != date || str(now["type"]) != vt {
 		return M{"ok": false, "changed": true, "now": now, "alterNow": now["alterId"], "xml": raw,
 			"message": "Changed in Tally since it was opened here. This is how it is now."}
 	}
 	x, why := fixVoucherRequest(company, guid, vt, date, ff)
 	if why != "" {
 		return M{"ok": false, "message": "Not sent: " + why + "."}
+	}
+	if fixTypingFn() { // the typing gate again, right before the send
+		return fixHeld("Someone is working in Tally. The change is made in a moment.")
 	}
 	reply, serr := fixSendFn(port, x)
 	rr := M{}
@@ -443,20 +469,88 @@ func fixVoucher(p M, ff fixFields, port int, company string) M {
 	if moved {
 		c := &change{company: company, companyGuid: normGUID(str(p["companyGuid"])), event: "altered", guid: str(after["guid"]), masterId: mid,
 			alterId: str(after["alterId"]), vchType: str(after["type"]), vchNo: str(after["number"]), vchDate: or(str(after["date"]), date),
-			narr: html.UnescapeString(tagRaw(raw2, "NARRATION")), source: "alterid", saveMs: -1, readAt: time.Now(),
+			narr: html.UnescapeString(tagRaw(raw2, "NARRATION")), source: "fix", saveMs: -1, readAt: time.Now(),
 			at: time.Now().In(liveZone).Format(time.RFC3339), xml: raw2, bodyTried: true, full: liveFetchFull(), ledgers: fixLedgersOf(raw2)}
 		c.lineId = liveLineID("fix", c.companyGuid, c.guid, c.alterId)
 		fixQueueFn(c)
 	}
 	same := (ff.number == "" || after["number"] == ff.number) && (ff.pos == "" || strings.EqualFold(str(after["pos"]), ff.pos)) && (ff.gstin == "" || after["gstin"] == ff.gstin)
 	out := M{"before": now, "after": after, "alterBefore": now["alterId"], "alterAfter": after["alterId"], "xml": raw2}
+	also := fixAlsoChanged(raw, raw2, ff)
+	if len(also) > 0 {
+		out["alsoChanged"] = also
+		writeLog("Fix in place: Tally also changed " + strings.Join(also, ", ") + " of " + guid + " (not asked)")
+	}
 	switch {
 	case same && moved:
 		out["ok"], out["message"] = true, "Saved in Tally."
+		if len(also) > 0 {
+			out["message"] = "Saved in Tally. Tally also changed the " + strings.Join(also, ", the ") + " of this entry, which was not asked. Check it in Tally."
+		}
 	case serr != nil:
 		out["ok"], out["message"] = false, "Tally did not answer and the entry is as it was. Try again."
 	default:
 		out["ok"], out["kept"], out["message"] = false, true, "Tally kept its own value. This is how the entry is now."
+	}
+	return out
+}
+
+// review of 595554fbe: what Tally changed in the entry that the fix did not ask (the entry read before and after, field by
+// field; its change number and the fields asked left out), in a person's words for the head fields, Tally's tag else
+var (
+	reFixLeaf   = regexp.MustCompile(`<([A-Za-z0-9._]+)(?:\s[^<>]*)?>([^<>]*)</([A-Za-z0-9._]+)>`)
+	fixLeafWord = map[string]string{"DATE": "date", "VOUCHERTYPENAME": "voucher type", "VOUCHERNUMBER": "number", "PLACEOFSUPPLY": "place of supply",
+		"PARTYGSTIN": "party GSTIN", "NARRATION": "narration", "PARTYLEDGERNAME": "party", "LEDGERNAME": "ledger lines", "AMOUNT": "amounts",
+		"GUID": "Tally id", "MASTERID": "Tally id", "REFERENCE": "reference"}
+)
+
+func fixAlsoChanged(before, after string, ff fixFields) []string {
+	skip := map[string]bool{"ALTERID": true}
+	if ff.number != "" {
+		skip["VOUCHERNUMBER"] = true
+	}
+	if ff.pos != "" {
+		skip["PLACEOFSUPPLY"] = true
+	}
+	if ff.gstin != "" {
+		skip["PARTYGSTIN"] = true
+	}
+	leaves := func(x string) map[string][]string {
+		o := map[string][]string{}
+		for _, m := range reFixLeaf.FindAllStringSubmatch(x, -1) {
+			if k := strings.ToUpper(m[1]); m[1] == m[3] && !skip[k] {
+				o[k] = append(o[k], strings.TrimSpace(html.UnescapeString(m[2])))
+			}
+		}
+		return o
+	}
+	a, b := leaves(before), leaves(after)
+	tags := map[string]bool{}
+	for k := range a {
+		tags[k] = true
+	}
+	for k := range b {
+		tags[k] = true
+	}
+	keys := make([]string, 0, len(tags))
+	for k := range tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	seen := map[string]bool{}
+	var out []string
+	for _, k := range keys {
+		if strings.Join(a[k], "\x00") == strings.Join(b[k], "\x00") {
+			continue
+		}
+		w := fixLeafWord[k]
+		if w == "" {
+			w = k
+		}
+		if !seen[w] {
+			seen[w] = true
+			out = append(out, w)
+		}
 	}
 	return out
 }
@@ -517,7 +611,7 @@ func fixLedger(p M, gstin, pan string, port int, company string) M {
 	was := M{"gstin": row.gstin, "pan": row.pan, "alterId": fmt.Sprint(row.alter)}
 	// the AlterID check of a ledger: the value FinCom showed (and its AlterID, when FinCom has one) is Tally's now
 	shown := obj(p["was"])
-	if a := strings.TrimSpace(str(p["alterId"])); (a != "" && a != fmt.Sprint(row.alter)) ||
+	if a := strings.TrimSpace(str(p["alterId"])); a != fmt.Sprint(row.alter) ||
 		(gstin != "" && !strings.EqualFold(strings.TrimSpace(str(shown["gstin"])), row.gstin)) || (pan != "" && !strings.EqualFold(strings.TrimSpace(str(shown["pan"])), row.pan)) {
 		return M{"ok": false, "changed": true, "now": was, "alterNow": was["alterId"], "message": "Changed in Tally since it was opened here. This is how it is now."}
 	}
@@ -529,13 +623,16 @@ func fixLedger(p M, gstin, pan string, port int, company string) M {
 		if from == "" {
 			from = bf
 		}
-		if typ != "Composition" {
+		if typ == "" { // review of 595554fbe: the type as read; Regular only when the ledger has none
 			typ = "Regular"
 		}
 		x, why = fixLedgerGSTRequest(company, row.name, from, typ, gstin)
 	}
 	if why != "" {
 		return M{"ok": false, "message": "Not sent: " + why + "."}
+	}
+	if fixTypingFn() { // the typing gate again, right before the send
+		return fixHeld("Someone is working in Tally. The change is made in a moment.")
 	}
 	reply, serr := fixSendFn(port, x)
 	if serr == nil {

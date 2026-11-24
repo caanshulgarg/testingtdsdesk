@@ -205,7 +205,15 @@ func driveFixes(t *testing.T, f *standTally, td string) {
 	if r["ok"] != true {
 		t.Fatalf("voucher fix: %v", r)
 	}
-	r = runFix(M{"company": zz, "companyGuid": f.guid, "target": "ledger", "ledger": "Ledger A", "was": M{"gstin": ""}, "fields": M{"gstin": "27AAPFU0939F1ZV"}})
+	la := ""
+	f.mu.Lock()
+	for _, l := range f.led {
+		if l.name == "Ledger A" {
+			la = fmt.Sprint(l.alter)
+		}
+	}
+	f.mu.Unlock()
+	r = runFix(M{"company": zz, "companyGuid": f.guid, "target": "ledger", "ledger": "Ledger A", "alterId": la, "was": M{"gstin": ""}, "fields": M{"gstin": "27AAPFU0939F1ZV"}})
 	if r["ok"] != true {
 		t.Fatalf("ledger fix: %v", r)
 	}

@@ -247,7 +247,7 @@ func TestFixSendsOneAlterAndReadsBack(t *testing.T) {
 	if !strings.Contains(str(r["xml"]), "<VOUCHERNUMBER>INV/26-27/0084</VOUCHERNUMBER>") {
 		t.Fatal("the entry read back is not in the result")
 	}
-	if len(s.queued) != 1 || s.queued[0].event != "altered" || s.queued[0].guid != fxGUID || s.queued[0].alterId != "99" || s.queued[0].xml == "" || s.queued[0].source != "alterid" {
+	if len(s.queued) != 1 || s.queued[0].event != "altered" || s.queued[0].guid != fxGUID || s.queued[0].alterId != "99" || s.queued[0].xml == "" || s.queued[0].source != "fix" {
 		t.Fatalf("the altered line: %+v", s.queued)
 	}
 }
@@ -354,16 +354,16 @@ func TestFixLedgerGSTIN(t *testing.T) {
 		gst, alter = group(`<GSTIN>([^<]*)</GSTIN>`, x, 1), "12"
 		return "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>", nil
 	}
-	ask := M{"company": fxCo, "companyGuid": "co-guid-1", "target": "ledger", "ledger": "Sample Buyer", "was": M{"gstin": ""}, "fields": M{"gstin": "27AAPFU0939F1ZV"}}
+	ask := M{"company": fxCo, "companyGuid": "co-guid-1", "target": "ledger", "ledger": "Sample Buyer", "alterId": "11", "was": M{"gstin": ""}, "fields": M{"gstin": "27AAPFU0939F1ZV"}}
 	r := runFix(ask)
 	if r["ok"] != true || len(s.sent) != 1 || reads != 2 || sentUp != 1 {
 		t.Fatalf("%v sent %d reads %d up %d", r, len(s.sent), reads, sentUp)
 	}
-	if !strings.Contains(s.sent[0], "<APPLICABLEFROM>20240401</APPLICABLEFROM>\n<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>") || checkAllowed(s.sent[0]) != nil {
+	if !strings.Contains(s.sent[0], "<APPLICABLEFROM>20240401</APPLICABLEFROM>\n<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>") || checkAllowed(s.sent[0]) != nil {
 		t.Fatalf("not the approved shape with the dated record as read: %s", s.sent[0])
 	}
 	// FinCom showed a GSTIN Tally no longer has: nothing sent
-	ask["was"] = M{"gstin": "27AAAAA0000A1Z5"}
+	ask["was"], ask["alterId"] = M{"gstin": "27AAAAA0000A1Z5"}, "12"
 	if r := runFix(ask); r["changed"] != true || len(s.sent) != 1 {
 		t.Fatalf("sent over a later change: %v", r)
 	}

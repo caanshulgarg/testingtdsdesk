@@ -34,7 +34,7 @@ Before you start
 4. Party GSTIN on the ledger (FinComFixLedger)
    An invoice to ZZ Buyer in "Buyer GSTIN missing" > Open the entry > type the made-up GSTIN 27AAPFU0939F1ZV > Save.
    Expect: Saved. In Tally: Alter > Ledger > ZZ Buyer > GST registration details: GSTIN 27AAPFU0939F1ZV, registration
-   type Regular, state Maharashtra, the date it applies from unchanged (or the books' first day if there was none);
+   type as it was before (Regular only if the ledger had none), state Maharashtra, the date it applies from unchanged (or the books' first day if there was none);
    the ledger's name, group, opening balance and bank details unchanged.
    Note: the invoice itself keeps the GSTIN Tally stored on it when it was entered (decision 5: the ledger only). Note
    on each version whether the What to fix row leaves the list (it does only when the invoice has no GSTIN of its own).
@@ -60,11 +60,21 @@ Before you start
    c) While FinCom posts a batch of entries, Save a change. Expect it waits and goes right after the posting.
 
 9. Undo
-   After step 1, Changes made here > Undo on the number change. Expect: Saved; Tally has the earlier number again, the
-   lines as in your screenshot. (A place of supply that was blank before is not offered an Undo: the approved form
-   cannot blank a field. Check that Changes made here shows no Undo for the step 3 change.)
-   Then take the second voucher of step 1: alter it in Tally (its narration), and press Undo on its number change in
-   FinCom. Expect "Changed in Tally since it was opened here" and nothing changed (Undo has the same AlterID check).
+   a) After step 1, look at Changes made here for the number change. Expect: NO Undo on it. The earlier number has 17
+      characters, and the approved form takes at most 16, so the bridge refuses to send it back ("Not sent: the number
+      takes 1 to 16 letters, digits, / and -"), and the app hides Undo for such a change. (A place of supply that was
+      blank before is not offered an Undo either: the approved form cannot blank a field. Check that Changes made here
+      shows no Undo for the step 3 change.)
+   b) Make a sale numbered ZZ/0001 and a second one with the same number (Prevent duplicates off), so "Invoice numbers
+      used twice" lists them. Open the second, type ZZ/0002, Save. Then Changes made here > Undo on it. Expect: Saved;
+      Tally has ZZ/0001 again on that voucher, its lines as before.
+   c) Change it to ZZ/0002 once more. Alter that voucher in Tally (its narration), then press Undo in FinCom. Expect
+      "Changed in Tally since it was opened here" and nothing changed (Undo has the same AlterID check).
+
+9a. Not asked, still changed
+   If on any version Tally changes something the fix did not ask (the date, the voucher type, the narration, a line),
+   the window says "Saved in Tally. Tally also changed the ... of this entry, which was not asked. Check it in Tally."
+   Note the version and what changed; with step 1's check this should never appear.
 
 10. Only the approved forms
     In the bridge's log (sync\bridge.log) every fix shows as FinComFixVoucher or FinComFixLedger. A posting made the

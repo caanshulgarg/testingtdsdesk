@@ -136,6 +136,10 @@ func cannotSend(x string) string {
 	if reFixMark.MatchString(re(`^\s*<[^>]*>`).FindString(x)) {
 		return "An existing voucher, ledger or group is changed only by FinCom's fix in place, never by a posting."
 	}
+	// review of 595554fbe: an ACTION written with a character reference (Tally reads "&#65;lter" as Alter) is never sent
+	if reActionAmp.MatchString(x) {
+		return "An entry's ACTION is written as FinCom writes it (Create or Delete), never with & in it."
+	}
 	vtOnly := false
 	if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
 		inner := re(`(?s)^\s*<VOUCHERTYPE[^>]*>|</VOUCHERTYPE>\s*$`).ReplaceAllString(x, "")
