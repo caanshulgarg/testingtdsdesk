@@ -58,9 +58,17 @@ async function loadSales(cid, old, ids){
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
   // (re-review of e9c90fa34: a save of this client's list still waiting is written first, never lost to this reading)
   for (const p of [...salesPending]) if (p.cid === cid) await salesSaveNow(p);
-  const [list0, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
-  // (another read started since, a removal arriving while this one was reading: that one is drawn)
-  if (S.sales !== st) return;
+  // (the list written here while it was being read, an invoice filed meanwhile: read again, so it is not lost under the
+  // copy read before. The review of f3e0df029)
+  const wk = "sales:" + cid, wn = () => (BankDB.writes && BankDB.writes[wk]) || 0;
+  let list0, cfg, hist;
+  for (let n = 0; n < 5; n++){
+    const w0 = wn();
+    [list0, cfg, hist] = await Promise.all([BankDB.get(wk), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
+    // (another read started since, a removal arriving while this one was reading: that one is drawn)
+    if (S.sales !== st) return;
+    if (wn() === w0) break;
+  }
   let list = list0 || [];
   if (old){
     const got = new Map(list.map(v => [v.id, v])), marks = typeof Cloud === "object" ? Cloud.marks() : {}, dels = typeof Cloud === "object" ? Cloud.dels() : {};

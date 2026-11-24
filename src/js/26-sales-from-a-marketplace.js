@@ -81,7 +81,8 @@ async function uploadSales(files){
         const s = await live();
         // (written now, in this turn: salesSaveNow; another client's save still waiting goes in its own turn, saveSales)
         if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await salesSaveNow(); }
-        else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
+        // (not on screen: this client's saves still waiting written first, so none writes over it: review of f3e0df029)
+        else { for (const p of [...salesPending]) if (p.cid === cid) await salesSaveNow(p); v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
       });
       added++;
     } catch (e){
@@ -115,6 +116,9 @@ async function salesIngest(cid, file, r, hash){
     s.list.push(v); v.needsMap = false; mapInvoice(v); saveSales(); render();
   } else {
     const twin = await salesTurn(async () => {
+      // (this client's saves still waiting (an edit, then another client opened) written first, so none writes over the
+      // invoice filed here: the review of f3e0df029)
+      for (const p of [...salesPending]) if (p.cid === cid) await salesSaveNow(p);
       const list = (await BankDB.get("sales:" + cid)) || [];
       if (list.some(o => o.hash === hash || salesTwin(o, x))) return true;
       list.push(v); await BankDB.set("sales:" + cid, list); return false;

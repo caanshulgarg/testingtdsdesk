@@ -9,7 +9,8 @@ made as the same client's list is being loaded again is kept; the link reaches t
 a list whose loading failed does not stop the sync while an upload waits on it.
 The review of 34de5bd26: an edit made while a sync is applied keeps the synced invoice too (Sales open or left); an
 edit on one client is kept when another client saves at once, or when a sync of the first comes before its save; an
-invoice filed while the client's list is loading is kept.
+invoice filed while the client's list is loading is kept. The review of f3e0df029: an invoice of A filed while A's save
+waits (B on screen) is kept; one filed while a slow reading of the list goes on past the 15 s wait is kept.
 Offline, made-up clients. Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sales_upload_race.py"""
 import os, sys, json, time, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -166,6 +167,29 @@ with sync_playwright() as p:
       await ld; BankDB.get = get; await new Promise(ok => setTimeout(ok, 900)); await cloudApply.q;
       return {loading, done, screen: SL().list.some(x => x.x.number === "FILED/1"), db: (await BankDB.get("sales:" + cid)).some(x => x.x.number === "FILED/1")}; }""")
     ok(r == {"loading": True, "done": True, "screen": True, "db": True}, "an invoice filed while the list is loading: on the screen and kept (%s)" % r)
+    # (the review of f3e0df029) an edit on A, B opened at once, then an invoice of A filed from elsewhere (A not on
+    # screen): A's waiting save does not write over it
+    boot("ZZ Pending Filed A Pvt Ltd")
+    a = pg.evaluate("() => [SL().cid, window.__mine]")
+    pg.evaluate("() => { inv(window.__mine).x.customerName = 'Typed On A'; saveSales(); }")
+    pg.evaluate(CLIENT, ["ZZ Pending Filed B Pvt Ltd", LEDGERS])
+    r = pg.evaluate("""async ([cid, id]) => { %s window.charge = async () => true;
+      const added = await salesIngest(cid, new File(["made up"], "filed-a.pdf", {type: "application/pdf"}), {method: "claude-test", j: {vendorGstin: CO(cid).gstin, invoiceNo: "FILED/P10", invoiceDate: "2026-10-03", buyerName: "Filed Buyer", taxableValue: 100, cgst: 9, sgst: 9, igst: 0, totalAmount: 118}}, "hash-p10");
+      await new Promise(ok => setTimeout(ok, 1200)); await cloudApply.q; const db = await BankDB.get("sales:" + cid);
+      return {added, edit: f(db, id), filed: db.some(v => v.x.number === "FILED/P10")}; }""" % F, a)
+    ok(r == {"added": True, "edit": "Typed On A", "filed": True}, "an edit on A, B opened, an invoice of A filed: both kept (%s)" % r)
+    # an invoice filed while the list is loading and its reading slow: before the read, after the read (past the 15 s
+    # wait, then filed into the kept list): it ends on the screen and kept
+    boot("ZZ Slow Read Car Care Pvt Ltd")
+    for n, delay, after in [("FILED/R1", 800, False), ("FILED/R2", 16000, False), ("FILED/R3", 16000, True)]:
+        r = pg.evaluate("""async ([n, delay, after]) => { const cid = SL().cid, get = BankDB.get.bind(BankDB); let slow = true; window.charge = async () => true;
+          BankDB.get = k => { if (slow && k === "sales:" + cid){ slow = false; return after ? get(k).then(v => new Promise(ok => setTimeout(() => ok(v), delay))) : new Promise(ok => setTimeout(ok, delay)).then(() => get(k)); } return get(k); };
+          const ld = loadSales(cid); await new Promise(ok => setTimeout(ok, 200));
+          const added = await salesIngest(cid, new File(["made up"], n.replace("/", "-") + ".pdf", {type: "application/pdf"}), {method: "claude-test", j: {vendorGstin: CO(cid).gstin, invoiceNo: n, invoiceDate: "2026-10-02", buyerName: "Filed Buyer", taxableValue: 100, cgst: 9, sgst: 9, igst: 0, totalAmount: 118}}, "h-" + n);
+          await ld; BankDB.get = get; await new Promise(ok => setTimeout(ok, 900)); const s = SL(); if (s && !s.loading){ s.list[0].userLedger = true; saveSales(); }
+          await new Promise(ok => setTimeout(ok, 900)); await cloudApply.q;
+          return {added, screen: SL().list.some(x => x.x.number === n), db: ((await BankDB.get("sales:" + cid)) || []).some(x => x.x.number === n)}; }""", [n, delay, after])
+        ok(r == {"added": True, "screen": True, "db": True}, "an invoice filed while the list loads, its reading slowed %d ms %s: on the screen and kept (%s)" % (delay, "after reading" if after else "before reading", r))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
