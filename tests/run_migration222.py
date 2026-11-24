@@ -30,7 +30,8 @@ removed after; never a real database), with 221 applied first, made-up firm, boo
      'bands' without bands as today; 31 dates re-checked; auto_tries reset; the jobs in UTC; types and job names guarded
  11. tally_days_claim / tally_check_next_open with p_auto false (an old bridge): only upload, check and fill days, so a
      2.5.16+ bridge gets FinCom's own days at once; the 7- and 2-argument calls as before; a given-up period day (over2s,
-     dates, shape, toomany, entries, payroll, other) queued as a check day and unmarked once that day finishes
+     dates, shape, entries, payroll, other) queued as its own source 'retry' (never to an old bridge), unmarked once that
+     day finishes; 'toomany' not queued, said plainly; tally_period_upload backs the open check day off 1 h, 3 h, 24 h
 RED_WITHOUT_222=1: the same checks without the file (they fail)."""
 import os, re, sys, json, hashlib, datetime, difflib
 os.environ["TMPDIR"] = os.environ.get("PG222_DIR") or "/tmp/tell222"
@@ -129,8 +130,9 @@ try:
               insert into tally_period_day_retry (book_id, firm_id, day, fails, first_at, last_at, retry_at, why) values (%(B6)s, %(F)s, %(S3)s, 3, now() - interval '3 days', now() - interval '1 day', now() + interval '20 hours', 'over2s');
               insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_words) values
                 (%(B6)s, %(F)s, %(E1)s, now() - interval '1 day', 'entries', 'FinCom could not read that day from Tally. Please upload that day''s Day Book.'),
+                (%(B6)s, %(F)s, %(T1)s, now() - interval '1 day', 'toomany', 'Too many entries. Please upload that day''s Day Book.'),
                 (%(B6)s, %(F)s, %(L1)s, now() - interval '1 day', 'locked', 'FinCom did not bring in that day: its month is locked in FinCom. Unlock the month, then upload that day''s Day Book.')"""
-           % {"B": q(BK[6]), "B6": q(BK[6]), "F": q(F), "U": q(UPD.isoformat()), "L": q(LKD.isoformat()), "S3": q(S3.isoformat()), "FY": q(FY.isoformat()), "E1": q(D(44).isoformat()), "L1": q(D(45).isoformat())})
+           % {"B": q(BK[6]), "B6": q(BK[6]), "F": q(F), "U": q(UPD.isoformat()), "L": q(LKD.isoformat()), "S3": q(S3.isoformat()), "FY": q(FY.isoformat()), "E1": q(D(44).isoformat()), "L1": q(D(45).isoformat()), "T1": q(D(46).isoformat())})
     if text:
         db.sql("alter table tally_check_days add column prio text")
         r = st.psql_text(text); ok(r.returncode != 0 and "column tally_check_days.prio (not smallint)" in r.stderr, "the guard stops it over an existing column of another type (%s)" % r.stderr.strip()[-100:])
@@ -489,17 +491,38 @@ try:
     ok(isinstance(n2, list) and isinstance(n3, list) and [x["day"] for x in n3] == [d8(D(2))], "tally_check_next_open(book, max, false): only upload / check / fill (%s; %s)" % (n2, n3))
     # given-up period days: queued as check days (retried under the backoff), unmarked once the check day finishes
     k = 6
-    for n_, why in ((80, "over2s"), (81, "payroll"), (82, "shape")):
+    for n_, why in ((80, "over2s"), (81, "payroll"), (82, "shape"), (83, "toomany")):
         db.sql("insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_words) values (%s, %s, %s, now() - interval '1 day', %s, 'FinCom could not read it from Tally by itself.') on conflict (book_id, day) do update set upload_at = excluded.upload_at, upload_why = excluded.upload_why"
                % (q(BK[k]), q(F), q(D(n_).isoformat()), q(why)))
     queue(k)
     cs = {n_: cday(k, D(n_)) for n_ in (80, 81, 82)}
-    ok(all(c_.get("source") == "check" and c_.get("done") == "false" and c_.get("up") == "false" for c_ in cs.values()), "each given-up period day (over2s, payroll, shape): queued to be read as a check day (%s)" % cs)
+    ok(all(c_.get("source") == "retry" and c_.get("prio") == "5" and c_.get("done") == "false" and c_.get("up") == "false" for c_ in cs.values()), "each given-up period day (over2s, payroll, shape): queued as its own source 'retry', prio 5 (%s)" % cs)
+    ok(cday(k, D(83)) == {}, "a 'toomany' day: not queued (a check read hits the same limit) (%s)" % cday(k, D(83)))
+    db.sql("update tally_check_runs set state = 'going', stop_why = null where book_id = %s" % q(BK[k]))
+    db.sql("insert into tally_check_runs (book_id, firm_id) values (%s, %s) on conflict do nothing" % (q(BK[k]), q(F)))
+    old6 = j("select tally_check_next_open(%s, 30, false)::text" % q(BK[k])); new6 = j("select tally_check_next_open(%s, 30, true)::text" % q(BK[k]))
+    ok(isinstance(old6, list) and not [x for x in old6 if x["day"] in (d8(D(80)), d8(D(81)), d8(D(82)))] and isinstance(new6, list) and {d8(D(80)), d8(D(81)), d8(D(82))} <= {x["day"] for x in new6},
+       "the 'retry' days: never handed to a bridge before 2.5.16 (p_auto false), handed to a newer one (%s; %s)" % ([x["day"] for x in old6] if isinstance(old6, list) else old6, [x["day"] for x in new6] if isinstance(new6, list) else new6))
+    db.sql("update tally_check_days set asked_at = null where book_id = %s" % q(BK[k]))
     db.sql("update tally_check_days set done_at = now(), listed_at = now(), via = 'day' where book_id = %s and day in (%s, %s)" % (q(BK[k]), q(D(80).isoformat()), q(D(82).isoformat())))
     queue(k)
     pr = {r_["day"]: r_["up"] for r_ in db.rows("select day::text as day, (upload_at is not null)::text as up from tally_period_days where book_id = %s and day in (%s, %s, %s)" % (q(BK[k]), q(D(80).isoformat()), q(D(81).isoformat()), q(D(82).isoformat())))}
     ok(pr == {D(80).isoformat(): "false", D(81).isoformat(): "true", D(82).isoformat(): "false"}, "a check day finished: its period day unmarked; the payroll one still waiting (%s)" % pr)
     queue(k); ok(cday(k, D(81)).get("done") == "false" and db.one("select count(*) from tally_check_days where book_id = %s and day = %s" % (q(BK[k]), q(D(80).isoformat()))) == "1", "queued again: the open one left as it is, the finished one not reopened")
+
+    print("  -- a give-up by tally_period_upload backs off the day's open check day: 1 h, 3 h, then 24 h")
+    k = 6; GU = D(84)
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'retry') on conflict do nothing" % (q(BK[k]), q(F), q(GU.isoformat())))
+    wts = []
+    for i in range(3):
+        j("select tally_period_upload(%s, %s, 'shape', '', '')::text" % (q(BK[k]), q(GU.isoformat())))
+        wts.append(db.one("select round(extract(epoch from (next_at - now())) / 3600)::text || '/' || tries::text || '/' || coalesce(last_why, '') from tally_check_days where book_id = %s and day = %s" % (q(BK[k]), q(GU.isoformat()))))
+    ok(wts == ["1/1/shape", "3/2/shape", "24/3/shape"], "each give-up waits 1 h, then 3 h, then 24 h (%s)" % wts)
+    j("select tally_period_upload(%s, %s, 'toomany', 'Payment', 'Please upload the Day Book.')::text" % (q(BK[k]), q(D(85).isoformat())))
+    w = db.one("select upload_words from tally_period_days where book_id = %s and day = %s" % (q(BK[k]), q(D(85).isoformat())))
+    ok(w == "%s has more entries than FinCom can read from Tally in one go." % D(85).strftime("%d-%b-%Y"), "a 'toomany' day's words: plain and true, no promise to retry (%r)" % w)
+    tm = db.one("select upload_words from tally_period_days where book_id = %s and day = %s" % (q(BK[6]), q(D(46).isoformat())))
+    ok(tm == "%s has more entries than FinCom can read from Tally in one go." % D(46).strftime("%d-%b-%Y"), "a 'toomany' day marked before 222: the same words (%r)" % tm)
 
     print("== 8. the words, the sweep")
     hs = j("select tally_held_status(null)::text", uid=OWNER, role="authenticated")
