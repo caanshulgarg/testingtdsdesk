@@ -50,7 +50,7 @@ def rpc(name, a):
         if name == "tally_period_gate": return True
         if name in ("tally_period_next", "tally_period_next_paced") or (name == "tally_days_claim" and a["p_kind"] == "period"): return PERIOD[0][: a["p_max"]]
         if name in ("tally_check_next", "tally_check_next_open") or name == "tally_days_claim":
-            return [{"day": d, "fetch": True, "chosenAt": CA, "check": True} for d in sorted(DAYS, reverse=True)][: a["p_max"]]
+            return [{"day": d, "fetch": True, "chosenAt": CA, "check": True} for d in sorted(DAYS, reverse=True) if a.get("p_auto") is not False or DAYS[d] not in ("delete", "future")][: a["p_max"]]     # (222: p_auto false lists none of its new sources)
         if name == "tally_held_front": return [{"day": "20260401", "chosenAt": CA}]
         if name == "tally_gap_front": return [{"day": "20260402", "chosenAt": CA}]
         if name == "tally_period_retry_days": return []
@@ -73,7 +73,7 @@ for i, (co, (book, guid)) in enumerate(BOOKS.items()):
 FS.T["tally_devices"].append({"id": DA, "firm_id": FIRM, "name": "PC-MADEUP", "key_hash": hashlib.sha256(KA.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.5.16", "period_fetch": True})
 FS.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key")
-fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.environ.get("INDEX_TS") or os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 log = []
 threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
 def call(body, key=KA):
@@ -106,6 +106,8 @@ try:
     ok(c == 200 and q == [("tally_autoday_queue", SB, None)], "1. tally_autoday_queue asked for the book (%s)" % q)
     at = lambda n: next((i for i, x in enumerate(ORDER) if x[0] == n), 99)
     ok(at("tally_autoday_queue") < min(at("tally_days_claim"), at("tally_held_front"), at("tally_gap_front")), "1. before the book's days are handed out (%s)" % [x[0] for x in ORDER[:5]])
+    ck = [a for a in FS.ARGS.get("tally_days_claim") or [] if a.get("p_kind") == "check"]
+    ok(ck and ck[-1].get("p_auto") is True, "1. the claim says p_auto true for 2.5.16 (%s)" % (ck[-1:] and ck[-1].get("p_auto")))
     want = sorted(list(DAYS) + ["20260401", "20260402"])
     ok(days == want, "2. every day handed: FinCom's own, the person's, the held delete and the gap's (%s)" % days)
     ok(all(d.get("kind") in ("check", "fill") for d in pd) and {d["day"]: d["kind"] for d in pd}.get("20260415") == "fill", "2. as check days (a fill as fill): no new kind (%s)" % {d["day"]: d["kind"] for d in pd})
@@ -115,17 +117,19 @@ try:
 
     print("== 3. a bridge older than 2.5.16")
     c, r, pd, days = beat("SERVED CO", GB)
-    ok(c == 200 and days == ["20260414", "20260415"], "3. only the person's days (upload, fill) (%s)" % days)
-    ok(not asked("tally_held_front") and not asked("tally_gap_front"), "3. the held deletes' and the gap's days not asked for it (%s)" % [x[0] for x in ORDER])
+    ok(c == 200 and days == ["20260401", "20260402", "20260410", "20260413", "20260414", "20260415"], "3. as before (held deletes, gap, held, the person's), none of 222's new days (delete, future) (%s)" % days)
+    ok(asked("tally_held_front") and asked("tally_gap_front"), "3. its held deletes' and gap's reads kept (%s)" % [x[0] for x in ORDER])
+    ck = [a for a in FS.ARGS.get("tally_days_claim") or [] if a.get("p_kind") == "check"]
+    ok(ck and ck[-1].get("p_auto") is False, "3. the claim says p_auto false: FinCom's own days never claimed for it (%s)" % (ck[-1:] and ck[-1].get("p_auto")))
     ok(r.get("ok") is True and "posts" in r, "3. the beat answered as ever (posting untouched)")
 
     print("== 4. a bridge not serving the book (no claim)")
     LB = BOOKS["LONELY CO"][0]
     c, r, pd, days = beat("LONELY CO")
     ok(asked("tally_autoday_queue") == [("tally_autoday_queue", LB, None)], "4. its days queued all the same (%s)" % asked("tally_autoday_queue"))
-    ok(not [x for x in asked("tally_days_claim") if x[1] == LB] and days == [], "4. not by claim: no check day at all (222 hands them only by claim) (%s)" % days)
+    ok(not [x for x in asked("tally_days_claim") if x[1] == LB], "4. not by claim: no check day (222 hands them only by claim) (%s)" % days)
     ok(not asked("tally_check_next_open") and not asked("tally_check_next"), "4. the plain list not asked (%s)" % [x[0] for x in ORDER])
-    ok(not asked("tally_held_front") and not asked("tally_gap_front"), "4. the held deletes' and the gap's days not asked")
+    ok(days == ["20260401", "20260402"] and asked("tally_held_front") and asked("tally_gap_front"), "4. its held deletes' and gap's reads as before (%s)" % days)
 
     print("== 1b. a company without a starting point: queued, not handed")
     NB = BOOKS["NOSTART CO"][0]
@@ -140,6 +144,7 @@ try:
     dev.update(period_night_from=(h0 + 2) % 24, period_night_to=(h0 + 4) % 24, period_night_sunday=False)     # by day: 3 an answer
     c, r, pd, days = beat("SERVED CO", lastKeySec=600)
     ok(len(pd) == 3 and all(d["kind"] in ("check", "fill") for d in pd) and asked("tally_days_claim")[0][2] == "check", "6. by day (3 an answer): the check's days fill it first (%s)" % [(d["day"], d["kind"]) for d in pd])
+    ok(not [x for x in asked("tally_days_claim") if x[2] == "period"] and not asked("tally_period_next_paced"), "6. no room left: the period's days not claimed (%s)" % [x for x in ORDER if "period" in x[0] or x[2] == "period"])
     PERIOD[0] = []
     dev.update(period_night_from=h0, period_night_to=(h0 + 2) % 24, period_night_sunday=True)
 

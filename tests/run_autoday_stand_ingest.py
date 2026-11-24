@@ -6,8 +6,9 @@ its serving rule, the hand-out, the pickup, the heads); the rest of tally-ingest
 (fake_supabase.py), the computer's record copied to the database before each of its calls. Made-up data only. Checks:
   1. a stuck line's day: queued by the beat itself (held, prio 1) and handed to the 2.5.16 bridge serving the book, as a
      check day
-  2. a 2.5.10 bridge serving the book: not handed it; a bridge the database does not know as this computer's (not
-     serving): no check day at all
+  2. a 2.5.10 bridge serving the book: not handed it and never claims it (222's p_auto false), so the 2.5.16 bridge's
+     next beat gets it at once (the claims kept between the beats); a bridge the database does not know as this
+     computer's (not serving): no check day at all
   3. a pick-up refused 'slow': the day waits (tries 1, an hour) and is not handed; told once, not again each beat;
      'started' clears its why
   4. a day read in bands: a hole deletes nothing however many lists; whole bands delete on the second list a minute later
@@ -97,7 +98,7 @@ try:
     FS.T["tally_devices"].append({"id": DA, "firm_id": F, "name": "MADEUP-PC1", "key_hash": hashlib.sha256(KA.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.5.16", "period_fetch": True})
     FS.start()
     env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key")
-    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.environ.get("INDEX_TS") or os.path.join(HERE, "..", "server", "tally-cloud", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     log = []
     threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
     def call(body):
@@ -106,7 +107,7 @@ try:
         except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
     LAST = [0.0]
     def beat(bridge=GA, **more):
-        time.sleep(max(0.0, LAST[0] + 5.3 - time.time()))     # (the database lists days to a computer at most every 5 s: tally_period_gate)
+        db.sql("update tally_devices set period_listed_at = null where id = %s" % q(DA))     # (the database lists days to a computer at most every 5 s: tally_period_gate)
         sync(); CALLS.clear()
         c, r = call(dict({"version": bridge["version"], "bridge": bridge, "kind": "beat", "tally": True, "open": [CO],
                           "companies": [{"name": CO, "open": True, "guid": CG, "altvchid": 100, "altmstid": 50}], "lastKeySec": 600,
@@ -123,7 +124,8 @@ try:
     unask = lambda: db.sql("update tally_check_days set asked_at = null where book_id = %s" % q(BOOK))
 
     print("== 1. a stuck line's day, by itself")
-    beat()          # the bridge's record (cos) kept: it serves the book from the next beat
+    beat(GB); beat()     # both bridges' records (cos) kept: each serves the book once tally-ingest asks again (every 20 s a book)
+    time.sleep(21)
     c, r, cd = beat()
     ok(cday(STUCK).get("source") == "held" and cday(STUCK).get("prio") == "1", "1. queued by the beat itself: held, prio 1 (%s)" % cday(STUCK))
     ok(c == 200 and d8(STUCK) in [d["day"] for d in cd] and all(d["kind"] == "check" for d in cd if d["day"] == d8(STUCK)), "1. handed to the 2.5.16 bridge serving the book, as a check day (%s)" % [d["day"] for d in cd])
@@ -133,6 +135,12 @@ try:
     db.sql("delete from tally_work_claims where book_id = %s" % q(BOOK)); unask()
     beat(GB); c, r, cd = beat(GB)
     ok(c == 200 and d8(STUCK) not in [d["day"] for d in cd], "2. 2.5.10: not handed the stuck line's day (%s)" % [d["day"] for d in cd])
+    ok(any(n == "tally_days_claim" and a.get("p_kind") == "check" for n, a in CALLS), "2. (it serves the book: its days are claimed for it) (%s)" % [n for n, _ in CALLS])
+    held_by = lambda b: db.one("select count(*) from tally_work_claims where book_id = %s and kind = 'check' and unit = %s and bridge_id = %s and until > now()" % (q(BOOK), q(d8(STUCK)), q(b["id"])))
+    ok(held_by(GB) == "0", "2. the 2.5.10 bridge never claimed it (222's p_auto false) (%s; %s)" % (held_by(GB), [(n, a.get("p_kind"), a.get("p_auto")) for n, a in CALLS if n == "tally_days_claim"]))
+    unask()
+    c, r, cd = beat()     # (the claims NOT cleared between the beats)
+    ok(c == 200 and d8(STUCK) in [d["day"] for d in cd] and held_by(GA) == "1", "2. the 2.5.16 bridge's next beat: handed it at once, nothing held by the older one (%s)" % [d["day"] for d in cd])
     db.sql("delete from tally_work_claims where book_id = %s" % q(BOOK)); unask()
     c, r, cd = beat(GC)
     ok(c == 200 and cd == [] and not any(n in ("tally_check_next_open", "tally_check_next") and a.get("p_book") == BOOK for n, a in CALLS if n != "tally_days_claim"), "2. a bridge the database does not know as this computer's: no check day (%s)" % [d["day"] for d in cd])

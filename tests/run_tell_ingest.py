@@ -102,7 +102,7 @@ try:
     ok(c == 200 and r.get("upload") is True and r.get("words") == "Tally could not send 31-Aug-2025 in time on 3 days. FinCom tries it again by itself.", "3. a day stopped on its 3rd day: FinCom's words (%s)" % r.get("words"))
     c, r = call(dict(b16, kind="period_heads", company="MADE UP CO", company_guid=CG, day="20250830", upload=True, why="over2s", type="Sales", words="Tally took too long to give 30-Aug-2025. Please upload that day's Day Book."))
     u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
-    ok(c == 200 and u.get("p_words") == "Tally took too long to give 30-Aug-2025. FinCom brings this day from Tally by itself.", "3. a day the bridge marks: kept without the ask (%s)" % u.get("p_words"))
+    ok(c == 200 and u.get("p_words") == "Tally took too long to give 30-Aug-2025.", "3. a day the bridge marks: kept without the ask (%s)" % u.get("p_words"))
     c, r = call(dict(b16, kind="period_stop", company="MADE UP CO", company_guid=CG, day="20250830", why="over2s", chosenAt="2026-11-24T08:00:00.123456+00:00",
                      words="Tally took too long to give 30-Aug-2025, so FinCom stopped reading older entries of MADE UP CO. Please upload the Day Book for the days still missing."))
     ps, cs = (FS.ARGS.get("tally_period_stop") or [{}])[-1], (FS.ARGS.get("tally_check_stop") or [{}])[-1]
@@ -117,14 +117,14 @@ try:
     ud = ((bt.get("periodPull") or {}).get("uploadDays") or [{}])[0]
     ok(ud.get("day") == "20250830" and "upload" not in ud.get("words", "upload").lower(), "3. the days the bridge lists: no ask (%s)" % ud)
     ra = (bt.get("renumberAlerts") or [{}])[0]
-    ok(ra.get("words") == "Tally may have renumbered 3 entries. FinCom reads these days from Tally again by itself.", "3. a renumbering alert: no ask (%s)" % ra.get("words"))
+    ok(ra.get("words") == "Tally may have renumbered 3 entries.", "3. a renumbering alert: no ask (%s)" % ra.get("words"))
     replies = []
     c, r = call(dict(b16, kind="period_entries", company="MADE UP CO", company_guid=CG, day="20250830", vouchers=[V(6, "20250830"), V(7, "20250830", other="90.00")], full=True)); replies.append(r)
-    ok(c == 200 and r.get("notTaken") == 1 and r.get("upload") == "FinCom could not read 30-Aug-2025 from Tally yet. FinCom tries again by itself.", "3. an entry whose lines do not total zero: plain words (%s)" % r.get("upload"))
+    ok(c == 200 and r.get("notTaken") == 1 and r.get("upload") == "FinCom could not read 30-Aug-2025 from Tally by itself.", "3. an entry whose lines do not total zero: plain words (%s)" % r.get("upload"))
     LOCKED[0] = True
     c, r = call(dict(b16, kind="period_entries", company="MADE UP CO", company_guid=CG, day="20250830", vouchers=[V(8, "20250830")], full=True)); replies.append(r)
     LOCKED[0] = False
-    ok(c == 200 and r.get("locked") is True and r.get("upload") == "FinCom did not bring in 30-Aug-2025: its month is locked in FinCom. Unlock the month, then press Bring missing days on the Tally page.", "3. a locked month: what to press (%s)" % r.get("upload"))
+    ok(c == 200 and r.get("locked") is True and r.get("upload") == "FinCom did not bring in 30-Aug-2025: its month is locked in FinCom. Unlock the month; FinCom then reads this day by itself.", "3. a locked month: what to press (%s)" % r.get("upload"))
     c, r = call(dict(b16, kind="period_day_stop", company="MADE UP CO", company_guid=CG, day="20250831", why="over2s")); replies.append(r)
     bad = [w for x in replies for w in words_of(x) if "upload" in w.lower()]
     ok(not bad, "3. no reply's words contain 'upload' (%s)" % bad)
