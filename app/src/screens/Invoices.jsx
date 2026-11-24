@@ -30,10 +30,10 @@ export default function Invoices() {
   const d = D(), co = CO(), all = Object.values(d.entries);
   // Post automatically: "Posted automatically" shows the bills that went by themselves, whatever their state; "Waiting for
   // me" (the default) the tab as before, less those on their way by themselves (parts/AutoPost.jsx)
-  const shown = (apView("bills") === "auto" ? apRows("bills", all) : apRows("bills", all.filter((e) => e.status === S.filter))).sort((a, b) => (S.filter === "draft" ? byDate(a, b) : byDate(b, a)));
+  const shown = (apView("bills") === "auto" ? apRows("bills", all.filter((e) => !billOld(e))) : apRows("bills", all.filter((e) => e.status === S.filter && !billOld(e)))).sort((a, b) => (S.filter === "draft" ? byDate(a, b) : byDate(b, a)));
   // the first bill in the list is chosen when none is (as before)
   if (!S.selected || !d.entries[S.selected]) S.selected = shown[0] ? shown[0].id : null;
-  const cnt = (st) => all.filter((e) => e.status === st).length, drafts = cnt("draft");
+  const cnt = (st) => all.filter((e) => e.status === st && !billOld(e)).length, drafts = cnt("draft");
   const pick = (id) => {
     S.selected = id; render();
     if (window.innerWidth < 860) { const el = document.querySelector(".detail"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }

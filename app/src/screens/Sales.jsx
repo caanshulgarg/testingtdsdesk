@@ -7,6 +7,7 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
+import OldPosted from "../parts/OldPosted.jsx";
 import "../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 import { useDismiss } from "../parts/dismiss.js";
@@ -40,7 +41,7 @@ const salesOptShown = (v) => !!v.postedOptional && ["posted", "intally"].include
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
   ready: "Nothing ready to post. Confirm each invoice's customer ledger under To review; it then waits here.",
-  done: "Nothing in Tally yet. Post the invoices under Ready to post.", ignored: "No invoice ignored." };
+  done: "Nothing in Tally yet. Post the invoices under Ready to post.", old: "Nothing posted to Tally in the last 24 hours.", ignored: "No invoice ignored." };
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
@@ -140,12 +141,12 @@ function DraftText({ x, label, k, area, ...p }) {
 // tax-accuracy: the e-invoice (IRN) and e-way bill of this invoice, made through the firm's GST API
 function EinvPanel({ v }) {
   // (next-fix-audit-sales-einv) the e-invoice user of the registration the invoice is issued from (EINV.seller), not always the main GSTIN
-  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase(), seller = EINV.seller(v, co) || gstin;
+  // (what it shows and offers: EINV.offers, the rule Sales also reads to keep an invoice listed, salesNeedsAction)
+  const s = SL(), co = CO(s.cid), x = v.x, o = EINV.offers(v, co);
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [t, setT] = useState({ distance: "", vehicleNo: "", transporterId: "", mode: "1" });
-  if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
-  const a = EINV.need(seller), probs = EINV.problems(v, co, s.cfg);
+  if (!o) return null;
+  const { a, active } = o, canCancel = o.cancel, probs = EINV.problems(v, co, s.cfg);
   const go = (label, f) => async () => { setBusy(label); setMsg(""); try { setMsg(await f()); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(""); render(); };
-  const active = x.irn && x.irnStatus !== "cancelled", canCancel = active && x.ackDt && Date.now() - Date.parse(x.ackDt) < 24 * 3600000;
   return <section data-einv={v.id}><h3>E-invoice and e-way bill</h3>
     {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
     {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
@@ -156,7 +157,7 @@ function EinvPanel({ v }) {
         {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
         <button className="btn small primary" disabled={!!busy || probs.length > 0} onClick={go("irn", async () => { const j = await EINV.irn(v); return "IRN made: " + j.irn; })}>{busy === "irn" ? "Making the IRN…" : "Make the IRN"}</button>
       </> : <>
-        {!x.ewayNo && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+        {o.ewb && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
           <input type="number" min="0" placeholder="Distance (km)" aria-label="Distance in km" value={t.distance} style={{ width: 120 }} onChange={(ev) => setT({ ...t, distance: ev.target.value })} />
           <select aria-label="Mode" value={t.mode} style={{ width: "auto" }} onChange={(ev) => setT({ ...t, mode: ev.target.value })}><option value="1">Road</option><option value="2">Rail</option><option value="3">Air</option><option value="4">Ship</option></select>
           <input type="text" placeholder="Vehicle no." aria-label="Vehicle number" value={t.vehicleNo} style={{ width: 130 }} onChange={(ev) => setT({ ...t, vehicleNo: ev.target.value })} />
@@ -416,6 +417,7 @@ export default function Sales() {
   const co = CO(), s = SL();
   if (!s || s.cid !== co.id) { loadSales(co.id); return <Loading what="sales invoices" page="table" />; }
   if (s.loading) return <Loading what="sales invoices" page="table" />;
+  salesSel();   // a ticked invoice now older than 24 hours is unticked (src/js/26)
   if (s.view === "create" && s.draft) return <Create />;
   ensureFileInputs();
   const all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
@@ -461,17 +463,19 @@ export default function Sales() {
     </div>
     {s.showSettings && <SettingsPanel />}
   </>;
-  const list = salesVisible(), nSel = list.filter((v) => s.sel.has(v.id)).length, open = s.openId && inv(s.openId);
+  // the invoices this page lists: all but those Tally confirmed more than 24 hours ago (in Transactions only, salesOld)
+  const list = salesVisible(), listed = s.list.filter((v) => !salesOld(v)).length, nSel = list.filter((v) => s.sel.has(v.id)).length, open = s.openId && inv(s.openId);
   return <>
     <div className="bk sl">{head}
       <div className="bk-bar">
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search invoice, customer, GSTIN" aria-label="Search the invoices" value={s.q} onChange={(ev) => salesSearch(ev.target.value)} />
       </div>
-      <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />
+      <ChipBar t="sales" shown={list.length} total={listed + " invoices"} />
       {/* the one list table (spec K6) */}
-      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length} selected={s.sel}
+      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={listed} selected={s.sel}
         rowProps={(v) => ({ className: s.sel.has(v.id) ? "picked" : undefined })}
-        empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter]} />
+        empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter === "done" && salesCounts().old ? "old" : s.filter]} />
+      <OldPosted kind="sales" />
     </div>
     {open && <Detail v={open} />}
     {s.showSettings && <SettingsPanel />}
@@ -488,10 +492,9 @@ export function SalesBar() {
       <div className="ab-right"><button className="btn" onClick={() => salesAct("salesCancel")}>Cancel</button><button className="btn" onClick={() => salesAct("salesPrintDraft")}>Preview / Print</button><button className="btn primary" onClick={() => salesAct("salesSave")}>Save invoice</button></div>
     </div>) : null;
   if (!s.list.length) return null;
-  const tc = salesCounts(), nsel = s.sel.size;
+  const rows = salesSel(), tc = salesCounts(), nsel = s.sel.size;
   let left, right;
   if (nsel) {
-    const rows = s.list.filter((v) => s.sel.has(v.id));
     left = <><b>{nsel} selected</b> <span className="muted">· {money(r2(rows.reduce((a, v) => a + num(v.x.total), 0)))}</span> <button className="linkbtn" onClick={() => salesAct("salesSelNone")}>Clear</button></>;
     right = <>
       {/* a ledger picked from the list, or Enter, applies it (src/js/23, 26) */}

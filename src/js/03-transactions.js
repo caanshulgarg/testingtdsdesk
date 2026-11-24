@@ -19,6 +19,63 @@ function vchTypeOf(e, co){
 // A bill in a Tally file that no one has confirmed is not counted. Round 17a (owner, 04-Oct-2026): a bill FinCom Bridge
 // 2.1.8 posted by Tally's reply (it never reads back: postByReply) is in Tally too.
 function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postByReply === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
+// the owner (23-Nov-2026): an entry Tally confirmed more than 24 hours ago leaves Purchase, Bank and Sales (their lists,
+// tabs and counts) and is listed in Transactions only; with no time kept (older data) it counts as older. A view only:
+// nothing kept changes, and every check, return and report still reads them all. Not Tally's confirmation (a Tally
+// file, gone from Tally, held, to review): always listed. The time: the posting's; a person's mark (posted), when it was
+// marked; one found already in Tally, when FinCom found it (matchedAt, 23-Nov-2026: older matches have none)
+// (POSTED_KEEP_MS: 24 hours; the tests of older made-up postings, whose lists are what they check, widen it)
+// Only the posted list: a bill deleted, held or marked no entry is always listed. The owner (24-Nov-2026): anything that
+// still needs the person never leaves, whatever its age: one rule per kind (salesNeedsAction, billNeedsAction,
+// bankNeedsAction), true whenever the entry's page or panel offers an action or a warning the person can act on there,
+// read from what those panels show: a sales invoice's alerts and its e-invoice part (EINV.offers, src/js/55), a bill's
+// warnings (billDocWarns) and its row on Post to Tally, a bank line's row there (postNeeds)
+let POSTED_KEEP_MS = 864e5;
+function postedOld(at){ return !(Date.parse(at || "") > Date.now() - POSTED_KEEP_MS); }
+// the keys ("bill:id", "bank:id") of the Post to Tally rows with something to do (Correct the Tally id, a posting queued
+// or going on, Errors), as that page draws them (postStatus, src/js/62); worked out once a drawing, or once a task outside one
+let POST_NEEDS = null;
+function postNeeds(cid){
+  // (a row the person hid or removed from the page, or of a posting a person dismissed, is not one to act on)
+  const f = () => new Set((typeof postEntryRows === "function" && postEntryRows(cid) || []).filter(x => (x.st.action || x.st.tab !== "posted") && !(x.job && x.job.dismissed_at && !x.job.dismiss_auto)
+    && !(typeof PostFlags === "object" && (PostFlags.isHidden(x.key) || PostFlags.removedNow(x)))).map(x => x.kind + ":" + x.id));
+  if (typeof postRev !== "function") return f();
+  reactScope(); if (IN_RENDER) return perRender(postNeeds, postRev(cid), f);
+  const k = cid + "|" + postRev(cid) + (typeof PostFlags === "object" ? "|" + PostFlags.hide.size + ":" + PostFlags.removed.size : "");
+  if (!POST_NEEDS) setTimeout(() => { POST_NEEDS = null; }, 0);
+  if (!POST_NEEDS || POST_NEEDS.k !== k) POST_NEEDS = {k, v: f()};
+  return POST_NEEDS.v;
+}
+// the Sales panel (app/src/screens/Sales.jsx Detail): its alerts (problems, Tally's error, Optional voucher, checked on
+// FinCom's copy, IRN cancelled while in Tally), Try again (refused, to check), a posting queued, and the e-invoice part:
+// Make the IRN while the person can press it there (EINV.irnBlocked: only the client's PIN, set in Sales settings, may be
+// missing) and the IRP's time limit is not past (irnLate: turnover of Rs 10 crore and above);
+// Make the e-way bill when one is needed (ewbNeeded); Cancel the IRN (within 24 hours of it)
+function salesNeedsAction(v){ const x = v.x || {}, o = typeof EINV === "object" && EINV.offers(v), s = SL();
+  return !!(x.irnCancelInTally || v.postJob || v.postError || v.refused || v.needsCheck || v.postedOptional || v.copyCheck || (v.problems || []).length || (v.ledgerIssues || []).length
+    || (o && ((o.irn && !EINV.irnLate(v, CO(s.cid)) && !EINV.irnBlocked(v, CO(s.cid), s.cfg || {}).length) || (o.ewb && EINV.ewbNeeded(v)) || o.cancel))); }
+// the bill's own warnings, each with its button (app/src/screens/Bill.jsx DocWarnings): not a tax invoice; billed to
+// another GSTIN than the client's own
+function billDocWarns(e, co){ const x = e.x || {}, bill = String(x.buyerGstin || "").toUpperCase();
+  return {notBill: !!(e.docKind && !e.docOverride), elsewhere: !!(co && co.gstin && bill && !ownGstins(co).includes(bill) && !e.buyerOverride)}; }
+// a bill: its owner's release (asked or held), Optional voucher, gone from Tally, Tally's error or a check that failed,
+// sent and not confirmed, its warnings (billDocWarns), and its row on Post to Tally
+function billNeedsAction(e, cid){ const w = billDocWarns(e, CO(cid || S.coId));
+  return !!(e.ownerRelease || e.postedOptional || e.goneFromTally || e.postError || e.postCheckFailed || e.postUnconfirmed || w.notBill || w.elsewhere || postNeeds(cid || S.coId).has("bill:" + e.id)); }
+// a bank line: Optional voucher, a posting queued or to review, Tally's error, being checked in Tally, gone from Tally,
+// and its row on Post to Tally
+function bankNeedsAction(r){ const b = S.bank; return !!(r.postedOptional || r.postJob || r.postError || r.postReview || r.checking || r.pendingCheck || r.goneFromTally || (b && postNeeds(b.cid).has("bank:" + r.id))); }
+function billOld(e, cid){ const t = e.tally || {}; return e.status === "approved" && billInTally(e) && postedOld((t.byOwner && t.byOwnerAt) || t.at || e.exportedAt) && !billNeedsAction(e, cid); }
+function bankOld(r){ return bankMatched(r) && postedOld(r.state === "intally" ? r.matchedAt : (r.tally && r.tally.at) || r.sentAt) && !bankNeedsAction(r); }
+// (asked of each invoice several times in a drawing, by the list, its counts, the ticks and the totals: once a drawing,
+// keyed on every save of the invoices, SALES_REV, so a drawing reused after a save (memoKeep) never reads old answers)
+function salesOld(v){
+  reactScope(); const m = IN_RENDER ? perRender(salesOld, "m:" + (typeof SALES_REV === "number" ? SALES_REV : 0), () => new WeakMap()) : null;
+  if (m && m.has(v)) return m.get(v);
+  const r = (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && postedOld(v.status === "intally" ? v.matchedAt : v.postedAt) && !salesNeedsAction(v);
+  if (m) m.set(v, r);
+  return r;
+}
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
   if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];
@@ -34,7 +91,7 @@ function txnRowsBills(){
   // deleted bills are listed too, shown only under the "Deleted" filter (review of 02-Oct-2026)
   return Object.values(d.entries).map(e => {
     const x = e.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
-    const [cls, label] = tallyStateOf(e);
+    const [cls, label0] = tallyStateOf(e), label = e.goneFromTally ? "Gone from Tally" : label0;
     // a purchase bill is posted as the voucher type chosen in Client setup (Testing AAD: Journal); said so beside it
     // (review of 02-Oct-2026: "Journal" on purchase bills looked like a mistake)
     return {id: e.id, kind: "bill", date: x.invoiceDate || "", up: (e.createdAt || "").slice(0, 10), vch: vchTypeOf(e, co), vchNote: e.noteKind === "credit" || e.vchType ? "" : "the voucher type chosen for this client’s purchase bills (Client setup → Tally, or “Post as” on a purchase sheet)", no: x.invoiceNo || "",
@@ -47,8 +104,9 @@ function txnRowsSales(){
   if (!s || s.cid !== S.coId) return null;
   return s.list.map(v => {
     const x = v.x || {}, gst = num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess);
-    const cls = v.status === "posted" ? "ok" : v.status === "ready" ? "warn" : v.status === "ignored" ? "no" : "no";
-    const label = v.status === "posted" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
+    // (an invoice found already in Tally is In Tally too)
+    const cls = v.status === "posted" || v.status === "intally" ? "ok" : v.status === "ready" ? "warn" : "no";
+    const label = v.status === "posted" || v.status === "intally" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
     return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: salesVt(x),
       no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + v.id))), v};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -60,8 +118,10 @@ function txnRowsBank(){
   (b.stmts || []).forEach(st => { stName[st.id] = st; });
   return b.rows.map(r => {
     const st = stName[(r.id || "").split("-")[0]] || curStmt() || {};
-    const cls = r.state === "sent" ? "ok" : r.state === "intally" ? "ok" : r.state === "ready" ? "warn" : r.state === "ignored" ? "no" : "no";
-    const label = r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Post to Tally" : r.state === "ignored" ? "Left out" : "To review";
+    // (a line sent, or in a Tally file, that Tally has not shown: Not found in Tally; one deleted there since: Gone from Tally)
+    const lost = bankInTally(r) && !bankMatched(r), gone = lost && r.goneFromTally;
+    const cls = gone ? "bad" : lost ? "warn" : r.state === "sent" || r.state === "intally" ? "ok" : r.state === "ready" ? "warn" : "no";
+    const label = gone ? "Gone from Tally" : lost ? "Not found in Tally" : r.state === "sent" ? "In Tally" : r.state === "intally" ? "Already in Tally" : r.state === "ready" ? "Post to Tally" : r.state === "ignored" ? "Left out" : "To review";
     return {id: r.id, kind: "bank", date: r.date, up: (st.uploadedAt || "").slice(0, 10), vch: r.credit ? (CO().receiptType || "Receipt") : (CO().paymentType || "Payment"),
       no: (r.dec && (r.dec.utr || r.dec.chq)) || "", party: (r.dec && r.dec.name) || r.narr.slice(0, 40), taxable: 0, gst: 0,
       total: num(r.debit) || num(r.credit), dr: num(r.debit), cr: num(r.credit), cls, label, file: st.fileName || "", docPath: st.docPath || "", hasFile: !!(S.files["st:" + st.id] || st.docPath || (S.fileIndex && S.fileIndex.has("st:" + st.id))), stId: st.id, r};

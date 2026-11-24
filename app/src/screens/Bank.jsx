@@ -26,6 +26,7 @@ import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import { ColFunnel } from "../parts/ColHead.jsx";
 import ListTable from "../parts/ListTable.jsx";
+import OldPosted from "../parts/OldPosted.jsx";
 import Loading from "../parts/Loading.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import { BankLedger } from "../parts/Confirm.jsx";
@@ -62,7 +63,7 @@ export const bstOf = (r) => (!newLook() ? BST[r.state] : r.state === "ready" && 
 
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to do: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To do its ledger; it then waits here.",
-  done: "Nothing posted to Tally yet. Post the lines under Ready to post.", ignored: "No line ignored. A line you set aside with ✕ waits here, with Restore." };
+  done: "Nothing posted to Tally yet. Post the lines under Ready to post.", old: "Nothing posted to Tally in the last 24 hours.", ignored: "No line ignored. A line you set aside with ✕ waits here, with Restore." };
 const live = () => Bridge.on() && Bridge.up();
 
 
@@ -220,15 +221,18 @@ function wheelToTop(ev, g) {
   if (se.scrollTop !== y) ev.preventDefault();
 }
 
+// the statement's lines this page lists: all but those Tally confirmed more than 24 hours ago (in Transactions only)
+const listed = (b) => b.rows.filter((r) => !bankOld(r)).length;
 // the table's totals row (spacious layout: kept at the foot of the table's box, spacious.css): how many lines, the
 // statement's opening and closing, and "Select all" of the lines shown (was in the filter bar); the withdrawals and
 // deposits of the lines shown are added up under their columns
 function FootNote({ b, all }) {
   const st = curStmt() || {}, n = all.length, pickable = all.filter((r) => r.state !== "sent"), allPicked = pickable.length > 0 && pickable.every((r) => b.sel.has(r.id));
   return <span className="bsp-foot" data-bank-totals="">
-    <b>{n + " " + (n === 1 ? "entry" : "entries")}</b>{b.rows.length !== n ? " of " + b.rows.length : ""}
+    <b>{n + " " + (n === 1 ? "entry" : "entries")}</b>{listed(b) !== n ? " of " + listed(b) : ""}
     <span className="bsp-oc-f"> · Opening <b>{st.opening !== undefined ? money(st.opening) : "—"}</b> · Closing <b>{st.closing !== undefined ? money(st.closing) : "—"}</b></span>
     {pickable.length > 0 && <> · <button className="linkbtn" data-f-selall="" onClick={() => selectAll(pickable, !allPicked)}>{allPicked ? "Untick all" : "Select all " + pickable.length}</button></>}
+    <OldPosted kind="bank" foot />
   </span>;
 }
 
@@ -253,11 +257,11 @@ function Table({ tab, all }) {
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
   return <div className="bs-grid" ref={grid} tabIndex={0} data-bank-grid="" aria-label="Bank statement lines: arrow keys move, Enter sets the ledger" onKeyDown={(ev) => kbKey(ev, grid.current)}>
-    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} selected={b.sel} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
+    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} selected={b.sel} unit={["entry", "entries"]} of={listed(b)} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
       rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : "") + (b.drawer === r.id ? " dr-on" : ""), "data-rid": r.id,
         onClick: (ev) => rowOpen(ev, r.id) })}
-      empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />
+      empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab === "done" && tabCounts(b.rows).old ? "old" : tab] || "Nothing here. Use Upload statement at the top right to add one."} />
   </div>;
 }
 
@@ -397,6 +401,7 @@ export function healRows(b) {
 
 // spacious layout (01-Nov-2026): the slim rail (parts/bank/Rail.jsx) on the Bank page, whatever the page shows
 export default function Bank() {
+  if (B() && B().rows) bankSelected();   // a ticked line now older than 24 hours is unticked (src/js/22)
   return <><Rail /><BankPage /></>;
 }
 // the statement open: the spacious layout on (html.bk-spacious, parts/bank/Spacious.jsx)
@@ -456,7 +461,7 @@ export function BankPage() {
   const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + (bankAside(r) ? 0 : num(r[k])), 0));
   // the lines the table lists: the tab, search, column filters and dates (bankVisibleRows, src/js/22), then the quick
   // chips and "suggestions only" (parts/bank/smart.js); the filter bar counts and adds them up (it replaces the ChipBar)
-  const view = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
+  const view = apView("bank") === "auto" ? b.rows.filter((r) => isAuto(r) && !bankOld(r)) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
   // the ready lines shown now, when a filter is on (re-review of fdeb79bd8); [] otherwise
   const fOn = smartOn(b) || ["date", "narr", "wd", "dep", "led"].some((k) => colActive("bank", k)) || listFOn("bank"), bsh = fOn ? listShownSet("bank") : null;
   const pv = fOn ? shown.filter((r) => r.state === "ready" && (!bsh || bsh.has(r.id))) : [];
@@ -522,7 +527,7 @@ export function BankPage() {
         {top}
         <OverlapPanel st={st} />
         <Gone /><DupFind /><BankFocus />
-        {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
+        {tab === "done" && !b.focus && live() && tc.done + tc.old > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
         {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
           <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}
       </div>
@@ -553,6 +558,7 @@ export function BankBar() {
     return () => o.disconnect();
   });
   if (!b || b.loading || !curStmt()) return null;
+  bankSelected();
   const tc = tabCounts(bankRangeRows()), nsel = b.sel.size;
   // review of 02-Oct-2026: with no Tally ledger chosen for this bank account nothing can be posted, and nothing can be
   // said about which lines are in Tally ("184 no longer in Tally · post them again" was shown for lines of an account

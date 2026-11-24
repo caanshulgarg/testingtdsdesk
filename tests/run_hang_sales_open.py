@@ -15,6 +15,11 @@ SALES (default 4000) made-up sales invoices on it, half posted, half to review. 
      switcher open; Esc closes it, Sales still shown;
   3. the duplicate check holds nothing (the owner, 23-Nov-2026): an invoice to review of a number already posted (same
      type and year, another amount) has no "Already in Tally as ..." and no "Post duplicate anyway"; nor one of another year.
+  4. the 24-hour rule's e-invoice check (salesNeedsAction, src/js/03): with the firm's GST API on, every invoice to a
+     GSTIN, over 30 days old and with no IRN, the IRP's 30 days are read from the year before's turnover (EINV.aato:
+     the books' outward entries, once for the books and the year, not once an invoice): on In Tally, Select all, the
+     grid's search and salesCounts() outside a drawing each within ACT_MS of script (default 200; 12.2 s, 9.4 s before;
+     the search: SEARCH_MS, default 250).
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 BIG_DIR=a folder with Master.xml and DayBook.xml from mis_big_books.py (made in a temporary folder when not given)."""
 import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.server
@@ -28,6 +33,10 @@ PORT = int(os.environ.get("HANG_SALES_PORT") or 8348)
 OPEN_MS = int(os.environ.get("OPEN_MS") or 2200)
 CLICK_MS = int(os.environ.get("CLICK_MS") or 900)
 SALES = int(os.environ.get("SALES") or 4000)
+ACT_MS = int(os.environ.get("ACT_MS") or 200)
+# the search draws the In Tally list again (300 rows) in the typing's own task: 140-220 ms of it on a shared machine,
+# the 24-hour rule's part of it a few ms, so its limit is SEARCH_MS (default 250)
+SEARCH_MS = int(os.environ.get("SEARCH_MS") or 250)
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
@@ -100,6 +109,29 @@ try:
             probB: (b.problems || []).filter(p => w.test(p)).length, dupA: !!salesDupOf(a), dupB: !!salesDupOf(b)}; }""")
         ok(not d["rowA"] and d["probA"] == 0 and not d["dupA"], "3. an invoice to review of a number posted the same year, another amount: never held, no Post duplicate anyway (%s)" % d)
         ok(d["probB"] == 0 and not d["dupB"], "   the same number a year later: not a duplicate")
+        # 4. the e-invoice part of the 24-hour rule on these books: the turnover worked out once, not per invoice
+        GON = "GSTAPI.on = () => true; const g = String(CO().gstin).toUpperCase(); EINV.accounts[g] = {user: 'made-up'}; EINV.asked[g] = Date.now(); "
+        pg.evaluate("() => { " + GON + """SL().list.forEach(v => { v.x.customerGstin = '09AABCT1234E1Z2'; v.x.address = 'Made-up Road, Lucknow 226001'; v.x.irn = ''; v.x.items = [{desc: 'x', hsn: '998314', qty: 1, rate: v.x.taxable, taxable: v.x.taxable, gstRate: 18}]; });
+          S.books.gstAato = {}; CO().turnover10cr = false; EINV.aatoMemo = null; window.__lf = [];
+          new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__lf.push(Math.round((e.scripts || []).reduce((a, x) => a + x.duration, 0))))).observe({type: 'long-animation-frame'}); }""")
+        late = pg.evaluate("() => SL().list.filter(v => Date.now() - Date.parse(v.x.date) > 30 * 864e5 && !v.x.irn && v.x.customerGstin).length")
+        pg.evaluate("() => salesTabGo('done')"); pg.wait_for_timeout(8000)
+        shown = pg.locator("#app table.bk-table tbody tr").count()
+        ok(late >= SALES and shown > 0, "4. %d invoices to a GSTIN, over 30 days old, no IRN, the GST API on; In Tally shows %d rows" % (late, shown))
+        cnt = pg.evaluate("() => { const t = performance.now(); const c = salesCounts(); return [Math.round(performance.now() - t), c]; }")
+        ok(cnt[0] <= ACT_MS, "   salesCounts() outside a drawing: %d ms (at most %d; 9.4 s before) %s" % (cnt[0], ACT_MS, cnt[1]))
+        # (a shared test machine: each timed up to 3 times, the best kept; every try said)
+        def frames(act, undo, limit=ACT_MS):
+            tries = []
+            for _ in range(3):
+                pg.evaluate("() => { window.__lf = []; }"); act(); pg.wait_for_timeout(3000)
+                tries.append(max(pg.evaluate("window.__lf.slice()") or [0])); undo(); pg.wait_for_timeout(1500)
+                if tries[-1] <= limit: break
+            return min(tries), tries
+        best, tries = frames(lambda: pg.locator('#app input[aria-label="Select all"]').first.click(timeout=120000), lambda: pg.evaluate("() => { SL().sel.clear(); render(); }"))
+        ok(best <= ACT_MS, "   Select all: the longest frame's script %d ms (at most %d; 12.2 s before), tries %s" % (best, ACT_MS, tries))
+        best, tries = frames(lambda: pg.fill("#app input.bk-search", "ZS/1"), lambda: pg.fill("#app input.bk-search", ""), SEARCH_MS)
+        ok(best <= SEARCH_MS, "   the grid's search: the longest frame's script %d ms (at most %d), tries %s" % (best, SEARCH_MS, tries))
         br.close()
 finally:
     srv.shutdown(); shutil.rmtree(root, ignore_errors=True)

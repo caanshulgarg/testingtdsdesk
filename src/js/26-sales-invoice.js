@@ -137,7 +137,7 @@ async function salesCheckSafe(list){
   list.forEach(v => { delete v.copyCheck; });
   // (the same entry FinCom posted itself, salesDupOf: In Tally quietly, never posted twice; it needs no copy)
   list.forEach(v => { const o = v.status !== "intally" && salesDupOf(v); if (!o) return;
-    v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {key: "fincom:" + o.id, date: String(o.date || "").replace(/-/g, ""), number: o.number, type: o.type, party: o.party, amount: o.amount}; });
+    v.status = "intally"; v.matchedAt = new Date().toISOString(); v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {key: "fincom:" + o.id, date: String(o.date || "").replace(/-/g, ""), number: o.number, type: o.type, party: o.party, amount: o.amount}; });
   try { await salesCheckTally(list, dupCopy); }
   catch (e){ list.forEach(v => { v.copyCheck = {note: DUP_NOT_CHECKED, off: true}; }); return; }
   const at = salesCopyAt(co.id);
@@ -246,7 +246,7 @@ function salesLinePick(id, role, rate, ledger){
 function salesBulkLine(role, rate, ledger){
   const s = SL(), l = exactLedger(ledger);
   if (!l){ toast("\u201c" + ledger + "\u201d is not a Tally ledger. Choose one from the list."); return null; }
-  const rows = s.list.filter(v => s.sel.has(v.id)), before = [];
+  const rows = salesSel(), before = [];
   let changed = 0, skipped = 0;
   rows.forEach(v => {
     if (!["review", "ready"].includes(v.status)){ skipped++; return; }

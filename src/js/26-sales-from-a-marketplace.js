@@ -207,7 +207,7 @@ function printInvoiceHtml(html, number){
 }
 /* ---------- the Sales screen ---------- */
 function salesTabStates(t){ return t === "ready" ? ["ready"] : t === "done" ? ["posted", "intally"] : t === "ignored" ? ["ignored"] : ["review"]; }
-function salesCounts(){ const c = {review: 0, ready: 0, done: 0, ignored: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else if (v.status === "ignored") c.ignored++; else c.done++; }); return c; }
+function salesCounts(){ const c = {review: 0, ready: 0, done: 0, ignored: 0, old: 0}; SL().list.forEach(v => { if (v.status === "review") c.review++; else if (v.status === "ready") c.ready++; else if (v.status === "ignored") c.ignored++; else if (salesOld(v)) c.old++; else c.done++; }); return c; }
 function salesColPass(v){
   const f = (SL() || {}).f || {}, x = v.x || {};
   if (f.from && (x.date || "") < f.from) return false;
@@ -223,7 +223,7 @@ function salesColPass(v){
 function salesColOn(){ const f = (SL() || {}).f || {}; return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function salesVisible(){
   const s = SL(), states = salesTabStates(s.filter), q = s.q.trim().toLowerCase();
-  return s.list.filter(v => salesColPass(v) && (states.includes(v.status) || s.sticky.has(v.id)) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
+  return s.list.filter(v => salesColPass(v) && (states.includes(v.status) || s.sticky.has(v.id)) && !salesOld(v) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
     .sort((a, b) => String(b.x.date).localeCompare(String(a.x.date)) || String(b.x.number).localeCompare(String(a.x.number)));
 }
 // the Sales screen and its bar: React (app/src/screens/Sales.jsx)
@@ -287,11 +287,12 @@ async function salesCheckTally(list, call){
     const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
     const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
     const prior = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id));
-    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""};
+    // (byRef: found by its reference, not its own number: never the walk-in rule of salesSameEntry, review of 69441fde7)
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || "", byRef: normInvNo(x.number) !== no};
       if (!salesSameEntry(me, e, isInv) || gone.some(g => salesSameEntry(g, e, isInv))) return false;
       const was = prior.filter(o => salesSameEntry(salesEntryOf(o), e, isInv) && Date.parse(o.postedAt || "") >= copyAt);
       return !was.length || was.some(salesInBooks); });
-    if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
+    if (hit){ if (v.status !== "intally") v.matchedAt = new Date().toISOString(); v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (had) mapInvoice(v);
   });
   return n;
@@ -320,7 +321,9 @@ async function salesVouchersIn(co, from, to, call){
 // note type (salesNotSale)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
+  // (the owner, 24-Nov-2026: "Tax Invoice", "Retail Invoice", "Bill of Supply" are sales too; "Proforma Invoice",
+  // "Purchase Invoice" never, salesNotSale)
+  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b|cash[\s_-]*memo|\binvoices?\b|bill[\s_-]*of[\s_-]*supply/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
@@ -346,7 +349,7 @@ async function salesQueuedSync(){
     // (next-sales-followups) the same rule as a direct post: Tally's reply or a read back is posted, an answer not
     // confirmed is not; one Tally already had is In Tally; an IRN cancelled keeps its mark while it may be in Tally
     let maybeIn = false;
-    if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
+    if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.matchedAt = new Date().toISOString(); v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
     else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     // (the bridge's "already" refusal: said on the invoice, as a direct post says it)
@@ -502,9 +505,11 @@ function setCustomerLedger(v, ledger){
   saveSales();
   return true;
 }
+// the invoices ticked (one now older than 24 hours, off the page, is unticked: nothing hidden is acted on)
+function salesSel(){ const s = SL(); return s.list.filter(v => s.sel.has(v.id) && (!salesOld(v) || !s.sel.delete(v.id))); }
 function salesBulk(kind, ledger){
   // (an invoice with a live IRN is never ignored or deleted: the IRN is cancelled first, review of b4ff11b10)
-  const s = SL(), sel = s.list.filter(v => s.sel.has(v.id) && !salesInTally(v)), live = /^(ignore|delete)$/.test(kind) ? sel.filter(v => v.x.irnStatus === "active") : [], rows = sel.filter(v => !live.includes(v));
+  const s = SL(), sel = salesSel().filter(v => !salesInTally(v)), live = /^(ignore|delete)$/.test(kind) ? sel.filter(v => v.x.irnStatus === "active") : [], rows = sel.filter(v => !live.includes(v));
   if (live.length) toast(live.length + " with an IRN kept: cancel the IRN first.");
   if (!rows.length) return;
   const before = rows.map(salesSnapshot);
@@ -608,7 +613,7 @@ function salesClick(t){
     case "salesBulkConfirm": salesBulk("confirm"); return true;
     case "salesBulkIgnore": salesBulk("ignore"); return true;
     case "salesBulkDelete": salesBulk("delete"); return true;   // Undo in the bar (spec K9, round 2)
-    case "salesBulkPrint": { const rows = s.list.filter(v => s.sel.has(v.id)); const co = CO(s.cid);
+    case "salesBulkPrint": { const rows = salesSel(); const co = CO(s.cid);
       withPart("invoice", "invoiceHtml", () => {
       const html = rows.map(v => invoiceHtml(v.x, co, s.cfg)).join("").replace(/<\/body><\/html><!doctype html><html lang="en"><head>[\s\S]*?<body>(<p class="noprint"[\s\S]*?<\/p>)?/g, '<div style="page-break-before:always"></div>');
       printInvoiceHtml(html, rows.length + "-invoices"); }); return true; }
