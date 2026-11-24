@@ -453,6 +453,8 @@ run_fixed_assets_ui.py                420  TDSDESK_SITE=../app/dist-test
 # format; after that it should learn that format"): the engine on the made-up registers (no browser), then the panel, the
 # questions, To review and posting (Tally's queue; Zoho Books faked); GSTR-1 and GSTR-2B JSON by rules
 run_sheet_engine.js                   120
+# next-fix-zoho-sales-sheet (24-Nov-2026): Zoho Books' invoice export by rules (Item Total, Draft / Void left out); a wide new layout's columns to the AI
+run_sheet_zoho.js                     60
 run_sheet_import.py                   300  TDSDESK_SITE=../app/dist-test
 # next-fix-sheet-import (13-Nov-2026): a client's own Tally-style sales and purchase sheets (a ledger column, the client's
 # voucher type, ledgers in sub-groups), from the first upload to the posting; why Post is disabled, said
