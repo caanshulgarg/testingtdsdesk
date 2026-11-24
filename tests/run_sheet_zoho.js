@@ -147,8 +147,8 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   ok(mine && mine.how === "known" && mine.fmt.id === "sf-own", "the client's own saved one, first (" + JSON.stringify(mine && [mine.how, mine.fmt.id]) + ")");
   // (review of 4bd26c5e9) a mapping saved before FinCom read Zoho's status (15d4414a0) has no status column, and none
   // of the rule's once-an-invoice transforms: the rule's essentials are laid on it, its own column choices kept
-  ok(mine && mine.fmt.map.status === "invoicestatus" && mine.fmt.transforms.groupByNo === true && mine.fmt.transforms.docTotal === true && mine.fmt.transforms.docTaxable === true && mine.fmt.transforms.zoho && mine.fmt.transforms.zoho.adj === "adjustment",
-    "the rule's status column and transforms laid on it (" + JSON.stringify(mine && [mine.fmt.map, mine.fmt.transforms]) + ")");
+  ok(mine && mine.fmt.map.status === "invoicestatus" && mine.fmt.transforms.groupByNo === true && mine.fmt.transforms.docTotal === true && mine.fmt.transforms.docTaxable === false && mine.fmt.map.taxable === "itemtotal" && mine.fmt.transforms.zoho && mine.fmt.transforms.zoho.adj === "adjustment",
+    "the rule's status column and transforms laid on it; its SubTotal read as Item Total, which the header has (review of 1352e5dfb) (" + JSON.stringify(mine && [mine.fmt.map, mine.fmt.transforms]) + ")");
   const od = mine ? F.apply(mine.fmt, g, hi, co, "sales") : [];
   ok(od.map((x) => x.no).join() === "INV-000101,INV-000102,INV-000106,INV-000107", "with the saved mapping: Draft INV-000103 / 104 and Void INV-000105 still left out (" + od.map((x) => x.no) + ")");
   ok((od.skipped || []).filter((x) => x.status === "draft").length === 3 && (od.skipped || []).filter((x) => x.status === "void").length === 1, "… and counted as Draft and Void");
@@ -176,6 +176,71 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   const near = F.find(head, "Invoice", "c1", "sales");
   ok(near && near.how === "builtin", "a saved layout that is only near (drift): the Zoho rule still (" + (near && near.how) + ")");
   co.sheetFormats = co.sheetFormats.filter((x) => x.id !== "sf-drift");
+
+  console.log("10. review of 1352e5dfb: every item at the rate the sheet gives, never a rate no item carries");
+  co.sheetFormats = [];
+  const HD = gm[hm], HN = HD.map((x) => F.norm(x)), cc = (n) => HN.indexOf(n), tp = gm[hm + 1];
+  const row = (o) => { const r = tp.map(() => ""); r[cc("invoicedate")] = "2026-10-20"; r[cc("invoicenumber")] = o.no; r[cc("invoicestatus")] = "Open"; r[cc("customername")] = "Ujala Lamps";
+    r[cc("placeofsupply")] = o.pos || "UP"; r[cc("gstidentificationnumbergstin")] = o.pos === "DL" ? "07AAACD4444H1ZV" : "09AAACU5555J1ZZ"; r[cc("suppliergstregistrationnumber")] = "09AANFG3202D1ZR";
+    r[cc("isinclusivetax")] = o.incl ? "true" : "false"; r[cc("isdiscountbeforetax")] = "true";
+    Object.entries(o.v || {}).forEach(([k, v]) => { r[cc(k)] = String(v); }); return r; };
+  const rd = (hd, rows, fmt) => { const f = fmt || (F.find(hd, "Invoice", "c1", "sales") || {}).fmt; return f ? F.apply(f, [hd].concat(rows), 0, co, "sales") : []; };
+  const its = (x) => (x.items || []).map((i) => i.rate + ":" + i.taxable + ":" + i.tax).join();
+  const both = (x) => JSON.stringify([x.taxable, x.igst, x.cgst, x.sgst, x.total, its(x), x.check && x.check.ok, x.hold || ""]);
+  // A1: a discount before tax on an invoice of two rates (IGST): 1,000 at 18% and 1,000 at 5%, 200 off: 900 + 900
+  const a1 = (rate) => [row({no: "A1", pos: "DL", v: {itemtotal: "1000.00", igst: "162.00", "igstrate%": rate ? "18.00" : "", subtotal: "2000.00", total: "2007.00", entitydiscountamount: "200.00"}}),
+    row({no: "A1", pos: "DL", v: {itemtotal: "1000.00", igst: "45.00", "igstrate%": rate ? "5.00" : "", subtotal: "2000.00", total: "2007.00", entitydiscountamount: "200.00"}})];
+  let w = rd(HD, a1(true))[0] || {};
+  ok(its(w) === "5:900:45,18:900:162" && w.taxable === 1800 && w.check.ok, "A1: the discount shared, each line at the rate the sheet gives: 900 at 5%, 900 at 18% (" + both(w) + ")");
+  w = rd(HD, a1(false))[0] || {};
+  ok(its(w) === "5:900:45,18:900:162", "A1 with no rate on the rows: each line's rate from its figures after the discount (" + both(w) + ")");
+  // the same, CGST + SGST, the rates in CGST Rate % and SGST Rate %
+  w = rd(HD, [row({no: "A1c", v: {itemtotal: "1000.00", cgst: "81.00", sgst: "81.00", "cgstrate%": "9.00", "sgstrate%": "9.00", subtotal: "2000.00", total: "2007.00", entitydiscountamount: "200.00"}}),
+    row({no: "A1c", v: {itemtotal: "1000.00", cgst: "22.50", sgst: "22.50", "cgstrate%": "2.50", "sgstrate%": "2.50", subtotal: "2000.00", total: "2007.00", entitydiscountamount: "200.00"}})])[0] || {};
+  ok(its(w) === "5:900:45,18:900:162" && w.check.ok, "A1 within the state: CGST Rate % + SGST Rate % (" + both(w) + ")");
+  // tax-inclusive with a discount: 1,180 at 18% and 1,050 at 5%, 223 off the prices with tax: 900 + 900
+  w = rd(HD, [row({no: "I1", pos: "DL", incl: 1, v: {itemtotal: "1180.00", igst: "162.00", "igstrate%": "18.00", subtotal: "2230.00", total: "2007.00", entitydiscountamount: "223.00"}}),
+    row({no: "I1", pos: "DL", incl: 1, v: {itemtotal: "1050.00", igst: "45.00", "igstrate%": "5.00", subtotal: "2230.00", total: "2007.00", entitydiscountamount: "223.00"}})])[0] || {};
+  ok(its(w) === "5:900:45,18:900:162" && w.taxable === 1800 && w.check.ok, "tax-inclusive with a discount: 900 at 5%, 900 at 18% (" + both(w) + ")");
+  w = rd(HD, [row({no: "D1", pos: "DL", v: {itemtotal: "1000.00", igst: "162.00", "igstrate%": "18.00", subtotal: "2000.00", total: "2124.00", entitydiscountamount: "200.00"}}),
+    row({no: "D1", pos: "DL", v: {itemtotal: "1000.00", igst: "162.00", "igstrate%": "18.00", subtotal: "2000.00", total: "2124.00", entitydiscountamount: "200.00"}})])[0] || {};
+  ok(!its(w) && w.taxable === 1800 && w.rate === 18 && w.check.ok, "one rate on two lines with a discount: one line at 18% (" + both(w) + ")");
+  // A2: SubTotal only (no Item Total): 6,000 at 5% and 7,000 at 18%, SubTotal 13,000 (a blend of 12%, a GST rate)
+  const HD2 = HD.map((x) => x === "Item Total" ? "Line Note" : x);
+  const a2 = (rates, sub, incl) => [row({no: "A2", incl, v: {cgst: "150.00", sgst: "150.00", "cgstrate%": rates ? "2.50" : "", "sgstrate%": rates ? "2.50" : "", subtotal: sub, total: "14560.00"}}),
+    row({no: "A2", incl, v: {cgst: "630.00", sgst: "630.00", "cgstrate%": rates ? "9.00" : "", "sgstrate%": rates ? "9.00" : "", subtotal: sub, total: "14560.00"}})];
+  w = rd(HD2, a2(true, "13000.00"))[0] || {};
+  ok(its(w) === "5:6000:300,18:7000:1260" && w.taxable === 13000 && w.check.ok && !w.hold, "A2: SubTotal split by rate (each rate's tax / its rate): 6,000 at 5%, 7,000 at 18%, never one line at 12% (" + both(w) + ")");
+  w = rd(HD2, a2(true, "14560.00", 1))[0] || {};
+  ok(its(w) === "5:6000:300,18:7000:1260" && w.taxable === 13000 && w.check.ok && !w.hold, "A2 tax-inclusive: the same (" + both(w) + ")");
+  w = rd(HD2, a2(false, "13000.00"))[0] || {};
+  ok(w.hold === "SubTotal cannot be split by GST rate: the rows carry tax but the sheet gives no rate. Check the invoice in Zoho", "A2 with no rate on the rows: held, said plainly (" + both(w) + ")");
+  w = rd(HD2, a2(true, "13500.00"))[0] || {};
+  ok(w.hold === "SubTotal 13500.00 does not match the taxable values worked out from each GST rate (13000.00). Check the invoice in Zoho", "A2 whose rates do not add up to SubTotal: held (" + both(w) + ")");
+  // a saved mapping of SubTotal on a header that has Item Total: Item Total
+  const zfp2 = F.fingerprint(HD, "Invoice"), sv = (map) => { co.sheetFormats = [{id: "sv", name: "Mine", side: "sales", fp: zfp2, cols: HD.length, headers: HN, map, transforms: {date: "ymd", groupByNo: true}}]; return F.find(HD, "Invoice", "c1", "sales").fmt; };
+  const s7 = [row({no: "S7", v: {itemtotal: "6000.00", cgst: "150.00", sgst: "150.00", subtotal: "13000.00", total: "14560.00"}}), row({no: "S7", v: {itemtotal: "7000.00", cgst: "630.00", sgst: "630.00", subtotal: "13000.00", total: "14560.00"}})];
+  let fm7 = sv({no: "invoicenumber", date: "invoicedate", taxable: "subtotal", total: "total"});
+  w = rd(HD, s7, fm7)[0] || {};
+  ok(fm7.map.taxable === "itemtotal" && fm7.transforms.docTaxable === false && its(w) === "5:6000:300,18:7000:1260", "a saved mapping of SubTotal, the header has Item Total: Item Total, rate-wise (" + both(w) + ")");
+  // B: a saved mapping that reads Total as the taxable value: the rule's taxable value, and the sum check on Total
+  const b1 = [row({no: "B1", v: {itemtotal: "1000.00", cgst: "90.00", sgst: "90.00", subtotal: "1000.00", total: "1180.00"}})];
+  let fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "total"});
+  w = rd(HD, b1, fb)[0] || {};
+  ok(fb.map.taxable === "itemtotal" && fb.map.total === "total" && w.taxable === 1000 && w.total === 1180 && w.check.ok, "saved taxable = Total: refused, Item Total; checked against Total (" + JSON.stringify(fb.map) + both(w) + ")");
+  fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", cgst: "cgst", sgst: "sgst", total: "balance"});
+  w = rd(HD, b1.map((r) => { r = r.slice(); r[cc("balance")] = "0.00"; return r; }), fb)[0] || {};
+  ok(fb.map.total === "total" && w.total === 1180 && w.check.ok, "saved total = Balance: the rule's Total (" + JSON.stringify(fb.map) + both(w) + ")");
+  fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", cess: "total"});
+  ok(fb.map.cess === "cess", "an invoice-level column for another field (cess = Total): not read, the rule's CESS instead (" + JSON.stringify(fb.map) + ")");
+  // the fill-in: one tax column (it may carry the cess): no CESS added; the full tax in one head: no other head added
+  fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", tax: "itemtaxamount", total: "total"});
+  w = rd(HD, [row({no: "S1", v: {itemtotal: "1000.00", cgst: "140.00", sgst: "140.00", cess: "120.00", itemtaxamount: "400.00", subtotal: "1000.00", total: "1400.00"}})], fb)[0] || {};
+  ok(!fb.map.cess && !fb.map.cgst && !fb.map.igst && w.check.ok, "saved one tax column: no CESS / CGST / SGST / IGST filled in; adds up (" + JSON.stringify(fb.map) + both(w) + ")");
+  fb = sv({no: "invoicenumber", date: "invoicedate", taxable: "itemtotal", igst: "itemtaxamount", total: "total"});
+  ok(!fb.map.cgst && !fb.map.sgst && fb.map.igst === "itemtaxamount", "saved the full tax in IGST: no CGST / SGST filled in (" + JSON.stringify(fb.map) + ")");
+  co.sheetFormats = [];
+
   console.log(fails ? "\nFAILED: " + fails : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();

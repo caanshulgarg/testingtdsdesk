@@ -145,7 +145,8 @@ const SheetFmt = {
       // (next-zoho-sheet-followups) the invoice's own figures Zoho repeats on each of its lines, taken once an invoice:
       // its shipping charge and the charge's tax, its discount, whether its prices carry the tax, its Adjustment
       const zoho = {}, Z = {ship: "shippingcharge", shipTax: "shippingchargetaxamount", shipRate: "shippingchargetax%", shipType: "shippingchargetaxtype",
-        disc: "entitydiscountamount", discBefore: "isdiscountbeforetax", incl: "isinclusivetax", adj: "adjustment", round: "roundoff"};
+        disc: "entitydiscountamount", discBefore: "isdiscountbeforetax", incl: "isinclusivetax", adj: "adjustment", round: "roundoff",
+        rIg: "igstrate%", rCg: "cgstrate%", rSg: "sgstrate%"};
       Object.keys(Z).forEach(k => { if (is(Z[k])) zoho[k] = Z[k]; });
       return {id: "builtin:zoho-invoice", name: "Zoho Books invoices", builtin: "zoho-invoice", side: "sales", map,
         transforms: {date: "dmy", groupByNo: true, docTotal: true, docTaxable: !is("itemtotal"), zoho}};
@@ -163,10 +164,17 @@ const SheetFmt = {
     // invoice a number, its Total (and SubTotal) once, its own figures; the saved mapping keeps only its other column
     // choices. The saved format itself is not changed
     if (mine){
-      // (a field it leaves blank takes the rule's column, unless it reads that column for another field, or one tax column
-      // stands for CGST / SGST / IGST)
-      const map = Object.assign({}, mine.map), used = new Set(Object.values(map).filter(Boolean)), tx = b.transforms;
-      Object.entries(b.map).forEach(([f, n]) => { if (n && !map[f] && !used.has(n) && !(map.tax && ["igst", "cgst", "sgst"].includes(f))){ map[f] = n; used.add(n); } });
+      // (review of 1352e5dfb) an invoice's own figures (SubTotal, Total, Balance) are on each of its lines: never read
+      // line-wise for another field (Total as the taxable value), SubTotal only as the taxable value of an export with no
+      // Item Total; the sum check always on the rule's Total. A field it leaves blank takes the rule's column, unless it
+      // reads that column for another field; its own tax columns (one tax column, which may carry the cess, or the whole
+      // tax in one head) are not added to
+      const map = Object.assign({}, mine.map), tx = b.transforms, DOC = ["subtotal", "total", "balance"];
+      if (map.taxable === "subtotal" && b.map.taxable === "itemtotal") map.taxable = "itemtotal";
+      Object.keys(map).forEach(f => { if (DOC.includes(map[f]) && !(f === "taxable" && map[f] === "subtotal")) delete map[f]; });
+      if (b.map.total) map.total = b.map.total;
+      const used = new Set(Object.values(map).filter(Boolean)), ownTax = !!map.tax || ["igst", "cgst", "sgst"].some(f => map[f] && map[f] !== b.map[f]);
+      Object.entries(b.map).forEach(([f, n]) => { if (n && !map[f] && !used.has(n) && !(ownTax && ["igst", "cgst", "sgst"].includes(f)) && !(map.tax && f === "cess")){ map[f] = n; used.add(n); } });
       map.status = b.map.status;
       const docTaxable = map.taxable === "subtotal" || (map.taxable === b.map.taxable && tx.docTaxable);
       return {fmt: Object.assign({}, mine, {map, transforms: Object.assign({}, mine.transforms, {groupByNo: true, docTotal: true, docTaxable, zoho: tx.zoho})}), how: "known"};
@@ -402,6 +410,7 @@ const SheetFmt = {
       if (!taxable && total && rate) taxable = r2(total / (1 + rate / 100));
       // (next-zoho-sheet-followups) Zoho's tax-inclusive invoice: its Item Total carries the line's tax
       // (with no line-wise taxable value, SubTotal once: the invoice's whole tax is taken off it once, in zohoDoc)
+      const gross = taxable;
       if (yes(zc(r, "incl")) && !t.docTaxable) taxable = r2(taxable - igst - cgst - sgst - cess);
       // its shipping charge, discount and Adjustment, read from its first line only (each line repeats them)
       if (!had && t.zoho) d.zoho = {ship: this.amount(zc(r, "ship")), shipTax: zc(r, "shipTax"), shipRate: zc(r, "shipRate"), shipType: zc(r, "shipType"),
@@ -413,9 +422,13 @@ const SheetFmt = {
       // next-fix-sales-upload (item 5): each row's own GST rate (its rate column, else its tax over its taxable value at
       // the nearest standard rate), its figures kept rate-wise: an invoice whose rows carry two rates becomes one item line
       // a rate (taxable, rate, tax), never one line at a rate that is none of them
-      const rr = rate || this.rateOf(taxable, igst + cgst + sgst);
+      // (review of 1352e5dfb) a Zoho row's own GST rate: "IGST Rate %", else "CGST Rate %" + "SGST Rate %"
+      const zr = t.zoho ? this.amount(zc(r, "rIg")) || r2(this.amount(zc(r, "rCg")) + this.amount(zc(r, "rSg"))) : 0;
+      const rr = rate || zr || this.rateOf(taxable, igst + cgst + sgst);
       if (taxable || igst || cgst || sgst){
         const pt = (d.parts = d.parts || {})[rr] || (d.parts[rr] = {rate: rr, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
+        if (rate || zr) pt.known = true;
+        pt.gross = r2((pt.gross || 0) + gross);
         pt.taxable = r2(pt.taxable + taxable); pt.igst = r2(pt.igst + igst); pt.cgst = r2(pt.cgst + cgst); pt.sgst = r2(pt.sgst + sgst); pt.cess = r2(pt.cess + cess);
       }
       d.lines++; d.rows.push(hi + 2 + n);
@@ -433,20 +446,41 @@ const SheetFmt = {
   zohoDoc(d, home0){
     const z = d.zoho; delete d.zoho;
     if (!z) return d;
-    // the invoice's taxable value read once (SubTotal: no line-wise one): it is not known a rate, so the invoice is one
-    // line (its rows' rates are not split, never a line of tax on nothing); tax-inclusive, its whole tax off it once
+    const tx = p => p.igst + p.cgst + p.sgst;
+    // the invoice's taxable value read once (SubTotal: no line-wise one); tax-inclusive, its whole tax off it once.
+    // (review of 1352e5dfb: rows at several rates were one line at their blend, 12% by chance a GST rate) Rows at more
+    // than one rate (Zoho's rate columns): each rate's taxable value is its tax over its rate (a nil rate takes what is
+    // left), kept only when they add up to SubTotal (less a discount before tax) within a rupee; else, or with no rate
+    // given, held for a person, said
     if (z.doc){
-      const tax = r2(d.igst + d.cgst + d.sgst + d.cess);
-      if (z.incl) d.taxable = r2(d.taxable - tax);
-      if (Object.keys(d.parts || {}).length > 1){ const one = {rate: this.rateOf(d.taxable, d.igst + d.cgst + d.sgst), taxable: d.taxable, igst: d.igst, cgst: d.cgst, sgst: d.sgst, cess: d.cess}; d.parts = {[one.rate]: one}; }
-      else Object.values(d.parts || {}).forEach(p => { p.taxable = d.taxable; });
+      if (z.incl) d.taxable = r2(d.taxable - r2(tx(d) + d.cess));
+      const ps = Object.values(d.parts || {}), one = () => { const o = {rate: this.rateOf(d.taxable, tx(d)), taxable: d.taxable, igst: d.igst, cgst: d.cgst, sgst: d.sgst, cess: d.cess}; d.parts = {[o.rate]: o}; };
+      if (ps.length < 2) ps.forEach(p => { p.taxable = d.taxable; });
+      else if (ps.some(p => !p.known)){ one(); d.hold = d.hold || "SubTotal cannot be split by GST rate: the rows carry tax but the sheet gives no rate. Check the invoice in Zoho"; }
+      else {
+        const base = r2(d.taxable - z.disc), nil = ps.filter(p => !p.rate);
+        ps.forEach(p => { p.taxable = p.rate ? r2(tx(p) * 100 / p.rate) : 0; });
+        const sum = r2(ps.reduce((a, p) => a + p.taxable, 0)), left = r2(base - sum);
+        if (nil.length ? left >= -1 : Math.abs(left) <= 1){
+          (nil[0] || ps.slice().sort((a, b) => b.taxable - a.taxable)[0]).taxable = r2((nil[0] || ps.slice().sort((a, b) => b.taxable - a.taxable)[0]).taxable + left);
+          d.taxable = base; z.disc = 0;
+        } else { one(); d.hold = d.hold || "SubTotal " + base.toFixed(2) + " does not match the taxable values worked out from each GST rate (" + sum.toFixed(2) + "). Check the invoice in Zoho"; }
+      }
     }
-    const parts = Object.values(d.parts || {});
+    let parts = Object.values(d.parts || {});
     if (z.disc){
-      const base = r2(parts.reduce((a, p) => a + p.taxable, 0));
+      // (tax-inclusive: the discount is off the prices with the tax, shared as they are)
+      const w = p => z.incl && !z.doc ? p.gross || 0 : p.taxable, base = r2(parts.reduce((a, p) => a + w(p), 0));
       let left = z.disc;
-      parts.forEach((p, i) => { const cut = i === parts.length - 1 ? left : r2(base ? z.disc * p.taxable / base : 0); p.taxable = r2(p.taxable - cut); left = r2(left - cut); });
+      parts.forEach((p, i) => { const cut = i === parts.length - 1 ? left : r2(base ? z.disc * w(p) / base : 0); p.taxable = r2(p.taxable - cut); left = r2(left - cut); });
       d.taxable = r2(d.taxable - z.disc);
+    }
+    // a row with no rate given: its rate from its figures once the discount is off (900 and 162: 18%, not 16.2%)
+    if (!z.doc && parts.some(p => !p.known)){
+      const m = {};
+      parts.forEach(p => { const k = p.known ? p.rate : this.rateOf(p.taxable, tx(p)), q = m[k] || (m[k] = {rate: k, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
+        ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { q[f] = r2(q[f] + p[f]); }); });
+      d.parts = m; parts = Object.values(m);
     }
     if (z.ship && (z.shipTax !== "" || z.shipRate !== "")){
       const rate = z.shipRate !== "" ? this.amount(z.shipRate) : 0, tax = z.shipTax !== "" ? this.amount(z.shipTax) : r2(z.ship * rate / 100);
@@ -521,7 +555,7 @@ const SheetFmt = {
     // rows at more than one rate: one item line a rate, each with its own taxable value and tax (posted as the sales
     // voucher of several rates: a sales ledger and its tax a rate, src/js/25 salesLines)
     const parts = Object.values(d.parts || {}).filter(p => p.taxable || p.igst || p.cgst || p.sgst);
-    delete d.parts;
+    delete d.parts; parts.forEach(p => { delete p.known; delete p.gross; });
     if (parts.length > 1) d.items = parts.sort((a, b) => a.rate - b.rate).map(p => Object.assign(p, {tax: r2(p.igst + p.cgst + p.sgst)}));
     d.rate = d.taxable ? Math.round((d.igst + d.cgst + d.sgst) / d.taxable * 10000) / 100 : (d.rates[0] || 0);
     const diff = r2(d.total - d.taxable - tax);

@@ -53,6 +53,12 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   const sumOff = add({taxable: 10000, cgst: 900, sgst: 900, total: 11800, items: [it(6000, 18), it(3000, 18)]});
   ok(sumOff.status !== "ready" && sumOff.problems.some(p => /items/i.test(p)), "items' taxable 9,000 against the invoice's 10,000 at one rate: held (" + JSON.stringify(sumOff.problems) + ")");
 
+  // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong): held, said in plain words
+  const odd = add({taxable: 1800, cgst: 93.15, sgst: 93.15, total: 1986.3, items: [it(900, 16.2), it(900, 4.5)]});
+  ok(odd.status !== "ready" && odd.problems.some(p => p === "GST at 4.5% and 16.2% is not a GST rate: check the rates on the sheet or the items"), "items at 16.2% and 4.5%: held, said plainly (" + JSON.stringify(odd.problems) + ")");
+  const std = add({taxable: 1000, cgst: 7.5, sgst: 7.5, total: 1015, items: [it(500, 3), it(500, 0)]});
+  ok(!std.problems.some(p => /not a GST rate/.test(p)), "items at 3% and 0%: no such hold (" + JSON.stringify(std.problems) + ")");
+
   console.log("2. the e-invoice under the registration the invoice is issued from");
   co.otherGstins = KA;
   const ka = add({sellerGstin: KA, customerGstin: CKA, pos: "29", address: "3 Test Street, Bengaluru 560001", taxable: 10000, cgst: 900, sgst: 900, total: 11800, items: [it(10000, 18)]});

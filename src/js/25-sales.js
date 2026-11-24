@@ -567,6 +567,9 @@ function invoiceProblems(v){
   if (v.refused) p.push("Refused by Tally" + (v.refused.single ? " (sent on its own)" : "") + ": " + (v.refused.hint || v.refused.said || "Tally created nothing"));
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
+  // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong) is never posted
+  const odd = Array.from(new Set((x.items || []).filter(it => num(it.taxable) || num(it.qty)).map(it => num(it.gstRate)).filter(r => !SALES_RATES.includes(r)))).sort((a, b) => a - b);
+  if (odd.length) p.push("GST at " + odd.map(r => r + "%").join(" and ") + " is not a GST rate: check the rates on the sheet or the items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
   // (two not yet posted of one number and year: one is a mistake; one already posted or In Tally holds nothing)
   const dup = salesOfNo(x.number).find(o => o.id !== v.id && !["ignored", "posted", "intally"].includes(o.status) && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));
