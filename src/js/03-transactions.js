@@ -27,30 +27,40 @@ function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true
 // (POSTED_KEEP_MS: 24 hours; the tests of older made-up postings, whose lists are what they check, widen it)
 // Only the posted list: a bill deleted, held or marked no entry is always listed. The owner (24-Nov-2026): anything that
 // still needs the person never leaves, whatever its age: one rule per kind (salesNeedsAction, billNeedsAction,
-// bankNeedsAction), true whenever the entry's page or panel offers an action or a warning, read from what those panels
-// show: a sales invoice's alerts and its e-invoice part (EINV.offers, src/js/55: Make the IRN, Make the e-way bill when
-// one is needed, EINV.ewbNeeded: goods over Rs 50,000; Cancel the IRN), a bill's or bank line's row on Post to Tally (an action, or a tab other than Posted: postNeeds)
+// bankNeedsAction), true whenever the entry's page or panel offers an action or a warning the person can act on there,
+// read from what those panels show: a sales invoice's alerts and its e-invoice part (EINV.offers, src/js/55), a bill's
+// warnings (billDocWarns) and its row on Post to Tally, a bank line's row there (postNeeds)
 let POSTED_KEEP_MS = 864e5;
 function postedOld(at){ return !(Date.parse(at || "") > Date.now() - POSTED_KEEP_MS); }
 // the keys ("bill:id", "bank:id") of the Post to Tally rows with something to do (Correct the Tally id, a posting queued
 // or going on, Errors), as that page draws them (postStatus, src/js/62); worked out once a drawing, or once a task outside one
 let POST_NEEDS = null;
 function postNeeds(cid){
-  const f = () => new Set((typeof postEntryRows === "function" && postEntryRows(cid) || []).filter(x => x.st.action || x.st.tab !== "posted").map(x => x.kind + ":" + x.id));
+  // (a row the person hid or removed from the page, or of a posting a person dismissed, is not one to act on)
+  const f = () => new Set((typeof postEntryRows === "function" && postEntryRows(cid) || []).filter(x => (x.st.action || x.st.tab !== "posted") && !(x.job && x.job.dismissed_at && !x.job.dismiss_auto)
+    && !(typeof PostFlags === "object" && (PostFlags.isHidden(x.key) || PostFlags.removedNow(x)))).map(x => x.kind + ":" + x.id));
   if (typeof postRev !== "function") return f();
   reactScope(); if (IN_RENDER) return perRender(postNeeds, postRev(cid), f);
-  const k = cid + "|" + postRev(cid);
+  const k = cid + "|" + postRev(cid) + (typeof PostFlags === "object" ? "|" + PostFlags.hide.size + ":" + PostFlags.removed.size : "");
   if (!POST_NEEDS) setTimeout(() => { POST_NEEDS = null; }, 0);
   if (!POST_NEEDS || POST_NEEDS.k !== k) POST_NEEDS = {k, v: f()};
   return POST_NEEDS.v;
 }
 // the Sales panel (app/src/screens/Sales.jsx Detail): its alerts (problems, Tally's error, Optional voucher, checked on
-// FinCom's copy, IRN cancelled while in Tally), Try again (refused, to check), a posting queued, and the e-invoice part
-function salesNeedsAction(v){ const x = v.x || {}, o = typeof EINV === "object" && EINV.offers(v);
-  return !!(x.irnCancelInTally || v.postJob || v.postError || v.refused || v.needsCheck || v.postedOptional || v.copyCheck || (v.problems || []).length || (v.ledgerIssues || []).length || (o && (o.irn || (o.ewb && EINV.ewbNeeded(v)) || o.cancel))); }
+// FinCom's copy, IRN cancelled while in Tally), Try again (refused, to check), a posting queued, and the e-invoice part:
+// Make the IRN while the button is enabled (nothing in EINV.problems) and the IRP's time limit is not past (irnLate);
+// Make the e-way bill when one is needed (ewbNeeded); Cancel the IRN (within 24 hours of it)
+function salesNeedsAction(v){ const x = v.x || {}, o = typeof EINV === "object" && EINV.offers(v), s = SL();
+  return !!(x.irnCancelInTally || v.postJob || v.postError || v.refused || v.needsCheck || v.postedOptional || v.copyCheck || (v.problems || []).length || (v.ledgerIssues || []).length
+    || (o && ((o.irn && !EINV.irnLate(v) && !EINV.problems(v, CO(s.cid), s.cfg || {}).length) || (o.ewb && EINV.ewbNeeded(v)) || o.cancel))); }
+// the bill's own warnings, each with its button (app/src/screens/Bill.jsx DocWarnings): not a tax invoice; billed to
+// another GSTIN than the client's own
+function billDocWarns(e, co){ const x = e.x || {}, bill = String(x.buyerGstin || "").toUpperCase();
+  return {notBill: !!(e.docKind && !e.docOverride), elsewhere: !!(co && co.gstin && bill && !ownGstins(co).includes(bill) && !e.buyerOverride)}; }
 // a bill: its owner's release (asked or held), Optional voucher, gone from Tally, Tally's error or a check that failed,
-// sent and not confirmed, and its row on Post to Tally
-function billNeedsAction(e, cid){ return !!(e.ownerRelease || e.postedOptional || e.goneFromTally || e.postError || e.postCheckFailed || e.postUnconfirmed || postNeeds(cid || S.coId).has("bill:" + e.id)); }
+// sent and not confirmed, its warnings (billDocWarns), and its row on Post to Tally
+function billNeedsAction(e, cid){ const w = billDocWarns(e, CO(cid || S.coId));
+  return !!(e.ownerRelease || e.postedOptional || e.goneFromTally || e.postError || e.postCheckFailed || e.postUnconfirmed || w.notBill || w.elsewhere || postNeeds(cid || S.coId).has("bill:" + e.id)); }
 // a bank line: Optional voucher, a posting queued or to review, Tally's error, being checked in Tally, gone from Tally,
 // and its row on Post to Tally
 function bankNeedsAction(r){ const b = S.bank; return !!(r.postedOptional || r.postJob || r.postError || r.postReview || r.checking || r.pendingCheck || r.goneFromTally || (b && postNeeds(b.cid).has("bank:" + r.id))); }

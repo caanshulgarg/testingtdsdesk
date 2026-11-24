@@ -322,22 +322,35 @@ with sync_playwright() as p:
           problems: cp(v => { v.problems = ['Made-up problem']; }), ledgerIssues: cp(v => { v.ledgerIssues = ['Made-up ledger issue']; }), postedOptional: cp(v => { v.postedOptional = true; }),
           copyCheck: cp(v => { v.copyCheck = {at: h(30), note: 'Checked against a made-up copy'}; })}; }""")
         ok(m.pop("none") is True and not any(m.values()), look + "Sales: posted 25 hours ago hides; IRN cancelled while in Tally, a posting queued, Tally's error, refused, to check, a problem, a ledger issue, Optional, checked on FinCom's copy each keep it: %s" % m)
-        # the e-invoice part (the firm's GST API on, the client's e-invoice user given: made-up)
-        GON = "window.__gon = window.__gon || GSTAPI.on; GSTAPI.on = () => true; const g = String(CO().gstin).toUpperCase(); EINV.accounts[g] = {user: 'made-up'}; EINV.asked[g] = Date.now(); "
-        m = pg.evaluate("() => { " + CP + GON + """return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: 'E1'}); }),
-          cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''}); }), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: 'E1'}); }),
-          cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); })]; }""")
-        ok(m == [False, False, True, True, False], look + "Sales: no IRN (Make the IRN), IRN of 2 hours (Cancel the IRN) keep it; IRN of 30 hours with no goods (no e-way bill needed) or with its e-way bill hides; IRN cancelled (Make the IRN again) keeps it: %s" % m)
-        # the e-way bill counts only when one is needed: goods (an HSN not starting with 99) worth over Rs 50,000 (EINV.ewbNeeded)
-        IT = "const it = (hsn, taxable, gstRate) => ({desc: 'Made-up item', hsn, qty: 1, rate: taxable, taxable, gstRate}); const irn = (v, items) => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: '', items}); }; "
+        # the e-invoice part (the firm's GST API on, the client's e-invoice user given: made-up). An action counts only when
+        # the person can do it there: Make the IRN while its button is enabled (EINV.problems empty: rd makes the invoice
+        # ready, with PIN codes and its item) and within the IRP's 30 days (EINV.irnLate)
+        GON = "window.__gon = window.__gon || GSTAPI.on; GSTAPI.on = () => true; const g = String(CO().gstin).toUpperCase(); EINV.accounts[g] = {user: 'made-up'}; EINV.asked[g] = Date.now(); SL().cfg.address = 'Made-up Road, Lucknow 226001'; "
+        IT = ("const it = (hsn, taxable, gstRate, more) => Object.assign({desc: 'Made-up item', hsn, qty: 1, rate: taxable, taxable, gstRate}, more || {}); "
+              "const rd = (v) => { Object.assign(v.x, {date: new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10), address: 'Made-up Lane, Noida 201301', items: [it('8471', 2000, 18)]}); }; "
+              "const irn = (v, items, more) => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: '', items}, more || {}); }; ")
+        m = pg.evaluate("() => { " + CP + GON + IT + """return {ready: cp(rd), blocked: cp(v => {}), late: cp(v => { rd(v); v.x.date = new Date(Date.now() - 40 * 864e5).toISOString().slice(0, 10); }),
+          intallyBlocked: cp(v => { v.status = 'intally'; v.matchedAt = h(30); }), cancel2h: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: 'E1'}); }),
+          noGoods30h: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''}); }), withEwb30h: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: 'E1'}); }),
+          cancelledReady: cp(v => { rd(v); Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); }), cancelledBlocked: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); })}; }""")
+        ok(m == {"ready": False, "blocked": True, "late": True, "intallyBlocked": True, "cancel2h": False, "noGoods30h": True, "withEwb30h": True, "cancelledReady": False, "cancelledBlocked": True},
+           look + "Sales: Make the IRN keeps it only when enabled and within 30 days (ready: stays; blocked by its problems, or late: hides); Cancel the IRN of 2 hours keeps it; IRN of 30 hours with no goods or with its e-way bill hides; IRN cancelled: Make the IRN again keeps it only when enabled: %s" % m)
+        # the e-way bill counts only when one is needed: goods (an HSN not starting with 99; a blank one counts) that bear GST,
+        # worth over Rs 50,000 with GST and cess (EINV.ewbNeeded); never a credit or debit note; no GST under LUT to an SEZ
         m = pg.evaluate("() => { " + CP + GON + IT + """return {services: cp(v => irn(v, [it('998314', 90000, 18)])), goodsOver: cp(v => irn(v, [it('8471', 50000, 18)])),
           goodsAt: cp(v => irn(v, [it('8471', 50000, 0)])), goodsUnder: cp(v => irn(v, [it('8471', 30000, 18)])), mixedOver: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 45000, 18)])),
-          mixedUnder: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 20000, 18)])), goodsOverWithEwb: cp(v => { irn(v, [it('8471', 50000, 18)]); v.x.ewayNo = 'E1'; })}; }""")
-        ok(m == {"services": True, "goodsOver": False, "goodsAt": True, "goodsUnder": True, "mixedOver": False, "mixedUnder": True, "goodsOverWithEwb": True},
-           look + "Sales, an IRN of 30 hours and no e-way bill: services only hides; goods over Rs 50,000 stays (Make the e-way bill); goods of Rs 50,000 or under hides; with its e-way bill hides: %s" % m)
+          mixedUnder: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 20000, 18)])), goodsOverWithEwb: cp(v => { irn(v, [it('8471', 50000, 18)]); v.x.ewayNo = 'E1'; }),
+          creditNote: cp(v => irn(v, [it('8471', 60000, 18)], {noteKind: 'credit'})), debitNote: cp(v => irn(v, [it('8471', 60000, 18)], {noteKind: 'debit'})),
+          sezLut45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'SEZWOP'})), sezWithTax45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'SEZWP'})),
+          exempt0pct60k: cp(v => irn(v, [it('0701', 60000, 0)])), exemptFlag60k: cp(v => irn(v, [it('0701', 60000, 5, {exempt: true})])),
+          invoiceCess: cp(v => irn(v, [it('2402', 40000, 12)], {cess: 8000})), noInvoiceCess: cp(v => irn(v, [it('2402', 40000, 12)])),
+          hsnBlank60k: cp(v => irn(v, [it('', 60000, 18)])), qtyRate59k: cp(v => irn(v, [{desc: 'x', hsn: '8471', qty: 2, rate: 25000, gstRate: 18}])),
+          discount47k: cp(v => irn(v, [{desc: 'x', hsn: '8471', qty: 1, rate: 60000, taxable: 40000, gstRate: 18}])), irnTypedNoItems: cp(v => irn(v, [], {irnStatus: '', ackDt: '', taxable: 100000, igst: 18000, total: 118000}))}; }""")
+        ok(m == {"services": True, "goodsOver": False, "goodsAt": True, "goodsUnder": True, "mixedOver": False, "mixedUnder": True, "goodsOverWithEwb": True, "creditNote": True, "debitNote": True,
+                 "sezLut45k": True, "sezWithTax45k": False, "exempt0pct60k": True, "exemptFlag60k": True, "invoiceCess": False, "noInvoiceCess": True, "hsnBlank60k": False, "qtyRate59k": False, "discount47k": True, "irnTypedNoItems": True},
+           look + "Sales, an IRN of 30 hours and no e-way bill: only goods bearing GST worth over Rs 50,000 keep it (services, Rs 50,000 or under, notes, SEZ under LUT under the limit, exempt, a discount under it, no items: hide; blank HSN, qty x rate, the invoice's own cess count): %s" % m)
         m = pg.evaluate("() => { " + CP + "GSTAPI.on = window.__gon; return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: ''}); })]; }")
         ok(m == [True, True], look + "Sales: the firm's GST API off (no e-invoice part on the panel): nothing offered, it hides: %s" % m)
-        # ... and on the page: listed while its panel offers the button, gone once nothing is offered
         def listed_with(js, button):
             go(pg, H + GON + "const v = SL().list.find(x => x.id === 's2'); v.x.customerGstin = '09AABCT1234E1Z2'; " + js + " SL().openId = null; render();", 900)
             t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
@@ -346,7 +359,11 @@ with sync_playwright() as p:
             go(pg, "salesAct('salesClose');", 400)
             return "SI-s2" in t, n
         m = listed_with("", "Make the IRN")
-        ok(m == (True, 1), look + "Sales: no IRN yet: listed, and its panel offers Make the IRN: %s" % (m,))
+        ok(m == (False, 1) and pg.evaluate("salesOpen('s2'), document.querySelector('#app [data-einv] button.primary').disabled") is True, look + "Sales: no IRN, its button disabled by the invoice's problems: off the page (the panel still shows it, disabled): %s" % (m,))
+        go(pg, "salesAct('salesClose');", 400)
+        m = listed_with("Object.assign(v.x, {date: new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10), address: 'Made-up Lane, Noida 201301', items: [{desc: 'Made-up item', hsn: '8471', qty: 1, rate: 2000, taxable: 2000, gstRate: 18}]});", "Make the IRN")
+        ok(m == (True, 1) and pg.evaluate("salesOpen('s2'), document.querySelector('#app [data-einv] button.primary').disabled") is False, look + "Sales: no IRN yet, ready to make: listed, and its panel offers Make the IRN, enabled: %s" % (m,))
+        go(pg, "salesAct('salesClose');", 400)
         m = listed_with("Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: '', items: [{desc: 'Made-up item', hsn: '998314', qty: 1, rate: 90000, taxable: 90000, gstRate: 18}]});", "Make the e-way bill")
         ok(m == (False, 1), look + "Sales: services with an IRN and no e-way bill: off the page, its panel still offers Make the e-way bill: %s" % (m,))
         m = listed_with("v.x.items = [{desc: 'Made-up item', hsn: '8471', qty: 1, rate: 50000, taxable: 50000, gstRate: 18}];", "Make the e-way bill")
@@ -355,13 +372,20 @@ with sync_playwright() as p:
         ok(m == (True, 1), look + "Sales: an IRN of 2 hours: listed, and its panel offers Cancel the IRN: %s" % (m,))
         m = listed_with("Object.assign(v.x, {ackDt: h(30), ewayNo: 'E1'});", "")
         ok(m == (False, 0), look + "Sales: an IRN of 30 hours with its e-way bill: nothing offered, off the page: %s" % (m,))
-        go(pg, "GSTAPI.on = window.__gon; const v = SL().list.find(x => x.id === 's2'); Object.assign(v.x, {irn: '', irnStatus: '', ackDt: '', ewayNo: '', customerGstin: '', items: []}); render();", 500)
+        go(pg, "GSTAPI.on = window.__gon; const v = SL().list.find(x => x.id === 's2'); Object.assign(v.x, {irn: '', irnStatus: '', ackDt: '', ewayNo: '', customerGstin: '', items: [], address: '', date: '2026-10-22'}); SL().cfg.address = ''; render();", 500)
         # Bills: b6, Tally's reply 30 hours ago, nothing to do: hides; each warning or action keeps it
         m = pg.evaluate("() => { " + H + """const cp = (f) => { const e = JSON.parse(JSON.stringify(D().entries.b6)); f(e); return billOld(e); };
           return {none: cp(e => {}), postedOptional: cp(e => { e.postedOptional = true; }), ownerRelease: cp(e => { e.ownerRelease = {ask: true, by: 'Made-up Member', why: 'made-up'}; }),
             goneFromTally: cp(e => { e.goneFromTally = h(2); }), postError: cp(e => { e.postError = 'Made-up error'; }), postCheckFailed: cp(e => { e.postCheckFailed = {at: h(1), message: 'Could not check Tally'}; }),
-            postUnconfirmed: cp(e => { e.postUnconfirmed = {at: h(1)}; })}; }""")
-        ok(m.pop("none") is True and not any(m.values()), look + "Purchase: posted 30 hours ago hides; Optional, the owner's release, gone from Tally, Tally's error, a failed check, not confirmed each keep it: %s" % m)
+            postUnconfirmed: cp(e => { e.postUnconfirmed = {at: h(1)}; }), notBill: cp(e => { e.docKind = 'proforma'; }), billedElsewhere: cp(e => { e.x.buyerGstin = '27AAAAA0000A1Z5'; })}; }""")
+        ok(m.pop("none") is True and not any(m.values()), look + "Purchase: posted 30 hours ago hides; Optional, the owner's release, gone from Tally, Tally's error, a failed check, not confirmed, not a tax invoice, billed to another GSTIN (each a warning with its button on the bill) keep it: %s" % m)
+        m = pg.evaluate("() => { " + H + """const cp = (f) => { const e = JSON.parse(JSON.stringify(D().entries.b6)); f(e); return billOld(e); };
+          return [cp(e => { e.postAltered = true; }), cp(e => { e.docKind = 'proforma'; e.docOverride = true; }), cp(e => { e.x.buyerGstin = '27AAAAA0000A1Z5'; e.buyerOverride = true; }), cp(e => { e.x.buyerGstin = CO().gstin; })]; }""")
+        ok(m == [True, True, True, True], look + "Purchase: altered in Tally (no warning on the bill), a paper taken as a tax invoice, a bill kept here, one billed to the client: hide: %s" % m)
+        go(pg, "goClient('bills'); D().entries.b6.docKind = 'proforma'; S.step = null; S.tab = 'invoices'; S.filter = 'approved'; S.selected = 'b6'; render();", 1000)
+        m = [pg.locator("#app .bigwarn button", has_text="It is a tax invoice").count(), "INV-b6" in pg.evaluate("[...document.querySelectorAll('#app ul.queue > li')].map(li => li.innerText).join('|')")]
+        ok(m == [1, True], look + "Purchase: a posted paper that is not a tax invoice: its warning and button on the bill, and listed: %s" % m)
+        go(pg, "delete D().entries.b6.docKind; S.selected = null; render();", 400)
         # ... and what Post to Tally shows for it from FinCom's cloud: a posting queued, a reply to review, a Tally id to correct
         m = pg.evaluate("() => { " + H + """const cid = window.__cid, keep = CloudJobs.list, e = D().entries.b6;
           const J = (st, res) => ({id: 'jx', client_id: cid, status: st, created_at: h(30), updated_at: h(30), entry_ids: ['b6'], results: res ? [res] : [], n: 1});
@@ -384,6 +408,21 @@ with sync_playwright() as p:
         m = pg.evaluate("() => { " + H + """const keep = CloudJobs.list, r = B().rows.find(x => x.id === 'r1');
           CloudJobs.list = [{id: 'jb', client_id: window.__cid, status: 'waiting', created_at: h(1), updated_at: h(1), entry_ids: ['r1'], results: [], n: 1}]; const a = bankOld(r); CloudJobs.list = keep; return [a, bankOld(r)]; }""")
         ok(m == [False, True], look + "Bank: a posting of FinCom's cloud still queued for the line keeps it: %s" % m)
+        # a line Tally confirmed 25 hours ago with an older cloud posting that failed: it is in Tally, so that posting is not
+        # its row (as for bills); a row the person removed or hid on Post to Tally, or of a posting dismissed, is not one to act on
+        JOB = ("const keep = CloudJobs.list, r = B().rows.find(x => x.id === ID); CloudJobs.list = [{id: 'jf', client_id: window.__cid, status: 'failed', kind: 'bank', created_at: h(40), updated_at: h(40), attempts: 1, entry_ids: [ID], "
+               "items: [{id: ID, state: 'failed', reason: 'Made-up refusal'}], results: [{id: ID, ok: false, message: 'Made-up refusal'}], message: 'Made-up refusal'}]; ")
+        m = pg.evaluate("() => { " + H + JOB.replace("ID", "'r1'") + """const rows = (postEntryRows(window.__cid) || []).filter(x => x.id === 'r1').length, a = bankOld(r);
+          CloudJobs.list = keep; return [rows, a]; }""")
+        ok(m == [0, True], look + "Bank: a line in Tally (25 hours) whose older cloud posting failed: no Errors row for that posting, and it hides: %s" % m)
+        m = pg.evaluate("() => { " + H + JOB.replace("ID", "'r5'") + """const k = 'jf:r5', rr = () => (postEntryRows(window.__cid) || []).some(x => x.key === k), on = () => postNeeds(window.__cid).has('bank:r5');
+          const out = [rr(), on()]; PostFlags.removed.set(k, {by: 'me', at: h(1), why: 'made-up', attempts: 1}); out.push(on()); PostFlags.removed.delete(k);
+          PostFlags.hide.add(k); out.push(on()); PostFlags.hide.delete(k); CloudJobs.list[0].dismissed_at = h(1); CloudJobs.list = CloudJobs.list.slice(); out.push(on()); CloudJobs.list = keep; return out; }""")
+        ok(m == [True, True, False, False, False], look + "Bank: a refused posting's row counts until the person removes it, hides it, or the posting is dismissed: %s" % m)
+        m = pg.evaluate("() => { " + H + """const r = B().rows.find(x => x.id === 'r1'), keep = CloudJobs.list; CloudJobs.list = [{id: 'jf', client_id: window.__cid, status: 'failed', kind: 'bank', created_at: h(40), updated_at: h(40), attempts: 1, entry_ids: ['r1'],
+          items: [{id: 'r1', state: 'failed', reason: 'Made-up refusal'}], results: [{id: 'r1', ok: false, message: 'Made-up refusal'}], message: 'Made-up refusal'}]; PostFlags.removed.set('jf:r1', {by: 'me', at: h(1), why: 'made-up', attempts: 1});
+          const a = bankOld(r); PostFlags.removed.delete('jf:r1'); CloudJobs.list = keep; return a; }""")
+        ok(m is True, look + "Bank: and after its Post row is removed, it hides: %s" % m)
         go(pg, "B().rows.find(x => x.id === 'r1').postedOptional = true; goClient('bank'); bankTabGo('done');", 1200)
         ids = pg.evaluate("[...document.querySelectorAll('%s')].map(t => t.dataset.rid).sort()" % BANKROWS)
         ok("r1" in ids, look + "Bank: the Optional line posted 25 hours ago is under Posted: %s" % ids)

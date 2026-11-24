@@ -490,8 +490,10 @@ function postEntryRowsNow(cid){
     if (!js.reg && CloudJobs.stopped(j) && !CloudJobs.okIn(j).has(id)){
       const went = all.find(k => k !== j && CloudJobs.okIn(k).has(id));
       if (went) j = went;
-      // in Tally another way, or marked as sent here after this posting (a Tally file, a bridge here): the bill's own state
+      // in Tally another way, or marked as sent here after this posting (a Tally file, a bridge here): the bill's own state;
+      // a bank line Tally has (bankMatched), the same
       else if (e && ((typeof billInTally === "function" && billInTally(e)) || (e.exportedAt && String(e.exportedAt) > String(j.created_at || "")))) return;
+      else if (!e && bl && typeof bankMatched === "function" && bankMatched(bl)) return;
     }
     const kind = e ? "bill" : bl ? "bank" : "other";
     const ids = pid && pid.rows ? pid.rows.get(j.id + "|" + id) || null : null;
