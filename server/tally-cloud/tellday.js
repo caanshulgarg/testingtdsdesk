@@ -8,6 +8,9 @@
 //     later, and only by claim (tally_days_claim, which hands a day only to a bridge serving the book: tally_read_serves).
 //   - due: migration 222's tally_autoday_queue at most once a book per 10 minutes.
 //   - noUploadAsk: FinCom never asks for a Day Book upload; it brings the day from Tally by itself.
+//   - beforeStartWhy: a line dated before the book's first day never promises the day is read by itself.
+//   - pickupsToSay: the bridge's pick-up words for check days, each told once to 222's tally_autoday_pickup.
+//   - cleanBands / bandsWhole: a day read in MasterID bands is whole only end to end with no hole (222's rule).
 import { coName, coTrim } from "./linknow.js";
 
 export const SKIP_CODES = ["ownerUnknown", "twoTallys", "otherLogin", "notOpen", "otherCopy", "slow"];
@@ -141,4 +144,52 @@ export function beforeStartWhy(words, day, from) {
   const w = typeof words === "string" ? words : "";
   if (!w || !day || !from || String(day) >= String(from)) return w;
   return w.split(BRING_WORDS).join(BEFORE_START_WORDS).split(READS_AGAIN).join("it is dated before this book's first day in FinCom");
+}
+
+// migration 222's tally_autoday_pickup(book, day, code): what to tell it from a beat's pickups (index.ts pickupsOf, each
+// with its book): this bridge's words for check days (kind check or fill: the days of tally_check_days), "started" or the
+// refusal's code, each word once (not one said in the beat before: the same book, day, kind, state, code and hand-out
+// time); the day as yyyy-mm-dd; at most 20
+export function pickupsToSay(now, before, bridge) {
+  const key = (e) => [e.bridge, e.book, e.day, e.kind, e.state, e.code || "", e.takenAt].join("|");
+  const was = new Set((Array.isArray(before) ? before : []).filter(plain).map(key));
+  const out = [];
+  for (const e of Array.isArray(now) ? now : []) {
+    if (out.length >= 20) break;
+    if (!plain(e) || e.bridge !== bridge || !e.book || !/^\d{8}$/.test(String(e.day || "")) || !["check", "fill"].includes(e.kind) || was.has(key(e))) continue;
+    const code = e.state === "started" ? "started" : e.state === "refused" && typeof e.code === "string" && e.code ? e.code : "";
+    if (!code) continue;
+    out.push({ book: String(e.book), day: e.day.slice(0, 4) + "-" + e.day.slice(4, 6) + "-" + e.day.slice(6, 8), code });
+  }
+  return out;
+}
+
+// a heavy day read in MasterID bands (FinComDayHeadsPart, bridge 2.5.22 sends them with the list): [[from, to], ...], each
+// a whole number (from 1, to at least from, or null for the last, open-ended one), at most 2000; anything else: null
+const mid = (v) => typeof v === "number" ? (Number.isInteger(v) && v >= 1 && v < 1e18 ? v : null) : typeof v === "string" && /^[1-9]\d{0,17}$/.test(v) ? Number(v) : null;
+export function cleanBands(x) {
+  if (!Array.isArray(x) || !x.length || x.length > 2000) return null;
+  const out = [];
+  for (const b of x) {
+    if (!Array.isArray(b) || b.length < 1 || b.length > 2) return null;
+    const a = mid(b[0]), z = b.length < 2 || b[1] === null ? null : mid(b[1]);
+    if (a === null || (b.length === 2 && b[1] !== null && z === null)) return null;
+    out.push([a, z]);
+  }
+  return out;
+}
+// 222's tally_autoday_bands_whole, mirrored (the cloud asks the held deletes and the period's count only of a whole list):
+// the bands start at 1, each next one right after the one before, the last open-ended, every head's MasterID in a band
+export function bandsWhole(bands, heads) {
+  const b = cleanBands(bands);
+  if (!b || !Array.isArray(heads)) return false;
+  const s = [...b].sort((x, y) => x[0] - y[0]);
+  for (let i = 0; i < s.length; i++) {
+    const [a, z] = s[i];
+    if (i === 0 && a !== 1) return false;
+    if (i > 0 && (s[i - 1][1] === null || a !== s[i - 1][1] + 1)) return false;
+    if (z !== null && z < a) return false;
+    if (i === s.length - 1 && z !== null) return false;
+  }
+  return heads.every((h) => Array.isArray(h) && /^\d{1,18}$/.test(String(h[1] ?? "")) && Number(h[1]) > 0 && s.some(([a, z]) => Number(h[1]) >= a && (z === null || Number(h[1]) <= z)));
 }

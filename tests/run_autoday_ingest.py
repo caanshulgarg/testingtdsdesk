@@ -7,7 +7,12 @@ fake_supabase.py). Checks:
   2. a day FinCom queued by itself (tally_check_days.source held, delete, gap, future) goes to a bridge of 2.5.16 or later
      that serves the book (tally_days_claim) as an ordinary check day: no new kind, nothing else in it (no new Tally request)
   3. a bridge older than 2.5.16: none of those days, nor the held deletes' or the gap's days; a person's days as before
-  4. a bridge not serving the book (no claim): none of those days, nor the held deletes' or the gap's days
+  4. a bridge not serving the book (no claim): no check day at all (with 222 only by claim), nor the held deletes' or the
+     gap's days
+  6. the check's days before the period's (a stuck line's day never waits behind older days)
+  7. each new pick-up word of this bridge for a check day told to tally_autoday_pickup, once
+  8. a day read in bands: 222's 5-argument tally_check_heads with the bands; the held deletes and the period's count only
+     for whole bands; without 222: as before
   5. a cloud without 222: everything as before (asked again after 10 minutes)
 Needs Deno (DENO). Made-up books only."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
@@ -30,20 +35,28 @@ BOOK_OF = {b: co for co, (b, g) in BOOKS.items()}
 SERVE = {BOOKS["SERVED CO"][0]: [GA["id"], GB["id"]], BOOKS["NOSTART CO"][0]: [GA["id"]], BOOKS["OLDCLOUD CO"][0]: [GA["id"], GB["id"]]}
 DAYS = {"20260410": "held", "20260411": "delete", "20260412": "future", "20260413": "gap", "20260414": "upload", "20260415": "fill"}
 ORDER = []
+PERIOD = [[]]
+NO5 = [False]     # a cloud without 222's 5-argument tally_check_heads
 real = FS.rpc
 def rpc(name, a):
-    if name.startswith("tally_period") or name.startswith("tally_check") or name.startswith("tally_held_front") or name.startswith("tally_gap_front") or name in ("tally_days_claim", "tally_autoday_queue"):
+    if name.startswith("tally_period") or name.startswith("tally_check") or name.startswith("tally_held_front") or name.startswith("tally_gap_front") or name in ("tally_days_claim", "tally_autoday_queue", "tally_autoday_pickup"):
         FS.ARGS.setdefault(name, []).append(a); ORDER.append((name, a.get("p_book"), a.get("p_kind")))
         if name in FS.NO_FN: raise LookupError("PGRST202")
         if name == "tally_autoday_queue": return 2
+        if name == "tally_autoday_pickup": return {"ok": True, "mine": True, "tries": 1, "retryAt": None}
+        if name == "tally_check_heads" and "p_bands" in a and NO5[0]: raise LookupError("PGRST202")
+        if name == "tally_check_heads": return {"ok": True, "mine": True, "n": len(a.get("p_heads") or []), "want": [], "done": a.get("p_via") != "split"}
+        if name == "tally_period_heads": return {"ok": True, "n": len(a.get("p_heads") or []), "want": [], "done": a.get("p_via") != "split"}
         if name == "tally_period_gate": return True
-        if name in ("tally_period_next", "tally_period_next_paced") or (name == "tally_days_claim" and a["p_kind"] == "period"): return []
+        if name in ("tally_period_next", "tally_period_next_paced") or (name == "tally_days_claim" and a["p_kind"] == "period"): return PERIOD[0][: a["p_max"]]
         if name in ("tally_check_next", "tally_check_next_open") or name == "tally_days_claim":
             return [{"day": d, "fetch": True, "chosenAt": CA, "check": True} for d in sorted(DAYS, reverse=True)][: a["p_max"]]
         if name == "tally_held_front": return [{"day": "20260401", "chosenAt": CA}]
         if name == "tally_gap_front": return [{"day": "20260402", "chosenAt": CA}]
         if name == "tally_period_retry_days": return []
         return {"ok": True}
+    if name == "tally_held_delete_by_heads":
+        FS.ARGS.setdefault(name, []).append(a); return {"ok": True, "removed": 0}
     if name == "tally_read_serving_many":
         FS.ARGS.setdefault(name, []).append(a)
         return {b: [{"device": DA, "bridge": x, "guid": BOOKS[BOOK_OF[b]][1]} for x in SERVE.get(b, [])] for b in a["p_books"]}
@@ -110,7 +123,8 @@ try:
     LB = BOOKS["LONELY CO"][0]
     c, r, pd, days = beat("LONELY CO")
     ok(asked("tally_autoday_queue") == [("tally_autoday_queue", LB, None)], "4. its days queued all the same (%s)" % asked("tally_autoday_queue"))
-    ok(not [x for x in asked("tally_days_claim") if x[1] == LB] and days == ["20260414", "20260415"], "4. not by claim: only the person's days (%s)" % days)
+    ok(not [x for x in asked("tally_days_claim") if x[1] == LB] and days == [], "4. not by claim: no check day at all (222 hands them only by claim) (%s)" % days)
+    ok(not asked("tally_check_next_open") and not asked("tally_check_next"), "4. the plain list not asked (%s)" % [x[0] for x in ORDER])
     ok(not asked("tally_held_front") and not asked("tally_gap_front"), "4. the held deletes' and the gap's days not asked")
 
     print("== 1b. a company without a starting point: queued, not handed")
@@ -121,13 +135,62 @@ try:
     t = ((info.get("bridges") or {}).get(GA["id"]) or {}).get("tell") or {}
     ok((t.get("unstarted") or {}).get("NOSTART CO", {}).get("why") == "noNumbers", "1b. the drop recorded on the bridge's tell (%s)" % t)
 
+    print("== 6. the check's days before the period's")
+    PERIOD[0] = [{"day": "2026050%d" % i, "fetch": True, "types": ["Sales"], "chosenAt": CA} for i in range(1, 10)]
+    dev.update(period_night_from=(h0 + 2) % 24, period_night_to=(h0 + 4) % 24, period_night_sunday=False)     # by day: 3 an answer
+    c, r, pd, days = beat("SERVED CO", lastKeySec=600)
+    ok(len(pd) == 3 and all(d["kind"] in ("check", "fill") for d in pd) and asked("tally_days_claim")[0][2] == "check", "6. by day (3 an answer): the check's days fill it first (%s)" % [(d["day"], d["kind"]) for d in pd])
+    PERIOD[0] = []
+    dev.update(period_night_from=h0, period_night_to=(h0 + 2) % 24, period_night_sunday=True)
+
+    print("== 7. pick-up words told to tally_autoday_pickup")
+    def pk(day, state, code=None, kind="check", taken="2026-11-24T05:00:02Z"):
+        x = {"company": "SERVED CO", "guid": BOOKS["SERVED CO"][1], "kind": kind, "chosenAt": "2026-11-24T05:00:00Z", "takenAt": taken, "state": state, "day": day, "at": "2026-11-24T05:00:03Z", "login": "madeup-a"}
+        if state == "started": x.update(pickedUtc="2026-11-24T05:00:03Z", pickedAt="2026-11-24T05:00:03Z")
+        else: x["code"] = code
+        return x
+    FS.ARGS.pop("tally_autoday_pickup", None)
+    beat("SERVED CO", pickups=[pk("20260410", "refused", "slow"), pk("20260411", "started", kind="fill"), pk("20260412", "refused", "typing", kind="period")])
+    said = sorted((x["p_day"], x["p_code"]) for x in FS.ARGS.get("tally_autoday_pickup") or [])
+    ok(said == [("2026-04-10", "slow"), ("2026-04-11", "started")] and all(x["p_book"] == SB for x in FS.ARGS["tally_autoday_pickup"]), "7. this bridge's check days: slow and started; a period day's not (%s)" % said)
+    beat("SERVED CO", pickups=[pk("20260410", "refused", "slow"), pk("20260411", "started", kind="fill")])
+    ok(len(FS.ARGS.get("tally_autoday_pickup") or []) == 2, "7. the same words in the next beat: not told again (%d)" % len(FS.ARGS.get("tally_autoday_pickup") or []))
+    beat("SERVED CO", pickups=[pk("20260410", "refused", "slow", taken="2026-11-24T06:00:02Z")])
+    ok(len(FS.ARGS.get("tally_autoday_pickup") or []) == 3, "7. handed again, refused again: told again (%s; kept %s)" % (FS.ARGS.get("tally_autoday_pickup"), [(x.get("day"), x.get("takenAt"), x.get("state")) for x in ((next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("beat") or {}).get("pickups") or []]))
+
+    print("== 8. a day read in bands")
+    H = [["g-%d" % m, m, 400 + m, "Payment"] for m in (5, 120)]
+    def heads(**more):
+        for k in ("tally_check_heads", "tally_held_delete_by_heads", "tally_period_heads"): FS.ARGS.pop(k, None)
+        return call(dict({"version": "2.5.22", "bridge": GA, "kind": "period_heads", "company": "SERVED CO", "company_guid": BOOKS["SERVED CO"][1], "day": "20260410", "heads": H}, **more))
+    c, r = heads(via="bands", bands=[[1, 100], [101, None]])
+    ch = (FS.ARGS.get("tally_check_heads") or [{}])[-1]
+    ok(c == 200 and ch.get("p_via") == "bands" and ch.get("p_bands") == [[1, 100], [101, None]], "8. whole bands: 222's call with the bands as they came (%s)" % ch)
+    ok(FS.ARGS.get("tally_held_delete_by_heads") and (FS.ARGS.get("tally_period_heads") or [{}])[-1].get("p_via") == "day", "8. whole: the held deletes asked, the period's count as a whole day")
+    c, r = heads(via="bands", bands=[[1, 100], [150, None]])
+    ch = (FS.ARGS.get("tally_check_heads") or [{}])[-1]
+    ok(ch.get("p_via") == "bands" and not FS.ARGS.get("tally_held_delete_by_heads") and (FS.ARGS.get("tally_period_heads") or [{}])[-1].get("p_via") == "split" and r.get("partial") is True,
+       "8. a hole: no held delete, the period's count partial (%s)" % r)
+    c, r = heads(via="bands")
+    ch = (FS.ARGS.get("tally_check_heads") or [{}])[-1]
+    ok(ch.get("p_via") == "bands" and ch.get("p_bands") is None and not FS.ARGS.get("tally_held_delete_by_heads") and r.get("partial") is True, "8. bands without their ranges (a bridge before 2.5.22): partial (%s)" % ch)
+    c, r = heads(via="day")
+    ok(len(FS.ARGS.get("tally_check_heads") or []) == 1 and "p_bands" not in FS.ARGS["tally_check_heads"][-1] and FS.ARGS.get("tally_held_delete_by_heads"), "8. a whole day: as before (4 arguments)")
+
     print("== 5. a cloud without 222")
-    FS.NO_FN.add("tally_autoday_queue")
+    FS.NO_FN.update({"tally_autoday_queue"})
     OB = BOOKS["OLDCLOUD CO"][0]
     c, r, pd, days = beat("OLDCLOUD CO", GB)
     ok(c == 200 and days == want, "5. an older bridge: every day as before (%s)" % days)
     c, r, pd, days = beat("SERVED CO", GB)
     ok(days == want and not asked("tally_autoday_queue"), "5. not asked again for 10 minutes; as before (%s)" % days)
+    c, r, pd, days = beat("LONELY CO")
+    ok(asked("tally_check_next_open") and days == ["20260401", "20260402", "20260410", "20260411", "20260412", "20260413", "20260414", "20260415"], "5. a bridge not serving: the plain list as before (%s)" % days)
+    NO5[0] = True
+    c, r = heads(via="bands")
+    ch = FS.ARGS.get("tally_check_heads") or []
+    ok(c == 200 and ch and ch[-1].get("p_via") == "day" and "p_bands" not in ch[-1] and r.get("partial") is not True, "5. bands without 222: a whole day, as before (%s)" % ch[-1:])
+    NO5[0] = False
     FS.NO_FN.discard("tally_autoday_queue")
 finally:
     fn.terminate()

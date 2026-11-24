@@ -258,7 +258,7 @@ import { corsFor } from "../_shared/cors.ts";   // the one list of headers for e
 import { cloudReporter } from "../_shared/sentry.ts";
 // next-fix-devlookup (FINCOM-CLOUD-STAGING-8/B/C/9): the gateway's HTML error page as one short line, one more try for a read
 import { dbReport, readRetry } from "./dbgateway.js";
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk, beforeStartWhy } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk, beforeStartWhy, pickupsToSay, cleanBands, bandsWhole } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
@@ -2477,6 +2477,53 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       }
       const byClaim = !!claim && claim.shared.has(company) && Date.now() - daysClaimMissing >= 600000;
       const dArgs = byClaim ? { p_firm: firm, p_book: book, p_device: claim!.dev.id, p_bridge: claim!.bridge } : null;
+      // the owner's decision of 24-Nov-2026 (migration 222): the check's days (held lines' days, possible deletes, future
+      // lines on their day, the person's) go BEFORE the period's, so a stuck line's day never waits behind a year of older
+      // days; a cloud without 222: after them, as before
+      const checkDays = async () => {
+        // 30-Oct-2026 (the owner: an upload that differs from Tally is found and corrected; migration 133): the uploaded days
+        // to check against Tally, in the room left of the answer, through the same older-entries path (no new Tally request)
+        // migration 222 (the SQL builder, 24-Nov-2026): with 222 the check's days go ONLY by claim (tally_days_claim: a bridge
+        // serving the book), never by the plain list below, which cannot leave out the days FinCom queued by itself
+        if (out.length < max && Date.now() - checkMissing >= 600000 && (byClaim || !autoOn)) {
+          // (asked for the room left plus this company's days already listed, so a day of both never leaves the room empty)
+          // 30-Oct-2026 (migration 135, the owner's "Check for changes in Tally"): tally_check_next_open, 133's own rule except
+          // that a "Bring books from Tally" stopped before the person's press no longer holds the check; a cloud without 135:
+          // 133's tally_check_next as before (asked again after 10 minutes)
+          const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length + more) };
+          let got: any = null, claimed = false;
+          if (byClaim && Date.now() - daysClaimMissing >= 600000) {
+            got = await db.rpc("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false });
+            if (got.error && missingFn(String(got.error.message || ""))) { daysClaimMissing = Date.now(); got = null; } else claimed = true;
+          }
+          if (!got && Date.now() - openMissing >= 600000) {
+            got = await db.rpc("tally_check_next_open", cArgs);
+            if (got.error && missingFn(String(got.error.message || ""))) { if (!openMissing) console.log("tally-ingest beat: the check's days by 133's rule: migration 135 is not applied"); openMissing = Date.now(); got = null; }
+          }
+          if (!got) got = await db.rpc("tally_check_next", cArgs);
+          const { data: cd, error: ce } = got;
+          if (ce) {
+            if (missingFn(String(ce.message || ""))) { if (!checkMissing) console.log("tally-ingest beat: the upload check is off: migration 133 is not applied"); checkMissing = Date.now(); }
+            else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", company, String(ce.message || "").slice(0, 200)); }
+          } else {
+            const rows = (Array.isArray(cd) ? cd as any[] : []).filter((d) => isDay(String(d?.day || "")));
+            // bridge 2.5.10: a day queued by Bring missing days (tally_check_days.source 'fill') is handed out as kind fill,
+            // any other as check (one read of the days' sources, only when there are days; not read: check)
+            // the owner's decision of 24-Nov-2026: a day FinCom queued by itself (held, delete, gap, future) only by claim to a
+            // bridge of 2.5.16 or later (tellday.js autoKept); a person's day (upload, check, fill) as before
+            const srcs = await checkSourcesOf(book, rows.map((d) => String(d.day)));
+            for (const d of rows) {
+              if (out.length >= max) break;
+              const day = String(d?.day || "");
+              if (!autoKept(srcs.get(day), { autoOn, newBridge, claimed })) continue;
+              if (isHeld(day) || out.some((x) => x.company === company && x.day === day)) continue;
+              // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
+              out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: srcs.get(day) === "fill" ? "fill" : "check" });
+            }
+          }
+        }
+      };
+      if (autoOn) await checkDays();
       const pMax = Math.min(30, max - out.length + more);
       let { data, error } = byClaim ? await db.rpc("tally_days_claim", { ...dArgs, p_kind: "period", p_max: pMax, p_night: night })
         : await db.rpc("tally_period_next_paced", { p_book: book, p_max: pMax, p_night: night });
@@ -2506,45 +2553,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         // ignores it)
         out.push({ company, company_guid: guid, day: String(d.day), fetch: d?.fetch === true, types, ...chosenOf(d), kind: "period" });
       }
-      // 30-Oct-2026 (the owner: an upload that differs from Tally is found and corrected; migration 133): the uploaded days
-      // to check against Tally, in the room left of the answer, through the same older-entries path (no new Tally request)
-      if (out.length < max && Date.now() - checkMissing >= 600000) {
-        // (asked for the room left plus this company's days already listed, so a day of both never leaves the room empty)
-        // 30-Oct-2026 (migration 135, the owner's "Check for changes in Tally"): tally_check_next_open, 133's own rule except
-        // that a "Bring books from Tally" stopped before the person's press no longer holds the check; a cloud without 135:
-        // 133's tally_check_next as before (asked again after 10 minutes)
-        const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length + more) };
-        let got: any = null, claimed = false;
-        if (byClaim && Date.now() - daysClaimMissing >= 600000) {
-          got = await db.rpc("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false });
-          if (got.error && missingFn(String(got.error.message || ""))) { daysClaimMissing = Date.now(); got = null; } else claimed = true;
-        }
-        if (!got && Date.now() - openMissing >= 600000) {
-          got = await db.rpc("tally_check_next_open", cArgs);
-          if (got.error && missingFn(String(got.error.message || ""))) { if (!openMissing) console.log("tally-ingest beat: the check's days by 133's rule: migration 135 is not applied"); openMissing = Date.now(); got = null; }
-        }
-        if (!got) got = await db.rpc("tally_check_next", cArgs);
-        const { data: cd, error: ce } = got;
-        if (ce) {
-          if (missingFn(String(ce.message || ""))) { if (!checkMissing) console.log("tally-ingest beat: the upload check is off: migration 133 is not applied"); checkMissing = Date.now(); }
-          else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", company, String(ce.message || "").slice(0, 200)); }
-        } else {
-          const rows = (Array.isArray(cd) ? cd as any[] : []).filter((d) => isDay(String(d?.day || "")));
-          // bridge 2.5.10: a day queued by Bring missing days (tally_check_days.source 'fill') is handed out as kind fill,
-          // any other as check (one read of the days' sources, only when there are days; not read: check)
-          // the owner's decision of 24-Nov-2026: a day FinCom queued by itself (held, delete, gap, future) only by claim to a
-          // bridge of 2.5.16 or later (tellday.js autoKept); a person's day (upload, check, fill) as before
-          const srcs = await checkSourcesOf(book, rows.map((d) => String(d.day)));
-          for (const d of rows) {
-            if (out.length >= max) break;
-            const day = String(d?.day || "");
-            if (!autoKept(srcs.get(day), { autoOn, newBridge, claimed })) continue;
-            if (isHeld(day) || out.some((x) => x.company === company && x.day === day)) continue;
-            // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
-            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: srcs.get(day) === "fill" ? "fill" : "check" });
-          }
-        }
-      }
+      if (!autoOn) await checkDays();
       await unstamp();
     }
   } catch (e) {
@@ -2582,6 +2591,18 @@ async function autodayQueue(book: string) {
       else fail("autoday_queue", error);
     }
   } catch (e) { fail("autoday_queue", e); }
+}
+// migration 222: tally_autoday_pickup(p_book, p_day, p_code) for each pick-up word (pickupsToSay); never fails the beat. A
+// cloud without 222: not asked (again after 10 minutes)
+let pickupMissing = 0;
+async function autodayPickups(list: { book: string; day: string; code: string }[]) {
+  if (!list.length || Date.now() - pickupMissing < 600000) return;
+  await Promise.all(list.map(async (x) => {
+    try {
+      const { error } = await db.rpc("tally_autoday_pickup", { p_book: x.book, p_day: x.day, p_code: x.code });
+      if (error) { if (missingFn(String(error.message || ""))) pickupMissing = Date.now(); else fail("autoday_pickup", error); }
+    } catch (e) { fail("autoday_pickup", e); }
+  }));
 }
 // the version of the bridge this beat is from (its own beat's, else its record's)
 function bridgeVersionOf(dev: any, bridge: string, body: any): string {
@@ -2680,6 +2701,7 @@ function periodAllowed(devId: string) {
 // a day's heads from Tally (its count, by FinComDayHeads), or the day to be uploaded by hand
 // the period_heads list's kind: "split" (partial: one voucher type at a time) or "day" (whole: one go, or bridge 2.5.19's
 // MasterID bands end to end); anything else is taken as a whole day, as before
+let heads5Missing = 0;     // migration 222's 5-argument tally_check_heads found missing (asked again 10 minutes later)
 function periodHeadsVia(v: unknown): "split" | "day" {
   return v === "split" ? "split" : "day";
 }
@@ -2706,7 +2728,13 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
   // as via "bands": the bands cover the day end to end, so it is the day's whole list and closes the day as "day" does;
   // only "split" (one voucher type at a time) is partial. The database keeps both as "day" (tally_period_heads and
   // tally_check_heads take anything but "split" as whole: no SQL change)
-  const via = periodHeadsVia(body?.via);
+  // migration 222 (B.6, the delete guards): a day read in bands is a whole list only when its bands (bridge 2.5.22's
+  // body.bands, [[from, to], ...], the last to null) run from 1 end to end with no hole (bandsWhole, 222's own rule): only
+  // then the held deletes and the period's count take it as whole; the check gets 'bands' with its bands as they came
+  // (222's 5-argument tally_check_heads decides there). Bands without their ranges: partial with 222; a cloud without
+  // 222: as before (a whole day)
+  const isBands = body?.via === "bands", bands = isBands ? cleanBands(body?.bands) : null;
+  const via = !isBands ? periodHeadsVia(body?.via) : bands ? (bandsWhole(bands, heads) ? "day" : "split") : (autodayOn() && Date.now() - heads5Missing >= 600000 ? "split" : "day");
   // next-fast-delete (migration 158): a whole-day list of a day being checked first applies the held deletes it proves (the
   // line's MasterID, number and type name one live entry, whose GUID Tally makes from that MasterID, and the list has
   // neither; the line this computer's bridge's own, in the last 10 minutes, the entry held before it): the entry leaves
@@ -2718,7 +2746,12 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
       else if (Number((hd as any)?.removed) > 0) console.log("tally-ingest period_heads: held deletes applied on the day's list", book, day, (hd as any).removed);
     } catch (e) { fail("held_delete_by_heads", e); }
   }
-  const { data: ck, error: ce } = await db.rpc("tally_check_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
+  let ck: any = null, ce: any = null;
+  if (isBands && Date.now() - heads5Missing >= 600000) {
+    ({ data: ck, error: ce } = await db.rpc("tally_check_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: "bands", p_bands: bands }));
+    if (ce && missingFn(String(ce.message || ""))) { heads5Missing = Date.now(); ck = null; ce = null; }
+  }
+  if (!ck && !ce) ({ data: ck, error: ce } = await db.rpc("tally_check_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via }));
   if (ce && !missingFn(String(ce.message || ""))) return periodError(ce);
   if (!ce && (ck as any)?.mine === true) {
     const c = ck as any;
@@ -5218,6 +5251,9 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(b.tallyPortNotSaved && typeof b.tallyPortNotSaved === "object" && Number(b.tallyPortNotSaved.port) > 0 ? { tallyPortNotSaved: { port: Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.port))), iniPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPortNotSaved.iniPort) || 0))), words: s(b.tallyPortNotSaved.words, 400) } } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         if (pickups.length) (beat as any).pickups = pickups;
+        // migration 222: each new pick-up word of this bridge for a check day, told to tally_autoday_pickup (a 2 s stop holds
+        // the day back 1 h, 3 h, then 24 h; "started" clears it; any other word is kept as the day's last why)
+        await autodayPickups(pickupsToSay(pickups, prevInfo?.beat?.pickups, me.id));
         if (co) (me.entry as any).changesOnly = true;
         // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
         const ug = gateTrack(prevInfo, beat, Date.now());

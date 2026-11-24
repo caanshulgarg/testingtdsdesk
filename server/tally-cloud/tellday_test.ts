@@ -7,9 +7,11 @@
 //      itself goes only through a claim (tally_days_claim: a bridge that serves the book)
 //   4. due: tally_autoday_queue at most once per book per 10 minutes
 //   5. noUploadAsk: FinCom's words never ask for a Day Book upload
+//   7. pickupsToSay: what migration 222's tally_autoday_pickup is told (each new word of this bridge for a check day, once)
+//   8. cleanBands / bandsWhole: a day read in MasterID bands is whole only end to end with no hole (222's rule, mirrored)
 //   6. beforeStartWhy: a line dated before the book's first day never says FinCom reads that day by itself (the owner, 24-Nov:
 //      an earlier year is never added or read by itself; the page offers "Add 2025-26")
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS } from "./tellday.js";
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS, pickupsToSay, cleanBands, bandsWhole } from "./tellday.js";
 
 function assert(c: unknown, w: string) { if (!c) throw new Error(w); }
 const T0 = Date.parse("2026-11-24T06:00:00Z");
@@ -130,4 +132,35 @@ Deno.test("beforeStartWhy: a day before the book's first day: no promise to read
   assert(beforeStartWhy(a, null, "2026-04-01") === a && beforeStartWhy(a, "2026-03-01", "") === a, "a day or a first day not known: as they are");
   assert(beforeStartWhy("", "2026-03-01", "2026-04-01") === "", "none: none");
   assert(!/2025-26|added|add /i.test(BEFORE_START_WORDS) && BEFORE_START_WORDS.split(" ").length <= 14, "plain, 14 words at most, no year added by itself: " + BEFORE_START_WORDS);
+});
+
+Deno.test("pickupsToSay: this bridge's new words for check days, each once", () => {
+  const B = "go-aaaaaa222022", BK = "11111111-1111-1111-1111-111111112220";
+  const e = (x: Record<string, unknown>) => ({ bridge: B, book: BK, company: "MADE UP CO", guid: "g", kind: "check", day: "20261005", state: "refused", code: "slow", takenAt: "2026-11-24T05:00:00Z", ...x });
+  const now = [e({}), e({ day: "20261006", state: "started", code: undefined }), e({ kind: "period", day: "20261007" }), e({ book: "" , day: "20261008" }), e({ bridge: "go-bbbbbb222022", day: "20261009" }), e({ day: "2026-10-10" }), e({ kind: "fill", day: "20261011", code: "tallyClosed" })];
+  const got = pickupsToSay(now, [], B);
+  assert(JSON.stringify(got) === JSON.stringify([{ book: BK, day: "2026-10-05", code: "slow" }, { book: BK, day: "2026-10-06", code: "started" }, { book: BK, day: "2026-10-11", code: "tallyClosed" }]), JSON.stringify(got));
+  assert(pickupsToSay(now, now, B).length === 0, "said before (the same word, the same time): not again");
+  assert(pickupsToSay([e({ takenAt: "2026-11-24T06:00:00Z" })], now, B).length === 1, "handed again and refused again: said again");
+  assert(pickupsToSay([e({ code: "dayRetry" })], [e({})], B).length === 1, "another word: said");
+  assert(pickupsToSay(null, null, B).length === 0 && pickupsToSay(Array.from({ length: 40 }, (_, i) => e({ day: "202610" + String(i % 28 + 1).padStart(2, "0"), takenAt: "2026-11-24T05:00:" + String(i).padStart(2, "0") + "Z" })), [], B).length === 20, "20 at most");
+});
+
+Deno.test("cleanBands: [[from, to], ...], numbers only, the last open-ended", () => {
+  assert(JSON.stringify(cleanBands([[1, 100], [101, null]])) === "[[1,100],[101,null]]", "kept");
+  assert(JSON.stringify(cleanBands([["1", "100"], [101]])) === "[[1,100],[101,null]]", "digits and an open end");
+  assert(cleanBands("x") === null && cleanBands([]) === null && cleanBands([[1, 2], "x"]) === null && cleanBands([[0, 5]]) === null && cleanBands([[1.5, 3]]) === null && cleanBands([[1, -2]]) === null, "anything else: none");
+  assert(cleanBands(Array.from({ length: 2001 }, (_, i) => [i + 1, i + 1])) === null, "2000 at most");
+});
+
+Deno.test("bandsWhole: from 1, each next right after, the last open, every head in a band", () => {
+  const H = (mids: number[]) => mids.map((m) => ["g-" + m, m, 400 + m, "Payment"]);
+  assert(bandsWhole([[1, 100], [101, 300], [301, null]], H([5, 101, 999])), "whole");
+  assert(!bandsWhole([[1, 100], [150, null]], H([5])), "a hole");
+  assert(!bandsWhole([[2, 100], [101, null]], H([5])), "not from 1");
+  assert(!bandsWhole([[1, 100], [101, 300]], H([5])), "the last not open");
+  assert(!bandsWhole([[1, 100], [90, null]], H([5])), "an overlap");
+  assert(!bandsWhole(null, H([5])) && !bandsWhole([], H([5])), "no bands: never whole");
+  assert(!bandsWhole([[1, 100], [101, null]], [["g", 0, 1, "x"]]), "a head with no MasterID");
+  assert(bandsWhole([[1, null]], []), "one band, an empty day");
 });
