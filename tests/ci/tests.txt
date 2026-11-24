@@ -680,3 +680,13 @@ run_purchase_tds_audit.js             120
 run_migration220.py                   600
 run_fbooks_rules.mjs                  120
 run_fbooks_ui.py                      600  TDSDESK_SITE=../app/dist-test
+run_dup_cloud_only.py                 240  TDSDESK_SITE=../app/dist-test
+run_sales_reads_off.py                240  TDSDESK_SITE=../app/dist-test
+run_sales_post_reply.py               600  TDSDESK_SITE=../app/dist-test
+run_legacy_room.py                    600  TDSDESK_SITE=../app/dist-test
+# Posting never stuck (next-posting-never-stuck, 23-Nov-2026): the Post page's words for a posting that waits (Tally closed,
+# the company not open, the Tally computer off; never a computer or Windows user named), and the cloud's waiting words
+post_wait_test.mjs                    60
+run_post_wait_ui.py                   240  TDSDESK_SITE=../app/dist-test
+run_post_retry_words.py               240  TDSDESK_SITE=../app/dist-test
+run_post_wait_words_ingest.py         300

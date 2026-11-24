@@ -181,10 +181,12 @@ with sync_playwright() as p:
           r5.matchedAt = old; matchTallyBook(acc, B().rows, true); render(); return [r5.state, r5.matchedAt === old]; }""")
         pg.wait_for_timeout(500)
         ok(m == ["intally", True] and "r5" not in pg.evaluate("[...document.querySelectorAll('%s')].map(t => t.dataset.rid)" % BANKROWS), look + "Bank: matched again to the same entry keeps when it was first found (30 hours ago: off the page)")
-        m = pg.evaluate("""() => { const v = SL().list.find(x => x.id === "s5"); v.dupBlock = {src: "tally", type: "Sales", number: "SI-s5", date: v.x.date, amount: 2360}; salesNearAnswer("s5");
+        # (Tally's voucher of the invoice's number, amount and customer: the same entry, In Tally; a made-up reply of Tally)
+        m = pg.evaluate("""async () => { const v = SL().list.find(x => x.id === "s5"), t = v.x.date.replace(/-/g, "");
+          const n = await salesCheckTally([v], async () => ({vouchers: [{type: "Sales", number: "SI-s5", date: t, amount: 2360, party: "Customer s5", guid: "made-up-g5"}]}));
           return [v.status, Math.abs(Date.parse(v.matchedAt) - Date.now()) < 60000]; }""")
         go(pg, "goClient('sales'); salesTabGo('done');", 1000)
-        ok(m == ["intally", True] and "SI-s5" in pg.inner_text("#app table.bk-table tbody"), look + "Sales: an invoice found in Tally now (It is this invoice) is timed and under In Tally: %s" % m)
+        ok(m == ["intally", True] and "SI-s5" in pg.inner_text("#app table.bk-table tbody"), look + "Sales: an invoice found in Tally now (the same entry in Tally) is timed and under In Tally: %s" % m)
         ctx.close()
     # ---- review 3 (24-Nov-2026): what else reads the posted entries
     for nl in (False, True):

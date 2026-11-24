@@ -131,6 +131,8 @@ input[type=search]:focus-visible, select:focus-visible, textarea:focus-visible {
 /* ux-wins: a notice with nothing waiting on it (Post to Tally's line on an empty list): calm, never red */
 .bk-alert.calm { border-color: var(--border); background: var(--surface-muted); color: var(--text-secondary); }
 .bk-alert.ok { border-color: color-mix(in oklab, var(--ok) 38%, var(--border)); background: var(--ok-soft); }
+/* a note to read, nothing wrong (the duplicate check's line on an invoice): the info tone, never amber */
+.bk-alert.info { border-color: color-mix(in oklab, var(--info) 30%, var(--border)); background: var(--info-soft); }
 
 /* the old HTML pieces (parts/Legacy.jsx): GST Annual (GSTR-9's tables), Books → Accounts (the statements) and
    Books → Audit (the Form 3CD draft). Their HTML is also the PDF's, so its inline colours are overridden here, not edited. */

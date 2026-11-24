@@ -276,7 +276,7 @@ function postJobStatesNow(cid){
       else if ((it && it.state === "unknown") || (r && r.outcomeUnknown)) { st = "unknown"; reason = (it && it.reason) || "Checking whether it reached Tally"; }
       else if (live && (!it || ["waiting", "sending", "sent"].includes(it.state))) st = "sending";
       else if (byPerson || j.status === "cancelled") st = "";
-      else if ((it && it.state === "failed") || (r && !r.ok) || j.status === "failed") { st = "refused"; reason = (it && it.reason) || plainMsg(r && r.message) || plainMsg(j.message) || "Tally did not take it"; }
+      else if ((it && it.state === "failed") || (r && !r.ok) || j.status === "failed") { st = "refused"; reason = (it && it.reason) || plainMsg(r && r.message) || (j.message ? postCloudSay(plainMsg(j.message)) : "") || "Tally did not take it"; }
       // bridge 2.1.8: a record refusal (alreadySent: the bridge's own record says it went from that computer) is not Tally's word
       out.set(id, {st, job: j, reason, alreadySent: !!(r && r.alreadySent)});
     });

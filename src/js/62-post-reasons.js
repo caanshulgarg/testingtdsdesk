@@ -19,6 +19,23 @@
 // first. kind: refused (Tally said no: status 7), stopped (nothing reached Tally: status 8), review (Tally may have it:
 // status 6). again: Post again is safe once the fix is made.
 const POST_REASONS = [
+  // the cloud's own words for a posting meant for another Tally computer (migration 54 tally_post_reroute and
+  // tally_post_stranded_words, 174, 185): plain, never a computer, a Windows user or a bridge named, never "Tally said"
+  {id: "elsewhere", kind: "stopped", again: true,
+    re: /^Not (?:posted into|queued again for) .+?: the (?:computer|FinCom Bridge) it was for \(|^Moved to .+? \(the same Windows user, the same computer\)|^Queued: posts by itself when .+ is opened in Tally on |^This posting was meant for another Tally computer/i,
+    seen: "Not posted into X: the computer it was for (…) has no FinCom Bridge that may post · the FinCom Bridge it was for (…) is set to Changes only … · Moved to … · Queued: posts by itself when X is opened in Tally on …",
+    reason: "This posting was meant for another Tally computer",
+    fix: "Post it again: it goes from the computer where this company is open in Tally."},
+  {id: "startedelsewhere", kind: "stopped", again: false,
+    re: /^(?:Not (?:posted into|queued again for) .+?: )?Started on .+?, and that FinCom Bridge can no longer post|^Held: .+? was posting this and can no longer post|^This posting was started on another Tally computer/i,
+    seen: "Started on …, and that FinCom Bridge can no longer post · Held: … was posting this and can no longer post",
+    reason: "This posting was started on another Tally computer, which can no longer post; part of it may be in Tally",
+    fix: "Check Tally first: mark posted what is there, then post the rest again; it goes from the computer where this company is open in Tally."},
+  {id: "nolink", kind: "stopped", again: true,
+    re: /^Not (?:posted into|queued again for) .+?: the link of this client no longer says where|^FinCom no longer knows where this company is kept/i,
+    seen: "Not posted into X: the link of this client no longer says where X is kept in Tally …",
+    reason: "FinCom no longer knows where this company is kept in Tally",
+    fix: "Open the company in Tally on a computer with FinCom Bridge and check the client's link on the Tally page, then post again."},
   {id: "duplicate", kind: "stopped", again: false,
     re: /FinCom id is taken|already sent from this computer on|^Already in Tally \(voucher no\.|Held as posted|is not sent to Tally again: Tally accepted|Held as duplicate|already (?:being )?posted to Tally in another posting/i,
     seen: "its FinCom id is taken · already sent from this computer on … · Already in Tally (voucher no. …) · Held as posted …",
@@ -126,6 +143,43 @@ const POST_REASONS = [
     reason: "The posting stopped before anything was sent",
     fix: "Put right what the message says, then post again."}
 ];
+// a refusal of FinCom's cloud (a Retry, a posting, Cancel, Dismiss), for a toast or the row: never a computer or a Windows
+// user named (review of b3a99b3a8). Its words for another Tally computer (migrations 54, 174, 185: "Not queued again for X:
+// the FinCom Bridge it was for (PC · user) …", "…: Started on PC · user …", the link): the plain reason; "Nobody can post
+// into X …" (tally_post_nobody_words, tally_post_own_words) without the bridges listed; any other naming a computer the
+// app knows: plain (postWaitMsg)
+function postCloudSay(m){
+  const s = postReasonText(m), r = POST_REASONS.find(x => /^(elsewhere|startedelsewhere|nolink)$/.test(x.id) && x.re.test(s));
+  if (r) return r.reason + ". " + r.fix;
+  const t = s.replace(/(that (?:has|have) it open|a computer that may post|your FinCom Bridge) \([^)]*\)/g, "$1");
+  return postNameScrub(t) || "FinCom\u2019s cloud did not do it. Open the company in Tally on a computer with FinCom Bridge, then try again.";
+}
+// the firm's computers' and Windows users' names (the computer keys, TLight and the Tally page's beats), whole words only,
+// never a common word ("Admin", "Tally", "PC", …, which ordinary posting words also use): {name (lower case): "pc"|"user"}
+const POST_COMMON = new Set("admin administrator tally user users owner pc desktop laptop office accounts account guest server home default public computer system staff fincom bridge windows the and for not you your this that with from".split(" "));
+function postNamesKnown(devs){
+  const out = new Map(), one = (x, k) => { const t = String(x || "").trim().toLowerCase(); if (t.length >= 3 && !POST_COMMON.has(t) && !out.has(t)) out.set(t, k); };
+  const add = (x, k) => { const s = String(x || ""); one(s, k); s.split(" \u00b7 ").forEach((p, i) => { one(p, i ? "user" : k); if (p.includes("\\")) one(p.split("\\").pop(), "user"); }); };
+  (devs || [].concat((typeof TLight === "object" && TLight.st && TLight.st.devs) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices) || [])).forEach(d => {
+    if (!d) return; const i = d.info || {}; add(d.name, "pc"); add(i.computer, "pc"); add(i.user, "user");
+    Object.values(i.bridges || {}).forEach(b => { add(b && b.computer, "pc"); add(b && b.user, "user"); }); });
+  return out;
+}
+// a message with no computer or Windows user named in it, the rest of its words kept (review of bb00ebcee): a bracket
+// naming one ("(PC · DOMAIN\\user)", "(D:\\TallyData)") left out, a name the app knows said "the Tally computer" or "the
+// Windows user". The companies' own names (keep, and the firm's clients) are never cut, even when a computer is called so
+function postNameScrub(m, keep, devs){
+  let s = String(m == null ? "" : m); if (!s) return "";
+  const names = postNamesKnown(devs), lc = () => s.toLowerCase(), w = c => /[\p{L}\p{N}_]/u.test(c || ""), hold = [];
+  const cos = [].concat(keep || [], Object.values((typeof S === "object" && S && S.companies) || {}).flatMap(c => [c && c.name, c && c.tallyName])).map(x => String(x || "").trim()).filter(x => x.length >= 3).sort((a, b) => b.length - a.length);
+  // (each name put in a mark first, so no word put in is looked at again)
+  const mark = t => { hold.push(t); return "\u0001" + (hold.length - 1) + "\u0002"; };
+  cos.forEach(c => { for (let i = lc().indexOf(c.toLowerCase()); i >= 0; i = lc().indexOf(c.toLowerCase(), i + 1)){ const k = mark(s.slice(i, i + c.length)); s = s.slice(0, i) + k + s.slice(i + c.length); } });
+  const has = (t, n, f) => { const l = t.toLowerCase(); for (let i = l.indexOf(n, f || 0); i >= 0; i = l.indexOf(n, i + 1)) if (!w(l[i - 1]) && !w(l[i + n.length])) return i; return -1; };
+  s = s.replace(/ ?\(([^()]*)\)/g, (a, x) => / \u00b7 |\\|[A-Z]:\\/.test(x) || [...names.keys()].some(n => has(x, n) >= 0) ? "" : a);
+  [...names.keys()].sort((a, b) => b.length - a.length).forEach(n => { for (let i = has(s, n); i >= 0; i = has(s, n, i + 1)){ const k = mark(names.get(n) === "user" ? "the Windows user" : "the Tally computer"); s = s.slice(0, i) + k + s.slice(i + n.length); } });
+  return s.replace(/\u0001(\d+)\u0002/g, (a, i) => hold[+i]).replace(/\s+([,.;:])/g, "$1").replace(/\s{2,}/g, " ").trim();
+}
 // HTML entities in a message (the bridge's XML words) without the page (plainMsg needs a document)
 function postReasonText(m){
   return String(m == null ? "" : m).replace(/&#13;|&#10;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim()
@@ -320,13 +374,20 @@ function postStatus(entry, job, ids, marks, ctx){
         live && !acc ? null : {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live});
     }
     if (live){
-      if (job.status === "waiting" || (it && it.state === "waiting" && job.status !== "running")) return mk(4, (ctx.queue ? "Number " + ctx.queue + " in the queue" : "In the queue") + ": " + (postReasonText(job.message) || "waiting for the Tally computer to take it") + ".", job.status === "waiting" ? {kind: "cancel", label: "Cancel"} : null);
-      return mk(5, "Tally is taking it now" + (job.message && !/^Taken by|^Posting$/i.test(job.message) ? " (" + postReasonText(job.message) + ")" : "") + ". Nothing to do.", null);
+      // next-posting-never-stuck: what its bridge said last (Tally closed, the company not open, the Tally computer off:
+      // "Tally is closed. Open Tally and <company>", no computer or Windows user named; app/src/lib/postWait.js), first
+      // (review of 76d6c030e: Tally busy is no stop: a running posting is still being taken; the posting's own words
+      // without a computer or Windows user named in them, postWaitMsg)
+      const wait = typeof postWaitWhy === "function" ? postWaitWhy(job) : "", busy = /^Tally is busy/.test(wait), msg = typeof postWaitMsg === "function" ? postWaitMsg(job) : job.message;
+      if (job.status === "waiting" || (it && it.state === "waiting" && job.status !== "running")) return mk(4, (ctx.queue ? "Number " + ctx.queue + " in the queue" : "In the queue") + ": " + (wait || (postReasonText(msg) || "waiting for the Tally computer to take it").replace(/\.?$/, ".")), job.status === "waiting" ? {kind: "cancel", label: "Cancel"} : null);
+      if (wait && !busy) return mk(5, "Stopped part-way: " + wait, null);
+      return mk(5, "Tally is taking it now" + (msg && !/^Taken by|^Posting$/i.test(msg) ? " (" + postReasonText(msg) + ")" : "") + ". Nothing to do.", null);
     }
     if (backInReview) return null;
     if (job.status === "cancelled"){
-      const why = postReasonText(job.message) || "cancelled";
-      const cr0 = postReasonFor(why) || null, late0 = cr0 && cr0.again === false;
+      // (the cloud's words for another Tally computer, migration 54 and after: said plainly, no computer or user named)
+      const why0 = postReasonText(job.message) || "cancelled", rr = postReasonFor(why0), why = rr && /^(elsewhere|startedelsewhere|nolink)$/.test(rr.id) ? rr.reason + ". " + rr.fix.replace(/\.$/, "") : why0;
+      const cr0 = rr || null, late0 = cr0 && cr0.again === false;
       // migration 174 (sixth review): of a posting cancelled after it may have reached Tally, an entry whose id the cancel
       // freed (Tally clearly refused it) is posted again as any cancelled entry; only one whose id stays live is settled
       // (no id row known: settled, the safe side). The register's word comes first (seventh review): needs_review is
@@ -590,7 +651,7 @@ const PostFlags = {
     } catch (e){
       const m = String((e && e.message) || e);
       if (this.missing(m)){ this.ok = false; toast("FinCom's cloud is not ready for this yet (migration 49)."); }
-      else toast(m.replace(/^ERROR:\s*/i, ""));
+      else toast(postCloudSay(m.replace(/^ERROR:\s*/i, "")));
       if (typeof render === "function") render();
       return false;
     }

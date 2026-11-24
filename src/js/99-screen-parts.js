@@ -247,13 +247,6 @@ function salesVtAnswer(t){ const s = SL(); if (!s || !t) return; s.cfg.voucherTy
 // the notice of a type learnt from the books, shown until the person closes it or presses Change
 function salesVtNoticeDone(open){ const s = SL(); if (!s) return; if (s.cfg.vtNotice) s.cfg.vtNotice.seen = new Date().toISOString(); if (open) s.showSettings = true; saveSales({cfg: true}); render(); }
 // ---- from src/js/26-sales-from-a-marketplace.js
-// "It is this invoice": the Tally voucher of this number (another amount) is this invoice: In Tally, never posted
-function salesNearAnswer(id){
-  const s = SL(), v = inv(id), m = v && v.dupBlock; if (!m || m.src === "fincom" || !["review", "ready"].includes(v.status)) return;
-  delete v.dupBlock; v.status = "intally"; v.matchedAt = new Date().toISOString(); v.postNote = "Already in Tally"; v.tallyMatch = m;
-  auditEvent("sales_tally_same", "Invoice " + (v.x.number || v.id) + ": the Tally voucher " + [m.type, m.number, m.date, m.amount].join(" ") + " is this invoice", s.cid);
-  saveSales(); render();
-}
 function salesSearch(q){ const s = SL(); s.q = q; s.sticky.clear(); FinComReact.redraw(); later("sq", render, 250); }
 function salesToggle(id, on, shift){
   const s = SL();
@@ -1454,7 +1447,6 @@ if (typeof SALES_UNITS !== "undefined") globalThis.SALES_UNITS = SALES_UNITS;
 if (typeof taxLedgerFor !== "undefined") globalThis.taxLedgerFor = taxLedgerFor;
 if (typeof salesVtAnswer !== "undefined") globalThis.salesVtAnswer = salesVtAnswer;
 if (typeof salesVtNoticeDone !== "undefined") globalThis.salesVtNoticeDone = salesVtNoticeDone;
-if (typeof salesNearAnswer !== "undefined") globalThis.salesNearAnswer = salesNearAnswer;
 if (typeof salesSearch !== "undefined") globalThis.salesSearch = salesSearch;
 if (typeof salesToggle !== "undefined") globalThis.salesToggle = salesToggle;
 if (typeof salesSetCust !== "undefined") globalThis.salesSetCust = salesSetCust;
