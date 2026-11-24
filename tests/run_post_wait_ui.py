@@ -75,6 +75,15 @@ with sync_playwright() as p:
             t = pg.evaluate(TXT)
             ok("Still waiting after 6 hours (since 23-Nov-2026 10:00 IST) for the Tally computer that started it. Open Demo Builders Pvt Ltd in Tally there." in t and "PC-DEMO1" not in t and "asha" not in t, "4a words: plain, no names")
             shot(pg, "desktop-post-wait-4a-plain")
+            print("2c. failed and cancelled in the cloud's words for another Tally computer (migration 54 and after): plain, no names")
+            M54 = "Not posted into Demo Builders Pvt Ltd: the FinCom Bridge it was for (PC-DEMO1 · DEMO\\asha) is set to Changes only, and no other bridge of the same Windows user on that computer may post. Ask the firm's owner to switch Changes only off for that bridge (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post."
+            for st in ("failed", "cancelled"):
+                pg.evaluate("([m, st]) => { const j = CloudJobs.list[0]; j.status = st; j.message = m; j.items.forEach(i => { i.state = st; }); S.postTabs = {[S.coId]: 'errors'}; render(); }", [M54, st]); pg.wait_for_timeout(700)
+                t = pg.evaluate(TXT)
+                ok("meant for another Tally computer" in t and "PC-DEMO1" not in t and "asha" not in t and "Tally said" not in t and "Changes only" not in t, "%s: plain words, no names, Tally not blamed (%s)" % (st, t[t.find("Demo Builders"):][:300]))
+                ok(pg.locator("#app [data-show-reply]").count() == 0, "%s: no \u201cShow Tally's reply\u201d: they are the cloud's words, with the names" % st)
+                shot(pg, "desktop-post-%s-another-computer" % st)
+            pg.evaluate("() => { const j = CloudJobs.list[0]; j.status = 'waiting'; j.items.forEach(i => { i.state = 'waiting'; }); S.postTabs = {[S.coId]: 'topost'}; render(); }"); pg.wait_for_timeout(400)
             print("3. Home: no new box, the figure as before")
             pg.evaluate("() => { S.view = 'home'; navHome('today'); render(); }"); pg.wait_for_timeout(1200)
             ok(pg.locator("[data-post-needs]").count() == 0, "Home: no extra warning box")

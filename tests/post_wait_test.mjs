@@ -68,9 +68,41 @@ x = at([dev(OPEN)], job({ status: "running", items: [], message: "Started on PC-
 ok(x.todo.startsWith("Tally is taking it now") && !/PC-DEMO1|asha/.test(x.todo), "running, 'Started on <computer>': no names (" + x.todo + ")");
 x = at([dev(OPEN)], job({ message: "Waiting at PC-DEMO1 for Tally" }));
 ok(!/PC-DEMO1/.test(x.todo), "any words naming its computer: not shown (" + x.todo + ")");
+x = at([dev(OPEN)], job({ target_bridge: null, taken_by: null, message: "Queued: posts by itself when Demo Builders Pvt Ltd is opened in Tally on DESK-OTHER7 (D:\\TallyData) with FinCom Bridge" }));
+ok(/posts by itself when Demo Builders Pvt Ltd is opened in Tally/.test(x.todo) && !/DESK-OTHER7|TallyData/.test(x.todo), "queued for no computer (migration 185): no computer or folder named (" + x.todo + ")");
 console.log("5. an old bridge: no new warning (the owner: no warnings in posting)");
 x = at([dev({ tallyState: "open", tally: true, open: ["Demo Builders Pvt Ltd"], version: "2.5.1" })], job({ message: "Waiting for the Tally computer" }));
 ok(!/old version|Update FinCom Bridge/.test(x.todo), "an old bridge after 30 minutes: the posting's own words (" + x.todo + ")");
 console.log("6. no computer or Windows user named");
 ok(said.every((t) => !/PC-DEMO1|asha|DEMO\\/.test(t)), "none of the words names PC-DEMO1 or asha");
+console.log("6b. a posting failed or cancelled in the cloud's words for another Tally computer (migration 54 and after): plain, no names");
+const M54 = "Not posted into Demo Builders Pvt Ltd: the FinCom Bridge it was for (PC-DEMO1 · DEMO\\asha) is set to Changes only, and no other bridge of the same Windows user on that computer may post. Ask the firm's owner to switch Changes only off for that bridge (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post.";
+for (const s of ["failed", "cancelled"]) {
+  x = at([], job({ status: s, message: M54, items: [{ id: "stmdemo1-0", state: s }] }));
+  ok(/meant for another Tally computer/.test(x.todo) && /where this company is open/.test(x.todo) && !/PC-DEMO1|asha|Tally said|Changes only/.test(x.todo), s + ": " + x.todo);
+}
+console.log("7. names are matched as whole words, and common words are never taken for a name");
+const devN = (o) => ({ id: "d2", name: o.name, info: { computer: o.computer, user: o.user, beat: { at: ago(0) }, bridges: { "go-aaa111": { at: ago(0.5), computer: o.computer, user: o.user, tallyState: "open", tally: true, open: ["Demo Builders Pvt Ltd"] } } } });
+for (const [label, d, m, keep] of [
+  ["a user 'Ram' and the word Programme", { name: "RAMPC", computer: "RAMPC", user: "Ram" }, "Posting into Programme Demo Ltd: waiting for the Tally computer", true],
+  ["a computer named Admin", { name: "Admin", computer: "Admin", user: "Administrator" }, "Waiting for the admin to open Tally on the Tally computer", true],
+  ["a user named Tally, a computer named PC", { name: "PC", computer: "PC", user: "Tally" }, "Waiting for the Tally computer to answer", true],
+  ["a user named Owner", { name: "OWNER-PC", computer: "OWNER-PC", user: "Owner" }, "Waiting until the owner allows posting", true],
+  ["the computer named as a word", { name: "RAMPC", computer: "RAMPC", user: "DEMO\\ram" }, "Waiting at RAMPC for Tally", false],
+  ["the Windows user named alone", { name: "RAMPC", computer: "RAMPC", user: "DEMO\\ram" }, "Waiting for ram to open Tally", false]]) {
+  x = at([devN(d)], job({ message: m }));
+  ok(keep ? x.todo.includes(m) : !x.todo.includes(m), label + ": " + (keep ? "kept" : "left out") + " (" + x.todo + ")");
+}
+console.log("8. the Tally computer off: by the bridge's own beat interval and this computer's clock");
+const devB = (b, every) => ({ id: "d3", name: "PC-DEMO3", info: { computer: "PC-DEMO3", beat: { at: ago(0), every }, bridges: { "go-aaa111": Object.assign({ at: ago(4), computer: "PC-DEMO3", user: "DEMO\\asha", tallyState: "closed", tally: false, open: [] }, b) } } });
+x = at([devB({}, 300)]);
+ok(!/is off/.test(x.todo) && /Tally is closed/.test(x.todo), "a beat every 5 minutes, last 4 minutes ago: not off (" + x.todo + ")");
+x = at([devB({ at: ago(20) }, 300)]);
+ok(/The Tally computer is off/.test(x.todo), "a beat every 5 minutes, last 20 minutes ago: off (" + x.todo + ")");
+x = at([devB({}, 60)]);
+ok(/The Tally computer is off/.test(x.todo), "a beat every minute, last 4 minutes ago: off (" + x.todo + ")");
+globalThis.TallyClock = { skew: () => 10 * 60000 };
+x = at([devB({ at: ago(11) }, 60)]);
+ok(!/is off/.test(x.todo), "this computer's clock 10 minutes ahead, a beat a minute ago by the cloud's clock: not off (" + x.todo + ")");
+delete globalThis.TallyClock;
 console.log(fails ? "\nFAILED: " + fails : "\nall passed"); process.exit(fails ? 1 : 0);

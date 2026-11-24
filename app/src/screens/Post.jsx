@@ -283,7 +283,9 @@ function Line2({ x, owner }) {
 function RawReply({ x }) {
   const [open, setOpen] = useState(false);
   const raw = typeof postReplyRaw === "function" ? postReplyRaw(x.r, x.it) || (x.st.reason && x.st.reason.said) || "" : "";
-  if (!raw) return null;
+  // (the cloud's words for a posting meant for another Tally computer, migration 54 and after: not Tally's, and they name
+  // the computer and its Windows user, so never shown: src/js/62-post-reasons.js)
+  if (!raw || /^(elsewhere|startedelsewhere|nolink)$/.test((x.st.reason && x.st.reason.id) || "")) return null;
   return <>{" "}<button className="linkbtn" data-show-reply="" onClick={() => setOpen(!open)}>{open ? "Hide Tally's reply" : "Show Tally's reply"}</button>
     {open && <pre className="pe-raw" data-reply-raw="">{raw}</pre>}</>;
 }

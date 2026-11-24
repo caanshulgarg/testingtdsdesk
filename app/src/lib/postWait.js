@@ -1,13 +1,12 @@
 // Why a posting of FinCom's cloud still waits, for the Post page's words (src/js/62-post-reasons postStatus codes 4 and 5;
 // next-posting-never-stuck). Read from what the posting's own bridge said in its last beat (tally_devices.info.bridges, as
 // TLight and the Tally page read them): Tally closed, the company not open in its Tally, the Tally computer off (the bridge
-// not heard from for 3 minutes) or Tally busy. "" when the beat explains nothing: the posting's own words then. The owner
+// not heard from for three of its own beats, as devState says offline) or Tally busy. "" when the beat explains nothing: the posting's own words then. The owner
 // (23-Nov-2026): "warnings say just 'Tally is closed'", plain and short, no computer and no Windows user named, and no new
 // warnings in posting (an old bridge is allowed and not said). The cloud's 2-hour "restart FinCom Bridge" is never shown while
 // the bridge says Tally is closed. Its own file, with the Post page's (nothing of it in legacy.js).
 import { tallyDevs } from "./tallyState.js";
 
-const BEAT_MS = 3 * 60000;
 const norm = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
 
 // the posting's bridge as its computer last told the cloud: {online, tally, open} or null
@@ -17,8 +16,11 @@ function bridgeOf(job, devs, now) {
   for (const d of devs) {
     const b = (((d && d.info) || {}).bridges || {})[id];
     if (!b) continue;
-    const at = Date.parse(b.at || "") || 0;
-    return { online: !!at && now - at < BEAT_MS, tally: b.tallyState || (b.tally ? "open" : "closed"), open: [].concat(b.open || []) };
+    // (as src/js/49 devState: the bridge's own beat interval, 10 s to 10 minutes, 60 s when not said; its time from the
+    // cloud's clock, corrected for this computer's (TallyClock); off after three beats missed and 30 s more)
+    const at = Date.parse(b.at || "") || 0, every = Math.max(10, Math.min(600, Number(b.every || ((d.info || {}).beat || {}).every) || 60));
+    const skew = typeof TallyClock === "object" && TallyClock && TallyClock.skew ? TallyClock.skew() : 0, seen = Math.min(now, at + skew);
+    return { online: !!at && now - seen <= (3 * every + 30) * 1000, tally: b.tallyState || (b.tally ? "open" : "closed"), open: [].concat(b.open || []) };
   }
   return null;
 }
@@ -41,10 +43,15 @@ const NAMED = [
   [/^Still waiting after 6 hours \(since ([^)]*)\) for .+?, which started it .*?Open (.+) in Tally there\.?$/s, (m) => "Still waiting after 6 hours (since " + m[1] + ") for the Tally computer that started it. Open " + m[2] + " in Tally there"],
   [/^Started on .+?, and that FinCom Bridge can no longer post/s, () => "The FinCom Bridge that started it can no longer post. Check in Tally: Mark posted what is there, then post the rest again"],
   [/^Moved to .+? \(the same Windows user, the same computer\)/s, () => "Moved to another FinCom Bridge on the same computer: the bridge it was for can no longer post"],
+  [/^Queued: posts by itself when (.+) is opened in Tally on .+? with FinCom Bridge\.?$/s, (m) => "Queued: posts by itself when " + m[1] + " is opened in Tally on a computer with FinCom Bridge"],
   [/^Held: .+? was posting this and can no longer post/s, () => "Held: the FinCom Bridge that was posting this can no longer post; how far it got is not known. Check in Tally: Mark posted what is there, release the rest (Not in Tally)"],
 ];
+// (whole words only, and never a common word a computer or a Windows user may be called: "Admin", "Tally", "PC", …,
+// which ordinary posting words also use; a Windows user "DOMAIN\\name" also by its name alone, a "computer · user" by each)
+const COMMON = new Set(["admin", "administrator", "tally", "user", "users", "owner", "pc", "desktop", "laptop", "office", "accounts", "account", "guest", "server", "home", "default", "public", "computer", "system", "staff", "fincom", "bridge", "windows"]);
 function namesOf(devs) {
-  const out = new Set(), add = (x) => { const t = String(x || "").trim(); if (t.length >= 3) out.add(t.toLowerCase()); };
+  const out = new Set(), one = (x) => { const t = String(x || "").trim().toLowerCase(); if (t.length >= 3 && !COMMON.has(t)) out.add(t); };
+  const add = (x) => { const s = String(x || ""); one(s); for (const p of s.split(" \u00b7 ")) { one(p); if (p.includes("\\")) one(p.split("\\").pop()); } };
   for (const d of devs || []) {
     add(d && d.name); const i = (d && d.info) || {}; add(i.computer); add(i.user);
     for (const b of Object.values(i.bridges || {})) { add(b && b.computer); add(b && b.user); }
@@ -54,8 +61,9 @@ function namesOf(devs) {
 export function postWaitMsg(job, devs) {
   const m = String((job && job.message) || "");
   for (const [re, f] of NAMED) { const x = m.match(re); if (x) return f(x); }
-  const lc = m.toLowerCase();
-  for (const n of namesOf(devs || tallyDevs())) if (lc.includes(n)) return "";
+  const lc = m.toLowerCase(), word = (n) => { let i = lc.indexOf(n); const w = (c) => /[\p{L}\p{N}_]/u.test(c || "");
+    for (; i >= 0; i = lc.indexOf(n, i + 1)) if (!w(lc[i - 1]) && !w(lc[i + n.length])) return true; return false; };
+  for (const n of namesOf(devs || tallyDevs())) if (word(n)) return "";
   return m;
 }
 if (typeof window === "object") window.postWaitMsg = (job) => { try { return postWaitMsg(job); } catch (e) { return ""; } };

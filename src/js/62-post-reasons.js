@@ -19,6 +19,23 @@
 // first. kind: refused (Tally said no: status 7), stopped (nothing reached Tally: status 8), review (Tally may have it:
 // status 6). again: Post again is safe once the fix is made.
 const POST_REASONS = [
+  // the cloud's own words for a posting meant for another Tally computer (migration 54 tally_post_reroute and
+  // tally_post_stranded_words, 174, 185): plain, never a computer, a Windows user or a bridge named, never "Tally said"
+  {id: "elsewhere", kind: "stopped", again: true,
+    re: /^Not posted into .+?: the (?:computer|FinCom Bridge) it was for \(|^Moved to .+? \(the same Windows user, the same computer\)|^Queued: posts by itself when .+ is opened in Tally on /i,
+    seen: "Not posted into X: the computer it was for (…) has no FinCom Bridge that may post · the FinCom Bridge it was for (…) is set to Changes only … · Moved to … · Queued: posts by itself when X is opened in Tally on …",
+    reason: "This posting was meant for another Tally computer",
+    fix: "Post it again: it goes from the computer where this company is open in Tally."},
+  {id: "startedelsewhere", kind: "stopped", again: false,
+    re: /^Started on .+?, and that FinCom Bridge can no longer post|^Held: .+? was posting this and can no longer post/i,
+    seen: "Started on …, and that FinCom Bridge can no longer post · Held: … was posting this and can no longer post",
+    reason: "This posting was started on another Tally computer, which can no longer post; part of it may be in Tally",
+    fix: "Check Tally first: mark posted what is there, then post the rest again; it goes from the computer where this company is open in Tally."},
+  {id: "nolink", kind: "stopped", again: true,
+    re: /^Not posted into .+?: the link of this client no longer says where/i,
+    seen: "Not posted into X: the link of this client no longer says where X is kept in Tally …",
+    reason: "FinCom no longer knows where this company is kept in Tally",
+    fix: "Open the company in Tally on a computer with FinCom Bridge and check the client's link on the Tally page, then post again."},
   {id: "duplicate", kind: "stopped", again: false,
     re: /FinCom id is taken|already sent from this computer on|^Already in Tally \(voucher no\.|Held as posted|is not sent to Tally again: Tally accepted|Held as duplicate|already (?:being )?posted to Tally in another posting/i,
     seen: "its FinCom id is taken · already sent from this computer on … · Already in Tally (voucher no. …) · Held as posted …",
@@ -331,8 +348,9 @@ function postStatus(entry, job, ids, marks, ctx){
     }
     if (backInReview) return null;
     if (job.status === "cancelled"){
-      const why = postReasonText(job.message) || "cancelled";
-      const cr0 = postReasonFor(why) || null, late0 = cr0 && cr0.again === false;
+      // (the cloud's words for another Tally computer, migration 54 and after: said plainly, no computer or user named)
+      const why0 = postReasonText(job.message) || "cancelled", rr = postReasonFor(why0), why = rr && /^(elsewhere|startedelsewhere|nolink)$/.test(rr.id) ? rr.reason + ". " + rr.fix.replace(/\.$/, "") : why0;
+      const cr0 = rr || null, late0 = cr0 && cr0.again === false;
       // migration 174 (sixth review): of a posting cancelled after it may have reached Tally, an entry whose id the cancel
       // freed (Tally clearly refused it) is posted again as any cancelled entry; only one whose id stays live is settled
       // (no id row known: settled, the safe side). The register's word comes first (seventh review): needs_review is
