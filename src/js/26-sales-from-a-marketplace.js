@@ -384,7 +384,7 @@ async function postSalesRun(){
   const s = SL(), co = CO(s.cid);
   if (!(await ensureTallyCompany(co))) return;
   await syncLedgersFromTally(true);
-  let list = salesPostScope(s.list.filter(v => v.status === "ready"));
+  let list = salesPostScope(s.list.filter(v => v.status === "ready" && !(typeof salesJobLive === "function" && salesJobLive(v))));
   if (!list.length) return withPart("invoice", "salesWhy", () => toast("No invoice is ready to post" + (salesWhy() ? ": " + salesWhy().text : "") + "."));   // never silent
   s.busy = "Checking FinCom\u2019s copy of Tally for invoices already booked\u2026"; render();
   try {

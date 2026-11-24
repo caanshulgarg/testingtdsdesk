@@ -112,7 +112,8 @@ const CloudPost = {
     const resultsOf = at => ids.filter(jobOf).map(x => {
       const jj = (at && jobOf(x) === id ? at : rows.get(jobOf(x))) || {}, got = [].concat(jj.results || []).find(y => y.id === x);
       // (24-Nov-2026) an earlier posting's answer is said to be one: never a new posting of the entry
-      if (got) return jobOf(x) === own ? got : Object.assign({}, got, {earlier: jobOf(x)});
+      // (only a posting already settled, done or failed, when this one was queued; one still going posts it itself)
+      if (got) return jobOf(x) !== own && dup.has(x) && ["done", "failed"].includes(dup.get(x).status) && !dup.get(x).resend ? Object.assign({}, got, {earlier: jobOf(x)}) : got;
       const o = {id: x, ok: false, job: jobOf(x), status: jj.status};
       if (!fin(jj)) return Object.assign(o, {held: true, message: (!jj.status ? "Not heard from the cloud for 30 minutes" : jj.status === "waiting" ? waits(jj) : "Being posted " + (dup.has(x) ? "in an earlier posting" : "on the Tally computer")) + ": it stays queued and posts by itself."});
       if (dup.has(x) && jj.status === "done") return Object.assign(o, {held: true, message: "Already posted in an earlier posting (it stays queued there until its result is marked here); not sent twice."});

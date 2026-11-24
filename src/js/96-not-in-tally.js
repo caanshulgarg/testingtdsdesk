@@ -13,12 +13,18 @@
 //   nothing there, the copy not up to date since the posting's send or Tally's acceptance newer than its deletion
 //     ("unsure": a stale copy never releases an entry that may be in Tally), or the cloud cannot answer yet: said plainly,
 //     in the cloud's own words; nothing is sent.
-// On the Post press (salesEarlier, from postSalesRun), and by "Not in Tally? Post again" on a posted invoice, bill or bank
-// line (the same rule, for one marked posted before this).
+// On the Post press (salesEarlier from postSalesRun; postEarlier from the bills' and bank lines' posting), and by "Not in
+// Tally? Post again" on a posted invoice, bill or bank line (the same rule, for one marked posted before this). The review
+// of 24-Nov-2026: Posted only when the copy has it as a regular entry, or when that earlier posting was taken by Tally and
+// the copy has nothing of it; otherwise the entry keeps its state with the words as its red note (a failed earlier
+// posting is never called posted). A client posting Optional vouchers by its setting: the Optional voucher IS the
+// posting, so nothing is asked and nothing sent again.
 const NotInTally = {
   busy: {},
   LABEL: "Not in Tally? Post again",
   on(id){ return !!this.busy[String(id)]; },
+  // a client whose bills and invoices go to Tally as Optional vouchers by its setting (Client setup)
+  optional(co){ return !!(co && co.createOptional); },
   fid(id){ return String(id || "").replace(/[^A-Za-z0-9]/g, ""); },
   // the posting that holds the entry's FinCom id (live), else ""
   async holder(co, fid){
@@ -27,12 +33,12 @@ const NotInTally = {
   },
   // the cloud decides by its copy: {state: optional|deleted|cancelled (sent again), there, none, elsewhere, busy, blocked,
   // notready, unable; resent, vno, vtype, day, words}
-  async resend(job, id){
+  async resend(job, id, kind){
     let r;
     try { r = await TCloud.rpc("tally_post_copy_resend", {p_job: job, p_id: String(id)}); }
     catch (e){
       const m = String((e && e.message) || e);
-      if (/tally_post_copy_resend|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m)) return {state: "notready", words: "FinCom's cloud cannot decide this from its copy of Tally yet (migration 219), so nothing was sent."};
+      if (/tally_post_copy_resend|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m)) return {state: "notready", words: "FinCom can't check this yet. Nothing was sent."};
       return {state: "unable", words: "FinCom's cloud did not answer (" + plainMsg(m) + "), so nothing was sent."};
     }
     r = r || {};
@@ -41,6 +47,7 @@ const NotInTally = {
     let words;
     if (r.resent) words = what + ": sent again. It posts by itself; FinCom marks it when Tally answers.";
     else if (r.released) words = what + ": " + (plainMsg(r.error) || "released, not sent yet.");
+    else if (st === "none") words = "FinCom's copy of Tally doesn't have this " + (kind || "entry") + ", so it can't tell. Nothing was sent.";
     else if (st === "there") words = "In Tally (FinCom's copy: " + [r.vtype, r.vno ? "no. " + r.vno : "", r.day ? "of " + fmtDate(String(r.day).slice(0, 10)) : ""].filter(Boolean).join(" ") + "), posted before by FinCom; nothing was sent.";
     else words = plainMsg(r.error) || "Nothing was sent.";
     return Object.assign({}, r, {state: st, words});
@@ -49,13 +56,14 @@ const NotInTally = {
   async run(o){
     const k = String(o.id);
     if (this.busy[k]) return null;
+    if (this.optional(o.co)){ toast("This client posts Optional vouchers by its setting, so the Optional voucher in Tally is the posting itself. Nothing was sent."); return null; }
     if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(o.co.id))){ toast("FinCom keeps no copy of this client's Tally books, so it cannot tell whether " + o.what + " is in Tally. Nothing was sent."); return null; }
     this.busy[k] = true; render();
     try {
       let job = "";
       try { job = await this.holder(o.co, o.fid || this.fid(o.id)); } catch (e){ toast("FinCom's cloud could not be read (" + plainMsg(e.message) + "). Nothing was sent."); return null; }
       if (!job){ toast("No posting of FinCom holds " + o.what + " now, so there is nothing to release. Nothing was sent."); return null; }
-      const r = await this.resend(job, o.id);
+      const r = await this.resend(job, o.id, o.kind);
       if (r.resent && o.sent) o.sent(r, job);
       if (r.state === "there" && o.there) o.there(r);
       toast(o.what.charAt(0).toUpperCase() + o.what.slice(1) + ": " + r.words);
@@ -64,31 +72,72 @@ const NotInTally = {
   }
 };
 const salesWhen = (r) => { const t = Date.parse((r && r.sentAt) || ""); return t ? new Date(t).toISOString() : ""; };
-// the Post press: the invoices an earlier posting holds ([invoice, that posting's answer]); returns the words for the message
+// what the Post press does with an entry an earlier posting holds (r: that posting's answer; d: the cloud's decision, or
+// null for a client posting Optional vouchers by its setting): sent (queued on that posting again), posted (posted before:
+// in Tally by the copy, or Tally took that posting and the copy has nothing of it), or keep (its state kept, the words as
+// its red note: that posting's own words when it failed)
+function earlierWay(r, d){
+  if (d && d.resent) return {way: "sent", words: d.words};
+  if (d && d.state === "there") return {way: "posted", there: true, words: d.words};
+  if ((!d || d.state === "none") && r && r.ok && postTaken(r)) return {way: "posted", words: d ? d.words : ""};
+  return {way: "keep", words: (r && !r.ok && plainMsg(r.message)) || (d && d.words) || "Not sent again."};
+}
+// the words of the Post press for those entries (n: {sent, there, posted, keep}), plain and counted
+function earlierLine(n, what){
+  const c = k => n[k] + " " + what + (n[k] === 1 ? " was" : "s were");
+  return [n.sent ? c("sent") + " posted before by FinCom and " + (n.sent === 1 ? "is" : "are") + " not in the books: sent again, " + (n.sent === 1 ? "it posts" : "they post") + " by " + (n.sent === 1 ? "itself" : "themselves") : "",
+    n.there ? c("there") + " posted before by FinCom and " + (n.there === 1 ? "is" : "are") + " in Tally: not sent again" : "",
+    n.posted ? c("posted") + " posted before by FinCom and not sent again" : "",
+    n.keep ? n.keep + " not sent: see the red note on " + (n.keep === 1 ? "it" : "each") : ""].filter(Boolean).join("; ");
+}
+// the Post press (sales): the invoices an earlier posting holds ([invoice, that posting's answer]); returns the words
 async function salesEarlier(early, co){
-  let resent = 0, there = 0, held = 0;
+  const n = {sent: 0, there: 0, posted: 0, keep: 0};
   for (const [v, r] of early){
-    const d = await NotInTally.resend(r.earlier, v.id);
-    if (d.resent){
-      resent++; v.postJob = r.earlier; v.postError = d.words; v.postNote = "";
-    } else {
-      // posted before by FinCom (that posting's own date); in Tally by the copy, or not sent again for the reason said
+    const d = NotInTally.optional(co) ? null : await NotInTally.resend(r.earlier, v.id, "invoice"), w = earlierWay(r, d);
+    n[w.there ? "there" : w.way]++;
+    if (w.way === "sent"){ v.postJob = r.earlier; v.postError = w.words; v.postNote = ""; delete v.postWhy; }
+    else if (w.way === "posted"){
       v.status = "posted"; v.postedAt = salesWhen(r) || v.postedAt || new Date().toISOString(); v.postError = ""; v.postedInto = r.company || "";
-      v.postedOptional = false; delete v.postJob;
-      if (d.state === "there"){ there++; v.postNote = "Posted before by FinCom; in Tally"; v.tallyMatch = {number: String(d.vno || ""), date: String(d.day || ""), type: String(d.vtype || "")}; }
-      else { held++; v.postNote = "Posted before by FinCom, not sent again"; v.postWhy = d.words; }
-    }
+      v.postedOptional = NotInTally.optional(co); delete v.postJob;
+      if (w.there){ v.postNote = "Posted before by FinCom; in Tally"; delete v.postWhy; v.tallyMatch = {number: String(d.vno || ""), date: String(d.day || ""), type: String(d.vtype || "")}; }
+      else { v.postNote = "Posted before by FinCom, not sent again"; if (w.words) v.postWhy = w.words; else delete v.postWhy; }
+    } else { v.postError = w.words; v.postJob = v.postJob || r.earlier; }
   }
   saveSales();
-  return [resent ? resent + " posted before and not in the books (FinCom's copy of Tally): sent again, posting by itself" : "",
-    there ? there + " posted before and in Tally (FinCom's copy): not sent again" : "",
-    held ? held + " posted before, not sent again: " + (held === 1 ? (early.find(([v]) => v.postWhy) || [{}])[0].postWhy : "open each to see why") : ""].filter(Boolean).join("; ").replace(/\.$/, "");
+  return earlierLine(n, "invoice");
+}
+// a posting is still going in FinCom's cloud for this invoice: it stays out of the next Post press
+function salesJobLive(v){
+  return !!(v && v.postJob && typeof CloudJobs === "object" && [].concat(CloudJobs.list || []).some(j => j && j.id === v.postJob && ["waiting", "taken", "running"].includes(j.status)));
+}
+// the bills' and bank lines' Post press (src/js/24 postBillsToTally, postBankToTally): the same decision
+async function postEarlier(kind, co, early, tname){
+  const n = {sent: 0, there: 0, posted: 0, keep: 0}, cid = co.id;
+  for (const [x, r] of early){
+    const d = NotInTally.optional(co) && kind === "bill" ? null : await NotInTally.resend(r.earlier, x.id, kind === "bill" ? "bill" : "bank line"), w = earlierWay(r, d);
+    n[w.there ? "there" : w.way]++;
+    const when = salesWhen(r) || new Date().toISOString(), ans = Object.assign({}, r, {ok: true, verified: true, vchNumber: (d && d.vno) || r.vchNumber || r.vchNo || ""});
+    if (kind === "bill"){
+      if (w.way === "posted"){ billPosted(cid, x, ans, tname, when, {quiet: true}); x.postNote = w.there ? "Posted before by FinCom; in Tally" : "Posted before by FinCom, not sent again"; }
+      else { x.postError = w.words; if (w.way === "sent") x.postJobNew = r.earlier; }
+      Store.saveEntry(cid, x);
+    } else {
+      if (w.way === "posted") bankPosted(cid, x, ans, tname, when, {quiet: true});
+      else { x.postError = w.words; if (w.way === "sent") x.postJob = r.earlier; }
+    }
+  }
+  if (kind === "bank") saveBank({rows: true, posted: true}); else refreshStats(cid);
+  const line = earlierLine(n, kind === "bill" ? "bill" : "bank line");
+  if (line) toast(line + ".");
+  render();
+  return line;
 }
 // a sales invoice marked Posted
 async function salesNotInTally(id){
   const s = SL(), v = s && s.list.find(x => x.id === id);
   if (!v || v.status !== "posted") return null;
-  return NotInTally.run({co: CO(s.cid), id: v.id, what: "invoice " + (v.x.number || v.id),
+  return NotInTally.run({co: CO(s.cid), id: v.id, kind: "invoice", what: "invoice " + (v.x.number || v.id),
     sent: (r, job) => { v.status = "ready"; delete v.postedAt; v.postJob = job; v.postNote = ""; delete v.postWhy; v.postError = r.words; v.postedOptional = false; saveSales(); },
     there: r => { v.postNote = "Posted before by FinCom; in Tally"; delete v.postWhy; v.tallyMatch = {number: String(r.vno || ""), date: String(r.day || ""), type: String(r.vtype || "")}; saveSales(); }});
 }
@@ -96,15 +145,15 @@ async function salesNotInTally(id){
 async function billNotInTally(id){
   const cid = S.coId, e = D().entries[id];
   if (!e || e.status !== "approved" || !e.exportedAt) return null;
-  return NotInTally.run({co: CO(cid), id: e.id, what: "bill " + ((e.x && e.x.invoiceNo) || e.id),
+  return NotInTally.run({co: CO(cid), id: e.id, kind: "bill", what: "bill " + ((e.x && e.x.invoiceNo) || e.id),
     sent: r => { e.postUndo = {why: r.words, at: new Date().toISOString(), by: postMyName()}; billClearPosting(e); Store.saveEntry(cid, e); refreshStats(cid); if (typeof CloudJobs === "object") CloudJobs.load(true); }});
 }
 // a bank line FinCom posted (its FinCom id: the line's fingerprint, as its voucher carries it)
 async function bankNotInTally(id){
   const b = B(), r = b && b.rows.find(x => x.id === id);
   if (!r || !(r.state === "sent" || (r.state === "intally" && bankOwnPost(r)))) return null;
-  return NotInTally.run({co: CO(b.cid), id: r.id, fid: fpHash(r.fp || r.id), what: "the bank line of " + fmtDate(r.date),
+  return NotInTally.run({co: CO(b.cid), id: r.id, fid: fpHash(r.fp || r.id), kind: "bank line", what: "the bank line of " + fmtDate(r.date),
     sent: (x, job) => { bankClearPosting(r, "ready"); r.postJob = job; r.postError = x.words; if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; saveBank({rows: true, posted: true}); }});
 }
-if (typeof globalThis === "object") Object.assign(globalThis, {NotInTally, salesEarlier, salesNotInTally, billNotInTally, bankNotInTally});
+if (typeof globalThis === "object") Object.assign(globalThis, {NotInTally, salesEarlier, salesJobLive, postEarlier, salesNotInTally, billNotInTally, bankNotInTally});
 /* @react-lazy: end */

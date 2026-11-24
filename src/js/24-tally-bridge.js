@@ -1197,7 +1197,7 @@ async function postBankToTally(ids){
     const now = new Date().toISOString();
     masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; if (!x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: b.cid, ref: l.name, party: l.group || "", amount: 0, tally: {company: tname}, by: (Cloud.st && Cloud.st.email) || ""}); } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
     let ok = 0, optionalN = 0;
-    const posted = [], held = [];
+    const posted = [], held = [], early = [];
     // 26-Oct-2026: each line of a batch Tally took whole gets its id inferred (kept apart, marked so), and the job
     const guesses = typeof bankBatchGuesses === "function" ? bankBatchGuesses(j.results) : new Map(), jobId = (j.job && j.job.id) || "";
     // a request Tally took all but the lines its errors name: those say why, the others are posted (src/js/96)
@@ -1208,6 +1208,8 @@ async function postBankToTally(ids){
       if (sp && sp.taken){ ok++; bankPosted(b.cid, r, Object.assign({}, sp.taken, {vchGuess: sp.guess, jobId}), tname, now); posted.push(r); return; }
       // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
+      // (24-Nov-2026) an earlier posting's answer: FinCom's copy of Tally decides, never a new post (src/js/96-not-in-tally.js)
+      if (byId.get(r.id) && byId.get(r.id).earlier){ early.push([r, byId.get(r.id)]); return; }
       const x1 = byId.get(r.id), x0 = x1 && postTaken(x1) ? Object.assign({}, x1, {vchGuess: guesses.get(String(r.id)) || "", jobId}) : x1;
       const x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
       // held by a posting still going on in FinCom's cloud: the line stays as it is (its release too), with those words
@@ -1261,6 +1263,7 @@ async function postBankToTally(ids){
       if (live !== b) held.forEach(r => { if (!done.has(r.id) && r.postError) { const q = live.rows.find(z => z.id === r.id); if (q && q.state === "ready" && !q.postError) q.postError = r.postError; } });
       saveBank({rows: true, posted: true});
     }
+    if (early.length && window.loadPart) await window.loadPart("notintally").then(() => postEarlier("bank", co, early, tname)).catch(() => {});
     const aN = already ? already.n : 0;
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, checking: !!j.checking,
       already: aN, alreadyLine: aN ? bankAlreadyLine(already) : "", review: failed.filter(f => f.review).length,
@@ -1398,8 +1401,10 @@ async function postBillsToTally(opts){
           [].concat(j2.results || []).forEach(x => byId.set(x.id, x));
         } catch (err){ /* reported below as refused */ }
       }
+      const early = [];
       todo.forEach(e => {
         const x = byId.get(e.id);
+        if (x && x.earlier){ early.push([e, x]); return; }   // (24-Nov-2026) an earlier posting's answer: src/js/96-not-in-tally.js
         // bridge 2.1.4 found the same bill in Tally as it was about to post: in Tally, with that voucher, not failed
         if (postAlready(x)){ billAlready(co.id, e, x, tname, now); dup.push(e); }
         // bridge 2.1.4 could not check Tally first: nothing was posted; the bill stays waiting, with that one line
@@ -1419,6 +1424,7 @@ async function postBillsToTally(opts){
         }
         Store.saveEntry(co.id, e);
       });
+      if (early.length && window.loadPart) await window.loadPart("notintally").then(() => postEarlier("bill", co, early, tname)).catch(() => {});
     }
     S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, byReply: byReplyN, checkFailed, masters: masterWords, company: tname, checkNote,
       reply: replyWords};

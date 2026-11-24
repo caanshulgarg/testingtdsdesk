@@ -96,7 +96,8 @@ function salesCols(s, list, nSel) {
 // next-fix-reupload-posted: a posted invoice that is not in Tally any more (deleted there, or only Optional): FinCom's own
 // copy of Tally decides and, if so, it is posted again (src/js/96-not-in-tally.js; nothing is asked of Tally)
 function NotThere({ v, wide }) {
-  if (v.status !== "posted" || v.postedVia === "file") return null;
+  // (a client posting Optional vouchers by its setting: its Optional voucher is the posting; no such button)
+  if (v.status !== "posted" || v.postedVia === "file" || NotInTally.optional(CO(SL().cid))) return null;
   const busy = NotInTally.on(v.id);
   return <button className={wide ? "btn" : "linkbtn"} data-not-in-tally={v.id} disabled={busy} title="FinCom's copy of Tally decides: if it shows this invoice deleted in Tally, or only as an Optional or cancelled voucher, it is posted again." onClick={() => salesNotInTally(v.id)}>{busy ? "Checking…" : NotInTally.LABEL}</button>;
 }
