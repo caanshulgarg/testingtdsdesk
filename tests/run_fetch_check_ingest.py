@@ -181,7 +181,15 @@ try:
         t = time.time()
         while time.time() - t < s and len(FS.ARGS.get("gst_calc_want_book") or []) < n: time.sleep(0.05)
         return len(FS.ARGS.get("gst_calc_want_book") or [])
-    n0 = len(FS.ARGS.get("gst_calc_want_book") or [])
+    def steady(hold=0.3, most=10.0):     # (earlier calls' gst_calc_want_book, not waited on, may still be arriving: the count steady 300 ms first)
+        t, last, since = time.time(), -1, time.time()
+        while time.time() - t < most:
+            n = len(FS.ARGS.get("gst_calc_want_book") or [])
+            if n != last: last, since = n, time.time()
+            elif time.time() - since >= hold: break
+            time.sleep(0.05)
+        return last
+    n0 = steady()
     c, r = call({"kind": "upload_days", "client": "c1", "company": "MADE UP CO", "days": [{"day": "20250907", "gz": gz(day0.replace("20250901", "20250907"))}]}, key=None, tok="tok-owner")
     got = gw(n0 + 1); w = (FS.ARGS.get("gst_calc_want_book") or [{}])[-1]
     ok(c == 200 and got == n0 + 1 and w.get("p_book") == BOOK and w.get("p_why") == "books" and "p_after" in w and w.get("p_after") is None, "6. an upload's days stored: one gst_calc_want_book for the book, not waited on (%s)" % w)
