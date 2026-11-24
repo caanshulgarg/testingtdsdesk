@@ -367,6 +367,23 @@ with sync_playwright() as p:
         a, st, sent = one("ZS/13%d" % i, G["k"], sv("ZS/13%d" % i, typ=t))
         ok(st == "intally " + t, "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally (%s)" % (t, st))
 
+    print("SALES 14c. a note, a memorandum, a return, an order, a quotation or a delivery by any spelling: never a sale (next-posting-followups)")
+    for i, t in enumerate(["Sales Note", "Sales Notes", "Sales Memorandum", "Sales Memo", "SalesReturn", "Sales Returnable", "SalesOrder", "Sales Quotation", "Sales Delivery Note"]):
+        a, st, sent = one("ZS/14%d" % i, G["k"], sv("ZS/14%d" % i, typ=t))
+        ok(st == "posted" and sent == [[a]], "cloud copy: '%s', the same GSTIN: never the sale, posted (%s)" % (t, st))
+    cls = A.evaluate("() => ['Sales Note', 'Sales Memorandum', 'SalesReturn', 'Credit Sales', 'Sales'].map(t => salesTypeClasses([])(t))")
+    ok(cls == [False, False, False, True, True], "salesTypeClasses: 'Sales Note', 'Sales Memorandum', 'SalesReturn' never a sale; 'Credit Sales', 'Sales' are (%s)" % cls)
+    print("SALES 14d. the client's own credit and debit note types are never a sale")
+    A.evaluate("() => { const c = SL().cfg; window.__nt = [c.creditNoteType, c.debitNoteType]; c.creditNoteType = 'Sales Adjustment'; c.debitNoteType = 'Sales Extra Charge'; }")
+    for i, t in enumerate(["Sales Adjustment", "Sales Extra Charge"]):
+        a, st, sent = one("ZS/15%d" % i, G["k"], sv("ZS/15%d" % i, typ=t))
+        ok(st == "posted" and sent == [[a]], "cloud copy: '%s' (the client's own note type): never the sale, posted (%s)" % (t, st))
+    vts = A.evaluate("""() => { const b0 = S.books, mk = (t, n) => Array.from({length: n}, () => ({type: t}));
+      S.books = {cid: SL().cid, vouchers: [].concat(mk('Sales Adjustment', 9), mk('Sales Note', 9), mk('Sales Memorandum', 9), mk('SalesReturn', 9), mk('Credit Sales', 5))};
+      try { return salesBooksVts().map(x => x.type); } finally { S.books = b0; } }""")
+    ok(vts == ["Credit Sales"], "salesBooksVts: only 'Credit Sales' is the client's sales type (%s)" % vts)
+    A.evaluate("() => { const c = SL().cfg; [c.creditNoteType, c.debitNoteType] = window.__nt; if (!c.creditNoteType) delete c.creditNoteType; if (!c.debitNoteType) delete c.debitNoteType; }")
+
     print("SALES 15. an entry not really in the books never makes a new upload the same entry (an Optional voucher deleted in Tally)")
     a, st, sent = one("ZS/120", G["k"], sv("ZS/120", opt="Yes"))
     ok(st == "posted" and sent == [[a]], "cloud copy: an Optional voucher of the same number, amount, year and customer: posted (%s)" % st)
@@ -452,6 +469,22 @@ with sync_playwright() as p:
         A.evaluate("() => postBankToTally()"); A.wait_for_timeout(900)
         st = A.evaluate(BST)
         ok([x["st"] for x in st] == ["sent"] * 3, label + ": all three posted (%s)" % st)
+    print("BANK 2c. a line FinCom posted as an Optional voucher, the statement deleted and uploaded again: posted (next-posting-followups)")
+    OPT = """() => { window.__post0 = window.__post0 || Bridge.post; Bridge.post = async (p) => { window.__sent.push(p.vouchers.map(v => v.id)); return {ok: true, company: "ZZ Test Dup Traders",
+      results: p.vouchers.map(v => ({id: v.id, ok: true, byReply: true, verified: false, created: 1, optional: true}))}; }; }"""
+    REUP = "() => { const b = B(); b.rows = window.__bankRows(3); b.postReport = null; b.tallyLook = null; b.books = {}; window.__sent = []; }"
+    bfresh(A); A.evaluate(OPT)
+    A.evaluate("() => postBankToTally()"); A.wait_for_timeout(900)
+    ok([x["st"] for x in A.evaluate(BST)] == ["sent"] * 3 and A.evaluate("() => B().rows.every(r => r.postedOptional)"), "first posting: all three went in as Optional vouchers (%s)" % A.evaluate(BST))
+    A.evaluate("() => { Bridge.post = window.__post0; }"); A.evaluate(REUP)
+    A.evaluate("() => postBankToTally()"); A.wait_for_timeout(900)
+    st = A.evaluate(BST); sent = A.evaluate("() => window.__sent")
+    ok([x["st"] for x in st] == ["sent"] * 3 and sent == [["s1-0", "s1-1", "s1-2"]], "uploaded again: all three posted, none In Tally (%s, sent %s)" % (st, sent))
+    A.evaluate(REUP)
+    A.evaluate("() => postBankToTally()"); A.wait_for_timeout(900)
+    st = A.evaluate(BST); sent = A.evaluate("() => window.__sent")
+    ok([x["st"] for x in st] == ["intally"] * 3 and sent == [], "the posting before was a regular voucher: uploaded again, In Tally, not sent (%s, sent %s)" % (st, sent))
+
     print("BANK 3. the copy cannot be read: posted, nothing said")
     for label, cl in [("no copy", "{has: false, fail: false, at: '', vouchers: []}"), ("the copy does not answer", "{has: true, fail: true, at: new Date().toISOString(), vouchers: []}")]:
         bfresh(A, 2)
