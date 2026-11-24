@@ -96,6 +96,25 @@ with sync_playwright() as p:
     ok(g["text"] == "ZZ Gap Client: Checking with Tally\u2026 (no action needed)" and not g["act"], "2. (guard) before checkUntil: Checking with Tally, no button (%s)" % g["text"]); shut()
     g = bell(G(checking=True, at=iso(NOW - datetime.timedelta(minutes=5))))
     ok(g["text"] == "ZZ Gap Client: Checking with Tally\u2026 (no action needed)", "2. (guard) a gap written before 182, checked 5 minutes ago: Checking with Tally (%s)" % g["text"]); shut()
+
+    # next-fix-false-errors (migration 217): changes on older dates that FinCom reads from Tally by itself (the year's days
+    # counted again, or From Tally's older days, one at a time while the computer is idle): checking, with older kept
+    print("== 3. older dates FinCom is reading by itself: no upload asked")
+    E("() => { S.tab = 'dash'; S.dbFrom = ''; render(); }")
+    g = bell(G(checking=True, checkUntil=iso(NOW + datetime.timedelta(minutes=30)), older=OLDER))
+    ok(g["text"] == "ZZ Gap Client: Checking with Tally\u2026 (no action needed)" and not g["act"] and g["sev"] != "bad", "3. the bell: Checking with Tally, no button (%s | %s | %s)" % (g["sev"], g["text"], g["act"]))
+    # (the review of 23-Nov-2026: FinCom reads only some of those days - the ones not counted again, the ones asked - so
+    # the bell names no range of dates)
+    ok(g["fix"] == "FinCom is reading the older days from Tally by itself; nothing to do.", "3. it says plainly FinCom reads the older days, no false range of dates (%s)" % g["fix"])
+    shut()
+    E("() => { S.tab = 'books'; S.booksTab = 'tds'; render(); }"); pg.wait_for_timeout(800)
+    ok(pg.locator("#app [data-alert-line] [data-alert-act]").count() == 0, "3. no Upload Day Book button on the page")
+    E("() => goClient('books:import')"); pg.wait_for_timeout(1200)
+    row = txt('#app [data-need-day="2026-04-01"]')
+    ok("Changes were made in Tally on older dates" in row and "no action needed" in row and "Upload the Day Book" not in row, "3. From Tally: the row says FinCom is reading them (%s)" % row)
+    E("() => { S.tab = 'dash'; render(); }")
+    g = bell(G(checking=True, checkUntil=iso(NOW - datetime.timedelta(hours=2)), older=OLDER))
+    ok(g["text"] == "ZZ Gap Client: Changes were made in Tally on older dates." and g["act"] == "Upload Day Book", "3. (guard) checkUntil passed (nothing read for an hour): the upload asked again (%s)" % g["text"]); shut()
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()
