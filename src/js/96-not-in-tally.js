@@ -23,8 +23,9 @@ const NotInTally = {
   busy: {},
   LABEL: "Not in Tally? Post again",
   on(id){ return !!this.busy[String(id)]; },
-  // a client whose bills and invoices go to Tally as Optional vouchers by its setting (Client setup)
-  optional(co){ return !!(co && co.createOptional); },
+  // a client whose entries go to Tally as Optional vouchers by its setting (Client setup): bills and invoices
+  // (createOptional), bank lines their own (bankOptional, src/js/22 bankVoucherXml)
+  optional(co, kind){ return !!(co && (kind === "bank" ? co.bankOptional : co.createOptional)); },
   fid(id){ return String(id || "").replace(/[^A-Za-z0-9]/g, ""); },
   // the posting that holds the entry's FinCom id (live), else ""
   async holder(co, fid){
@@ -56,7 +57,7 @@ const NotInTally = {
   async run(o){
     const k = String(o.id);
     if (this.busy[k]) return null;
-    if (this.optional(o.co)){ toast("This client posts Optional vouchers by its setting, so the Optional voucher in Tally is the posting itself. Nothing was sent."); return null; }
+    if (this.optional(o.co, o.kind === "bank line" ? "bank" : "")){ toast("This client posts Optional vouchers by its setting, so the Optional voucher in Tally is the posting itself. Nothing was sent."); return null; }
     if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(o.co.id))){ toast("FinCom keeps no copy of this client's Tally books, so it cannot tell whether " + o.what + " is in Tally. Nothing was sent."); return null; }
     this.busy[k] = true; render();
     try {
@@ -115,7 +116,7 @@ function salesJobLive(v){
 async function postEarlier(kind, co, early, tname){
   const n = {sent: 0, there: 0, posted: 0, keep: 0}, cid = co.id;
   for (const [x, r] of early){
-    const d = NotInTally.optional(co) && kind === "bill" ? null : await NotInTally.resend(r.earlier, x.id, kind === "bill" ? "bill" : "bank line"), w = earlierWay(r, d);
+    const d = NotInTally.optional(co, kind) ? null : await NotInTally.resend(r.earlier, x.id, kind === "bill" ? "bill" : "bank line"), w = earlierWay(r, d);
     n[w.there ? "there" : w.way]++;
     const when = salesWhen(r) || new Date().toISOString(), ans = Object.assign({}, r, {ok: true, verified: true, vchNumber: (d && d.vno) || r.vchNumber || r.vchNo || ""});
     if (kind === "bill"){

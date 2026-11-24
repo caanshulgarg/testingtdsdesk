@@ -83,7 +83,7 @@ function salesCols(s, list, nSel) {
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
-        <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") + (v.postNote ? " · " + v.postNote : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span>
+        <span className="src muted" style={v.postNote ? { whiteSpace: "normal" } : undefined}>{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") + (v.postNote ? " · " + v.postNote : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span>
         {/* (under the ledger, not beside Open: the row's buttons fit the table at any width) */}
         {v.status === "intally" && <div><button className="linkbtn" data-sales-nottally={v.id} onClick={act("nottally", v)}>Not this Tally entry</button></div>}</> },
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>

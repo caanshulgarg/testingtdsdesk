@@ -454,7 +454,7 @@ async function postSalesRun(){
     const ew = early.length && typeof salesEarlier === "function" ? await salesEarlier(early, co) : "";
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (ew ? "; " + ew : "") + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
+    toast((ok || !ew ? ok + " posted to Tally" + (ew ? "; " + ew : "") : ew) + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
       (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + ".");
     if (!bad && !queued && !refusedN) s.filter = "done";
     else if (refusedN && !bad && !queued) s.filter = "review";

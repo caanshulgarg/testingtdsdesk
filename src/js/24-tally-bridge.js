@@ -1203,13 +1203,13 @@ async function postBankToTally(ids){
     // a request Tally took all but the lines its errors name: those say why, the others are posted (src/js/96)
     const split = typeof bankPartialSplit === "function" ? bankPartialSplit(j.results, new Map(rows.map(r => [String(r.id), r]))) : new Map();
     rows.forEach(r => {
+      // (24-Nov-2026) an earlier posting's answer: FinCom's copy of Tally decides, never a new post (src/js/96-not-in-tally.js)
+      if (byId.get(r.id) && byId.get(r.id).earlier){ early.push([r, byId.get(r.id)]); return; }
       const sp = split.get(String(r.id));
       if (sp && sp.refused){ r.postError = sp.refused; failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: sp.refused}); return; }
       if (sp && sp.taken){ ok++; bankPosted(b.cid, r, Object.assign({}, sp.taken, {vchGuess: sp.guess, jobId}), tname, now); posted.push(r); return; }
       // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
-      // (24-Nov-2026) an earlier posting's answer: FinCom's copy of Tally decides, never a new post (src/js/96-not-in-tally.js)
-      if (byId.get(r.id) && byId.get(r.id).earlier){ early.push([r, byId.get(r.id)]); return; }
       const x1 = byId.get(r.id), x0 = x1 && postTaken(x1) ? Object.assign({}, x1, {vchGuess: guesses.get(String(r.id)) || "", jobId}) : x1;
       const x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
       // held by a posting still going on in FinCom's cloud: the line stays as it is (its release too), with those words

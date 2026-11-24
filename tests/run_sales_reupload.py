@@ -81,7 +81,7 @@ with sync_playwright() as p:
     st = A.evaluate(STATE, va); t = A.evaluate(LAST); c = copyrpc()
     ok(c == [{"p_job": "j-" + va, "p_id": va}], "the cloud asked to decide by its copy, for the posting that holds it (%s)" % c)
     ok(st["st"] == "ready" and "sent again" in st["err"] and A.evaluate("(id) => SL().list.find(v => v.id === id).postJob", va) == "j-" + va, "queued on that posting again, said so; not Posted (%s)" % st)
-    ok("1 invoice was posted before by FinCom and is not in the books: sent again" in t and t.startswith("0 posted to Tally"), "the message says so, readably (%s)" % t)
+    ok(t.startswith("1 invoice was posted before by FinCom and is not in the books: sent again") and "0 posted" not in t, "the message says so, readably, no \"0 posted\" (%s)" % t)
     # (A3) an invoice whose posting is still going is left out of the next Post press
     A.evaluate("""(id) => { CloudJobs.list = [{id: 'j-' + id, client_id: SL().cid, status: 'waiting', results: []}]; window.__sent = []; window.__enq = () => ({ok: true}); }""", va)
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(800)
@@ -131,11 +131,16 @@ with sync_playwright() as p:
     A.evaluate("() => { SL().filter = 'done'; SL().openId = null; render(); }"); A.wait_for_timeout(500)
     row = A.locator("[data-not-in-tally='%s']" % vc)
     ok(row.count() == 1 and row.first.inner_text() == "Not in Tally? Post again", "the button on the posted row (%d)" % row.count())
+    # (the polish of 24-Nov-2026) the row's note is never cut short: it wraps
+    cut = A.evaluate("(id) => { const b = document.querySelector(`[data-not-in-tally='${id}']`), tr = b && b.closest('tr'), s = tr && [...tr.querySelectorAll('.src.muted')].find(x => /Posted before/.test(x.textContent)); return s ? {cut: s.scrollWidth > s.clientWidth + 1, text: s.textContent} : null; }", vc)
+    ok(cut and not cut["cut"] and "Posted before by FinCom, not sent again" in cut["text"], "the row's note shown whole (%s)" % cut)
     if SHOTS:
         os.makedirs(SHOTS, exist_ok=True); row.first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "1-sales-posted-row.png"))
     A.evaluate("(id) => { SL().openId = id; render(); }", vc); A.wait_for_timeout(500)
     ok(A.locator(".bk-panel [data-not-in-tally='%s']" % vc).count() == 1 and A.locator("[data-post-why='%s']" % vc).count() == 1, "the button and the reason in the invoice's panel")
-    if SHOTS: A.locator(".bk-panel [data-not-in-tally='%s']" % vc).first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "2-sales-panel.png"))
+    if SHOTS:
+        A.locator("[data-post-why='%s']" % vc).first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "2-sales-panel-reason.png"))
+        A.locator(".bk-panel [data-not-in-tally='%s']" % vc).first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "3-sales-panel-button.png"))
     A.evaluate("() => { SL().openId = null; render(); }"); A.wait_for_timeout(300)
     A.evaluate("""(id) => { window.__ids = [{job_id: 'j-' + id}]; window.__rpc = []; window.__toasts = []; window.__calls = [];
       window.__copy = (a) => ({ok: true, state: "deleted", job: a.p_job, id: a.p_id, released: true, resent: true}); }""", vc)
@@ -180,6 +185,20 @@ with sync_playwright() as p:
     ok(out["e1"]["exp"] is None and "not up to date" in out["e1"]["err"], "a bill, the copy not up to date: not posted, the red note says so (%s)" % out["e1"])
     ok(bool(out["e2"]["exp"]) and out["e2"]["exp"].startswith("2026-11-18"), "a bill in Tally by the copy: posted before, its earlier date (%s)" % out["e2"])
     ok(out["r"]["st"] == "ready" and out["r"]["job"] == "j-k1" and "sent again" in out["r"]["err"], "a bank line not in the books: queued on its posting again (%s)" % out["r"])
+    print("5. (the polish) bank lines of a client posting bank entries as Optional (bankOptional): never asked, no button")
+    out = A.evaluate("""async () => { window.__rpc = []; CO().bankOptional = true;
+      const r = {id: "stzr-3", fp: "stzr-3", state: "ready", date: "2026-11-10", narr: "NEFT ZZ", debit: 300, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}};
+      B().rows.push(r); await postEarlier("bank", CO(), [[r, {id: r.id, earlier: "j-k2", ok: true, byReply: true, verified: false, sentAt: "2026-11-18T11:23:12+05:30"}]], "ZZ Test Reupload Traders");
+      const s = {id: "stzr-4", fp: "stzr-4", state: "sent", date: "2026-11-10", narr: "NEFT ZZ", debit: 310, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, sentAt: "2026-11-18T06:00:00.000Z", postedVia: "bridge"};
+      B().rows.push(s); window.__toasts = []; await bankNotInTally(s.id);
+      const o = {rpc: window.__rpc.length, st: r.state, sent: r.sentAt || "", t: window.__toasts.slice(-1)[0] || "", optSales: NotInTally.optional(CO()), optBank: NotInTally.optional(CO(), "bank")};
+      CO().bankOptional = false; return o; }""")
+    ok(out["rpc"] == 0 and out["st"] == "sent" and out["sent"].startswith("2026-11-18"), "a bank line of such a client: not asked, posted before (%s)" % out)
+    ok("Optional vouchers by its setting" in out["t"] and out["optBank"] is True and out["optSales"] is False, "its button says so and sends nothing; bankOptional is the bank's own setting (%s)" % out)
+    # (the polish) postBankToTally: an earlier posting's answer is looked at before a partial split takes the line
+    src = A.evaluate("() => fetch((document.querySelector('script[src*=legacy]') || {}).src || 'legacy.js').then(r => r.text())")
+    i = src.find("function postBankToTally("); seg = src[i:i + 20000]
+    ok(i >= 0 and 0 <= seg.find(".earlier)") < seg.find(".taken)"), "the earlier check comes before the split's taken lines (%d < %d)" % (seg.find(".earlier)"), seg.find(".taken)")))
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally at all")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
