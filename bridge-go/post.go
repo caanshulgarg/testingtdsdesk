@@ -131,6 +131,15 @@ func isBankItem(it M) bool {
 // why an entry cannot be sent at all ("" when it can): no valid date, or not a VOUCHER, LEDGER or GROUP (a voucher type
 // may only have its numbering changed: no other field, and only an Alter)
 func cannotSend(x string) string {
+	// fix in place (decision 7 of 23-Nov-2026): an existing voucher, ledger or group is never altered by a posting; the
+	// two approved fix forms (fixalter.go) are the only way
+	if reFixMark.MatchString(re(`^\s*<[^>]*>`).FindString(x)) {
+		return "An existing voucher, ledger or group is changed only by FinCom's fix in place, never by a posting."
+	}
+	// review of 595554fbe: an ACTION written with a character reference (Tally reads "&#65;lter" as Alter) is never sent
+	if reActionAmp.MatchString(x) {
+		return "An entry's ACTION is written as FinCom writes it (Create or Delete), never with & in it."
+	}
 	vtOnly := false
 	if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
 		inner := re(`(?s)^\s*<VOUCHERTYPE[^>]*>|</VOUCHERTYPE>\s*$`).ReplaceAllString(x, "")

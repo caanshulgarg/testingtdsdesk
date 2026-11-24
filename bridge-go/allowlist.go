@@ -75,9 +75,12 @@ var tallyAllowList = map[string]allowedReq{
 	masterCheckID:       {purpose: "the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only"},
 	"Import":            {purpose: "a posting or a deletion (Import Data)"},
 	payrollImportID:     {purpose: "a month's salary as one Tally payroll voucher (Import Data; owner approved 22-Nov-2026)"},
-	sliceID:             {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
-	datesProbeID:        {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
-	editLogProbeID:      {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
+	// fix in place (the owner's approval of 23-Nov-2026, findings/fix-in-place-plan.md section 2.3; fixalter.go)
+	fixVoucherID:   {purpose: "fix in place: ONE existing voucher altered by its GUID, its date and type as read, only its number, place of supply or party GSTIN (Import Data; owner approved 23-Nov-2026)"},
+	fixLedgerID:    {purpose: "fix in place: ONE existing ledger altered by its name, only its GST registration (GSTIN and its state) or its PAN (Import Data; owner approved 23-Nov-2026)"},
+	sliceID:        {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
+	datesProbeID:   {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
+	editLogProbeID: {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
 	// next-fastfetch (the owner's approval of 07-Oct-2026 and decision of 08-Oct-2026): replaces FinComVoucherByMaster
 	vchObjectID: {purpose: "the entry request (next-fastfetch, replacing FinComVoucherByMaster): ONE voucher by its MasterID, Tally's object export ID:<MasterID> (keyed: it does not read every voucher of the company), its FETCHLIST the approved fields of FinComVoucherByMaster; Tally sends the whole voucher and the bridge keeps exactly those fields (ledger lines as ALLLEDGERENTRIES), dropping the rest before anything is logged, stored or sent; read only, no period; stopped at 2 s, a payroll voucher's at 3 s (2.4.4, the owner's decision of 12-Oct-2026)", maxSec: 2.2,
 		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475: a payroll entry of 500 employees, 2,189 ms worst (6.2), under its 3 s; push-design runs 37718386662 and 37747408916 (2026-10-08): 9-23 ms median, 61 ms worst for an ordinary entry at 4,000-100,000 vouchers, 1.7 s worst for a 500-item invoice)"},
@@ -145,6 +148,9 @@ func tallyRequestID(x string) string {
 		if isPayrollImport(x) { // 2.5.18: a payroll voucher's Import is held to its own exact shape
 			return payrollImportID
 		}
+		if id := fixImportID(x); id != "" { // fix in place: an Alter is never the plain Import's (fixalter.go)
+			return id
+		}
 		return "Import"
 	}
 	if id, ok := objectRequestID(x); ok {
@@ -211,7 +217,9 @@ type pinRefusedError struct{ id string }
 
 func (e *pinRefusedError) Error() string {
 	why := "the " + or(e.id, "request") + " request differs from what the bridge builds"
-	if e.id == payrollImportID {
+	if e.id == fixVoucherID || e.id == fixLedgerID {
+		why = "the change of an existing entry or ledger is not one of the two forms the owner approved"
+	} else if e.id == payrollImportID {
 		why = "the payroll posting is not one payroll voucher exactly as FinCom builds it"
 	} else if e.id == "Import" {
 		why = "the posting holds something other than vouchers, ledgers, groups or a voucher type's numbering, as FinCom sends them"
@@ -255,6 +263,8 @@ func allowListSamples() map[string]string {
 		editLogProbeID:       editLogProbeRequest(c, "1"),
 		"Import":             importEnvelope("Vouchers", c, ""),
 		payrollImportID:      payrollImportSample(c),
+		fixVoucherID:         fixVoucherSample(c),
+		fixLedgerID:          fixLedgerSample(c),
 		"FinComMeasureB":     measureReqB(c, a, z, 1),
 		"FinComMeasureC":     measureReqC(c, a, z, 1),
 		"FinComMeasureYear":  measureReqYear(c, a, z),

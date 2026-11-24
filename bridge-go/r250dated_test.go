@@ -236,7 +236,7 @@ func TestR250ReadDaysExemptionOnlyThree(t *testing.T) {
 	}
 	setCfg("ReadDays", false)
 	// every other request carrying the same period keeps the rule it had: refused with ReadDays off
-	keep := map[string]bool{vchObjectID: true, sliceID: true, vchByNumberID: true, dayHeadsID: true, vchBatchID: true, "TDSDeskKeepList": true, "Import": true, payrollImportID: true}
+	keep := map[string]bool{vchObjectID: true, sliceID: true, vchByNumberID: true, dayHeadsID: true, vchBatchID: true, "TDSDeskKeepList": true, "Import": true, payrollImportID: true, fixVoucherID: true, fixLedgerID: true}
 	for id, x := range allowListSamples() {
 		if ledgerPeriodIDs[id] || keep[id] || x == "" {
 			continue

@@ -42,6 +42,9 @@ func allowListRows2518() string {
 	for _, id := range added2519 {
 		delete(list, id)
 	}
+	for _, id := range []string{fixVoucherID, fixLedgerID} { // fix in place (fixalter.go): added after 2.5.19
+		delete(list, id)
+	}
 	for id, add := range allowChanged2519 {
 		a := list[id]
 		a.purpose = strings.TrimSuffix(a.purpose, add)
