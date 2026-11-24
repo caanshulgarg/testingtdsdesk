@@ -223,7 +223,7 @@ function salesColPass(v){
 function salesColOn(){ const f = (SL() || {}).f || {}; return Object.keys(f).some(k => Array.isArray(f[k]) ? f[k].length : f[k]); }
 function salesVisible(){
   const s = SL(), states = salesTabStates(s.filter), q = s.q.trim().toLowerCase();
-  return s.list.filter(v => salesColPass(v) && (states.includes(v.status) && !salesOld(v) || s.sticky.has(v.id)) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
+  return s.list.filter(v => salesColPass(v) && (states.includes(v.status) || s.sticky.has(v.id)) && !salesOld(v) && (!q || [v.x.number, v.x.customerName, v.x.customerGstin, v.customerLedger, v.x.total].join(" ").toLowerCase().includes(q)))
     .sort((a, b) => String(b.x.date).localeCompare(String(a.x.date)) || String(b.x.number).localeCompare(String(a.x.number)));
 }
 // the Sales screen and its bar: React (app/src/screens/Sales.jsx)

@@ -232,6 +232,70 @@ with sync_playwright() as p:
         t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
         ok("SI-s1" not in t and pg.evaluate("salesOld(SL().list.find(x => x.id === 's1'))"), look + "Sales: an Optional voucher posted 30 hours ago is off the page too")
         ctx.close()
+    # ---- review 4 (24-Nov-2026): only the posted list hides; nothing that still needs the person's action hides
+    QUEUE = "[...document.querySelectorAll('#app ul.queue > li')].map(li => li.innerText).join('|')"
+    QN = "document.querySelectorAll('#app ul.queue > li').length"
+    for nl in (False, True):
+        look = "[review 4%s] " % (", new look" if nl else "")
+        ctx, pg = page(br, nl=nl)
+        H = "const h = (n) => new Date(Date.now() - n * 3600e3).toISOString(); "
+        # 1. Purchase: Deleted, Duplicates and No entry list every bill they count, posted or not, and restore works
+        go(pg, "goClient('bills'); const d = D().entries; softDeleteEntry(d.b2, 'Made-up reason'); d.b6.status = 'duplicate'; d.b7.status = 'rejected'; goState('deleted', 'bills');", 1500)
+        q = pg.evaluate(QUEUE)
+        ok("INV-b2" in q and pg.evaluate(QN) == 1 and STN(pg, "deleted") == "1", look + "Purchase: Deleted lists the bill posted 25 hours ago that was deleted (count %s, listed %r)" % (STN(pg, "deleted"), q))
+        go(pg, "goState('duplicate', 'bills');", 1000)
+        q = pg.evaluate(QUEUE)
+        ok("INV-b5" in q and "INV-b6" in q and pg.evaluate(QN) == 2 and STN(pg, "duplicate") == "2", look + "Purchase: Duplicates lists both it counts, the posted one held too: %r" % q)
+        go(pg, "goState('rejected', 'bills');", 1000)
+        q = pg.evaluate(QUEUE)
+        ok("INV-b7" in q and pg.evaluate(QN) == 1 and STN(pg, "rejected") == "1", look + "Purchase: No entry lists the posted bill marked no entry: %r" % q)
+        go(pg, "goState('deleted', 'bills'); S.selected = 'b2'; render();", 1000)
+        ok(pg.locator("#app button", has_text="Restore").count() >= 1, look + "Purchase: the deleted bill opens with its Restore button")
+        go(pg, "billRestore('b2');", 800)
+        ok(pg.evaluate("D().entries.b2.status") == "approved", look + "Purchase: Restore puts the posted bill back where it was")
+        # clearSent: "They are under Deleted" stays true for bills posted more than 24 hours ago
+        go(pg, H + "const d = D().entries; d.b6.status = 'approved'; d.b7.status = 'approved'; [d.b6, d.b7].forEach(e => { e.exportedAt = h(24 * 100); if (e.tally) e.tally.at = h(24 * 100); }); clearSent(); goState('deleted', 'bills');", 1500)
+        q = pg.evaluate(QUEUE)
+        ok("INV-b6" in q and "INV-b7" in q and pg.evaluate(QN) == 2 and STN(pg, "deleted") == "2", look + "Purchase: after clearing bills sent over 90 days ago, both are under Deleted as its message says: %r (count %s)" % (q, STN(pg, "deleted")))
+        go(pg, "const d = D().entries; [d.b6, d.b7].forEach(e => { billRestore(e.id); });", 800)
+        # 2. Purchase, Posted automatically view: a bill posted by itself more than 24 hours ago is not there
+        go(pg, H + "const d = D().entries; d.b1.auto = {at: h(2), rule: 'x', key: 'k'}; d.b2.auto = {at: h(25), rule: 'x', key: 'k'}; S.apView = {bills: 'auto'}; S.step = null; S.tab = 'invoices'; S.filter = 'approved'; S.selected = null; render();", 1200)
+        q = pg.evaluate(QUEUE)
+        ok("INV-b1" in q and "INV-b2" not in q, look + "Purchase: Posted automatically lists the bill of 2 hours ago, not the one of 25 hours: %r" % q)
+        # 3. Bank, Posted automatically view: the same, and so no Undo on a line not shown
+        go(pg, H + "const b = B(); b.rows.find(x => x.id === 'r0').auto = {at: h(2), rule: 'x', key: 'k', dir: 'out'}; b.rows.find(x => x.id === 'r1').auto = {at: h(25), rule: 'x', key: 'k', dir: 'in'}; S.apView = {bank: 'auto'}; goClient('bank'); bankTabGo('done');", 1500)
+        ids = pg.evaluate("[...document.querySelectorAll('%s')].map(t => t.dataset.rid).sort()" % BANKROWS)
+        ok(ids == ["r0"] and pg.locator("#app [data-ap-undo='r1']").count() == 0, look + "Bank: Posted automatically lists the line of 2 hours ago only, no Undo for the one of 25 hours: %s" % ids)
+        # 4. Sticky rows: a line or invoice kept in place by a click is not kept once it is older than 24 hours
+        go(pg, "S.apView = {}; const b = B(); b.sticky.add('r1'); b.sticky.add('r2'); render();", 1000)
+        ids = pg.evaluate("[...document.querySelectorAll('%s')].map(t => t.dataset.rid).sort()" % BANKROWS)
+        ok(ids == ["r0", "r8"], look + "Bank: lines kept in place (sticky) but older than 24 hours are not listed: %s" % ids)
+        go(pg, "B().sticky.clear(); goClient('sales'); salesTabGo('done'); const s = SL(); s.sticky.add('s2'); s.sticky.add('s3'); render();", 1200)
+        t = pg.inner_text("#app table.bk-table tbody")
+        ok("SI-s2" not in t and "SI-s3" not in t, look + "Sales: invoices kept in place (sticky) but older than 24 hours are not listed")
+        go(pg, "SL().sticky.clear(); render();", 600)
+        # 5. Sales: an invoice still in Tally whose IRN was cancelled keeps its red warning on the page, whatever its age;
+        # so does one with a problem to fix, a posting queued, or a Tally error
+        go(pg, "const v = SL().list.find(x => x.id === 's2'); v.x.irn = 'X1'; v.x.irnStatus = 'cancelled'; v.x.irnCancelInTally = true; const w = SL().list.find(x => x.id === 's3'); w.problems = ['Made-up problem to fix']; render();", 1000)
+        t = pg.inner_text("#app table.bk-table tbody")
+        m = pg.evaluate("['s2', 's3'].map(id => salesOld(SL().list.find(x => x.id === id)))")
+        ok("SI-s2" in t and "SI-s3" in t and m == [False, False] and STN(pg, "intally") == "5", look + "Sales: the IRN-cancelled invoice and the one with a problem stay under In Tally, counted (%s, salesOld %s)" % (STN(pg, "intally"), m))
+        # (the e-invoice part shows with the firm's GST API on and both GSTINs given: made-up ones)
+        go(pg, "window.__gon = GSTAPI.on; GSTAPI.on = () => true; SL().list.find(x => x.id === 's2').x.customerGstin = '09AABCT1234E1Z2'; salesOpen('s2');", 900)
+        ok(pg.locator("#app [data-irn-cancel-tally]").count() == 1, look + "Sales: it opens with its IRN-cancelled warning")
+        go(pg, "salesAct('salesClose'); GSTAPI.on = window.__gon;", 500)
+        m = pg.evaluate(H + "[{status: 'posted', postedAt: h(30), postJob: 'j1', x: {}}, {status: 'posted', postedAt: h(30), postError: 'Made-up error', x: {}}, {status: 'posted', postedAt: h(30), x: {}}].map(salesOld)")
+        ok(m == [False, False, True], look + "Sales: a posting still queued or a Tally error keeps an old invoice; one with nothing to do leaves: %s" % m)
+        # 6. Post to Tally: a row with an action to take ("Correct the Tally id") never leaves Posted
+        m = pg.evaluate(H + """(() => [postRowOld({st: {tab: "posted", code: 3, posted: h(40), markedAt: h(30), action: {kind: "correctId", label: "Correct the Tally id"}, id: {suspect: true}}}),
+          postRowOld({st: {tab: "posted", code: 1, posted: h(40), action: {kind: "correctId", label: "Correct the Tally id"}, id: {suspect: true}}}),
+          postRowOld({st: {tab: "posted", code: 1, posted: h(40), action: null, id: {suspect: false}}}),
+          postRowOld({st: {tab: "posted", code: 3, posted: h(40), markedAt: h(30), action: null}})])()""")
+        ok(m == [False, False, True, True], look + "Post: Correct the Tally id keeps the row under Posted, whatever its age; with nothing to do it leaves: %s" % m)
+        # 7. a bill a person marked as already in Tally (code 3) leaves 24 hours after the mark, like a confirmed one (kept)
+        m = pg.evaluate(H + "[billOld({status: 'approved', exportedAt: h(50), postVerified: true, tally: {at: h(50), byOwner: 'X', byOwnerAt: h(30)}}), billOld({status: 'approved', exportedAt: h(50), postVerified: true, tally: {at: h(50), byOwner: 'X', byOwnerAt: h(3)}})]")
+        ok(m == [True, False], look + "Purchase: marked already in Tally by a person: off the page 24 hours after the mark: %s" % m)
+        ctx.close()
     # ---- the phone
     for nl in (False, True):
         look = "[phone%s] " % (", new look" if nl else "")

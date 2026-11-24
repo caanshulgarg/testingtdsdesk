@@ -457,7 +457,7 @@ export function BankPage() {
   const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + (bankAside(r) ? 0 : num(r[k])), 0));
   // the lines the table lists: the tab, search, column filters and dates (bankVisibleRows, src/js/22), then the quick
   // chips and "suggestions only" (parts/bank/smart.js); the filter bar counts and adds them up (it replaces the ChipBar)
-  const view = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
+  const view = apView("bank") === "auto" ? b.rows.filter((r) => isAuto(r) && !bankOld(r)) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
   // the ready lines shown now, when a filter is on (re-review of fdeb79bd8); [] otherwise
   const fOn = smartOn(b) || ["date", "narr", "wd", "dep", "led"].some((k) => colActive("bank", k)) || listFOn("bank"), bsh = fOn ? listShownSet("bank") : null;
   const pv = fOn ? shown.filter((r) => r.state === "ready" && (!bsh || bsh.has(r.id))) : [];

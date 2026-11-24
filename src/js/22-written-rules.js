@@ -827,7 +827,7 @@ function bankVisibleRows(){
   if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
   const tab = bankTab(), states = tabStates(tab);
-  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && ((states ? bankTabOf(r) === tab : bankTabOf(r) !== "old") || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
+  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && ((states ? bankTabOf(r) === tab : bankTabOf(r) !== "old") || b.sticky.has(r.id)) && !bankOld(r) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
 }
 let bankLastClicked = null;
 // the ticks and the bottom bar only (React alone redraws, not the old screens around it)
