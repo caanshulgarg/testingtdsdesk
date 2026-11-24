@@ -687,8 +687,9 @@ with sync_playwright() as p:
     ok("types=" not in chk["url"] and "from=20261019" in chk["url"] and "to=20261023" in chk["url"], "the invoices' own dates only (20 to 22 Oct, a day either side), every type (%s)" % chk["url"][-80:])
     ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
        "the same entry (number, type, year, amount, customer) is found, with its real amount 1,180 and its party (%s)" % chk["am"])
-    # (the owner, 24-Nov-2026: the same entry is also the exact voucher type: another sales series is another entry, posted)
-    ok(chk["m"] != "intally" and chk["c"] != "intally" and chk["d"] != "intally", "another sales series (“GST Sales”) is not taken for it, nor a Journal of that number crediting Sales Accounts, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
+    # (the owner, 24-Nov-2026: both with a GSTIN and the same one, any Sales-class type is the same type: "GST Sales" of the
+    # same customer GSTIN, number, year and amount is the same entry; never a Journal, nor a "Tax Invoice" type)
+    ok(chk["m"] == "intally" and chk["c"] != "intally" and chk["d"] != "intally", "another sales series (“GST Sales”) of the same GSTIN is the same entry; not a Journal of that number crediting Sales Accounts, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
     # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow", superseding 16-Nov-2026's "Post duplicate anyway"):
     # the same number of another amount is another entry: nothing holds it
     ok(not chk["bn"] and "Already in Tally" not in chk["bp"] and "Post again anyway?" not in chk["bp"],

@@ -276,12 +276,12 @@ async function salesCheckTally(list, call){
     const had = !!v.dupBlock; delete v.dupBlock;
     // (this invoice's duplicate check has run again: an answer not confirmed before no longer holds it, item 3)
     if (v.needsCheck){ delete v.needsCheck; mapInvoice(v); }
-    // the same entry (salesSameEntry, as FinCom's own posted invoices are matched, salesDupOf): the number, the exact
-    // voucher type, the financial year, the amount (to ₹1) and the customer: In Tally, quietly. Anything less is not this
+    // the same entry (salesSameEntry, as FinCom's own posted invoices are matched, salesDupOf): the number, the voucher
+    // type (any Sales-class one when both GSTINs match), the year, the amount (to ₹1), the customer: In Tally, quietly. Anything less is not this
     // invoice: nothing holds it, it is posted. Nor the Tally entry of a FinCom invoice a person said is not this one
     const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
     const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
-    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party}; return salesSameEntry(me, e) && !gone.some(g => salesSameEntry(g, e)); });
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party}; return salesSameEntry(me, e, isInv) && !gone.some(g => salesSameEntry(g, e, isInv)); });
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (had) mapInvoice(v);
   });

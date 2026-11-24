@@ -565,15 +565,22 @@ function invoiceProblems(v){
   if (x.number && dup) p.push("invoice " + x.number + " already exists");
   return p;
 }
-// the same entry (the owner, 23-Nov-2026: "it should flow"; 24-Nov-2026): the number, the exact voucher type, the
-// financial year, the amount (to ₹1) and the customer (the GSTIN when both have one, else the party ledger). a, b:
-// {no (normInvNo), type, date (yyyy-mm-dd), amount, gstin, party}. Anything less is another entry, and is posted
-function salesSameEntry(a, b){
+// the same entry (the owner, 23-Nov-2026: "it should flow"; 24-Nov-2026): the number, the financial year, the amount
+// (to ₹1) and the customer. Both with a GSTIN: the same GSTIN, and any Sales-class voucher type (salesTypeClasses:
+// "Sales" and "Sales UP" alike; never a note); either without one: the exact voucher type and the party ledger. a, b:
+// {no (normInvNo), type, date (yyyy-mm-dd), amount, gstin, party, note}; isInv: the Sales-class test (salesCheckTally's).
+// Anything less is another entry, and is posted
+function salesSameEntry(a, b, isInv){
   const lc = s => String(s || "").trim().toLowerCase(), up = s => String(s || "").trim().toUpperCase();
-  if (!a.no || a.no !== b.no || !lc(a.type) || lc(a.type) !== lc(b.type) || !a.date || !b.date || fyLabel(a.date) !== fyLabel(b.date) || Math.abs(r2(a.amount) - r2(b.amount)) > 1) return false;
-  return up(a.gstin) && up(b.gstin) ? up(a.gstin) === up(b.gstin) : !!lc(a.party) && lc(a.party) === lc(b.party);
+  if (!a.no || a.no !== b.no || !a.date || !b.date || fyLabel(a.date) !== fyLabel(b.date) || Math.abs(r2(a.amount) - r2(b.amount)) > 1) return false;
+  const same = !!lc(a.type) && lc(a.type) === lc(b.type);
+  if (!up(a.gstin) || !up(b.gstin)) return same && !!lc(a.party) && lc(a.party) === lc(b.party);
+  if (up(a.gstin) !== up(b.gstin)) return false;
+  const cls = isInv || salesTypeClasses([].concat((SL() && SL().cfg || {}).voucherType || []));
+  return same || (!a.note && !b.note && cls(a.type) && cls(b.type));
 }
-function salesEntryOf(v){ return {no: normInvNo(v.x.number), type: salesVt(v.x), date: v.x.date, amount: Math.abs(num(v.x.total)), gstin: v.x.customerGstin, party: v.customerLedger}; }
+// (an invoice already In Tally: the type of the Tally entry it was matched to)
+function salesEntryOf(v){ return {no: normInvNo(v.x.number), type: (v.status === "intally" && v.tallyMatch && v.tallyMatch.type) || salesVt(v.x), date: v.x.date, amount: Math.abs(num(v.x.total)), gstin: v.x.customerGstin, party: v.customerLedger, note: !!v.x.noteKind}; }
 // the entries a person said are not this invoice's (Not this Tally entry): on it, and kept for its number (cfg.notTally)
 function salesNotOf(v){ return (v.notTally || []).concat(((SL().cfg || {}).notTally || {})[normInvNo(v.x.number)] || []); }
 // the same entry posted from FinCom (salesSameEntry), posted or found in Tally: {src, type, number, date, amount, party,

@@ -49,7 +49,7 @@ last = lambda A: A.evaluate("() => window.__toasts.slice(-1)[0] || ''")
 
 # ---- sales
 GST = """() => { const mk = (b) => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; };
-  return {up: mk('09AAACZ1234Q1Z'), k: mk('27AAACK5678P1Z')}; }"""
+  return {up: mk('09AAACZ1234Q1Z'), k: mk('27AAACK5678P1Z'), m: mk('27AAACM9012R1Z')}; }"""
 LED = [["Kappa Retail", "Sundry Debtors", "k"], ["Sales Account", "Sales Accounts"], ["Round Off", "Indirect Expenses"], ["Output IGST", "Duties & Taxes"]]
 SETL = """([leds, g]) => { const cid = SL() ? SL().cid : CO().id, list = leds.map(([name, group, gk]) => ({name, group, gstin: gk ? g[gk] : ""}));
   Ledgers.st[cid] = {list, parents: {}, at: new Date().toISOString(), srcAt: new Date().toISOString(), src: "cloud", file: "", book: "", cloudAt: ""};
@@ -64,8 +64,8 @@ DUPW = ["Post duplicate anyway", "Post again anyway?"]
 NODUP = lambda t: not any(w in t for w in DUPW)
 QUIET = lambda t: NOTE not in t and "Looks already" not in t and "Post anyway" not in t and NODUP(t) and "Checked against" not in t
 PAGE = "() => document.querySelector('#app').innerText + ' | ' + window.__toasts.join(' | ') + ' | ' + JSON.stringify(SL().list.map(v => [v.problems || [], v.postError || ''])) + ' | ' + JSON.stringify((SL().oneByOne || {}).rows || [])"
-def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail"):
-    return "{guid: 'g-%s', masterId: '%s', date: '%s', %snumber: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", n, party, party, amt)
+def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail", gstin=""):
+    return "{guid: 'g-%s', masterId: '%s', date: '%s', %s%snumber: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", ("partyGstin: '%s', " % gstin) if gstin else "", n, party, party, amt)
 def sfresh(A, *nos, d="2026-11-02"):
     A.evaluate("() => { SL().list = []; SL().dupSkipped = []; SL().oneByOne = null; }"); A.evaluate(RESET)
     return [A.evaluate(ADD, [n, d, G["k"], 0]) for n in nos]
@@ -251,7 +251,7 @@ with sync_playwright() as p:
     A.evaluate("() => { window.__cloud.vouchers = []; }")
 
     print("SALES 10. the same entry is also the exact voucher type and the same customer")
-    for label, v in [("another Sales series (Sales B2C)", sv("ZS/40", typ="Sales B2C")), ("another customer", sv("ZS/40", party="Omega Stores")),
+    for label, v in [("another customer", sv("ZS/40", party="Omega Stores")),
                      ("no type in the copy", sv("ZS/40", typ="")), ("a Credit Note of that number", sv("ZS/40", typ="Credit Note"))]:
         ids = sfresh(A, "ZS/40")
         A.evaluate("() => { window.__cloud.vouchers = [" + v + "]; }")
@@ -270,6 +270,59 @@ with sync_playwright() as p:
     a = A.evaluate(ADD, ["ZS/43", "2026-11-02", G["k"], 0])
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
     ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "intally" and A.evaluate("() => window.__sent") == [], "the same GSTIN: In Tally (%s)" % A.evaluate(SST))
+
+    print("SALES 13. both with a GSTIN and the same one: any Sales-class type is the same type; else the exact type")
+    SST1 = "(id) => { const v = SL().list.find(v => v.id === id); return v.status + (v.tallyMatch && v.tallyMatch.type ? ' ' + v.tallyMatch.type : ''); }"
+    def one(n, cg, copy, d="2026-11-02"):
+        sfresh(A); a = A.evaluate(ADD, [n, d, cg, 0])
+        # (a customer with no GSTIN is matched by name, not sure: a person sets its ledger, so it is Ready)
+        if not cg: A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.userLedger = true; mapInvoice(v); }", a)
+        A.evaluate("() => { window.__cloud.vouchers = [" + copy + "]; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        return a, A.evaluate(SST1, a), A.evaluate("() => window.__sent")
+    a, st, sent = one("ZS/70", G["k"], sv("ZS/70", typ="Sales UP"))
+    ok(st == "intally Sales UP" and sent == [], "cloud copy: 'Sales' here, 'Sales UP' in the copy, the same GSTIN: In Tally, not sent (%s, sent %s)" % (st, sent))
+    a, st, sent = one("ZS/71", G["k"], sv("ZS/71", typ="Sales UP", gstin=G["k"]))
+    ok(st == "intally Sales UP" and sent == [], "cloud copy: the same GSTIN on the copy's voucher itself: In Tally (%s)" % st)
+    a, st, sent = one("ZS/72", "", sv("ZS/72", typ="Sales UP"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: no GSTIN on the invoice, 'Sales UP' against 'Sales': posted (%s, sent %s)" % (st, sent))
+    a, st, sent = one("ZS/73", "", sv("ZS/73", typ="Sales UP", party="Lambda Stores"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: neither with a GSTIN, another type: posted (%s)" % st)
+    a, st, sent = one("ZS/74", G["k"], sv("ZS/74", typ="Sales UP", party="Mu Traders", gstin=G["m"]))
+    ok(st == "posted" and sent == [[a]], "cloud copy: another GSTIN: posted (%s)" % st)
+    a, st, sent = one("ZS/75", G["k"], sv("ZS/75", typ="Credit Note"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: a Credit Note of that number, the same GSTIN: never the sale, posted (%s)" % st)
+    a, st, sent = one("ZS/76", G["k"], sv("ZS/76", typ="Sales Return"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: a Sales Return of that number: posted (%s)" % st)
+    a, st, sent = one("ZS/77", G["k"], sv("ZS/77", typ="Sales UP", amt="1182.00"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: 'Sales UP', the same GSTIN, ₹2 off: posted (%s)" % st)
+    a, st, sent = one("ZS/78", G["k"], sv("ZS/78", typ="Sales UP", amt="1180.90"))
+    ok(st == "intally Sales UP", "cloud copy: 'Sales UP', the same GSTIN, 90 paise off: In Tally (%s)" % st)
+    a, st, sent = one("ZS/79", G["k"], sv("ZS/79", typ="Sales UP", d="20260331"), d="2026-04-01")
+    ok(st == "posted" and sent == [[a]], "cloud copy: 'Sales UP', the same GSTIN, another financial year: posted (%s)" % st)
+    a, st, sent = one("ZS/80", G["k"], sv("ZS/81", typ="Sales UP"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: 'Sales UP', the same GSTIN, another number: posted (%s)" % st)
+    print("   FinCom's own: an invoice In Tally as 'Sales UP', another 'Sales' invoice of that number")
+    def own(n, cg, mine="Sales UP", note=False, mg=None):
+        ids = sfresh(A, n)
+        A.evaluate("([id, t, note, g]) => { const p = SL().list.find(v => v.id === id); p.status = 'intally'; p.tallyMatch = {key: 'k-' + id, number: p.x.number, type: t, date: '20261102'}; if (note) p.x.noteKind = 'credit'; if (g !== null) p.x.customerGstin = g; }", [ids[0], mine, note, mg])
+        a = A.evaluate(ADD, [n, "2026-11-02", cg, 0])
+        # (a customer with no GSTIN is matched by name, not sure: a person sets its ledger, so it is Ready)
+        if not cg: A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.userLedger = true; mapInvoice(v); }", a)
+        A.evaluate("() => { window.__cloud.vouchers = []; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        return a, A.evaluate("(id) => SL().list.find(v => v.id === id).status", a), A.evaluate("() => window.__sent")
+    a, st, sent = own("ZS/90", G["k"])
+    ok(st == "intally" and sent == [], "FinCom's own: the same GSTIN: In Tally, not sent (%s, sent %s)" % (st, sent))
+    a, st, sent = own("ZS/91", "")
+    ok(st == "posted" and sent == [[a]], "FinCom's own: no GSTIN on the new invoice: the exact type, posted (%s)" % st)
+    a, st, sent = own("ZS/92", G["k"], mg="")
+    ok(st == "posted" and sent == [[a]], "FinCom's own: no GSTIN on the one In Tally: the exact type, posted (%s)" % st)
+    a, st, sent = own("ZS/93", G["k"], mg=G["m"])
+    ok(st == "posted" and sent == [[a]], "FinCom's own: another GSTIN: posted (%s)" % st)
+    a, st, sent = own("ZS/94", G["k"], mine="Credit Note", note=True)
+    ok(st == "posted" and sent == [[a]], "FinCom's own: a credit note of that number, the same GSTIN: posted (%s)" % st)
+    A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
 
     print("SALES 11. the duplicate check's line on the invoice: the info tone, not amber")
     sfresh(A, "ZS/50")
