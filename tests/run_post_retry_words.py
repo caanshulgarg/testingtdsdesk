@@ -135,6 +135,19 @@ with sync_playwright() as p:
     s2 = pg.evaluate("(m) => postWaitMsg({company: %r, status: 'waiting', message: m})" % CO, "Ledger \u201c" + CO + "\u201d is not in Tally \u2014 create it, then post again.")
     ok(s2.startswith("Ledger") and CO in s2, "a posting's own words with a computer key named like the client: kept, not left blank (%r)" % s2)
     if os.environ.get("TDSDESK_SHOTS"): pg.screenshot(path=os.environ["TDSDESK_SHOTS"] + "/sales-posterror-plain.png")
+    print("6. computers and Windows users named like accounting words, or like a quoted ledger: Tally's words kept (next-posting-followups)")
+    DEVS = """(names) => names.map((n, i) => ({id: "dev-w" + i, name: n + " \u00b7 DEMO\\\\" + n, info: {computer: n, user: "DEMO\\\\" + n.toLowerCase(), bridges: {}}}))"""
+    WORDS = ["Sales", "Purchase", "GST", "TDS", "Audit", "Billing", "Accounts", "Output", "Rent", "Kappa"]
+    devs = pg.evaluate(DEVS, WORDS)
+    for m in ["Voucher type Sales does not exist", "Voucher type Purchase does not exist", "GST ledger not set", "TDS Payable is not a ledger", "Audit trail is on",
+              "Billing failed", "Accounts are closed", "Ledger 'Output GST 18%' does not exist", "Ledger \u201cRent Paid\u201d is not in Tally",
+              "Ledger \u2018Kappa Retail\u2019 does not exist", "Ledger \"Output IGST\" does not exist"]:
+        got = pg.evaluate("([m, d]) => postNameScrub(m, [], d)", [m, devs])
+        ok(got == m, "kept as Tally said it: %r (%r)" % (m, got))
+    got = pg.evaluate("([m, d]) => postNameScrub(m, [], d)", ["Waiting at Rent for DEMO\\rent; the firm's owner can open Output's Tally", devs])
+    ok("Rent" not in got and "Output" not in got and "the Tally computer" in got, "a name not quoted is still left out, an apostrophe is no quote (%r)" % got)
+    got = pg.evaluate("([m, d]) => postNameScrub(m, [], d)", ["Ledger 'Output GST 18%' is not in Tally (PC-DEMO1 \u00b7 DEMO\\asha)", devs])
+    ok(got == "Ledger 'Output GST 18%' is not in Tally", "the quoted ledger kept, the computer's bracket left out (%r)" % got)
     ok(not errors, "no page errors (%s)" % errors[:2])
     br.close()
 srv.shutdown()

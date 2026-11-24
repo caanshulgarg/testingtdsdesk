@@ -333,10 +333,11 @@ async function salesVouchersIn(co, from, to, call){
 // whether a voucher type of Tally's answer is of the Sales class, for an invoice: the client's own sales type (Sales
 // settings, the invoices' own), Tally's "Sales", or a type with "sales" in its name; never a Journal, Receipt, Payment,
 // Contra, a note, a return or an order, whatever its entries; nor a type with any of those words in its name ("Sales CN",
-// "Sales Journal", "Sales Advance Receipt", "Sales Rtn": SALES_NOT_SALE)
+// "Sales Journal", "Sales Advance Receipt", "Sales Rtn", "Sales Note", "SalesReturn"), nor the client's own credit or debit
+// note type (salesNotSale)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  return t => { const n = lc(t); if (!n || SALES_NOT_SALE.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
+  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's

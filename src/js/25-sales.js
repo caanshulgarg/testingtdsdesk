@@ -610,18 +610,21 @@ function salesDupOf(v){
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), party: o.customerLedger || o.x.customerName || "", id: o.id} : null;
 }
 // a voucher type that is never a sale, by a word of its name (spaces, "_", "-", brackets between words): a credit or
-// debit note (also "Cr Note", "Dr Note", CN, DN), a return (Rtn, Ret), a Journal, a receipt, a payment, a contra, an
-// order, a quotation, a delivery note or a memo. "Credit" or "Debit" alone is a sale ("Credit Sales", "Sales (Credit)");
-// salesBooksVts and salesTypeClasses use this one test (reviews of 03ffa5eed and ab2f0a96e)
-const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|cn|dn|journals?|receipts?|payments?|returns?|rtn|ret|contra|orders?|quotations?|delivery|memo)(?=$|[^a-z0-9])/i;
+// debit note (also "Cr Note", "Dr Note", CN, DN, a note alone), a Journal, a receipt, a payment, a contra, Rtn or Ret;
+// or by any part of it: a return ("SalesReturn", "Returnable"), an order, a quotation, a delivery or a memo ("Sales
+// Memorandum": not in the books). "Credit" or "Debit" alone is a sale ("Credit Sales", "Sales (Credit)"); salesBooksVts
+// and salesTypeClasses use this one test, and salesNotSale with the client's own note types (next-posting-followups)
+const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra)(?=$|[^a-z0-9])|return|order|quotation|delivery|memo/i;
+// (a note type set the same as the client's sales type is no note: never a reason to post a sale again)
+function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x || "").toLowerCase().trim(), n = l(t); return SALES_NOT_SALE.test(n) || (n !== l(c.voucherType || "Sales") && [c.creditNoteType, c.debitNoteType].some(x => !!n && l(x) === n)); }
 // next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already
 // reads (the client's books): the Sales-class type most used, the default for uploads, shown as "(from your Tally)"; a
 // type a person typed in Sales settings stands (cfg.vtBy "you"), and when the books use more than one in real use the
 // person is asked once (cfg.vtBy "asked")
 function salesBooksVts(){
   const s = SL(), bk = S.books && s && S.books.cid === s.cid ? S.books : null; if (!bk) return [];
-  const n = new Map(), never = SALES_NOT_SALE;
-  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || never.test(t) || !/\bsales\b/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
+  const n = new Map();
+  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || salesNotSale(t) || !/\bsales\b/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
   const all = Array.from(n.entries()).sort((a, b) => b[1] - a[1]), tot = all.reduce((a, x) => a + x[1], 0);
   // (in real use: at least 3 vouchers and a twentieth of the client's sales)
   return all.filter(([, c]) => c >= 3 && c >= tot * 0.05).map(([type, count]) => ({type, count}));
