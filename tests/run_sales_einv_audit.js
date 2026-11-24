@@ -19,7 +19,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
 const NAMES = ["num", "r2", "INR", "money", "xesc", "GSTIN_RE", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_STATES", "SALES_RATES", "stateOfGstin", "fyLabel", "rateTag",
   "salesOwnGstins", "salesPan", "salesGstinOfPan", "salesOwnStates", "salesIsOwn", "salesSeriesKeys", "salesRegOf", "salesLearnReg",
   "salesTotals", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
-  "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
+  "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "postNamesKnown", "postNameScrub", "POST_REASONS", "postReasonText", "postCloudSay", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
   "inv", "blankItem", "salesIrnLocked", "startDraft", "recalcDraft", "draftProblems", "saveDraft", "salesSetField", "salesSetKind", "EINV"];
 const {ctx, x} = load(HTML, NAMES);
 // made-up GSTINs of one PAN in Maharashtra (27) and Karnataka (29), and customers'
