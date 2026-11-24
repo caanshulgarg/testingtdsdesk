@@ -64,7 +64,10 @@ async function rereadSales(v, force){
   if (force === "google" && !googleReady()){ toast("Google OCR is not set up."); return; }
   s.busy = force === "claude" ? "Reading again with Claude\u2026" : force === "google" ? "Reading again with Google OCR\u2026" : "Reading again\u2026"; render();
   try {
-    const r = await readSalesFile(file, s.cid, m => { s.busy = m + "\u2026"; render(); }, null, force);
+    // an invoice out of a PDF of several: its own pages (next-fix-zoho-sales-pdf: it was read from page 1 again; older
+    // ones by the pages in their file name)
+    const pm = /pages? (\d+)(?:\u2013(\d+))?$/.exec(v.fileName || ""), pages = v.pages || (pm ? Array.from({length: (+pm[2] || +pm[1]) - +pm[1] + 1}, (x, i) => +pm[1] + i) : null);
+    const r = await readSalesFile(file, s.cid, m => { s.busy = m + "\u2026"; render(); }, pages, force);
     Object.assign(v.x, r.x || {});
     v.method = r.method; v.problems = []; mapInvoice(v); saveSales();
     toast("Read again: " + (r.method || "") + ". Check the invoice.");
@@ -286,10 +289,41 @@ function salesFromClaude(j, co){
     pos: stateCodeFrom(j.placeOfSupply) || stateOfGstin(cust), taxable: num(j.taxableValue), cgst: num(j.cgst), sgst: num(j.sgst), igst: num(j.igst), cess: num(j.cess),
     total: num(j.totalAmount), irn: String(j.irn || ""), dueDays: num(j.dueDays), items};
 }
+// next-fix-zoho-sales-pdf: the figures as Zoho Books (and others) print them: "Sub Total", then "Discount(12.70%) (-)
+// 292.00", the GST on what is left, an "Adjustment" added or taken off ("(-) 5.00"), "Rounding -0.44", "Total". The
+// taxable value is the sub total less the discount (the reader took the sub total, so taxable plus GST was not the total
+// and every such invoice was held, or sent to Claude); the adjustment and the rounding are the invoice's round off
+function salesDiscountFix(x, text){
+  const ls = String(text || "").split(/\n/).map(l => l.replace(/\s+/g, " ").trim());
+  const find = re => { for (const l of ls){ const m = re.exec(l); if (m) return m; } return null; }, val = m => m ? num(String(m[2]).replace(/,/g, "")) : 0;
+  const gst = num(x.cgst) + num(x.sgst) + num(x.igst), A = "(?:\\u20b9|rs\\.?|inr)?\\s*([\\d,]+(?:\\.\\d{1,2})?)\\s*$";
+  const dm = find(new RegExp("^(?:less\\s*:?\\s*)?(?:trade\\s+)?discount\\b\\s*(?:\\(\\s*[\\d.]+\\s*%\\s*\\))?\\s*(\\(-\\)\\s*|-\\s*)?" + A, "i"));
+  const am = find(new RegExp("^adjustment\\b\\s*(\\(-\\)\\s*|-\\s*)?" + A, "i")), sm = find(new RegExp("^sub\\s*-?\\s*total\\b\\s*()" + A, "i"));
+  const d = val(dm), adj = (am && am[1] ? -1 : 1) * val(am), t = r2((val(sm) || num(x.taxable)) - d);
+  const off = v => Math.abs(v + gst + adj - num(x.total));
+  if (!(num(x.total) > 0 && gst > 0) || (Math.abs(num(x.taxable) + gst - num(x.total)) <= 1) || !(d > 0 || adj)) return false;
+  if (!(t > 0 && off(t) <= 1 && FREE_GST_RATES.some(r => Math.abs(gst / t * 100 - r) <= 0.15))) return false;
+  x.taxable = t; return true;
+}
+// the invoice's own round off as it states it: its Adjustment (added, or "(-)" taken off) and its Rounding ("Rounding
+// -0.44", "Round off (-) 0.20"), 0 when it states neither (the owner, 24-Nov-2026: these go to Round Off and post)
+function salesStatedRound(text){
+  let t = 0;
+  String(text || "").split(/\n/).forEach(l => { const m = /^(adjustment|round(?:ing|ed)?(?:\s*-?\s*off)?)\b\s*(\(-\)\s*|-\s*)?(?:\u20b9|rs\.?|inr)?\s*(-?)\s*([\d,]+(?:\.\d{1,2})?)\s*$/i.exec(l.replace(/\s+/g, " ").trim());
+    if (m) t += (m[2] || m[3] ? -1 : 1) * num(m[4].replace(/,/g, "")); });
+  return r2(t);
+}
+// the text of an invoice's pages, without drawing them (most PDFs are read from their text alone)
+async function salesPdfText(file, pages){
+  const pdf = await getPdf(file); let text = "";
+  for (const i of pages.filter(n => n >= 1 && n <= pdf.numPages)) text += pageTextLines(await (await pdf.getPage(i)).getTextContent()) + "\n";
+  return text.trim().slice(0, 14000);
+}
 async function salesReadFile(file, cid, progress, pageList, force){
   const co = CO(cid), trace = [];
   let text = "", canvases = [], kind;
-  if (isPdf(file)){ const r = await pdfPages(file, pageList || [1, 2]); text = r.text; canvases = r.canvases; kind = text.replace(/\s/g, "").length >= 80 ? "pdf_text" : "pdf_scan"; }
+  const draw = async () => { if (!canvases.length && isPdf(file)) canvases = (await pdfPages(file, pageList || [1, 2])).canvases; return canvases; };
+  if (isPdf(file)){ text = await salesPdfText(file, pageList || [1, 2]); kind = text.replace(/\s/g, "").length >= 80 ? "pdf_text" : "pdf_scan"; if (kind !== "pdf_text" || force) await draw(); }
   else if (isImage(file)){ canvases = [await imageToCanvas(file)]; kind = "photo"; }
   else throw {code: "sales_type"};
   await readerLoad();   // freeParse: the bill reader, the first time (src/js/82)
@@ -297,13 +331,16 @@ async function salesReadFile(file, cid, progress, pageList, force){
   const tryText = (t, label) => {
     const fp = freeParse(t, cid, file.name, {ocr: kind !== "pdf_text"});
     const x = salesFromFree(fp, co, t);
-    const why = fp.why.filter(w => !/supplier GSTIN not found|client's own sales invoice|not a standard rate/.test(w));
+    const fixed = salesDiscountFix(x, t), stated = salesStatedRound(t);
+    if (stated && Math.abs(num(x.taxable) + num(x.cgst) + num(x.sgst) + num(x.igst) + stated - num(x.total)) < 0.01) x.roundOff = stated;
+    const why = fp.why.filter(w => !/supplier GSTIN not found|client's own sales invoice|not a standard rate/.test(w) && !(fixed && /taxable value plus GST does not equal the total/.test(w)));
     const ok = why.length === 0 && x.number && x.date && x.total > 0;
     trace.push({step: label, ok, note: ok ? "all checks passed" : why.join("; ")});
     if (!best || ok) best = {x, ok, why};
     return ok;
   };
   if (kind === "pdf_text") tryText(text, "PDF\u2019s own text");
+  if (!(best && best.ok)) await draw();
   if (!(best && best.ok) && canvases.length){
     if (progress) progress("reading the scan");
     for (const psm of ["3", "11"]){

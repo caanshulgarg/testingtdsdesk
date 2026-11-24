@@ -533,7 +533,11 @@ function invoiceProblems(v){
   if (!(num(x.total) > 0)) p.push("total missing");
   if (x.customerGstin && !gstinValid(x.customerGstin)) p.push("customer GSTIN is not valid");
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
-  if (Math.abs(num(x.taxable) + gst + num(x.cess) - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
+  // (the owner, 24-Nov-2026, as the items check in salesProblemsNow: the invoice's own stated Adjustment plus Rounding,
+  // x.roundOff, read from an uploaded PDF or sheet, explains the gap and posts in Round Off; never on an invoice made
+  // here, whose roundOff is worked out as the gap)
+  const ro = ["upload", "sheet", "market"].includes(v.source) ? num(x.roundOff) : 0;
+  if (Math.abs(num(x.taxable) + gst + num(x.cess) + ro - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
   if (num(x.igst) && (num(x.cgst) || num(x.sgst))) p.push("both IGST and CGST/SGST");
   const inter = isInterState(x, co), home = salesRegOf(v).code || stateOfGstin(co.gstin), pos = x.pos || stateOfGstin(x.customerGstin);
   // next-fix-sales-upload (item 1): the place of supply named, and where it came from (the party's Tally ledger when the
@@ -756,7 +760,8 @@ function customerMasterXml(l){
 function customerFromText(text, custGstin, co){
   const lines = String(text || "").split(/\n/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
   const bad = l => /gstin|gst\s*no|pan\b|address|place\s*of|state\b|phone|mobile|email|invoice|date|^\d|pin\s*code|\b\d{6}\b|tax\s*invoice|original|duplicate/i.test(l) || normName(l) === normName(co.name) || l.length < 3;
-  const clean = l => l.replace(/^(bill(ed)?\s*to|buyer|customer|consignee|party|ship(ped)?\s*to|details\s+of\s+receiver)\s*(\(.*?\))?\s*[:\-]?\s*/i, "").replace(/^m\/s\.?\s*/i, "").trim();
+  // (the invoice's own details beside the name on the same line, as Zoho prints "Terms : Due on Receipt": not the name)
+  const clean = l => l.replace(/^(bill(ed)?\s*to|buyer|customer|consignee|party|ship(ped)?\s*to|details\s+of\s+receiver)\s*(\(.*?\))?\s*[:\-]?\s*/i, "").replace(/^m\/s\.?\s*/i, "").replace(/\s+(terms|due\s*date|invoice\s*(date|no\.?|#)|p\.?\s*o\.?\s*#?|balance\s*due)\s*[:#].*$/i, "").trim();
   const at = lines.findIndex(l => /^(bill(ed)?\s*to|buyer|customer|consignee|details\s+of\s+receiver)\b/i.test(l));
   if (at >= 0){
     const same = clean(lines[at]);

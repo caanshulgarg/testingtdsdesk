@@ -29,44 +29,61 @@ const Market = {
 };
 
 async function uploadSales(files){
-  const s = SL(); if (!s) return;
+  if (!SL()) return;
   // a register (a sheet or JSON: GSTR-1, a marketplace's or an ERP's report) goes to the sheet panel (app/src/lib/registers.js)
   const sheets = files.filter(f => isSheetFile(f));
   if (sheets.length){ sheetStart(sheets, "sales"); files = files.filter(f => !sheets.includes(f)); if (!files.length) return; }
-  const cid = s.cid;
+  const cid = SL().cid;
+  // next-fix-zoho-sales-pdf (24-Nov-2026: a Zoho Books PDF of many invoices; only the first few stayed): the Sales list on
+  // screen is made afresh when the sync brings a change (cloudApplyNow) or the page is opened again (loadSales), and the
+  // invoices read after that went into the list that was no longer shown, never saved. Each invoice now goes into the
+  // client's list as it is now, and is kept at once: the one on screen, else the one in this browser (as salesIngest)
+  const now = () => S.sales && S.sales.cid === cid ? S.sales : null;
+  const say = t => { const s = now(); if (s){ s.busy = t; render(); } };
+  const live = async () => { while (now() && now().loading) await new Promise(ok => setTimeout(ok, 100)); return now(); };   // a list being loaded: once it is in
+  const kept = async () => { const s = await live(); return s ? s.list : ((await BankDB.get("sales:" + cid)) || []); };
+  const told = new Set();
   let added = 0;
-  // a PDF holding several sales invoices is read one invoice at a time
+  // a PDF holding several sales invoices is read one invoice at a time; the file itself is kept once, with its first
+  // invoice (docOf on the others), not once for each invoice in it
   const items = [];
   for (const f of files){
-    const g = isPdf(f) ? await invoiceGroups(f) : null;
-    if (g && g.length > 1){ g.forEach(pg => items.push({file: f, pages: pg})); toast(f.name + " holds " + g.length + " invoices: each is read separately."); }
+    say("Reading " + f.name + "\u2026");
+    let g = null; try { g = isPdf(f) ? await invoiceGroups(f) : null; } catch (e){}
+    if (g && g.length > 1) g.forEach(pg => items.push({file: f, pages: pg, of: g.length}));
     else items.push({file: f, pages: g && g.length === 1 ? g[0] : null});
   }
-  for (const it of items){
-    const file = it.file;
-    s.busy = "Reading " + file.name + "\u2026"; render();
+  const first = new Map();
+  for (let i = 0; i < items.length; i++){
+    const it = items[i], file = it.file, of = it.of ? " (invoice " + (items.filter((x, j) => j <= i && x.file === file).length) + " of " + it.of + ")" : "";
+    say("Reading " + file.name + of + "\u2026");
     try {
-      const hash = (await fileHash(file)) + (it.pages ? "p" + it.pages.join(",") : "");
-      const same = s.list.find(v => v.hash === hash);
-      if (same){ toast(file.name + " was already uploaded (invoice " + (same.x.number || "?") + ")."); continue; }
-      const r = await readSalesFile(file, cid, m => { s.busy = file.name + ": " + m + "\u2026"; render(); }, it.pages);
+      const fh = await fileHash(file), hash = fh + (it.pages ? "p" + it.pages.join(",") : "");
+      const same = (await kept()).find(v => v.hash === hash);
+      if (same){ if (!told.has(file)) toast(file.name + " was already uploaded" + (it.of ? "" : " (invoice " + (same.x.number || "?") + ")") + "."); told.add(file); continue; }
+      const r = await readSalesFile(file, cid, m => say(file.name + of + ": " + m + "\u2026"), it.pages);
       // the same invoice arriving inside another file is not added twice
       const no = normInv(r.x && r.x.number);
-      const twin = no && s.list.find(v => normInv(v.x.number) === no && (!v.x.date || !r.x.date || v.x.date === r.x.date));
+      const twin = no && (await kept()).find(v => normInv(v.x.number) === no && (!v.x.date || !r.x.date || v.x.date === r.x.date));
       if (twin){ toast("Invoice " + r.x.number + " is already in Sales; not added again."); continue; }
       const v = newInvoice(r.x, "upload", {hash, fileName: file.name + (it.pages ? " \u00b7 page" + (it.pages.length > 1 ? "s " + it.pages[0] + "\u2013" + it.pages[it.pages.length - 1] : " " + it.pages[0]) : ""), method: r.method, trace: r.trace});
-      S.files["sv:" + v.id] = file; FileStore.put(cid, "sv:" + v.id, file); CloudDocs.add(cid, "sv:" + v.id, file, "sale");
-      s.list.push(v);
-      mapInvoice(v);
+      if (it.pages) v.pages = it.pages;
+      const doc = first.get(fh);
+      S.files["sv:" + v.id] = file;
+      if (doc) v.docOf = doc; else { first.set(fh, v.id); FileStore.put(cid, "sv:" + v.id, file); CloudDocs.add(cid, "sv:" + v.id, file, "sale"); }
+      const s = await live();
+      if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
+      else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
       added++;
     } catch (e){
-      toast(file.name + ": " + (e && e.code === "sales_unreadable" ? "the invoice could not be read. Create it by hand with Create invoice." : e && e.code === "sales_type" ? "use a PDF or a photo." : errCopy(e && e.code)));
+      toast(file.name + of + ": " + (e && e.code === "sales_unreadable" ? "the invoice could not be read. Create it by hand with Create invoice." : e && e.code === "sales_type" ? "use a PDF or a photo." : errCopy(e && e.code)));
     }
   }
-  s.busy = "";
-  saveSales();
+  const s = now();
   if (added) toast(added + " sales invoice" + (added > 1 ? "s" : "") + " read.");
-  s.filter = "review";
+  if (!s) return;
+  s.busy = ""; s.filter = "review";
+  saveSales();
   render();
   if (added && bridgeLive()) salesAutoSync(true);
 }
