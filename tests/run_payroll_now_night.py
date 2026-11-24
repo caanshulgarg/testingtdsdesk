@@ -7,6 +7,9 @@ PostgreSQL (pg_stand), made-up data only:
   2. with it: the entry stays ready, its finding stays resolved; nothing new is made; a month the night makes itself and
      no longer finds is still withdrawn (the night's own rule)
   3. an approved one is not passed and stays approved (never put back as ready)
+  4. (re-review 2) the running month made now as Needs you (a ledger to pick): without keepNow's findings the night clears
+     it (the bug); with them it stays Needs you, as it was (facts and choices), and so does the payroll ledger pick it
+     waits on; one of a month the night makes itself and no longer finds is still cleared
 PG_PORT (55487); the database under TMPDIR (default /tmp/pjnow-pg)."""
 import os, sys, json, subprocess
 os.environ["TMPDIR"] = os.environ.get("PG_TMP") or "/tmp/pjnow-pg"
@@ -24,14 +27,15 @@ TODAY = "20261124"
 KEEP = r"""
 import * as PN from "%s";
 import { payrollMonths } from "%s";
-const [rows, firm, cid, today] = JSON.parse(process.argv[1]);
-const rest = async () => rows.filter((r) => r.firm_id === firm && r.client_id === cid);
-const k = typeof PN.keepNow === "function" ? await PN.keepNow(rest, firm, cid, payrollMonths(today)) : [];
-process.stdout.write(JSON.stringify(k));
+const [rows, finds, firm, cid, today] = JSON.parse(process.argv[1]);
+const rest = async (p) => (/night_findings/.test(p) ? finds : rows).filter((r) => r.firm_id === firm && r.client_id === cid);
+const k = typeof PN.keepNow === "function" ? await PN.keepNow(rest, firm, cid, payrollMonths(today), []) : [];
+process.stdout.write(JSON.stringify(Array.isArray(k) ? { entries: k, findings: [] } : k));
 """ % (os.path.join(NIGHT, "paynow.js"), os.path.join(HERE, "..", "server", "_shared", "dailyjournals.js"))
 def keep_of(db, cid):
     rows = db.rows("select id::text, firm_id::text, client_id, dedupe, state from night_entries where client_id = '%s'" % cid)
-    r = subprocess.run(["node", "--input-type=module", "-e", KEEP, json.dumps([rows, F1, cid, TODAY])], capture_output=True, text=True, check=True)
+    fs = [json.loads(list(x.values())[0]) for x in db.rows("select row_to_json(x)::text from (select firm_id::text, client_id, kind, key, state, facts, evidence, candidates, decided_by::text from night_findings where client_id = '%s') x" % cid)]
+    r = subprocess.run(["node", "--input-type=module", "-e", KEEP, json.dumps([rows, fs, F1, cid, TODAY])], capture_output=True, text=True, check=True)
     return json.loads(r.stdout)
 
 db = pg_stand.start(int(os.environ.get("PG_PORT") or 55487))
@@ -56,10 +60,12 @@ try:
                    case when key = 'payroll:202611' then '%(s)s' else 'ready' end,
                    case when key = 'payroll:202611' and %(d)s then '%(f)s'::uuid end, case when key = 'payroll:202611' and %(d)s then now() - interval '2 hours' end
               from night_findings where client_id = '%(c)s';""" % {"f": F1, "c": cid, "s": state, "d": "true" if decided else "false"})
-    def night(cid, entries):
+    def night(cid, keep):
         # tonight's complete run (p_complete): the books show Oct's salary booked now (the night no longer makes Oct), and
         # the night never makes the running month: no finding or entry of the night's own for either
-        return json.loads(db.one("set role service_role;\nselect public.night_apply('%s', '%s', '2026-11-24', 'v1', '[]'::jsonb, '%s'::jsonb, true, '')::text" % (F1, cid, json.dumps(entries).replace("'", "''"))))
+        if isinstance(keep, list): keep = {"entries": keep, "findings": []}
+        q = lambda x: json.dumps(x).replace("'", "''")
+        return json.loads(db.one("set role service_role;\nselect public.night_apply('%s', '%s', '2026-11-24', 'v1', '%s'::jsonb, '%s'::jsonb, true, '')::text" % (F1, cid, q(keep.get("findings") or []), q(keep.get("entries") or []))))
     st = lambda cid, d: db.one("select state from night_entries where client_id = '%s' and dedupe = '%s'" % (cid, d))
 
     print("1. without it (as before)")
@@ -70,7 +76,7 @@ try:
     print("2. with it")
     made_now("c1")
     k = keep_of(db, "c1")
-    ok([e.get("dedupe") for e in k] == ["payroll:202611"], "2. keepNow: the running month's entry only: " + json.dumps(k))
+    ok([e.get("dedupe") for e in k["entries"]] == ["payroll:202611"] and k["findings"] == [], "2. keepNow: the running month's entry only: " + json.dumps(k))
     c = night("c1", k)
     ok(st("c1", "payroll:202611") == "ready", "2. Make now for Nov 2026, then the night run (p_complete): the entry stays ready")
     ok(db.one("select state from night_findings where client_id = 'c1' and key = 'payroll:202611'") == "resolved", "2. its finding stays resolved")
@@ -83,9 +89,32 @@ try:
     print("3. approved")
     made_now("c3", "approved", True)
     k3 = keep_of(db, "c3")
-    ok(k3 == [], "3. an approved one is not passed: " + json.dumps(k3))
+    ok(k3["entries"] == [], "3. an approved one is not passed: " + json.dumps(k3))
     night("c3", k3)
     ok(st("c3", "payroll:202611") == "approved", "3. it stays approved (never put back as ready)")
+
+    print("4. the running month's Needs you")
+    def you_now(cid):
+        db.sql("""insert into night_findings (firm_id, client_id, kind, key, facts, state, evidence, candidates, first_seen, last_seen) values
+            ('%(f)s', '%(c)s', 'payroll_due', 'payroll:202611', '{"ym": "202611", "waits": true, "title": "Payroll Nov 2026: pick the TDS on salary ledger", "ask_text": ""}', 'you', '[]', '[]', '2026-11-24', '2026-11-24'),
+            ('%(f)s', '%(c)s', 'ledger_pick', 'led:tds', '{"role": "tds", "ask_text": ""}', 'you', '[]', '[{"t": "ledger", "ref": "ledger:tds:TDS on Salary 192", "label": "TDS on Salary 192", "ledger": "TDS on Salary 192"}]', '2026-11-24', '2026-11-24'),
+            ('%(f)s', '%(c)s', 'payroll_due', 'payroll:202610', '{"ym": "202610", "ask_text": ""}', 'you', '[]', '[]', '2026-11-01', '2026-11-23');""" % {"f": F1, "c": cid})
+    fst = lambda cid, k: db.one("select state from night_findings where client_id = '%s' and key = '%s'" % (cid, k))
+    db.sql("insert into clients (id, firm_id, name) values ('c4', '%s', 'Sample Mills'), ('c5', '%s', 'Demo Foods');" % (F1, F1))
+    you_now("c4")
+    night("c4", [])
+    ok(fst("c4", "payroll:202611") == "cleared" and fst("c4", "led:tds") == "cleared", "4. without the findings passed: the running month's Needs you cleared the same night (the bug)")
+    you_now("c5")
+    before = db.one("select row_to_json(x)::text from (select facts, candidates from night_findings where client_id = 'c5' and key = 'led:tds') x")
+    k5 = keep_of(db, "c5")
+    ok(sorted(f["kind"] + "|" + f["key"] for f in k5["findings"]) == ["ledger_pick|led:tds", "payroll_due|payroll:202611"], "4. keepNow: the running month's finding and the pick it waits on: " + json.dumps([f["key"] for f in k5["findings"]]))
+    c5 = night("c5", k5)
+    ok(fst("c5", "payroll:202611") == "you" and fst("c5", "led:tds") == "you", "4. with them: both stay Needs you")
+    ok(db.one("select row_to_json(x)::text from (select facts, candidates from night_findings where client_id = 'c5' and key = 'led:tds') x") == before, "4. as they were: the facts and the choices unchanged")
+    ok(fst("c5", "payroll:202610") == "cleared", "4. a month the night makes itself and no longer finds: cleared, as before")
+    ok(c5.get("new") == 0 and db.one("select count(*) from client_asks where client_id = 'c5'") == "0", "4. nothing new made, no question to the client: " + json.dumps(c5))
+    night("c5", keep_of(db, "c5"))
+    ok(fst("c5", "payroll:202611") == "you", "4. the next night too")
 finally:
     db.stop()
     import shutil; shutil.rmtree(db.data, ignore_errors=True)

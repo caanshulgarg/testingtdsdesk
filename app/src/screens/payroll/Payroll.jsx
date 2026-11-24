@@ -283,14 +283,19 @@ function MakeNow({ co, ym, tally, onState }) {
     setBusy(true); let r;
     try { r = await Cloud.fn("assistant-night", { action: "payroll_now", client_id: co.id, ym }); } catch (e) { r = { kind: "error", words: String((e && e.message) || e) }; }
     setBusy(false); setSaid(r);
-    if (r.kind === "made" || r.kind === "already") { setEx({ id: r.id, state: r.state }); onState(true, r.kind === "made"); }
+    if (r.kind === "made" || r.kind === "updated" || r.kind === "already") { setEx({ id: r.id, state: r.state }); onState(true, r.kind !== "already"); }
+    // (re-review 1) the running month's entry taken back (its new figures need a person)
+    if (r.kind === "you") setEx(null);
   };
   const open = (id) => !tally && <button type="button" className="linkbtn" onClick={() => openDaily("entries", id)} data-now-open="">Open it</button>;
   const k = said ? said.kind : ex ? "already" : "";
-  const done = { approved: " and approved", approving: " and is being approved", rejected: ", and rejected on Daily Check" }[(said && said.state) || (ex && ex.state)] || "";
+  const state = (said && said.state) || (ex && ex.state) || "";
+  const done = { approved: " and approved", approving: " and is being approved", rejected: ", and rejected on Daily Check" }[state] || "";
+  // (re-review 1) the running month, still ready or held: made again from the salary kept now (the same entry, new figures)
+  const again = running && (state === "ready" || state === "held") && canWrite() && <> <button type="button" className="linkbtn" disabled={busy} onClick={make} data-make-again="">{busy ? "Making…" : "Make the " + what + " now again"}</button></>;
   return <section className="pr-card" data-make-now-card="">
-    {k === "made" ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>Made.</b> {where} It goes to Tally only when you approve it.{said.running ? " " + said.words : ""} {open(said.id)}</p>
-      : k === "already" ? <p className="pr-line" data-now-said="">The {what} for {label} is already made{done}. {done ? "" : where} {open((said && said.id) || ex.id)}</p>
+    {k === "made" || k === "updated" ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>{k === "updated" ? "Made again from the salary kept now." : "Made."}</b> {where} It goes to Tally only when you approve it.{said.running ? " " + said.words : ""} {open(said.id)}{again}</p>
+      : k === "already" ? <p className="pr-line" data-now-said="">The {what} for {label} is already made{done}. {done ? "" : where} {open((said && said.id) || ex.id)}{again}</p>
       : k === "you" ? <p className="pr-line" data-now-said="">{said.words} It is on Daily Check › Needs you. <button type="button" className="linkbtn" onClick={() => openDaily("you")} data-now-you="">Open Daily Check</button></p>
       : <>
         <div className="pr-acts"><button type="button" className="btn small primary" disabled={busy || !canWrite()} onClick={make} data-make-now="">{busy ? "Making…" : "Make the " + what + " now"}</button>
@@ -298,6 +303,13 @@ function MakeNow({ co, ym, tally, onState }) {
         {said && <p className="pr-line note" data-now-said="">{said.words}</p>}
       </>}
   </section>;
+}
+
+// (re-review 1) the "Replace them" confirm, when the month's entry is made: what replacing the salary does to it
+function madeWords(x, what, ym) {
+  const m = PS.monLabel(ym);
+  if (x.state === "approved" || x.state === "approving") return " The " + what + " for " + m + " is already approved; replacing the salary does not change the entry already sent to Tally.";
+  return " A " + what + " is already made for " + m + "; it is updated " + (ym === nowYm() ? "when you press Make the " + what + " now again." : "with the new figures tonight.");
 }
 
 // ---------------------------------------------------------------- the months kept with the books (b.salary)
@@ -399,7 +411,7 @@ export default function PayrollPage() {
       onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
     {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} method={method} made={made} />}
     {rows && kept && chk.ok && method && month && cloudOn() && canWrite() && <MakeNow co={co} ym={month} tally={method === "tally" && !once} onState={(m, fresh) => { setMade(m); if (fresh) setTick((x) => x + 1); }} />}
-    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{sureMade ? " A " + (method === "tally" && !once ? "Tally Payroll entry" : "journal") + " is already made for " + PS.monLabel(month) + ". Replacing changes it." : ""}{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" disabled={sureMade === undefined} onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
+    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{sureMade ? madeWords(sureMade, method === "tally" && !once ? "Tally Payroll entry" : "journal", month) : ""}{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" disabled={sureMade === undefined} onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
     {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} tick={tick} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}

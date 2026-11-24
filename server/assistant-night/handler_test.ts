@@ -99,7 +99,9 @@ function payStand(o: { member?: any; client?: any; entries?: any[]; findings?: a
     if (t && db[t]) {
       if (m === "GET") return new Response(JSON.stringify(db[t].filter((r: any) => !u.includes("dedupe=eq.") || u.includes("dedupe=eq." + encodeURIComponent(r.dedupe)))));
       if (m === "POST") { const rows = [].concat(body).map((r: any, i: number) => Object.assign({ id: t + (db[t].length + i + 1) }, r)); db[t].push(...rows); calls.posts.push(t); return new Response(JSON.stringify(rows)); }
-      if (m === "PATCH") return new Response("[]");
+      if (m === "PATCH") { const id = decodeURIComponent((u.match(/[?&]id=eq\.([^&]+)/) || [])[1] || ""), st = (u.match(/[?&]state=in\.\(([^)]*)\)/) || [])[1];
+        const hit = db[t].filter((r: any) => id && r.id === id && (!st || st.split(",").includes(r.state)));
+        hit.forEach((r: any) => Object.assign(r, body)); return new Response(JSON.stringify(hit)); }
     }
     return new Response("[]");
   };
@@ -160,6 +162,22 @@ Deno.test("payroll now: an entry already made is said before the books are read"
   const h = handler({ env: env(), fetch: s.fetch, now: NOW, inputFor: async () => { read++; return { inp: {}, made: ready }; } } as any);
   const r = await payNow(h, { client_id: "c1", ym: "202610" });
   eq([r.j.kind, r.j.id, r.j.state, read], ["already", "e1", "approved", 0], "already: its id and state, the books not read");
+});
+// (re-review 1) the running month's entry still ready: Make now again reads the books and gives it the new figures (the
+// same entry); one approved is said before the books are read, as before
+Deno.test("payroll now: the running month made again: the ready entry takes the new figures", async () => {
+  const nov = (lines: any[]) => ({ kind: "made", running: true, words: "Nov 2026 isn’t over yet. This is made from the salary kept now.",
+    finding: { kind: "payroll_due", key: "payroll:202611", state: "resolved", facts: { ym: "202611", short: "Payroll Nov 2026" }, evidence: [], candidates: [] }, picks: [],
+    entry: { finding_key: "payroll_due|payroll:202611", source: "payroll", dedupe: "payroll:202611", work_ref: "dc-y", voucher: { type: "Journal", kind: "payroll", date: "20261130", lines }, reason: "Payroll", why: "Payroll Nov 2026", evidence: [], checks: [], ready: true } });
+  const old = { id: "e7", firm_id: F, client_id: "c1", dedupe: "payroll:202611", state: "ready", decided_by: null, voucher: { type: "Journal", kind: "payroll", date: "20261130", lines: [{ ledger: "Salary", dr: 80000 }] } };
+  const s = payStand({ entries: [old] });
+  let read = 0;
+  const h = (made: any) => handler({ env: env(), fetch: s.fetch, now: NOW, inputFor: async () => { read++; return { inp: {}, made }; } } as any);
+  const r = await payNow(h(nov([{ ledger: "Salary", dr: 81000 }])), { client_id: "c1", ym: "202611" });
+  eq([r.j.kind, r.j.id, read, s.db.night_entries.length, s.db.night_entries[0].voucher.lines[0].dr], ["updated", "e7", 1, 1, 81000], "the books read; the same entry, the new figures");
+  s.db.night_entries[0].state = "approved";
+  const a = await payNow(h(nov([{ ledger: "Salary", dr: 82000 }])), { client_id: "c1", ym: "202611" });
+  eq([a.j.kind, a.j.state, read, s.db.night_entries[0].voucher.lines[0].dr], ["already", "approved", 1, 81000], "approved: said, the books not read, never changed");
 });
 Deno.test("payroll now: the month not over, Needs you, nothing to make: said in plain words", async () => {
   const notyet = await payNow(mk(payStand({}), { kind: "notyet", words: "Nov 2026 isn’t over yet." }), { client_id: "c1", ym: "202611" });

@@ -4,7 +4,7 @@
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
 /* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
-import { journals, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK, payrollSettings } from "../../../../server/_shared/dailyjournals.js";
+import { journals, payrollNow, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK, payrollSettings } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const CHANGED = "Changed since last night. Run again.";
@@ -73,7 +73,10 @@ export async function recheck(e, o = {}) {
   const daysAt = o.daysAt || (tpDays.length ? await (async () => { const out = {}; for (const day of tpDays) { const bk = holder(day); if (!bk) continue;
     try { ((await Cloud.api("tally_days?select=day,at&book_id=eq." + encodeURIComponent(bk) + "&day=eq." + day)) || []).forEach((r) => { out[String(r.day).slice(0, 10)] = String(r.at || ""); }); } catch (x) { /* not read: the part holds the journal back */ } } return out; })() : {});
   const inp = inputOf(cid, Object.assign({}, o, { ledgers, drafts, bookId, daysAt }));
-  const now = journals(inp).entries.find((x) => x.dedupe === e.dedupe);
+  // (re-review) the running month's payroll entry ("Make the journal now"): the night makes only the months that have
+  // ended, so it is made again here the way the button made it (payrollNow: the same builder, that month only)
+  const run = /^payroll:(\d{6})$/.exec(String(e.dedupe || "")), cur = String(inp.today || "").slice(0, 6);
+  const now = run && run[1] === cur ? (payrollNow(cur, inp) || {}).entry : journals(inp).entries.find((x) => x.dedupe === e.dedupe);
   if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;
   return "";
 }

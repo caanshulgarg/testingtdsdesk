@@ -21,10 +21,17 @@ made-up books and sheets (tests/payroll_sheets.mjs), FinCom's AI mocked (window.
      payroll_now faked); made: said, opened on Daily Check › Entries; made already (by the night or the button): said and
      opened, no button; the running month: offered, with a plain note that it is not over; Tally Payroll: "Make the Tally
      Payroll entry now", then Approve on this page
+ 14. (re-review blocker) Make now for the RUNNING month, the entry made by the server's own payrollNow (node, on the same
+     made-up books and the salary kept on the page), then Approve: the journal on Daily Check › Entries and the Tally
+     Payroll entry on the Payroll page; first the kept salary changed by hand after making ("Replace them" says the
+     entry is updated when Make now is pressed again): Approve refuses, nothing posted; Make now again: the same entry
+     with the new figures; Approve: claimed, posted once, approved
  13. (review B1) a draft per month: rows typed for Oct, Cancel, "Change by hand" on a kept Sep, back to Oct: Oct's rows
      still there; rows typed for Oct, Cancel, the Month picker to Sep, Enter by hand: Sep's rows; Oct's still there; no
      question asked. "Change by hand" on a kept month keeps the employer's PF and ESI. A kept month with its journal made:
-     the "Replace them" confirm says "A journal is already made for Sep 2026. Replacing changes it."
+     the "Replace them" confirm says what replacing does: approved, "The journal for Sep 2026 is already approved;
+     replacing the salary does not change the entry already sent to Tally."; made, "A journal is already made for Sep
+     2026; it is updated with the new figures tonight."
 Screenshots (deviceScaleFactor 2, desktop 1440 and phone 390) into SHOTS (default scratchpad/shots-payroll). UI_PORT (8476)."""
 import os, sys, json, subprocess, threading, functools, http.server, tempfile
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -435,7 +442,13 @@ def draft_flow(br, w, kind, nl):
     f(0, "HRA", "11,000"); f(0, "Net", "29,000"); settle(pg, 200)
     pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 500)
     rw = pg.inner_text("[data-replace-warn]") if pg.locator("[data-replace-warn]").count() else ""
-    ok("A journal is already made for Sep 2026. Replacing changes it." in rw, kind + " 13. Sep's journal made: the Replace confirm says so plainly: " + rw[:160])
+    ok("The journal for Sep 2026 is already approved; replacing the salary does not change the entry already sent to Tally." in rw, kind + " 13. Sep's journal approved: the Replace confirm says replacing does not change it: " + rw[:200])
+    shot(pg, "20-replace-approved", kind)
+    pg.click("[data-replace-warn] .linkbtn"); settle(pg, 200)
+    pg.evaluate("() => { window.__now.entries['202609'].state = 'ready'; return true; }")
+    pg.click("[data-keep]"); settle(pg, 500)
+    rw = pg.inner_text("[data-replace-warn]") if pg.locator("[data-replace-warn]").count() else ""
+    ok("A journal is already made for Sep 2026; it is updated with the new figures tonight." in rw, kind + " 13. Sep's journal made (ready): updated with the new figures tonight: " + rw[:200])
     shot(pg, "20-replace-made", kind)
     if pg.locator("[data-keep-sure]").count(): pg.click("[data-keep-sure]"); settle(pg, 400)
     sal = [r for r in pg.evaluate("() => S.books.salary") if r.get("month") == "202609"]
@@ -445,9 +458,120 @@ def draft_flow(br, w, kind, nl):
     ok(row1() == "Ravi Kumar", kind + " 13. Oct's rows still there after Sep was kept")
     if w < 600: ok(noside(pg), kind + " 13. no sideways scroll")
     ctx.close()
+# (re-review blocker) the server's own entry for the running month: payrollNow on the same made-up books (the night's
+# reading: nightInput), with the salary and the client's payroll settings as the page keeps them
+SERVERJS = """
+import { booksOf, gstOf, nightInput } from "../server/assistant-night/nightinput.js";
+import { payrollNow } from "../server/_shared/dailyjournals.js";
+import { gstRows } from "./daily2_books.mjs";
+const [salary, co, heads, today, ym] = JSON.parse(process.argv[1]);
+const PL = { "Salary": "Indirect Expenses", "TDS on Salary 192": "Duties & Taxes", "Professional Tax Payable": "Duties & Taxes", "Salary Payable": "Provisions", "PF Payable": "Duties & Taxes", "ESI Payable": "Duties & Taxes" };
+const rows = gstRows({ ym: "202610", filed: "", extraLedgers: PL, items: [{ key: "salary", item: "", ord: 0, data: salary, deleted: false }] });
+Object.assign(rows.co, co, { id: "c1" });
+const b = booksOf(rows);
+process.stdout.write(JSON.stringify(payrollNow(ym, nightInput(rows, b, { today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst: gstOf(rows, b, today), prior: [], jobs: {}, draftRecs: [], payHeads: heads }))));
+"""
+def server_now(pg, ym):
+    st = pg.evaluate("() => ({salary: S.books.salary, co: JSON.parse(JSON.stringify(S.companies.c1)), heads: Object.entries((S.books.payroll || {}).heads || {}).map(([name, h]) => ({name, type: (h && h.type) || ''})), today: new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '')})")
+    r = subprocess.run(["node", "--input-type=module", "-e", SERVERJS, json.dumps([st["salary"], st["co"], st["heads"], st["today"], ym])], cwd=HERE, capture_output=True, text=True, check=True)
+    made = json.loads(r.stdout)
+    pg.evaluate("(m) => { window.__ap.next = m; return true; }", made)
+    return made
+# assistant-night payroll_now as the server answers it (paynow.js applyNow): made; the running month's entry still ready
+# with other figures: updated (the same entry); the same figures: already
+NOWSRV = """() => { const A = window.__ap; A.fn = [];
+  Cloud.fn = async (name, body) => { A.fn.push([name, body]); const m = A.next;
+    if (!m || m.kind !== "made") return Object.assign({ok: true}, m || {kind: "none", words: "No salary."});
+    const was = A.entry, id = (was && was.id) || "00000000-0000-4000-8000-000000000a01";
+    if (was && !["ready", "held"].includes(was.state)) return {ok: true, kind: "already", id, state: was.state};
+    if (was && JSON.stringify(was.voucher) === JSON.stringify(m.entry.voucher)) return {ok: true, kind: "already", id, state: was.state};
+    A.entry = Object.assign({}, m.entry, {id, client_id: "c1", finding_id: "00000000-0000-4000-8000-000000000a02", state: m.entry.ready ? "ready" : "held", updated_at: new Date().toISOString(), decided_by: null});
+    return Object.assign({ok: true, kind: was ? "updated" : "made", id, state: A.entry.state}, m.running ? {running: true, words: m.words} : {}); };
+  window.openCompany = async () => {};
+  try { TCloud.book = () => ({book: "b1"}); } catch (e) {}
+  return true; }"""
+def run_now_approve(br, w, kind, tally):
+    ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
+    pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
+    pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    pg.evaluate(MOCK, "2.5.18"); pg.evaluate(NOWSRV)
+    pg.evaluate("() => { const co = S.companies.c1; co.payHeadPlan = {'earn:Basic': 'Basic Pay'}; co.payrollPayable = 'Salary Payable'; return true; }")
+    A = lambda: pg.evaluate("() => window.__ap")
+    what = "Tally Payroll entry" if tally else "journal"
+    f = lambda i, k, v: pg.fill("[data-entry-row='%d'] input[aria-label='%s row %d']" % (i, k, i + 1), v)
+    ym = pg.evaluate("() => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7)")
+    YM = ym.replace("-", "")
+    pg.click("[data-pick=%s]" % ("tally" if tally else "journal")); settle(pg, 250)
+    pg.fill("[data-sheet-month] input[type=month]", ym); settle(pg, 150)
+    pg.click("[data-manual]"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    f(0, "Employee", "Ravi Kumar"); f(0, "Basic", "25,000"); f(0, "HRA", "10,000"); f(0, "TDS", "1,500"); f(0, "PT", "200")
+    pg.click("[data-add-row]"); f(1, "Employee", "Asha Verma"); f(1, "Basic", "15,000"); f(1, "HRA", "6,000"); f(1, "PT", "200"); settle(pg, 200)
+    pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 400)
+    made = server_now(pg, YM)
+    ok(made.get("kind") == "made" and made.get("running") and made["entry"]["ready"], kind + " 14. the server's payrollNow for the running month " + YM + ": a ready " + what)
+    pg.click("[data-make-now]"); pg.wait_for_selector("[data-now-said]", timeout=10000); settle(pg, 800)
+    ok("Made" in pg.inner_text("[data-now-said]") and A()["entry"]["dedupe"] == "payroll:" + YM, kind + " 14. Make the " + what + " now: made (payroll:" + YM + ")")
+    v0 = A()["entry"]["voucher"]
+    # the kept salary changed after making: Change by hand, Keep, Replace them (said: updated when Make now is pressed again)
+    pg.click("[data-kept-edit='%s']" % YM); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    f(0, "Basic", "26,000"); f(0, "Net", ""); settle(pg, 200)
+    pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 600)
+    rw = pg.inner_text("[data-replace-warn]") if pg.locator("[data-replace-warn]").count() else ""
+    mon = pg.evaluate("(ym) => { const [y, m] = ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1] + ' ' + y; }", ym)
+    ok(("A %s is already made for %s; it is updated when you press Make the %s now again." % (what, mon, what)) in rw, kind + " 14. Replace them: the running month's entry is updated when Make now is pressed again: " + rw[:220])
+    if w > 600: shot(pg, "21-replace-running" + ("-tally" if tally else ""), kind)
+    pg.click("[data-keep-sure]"); settle(pg, 500)
+    sal = [r for r in pg.evaluate("() => S.books.salary") if r.get("month") == YM]
+    ok(sum(r["gross"] for r in sal) == 57000, kind + " 14. the new salary kept: gross " + str(sum(r["gross"] for r in sal)))
+    pg.evaluate(GATE)
+    def approve():
+        pg.evaluate("() => { window.__ap.order = []; window.__dc_toasts = []; const t0 = window.toast; window.toast = (m) => { window.__dc_toasts.push(String(m)); try { t0 && t0(m); } catch (e) {} }; return true; }")
+        if tally:
+            pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); settle(pg, 300)
+            if pg.locator("[data-approve]").count() == 0: remount(pg)
+            pg.wait_for_selector("[data-approve]", timeout=10000); settle(pg, 300); pg.evaluate(GATE)
+            pg.click("[data-approve]")
+            pg.wait_for_timeout(2500)
+            settle(pg, 500)
+            return pg.inner_text("[data-preview=tally]")
+        pg.evaluate("() => { S.dcTab = 'entries'; S.dcOpen = ''; navHome('daily'); return true; }"); pg.wait_for_selector("[data-daily]", timeout=15000); settle(pg, 600)
+        if pg.locator("[data-tab=entries]").count(): pg.click("[data-tab=entries]"); settle(pg, 500)
+        rid = A()["entry"]["id"]
+        pg.wait_for_selector("[data-row='%s'] .dc-icon.ok" % rid, timeout=10000)
+        pg.evaluate(GATE)
+        pg.click("[data-row='%s'] .dc-icon.ok" % rid); pg.wait_for_timeout(2500); settle(pg, 500)
+        return " | ".join(pg.evaluate("() => window.__dc_toasts"))
+    said = approve()
+    a = A()
+    ok("Changed since last night" in said and not [x for x in a["order"] if x in ("post", "entry_claim", "entry_approved")], kind + " 14. the salary changed after making: Approve refuses, nothing claimed or posted: " + said[:160].replace("\n", " "))
+    if w > 600: shot(pg, "22-approve-stale" + ("-tally" if tally else ""), kind)
+    # Make now again: the same entry, the new figures
+    pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    if pg.locator("[data-kept-open='%s']" % YM).count(): pg.click("[data-kept-open='%s']" % YM); settle(pg, 600)
+    made2 = server_now(pg, YM)
+    ma = pg.locator("[data-make-again]")
+    ok(ma.count() == 1 and ("Make the %s now again" % what) in ma.inner_text(), kind + " 14. the running month made and still ready: Make the " + what + " now again")
+    if w > 600: shot(pg, "23-make-again" + ("-tally" if tally else ""), kind)
+    if ma.count(): ma.click(); settle(pg, 900)
+    a = A()
+    ok(a["entry"]["voucher"] == made2["entry"]["voucher"] and a["entry"]["voucher"] != v0 and "Made again" in (pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""), kind + " 14. made again: the same entry with the new figures, said")
+    said = approve()
+    a = A()
+    order = [x for x in a["order"] if x == "post" or x.startswith("entry_")]
+    ok(order == ["entry_claim", "post", "entry_approved"] and a["entry"]["state"] == "approved", kind + " 14. Approve the running month's " + what + (" on the Payroll page" if tally else " on Daily Check › Entries") + ": claimed, posted once, approved: " + " > ".join(order) + " (" + said[:120].replace("\n", " ") + ")")
+    p0 = a["posts"][-1]["vouchers"][0] if a["posts"] else {}
+    ok(p0.get("id") == (("dc-tp-%s-c1-p1" % YM) if tally else made2["entry"]["work_ref"]), kind + " 14. the voucher posted: " + str(p0.get("id")))
+    if w > 600: shot(pg, "24-approved-running" + ("-tally" if tally else ""), kind)
+    ctx.close()
 with sync_playwright() as p:
     br = p.chromium.launch()
     O13 = os.environ.get("ONLY13")
+    if os.environ.get("ONLY14"):
+        run_now_approve(br, 1440, "running-journal", False)
+        run_now_approve(br, 1440, "running-tally", True)
+        O13 = "skip"
     if not O13 and not os.environ.get("ONLY8"): run(br, 1440, "desktop")
     if not O13 and not os.environ.get("ONLY8"): run(br, 390, "phone")
     if not O13 and not os.environ.get("ONLY11"):
@@ -457,8 +581,11 @@ with sync_playwright() as p:
         hand_flow(br, 1440, "hand-classic", False)
         hand_flow(br, 1440, "hand-newlook", True)
         hand_flow(br, 390, "hand-phone", True)
-    draft_flow(br, 1440, "draft-classic", False)
-    draft_flow(br, 390, "draft-phone", True)
+    if not O13:
+        run_now_approve(br, 1440, "running-journal", False)
+        run_now_approve(br, 1440, "running-tally", True)
+    if not os.environ.get("ONLY14"): draft_flow(br, 1440, "draft-classic", False)
+    if not os.environ.get("ONLY14"): draft_flow(br, 390, "draft-phone", True)
     if not O13:
         now_flow(br, 1440, "now-classic", False)
         now_flow(br, 1440, "now-newlook", True)

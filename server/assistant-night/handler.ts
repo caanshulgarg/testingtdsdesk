@@ -146,11 +146,16 @@ export function handler(deps: Deps) {
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }
     // (review B2) the running month's payroll entry made with "Make the journal now": kept (the night does not make that
-    // month, and night_apply withdraws on a complete run what the run did not pass); not read: the night stops for the client
-    let keep: any[];
-    try { keep = await keepNow(rest, firm, cid, payrollMonths(today)); } catch { await fail("failed", "the payroll entries made now could not be read"); return { ok: false, error: "keep" }; }
+    // month, and night_apply withdraws on a complete run what the run did not pass); (re-review 2) and that month's open
+    // findings (Needs you), passed back as they are, so night_apply does not clear them; not read: the night stops for
+    // the client
+    let keep: { entries: any[]; findings: any[] };
+    try { keep = await keepNow(rest, firm, cid, payrollMonths(today), res.findings); } catch { await fail("failed", "the payroll entries made now could not be read"); return { ok: false, error: "keep" }; }
     const version = String(book.book_id) + ":" + (b.vouchers || []).length + ":" + (book.ledgers_at || "");
-    const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings, p_entries: res.entries.concat(keep), p_complete: true, p_why: "" });
+    // (re-review 3) "Make now" (applyNow) writes through PostgREST, one call at a time, so it cannot hold night_apply's lock
+    // (pg_advisory_xact_lock 'night|firm|client'); a press between keepNow's read and night_apply can still be withdrawn
+    // that night. Pressing Make now again makes it again (a withdrawn entry is made in its place)
+    const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings.concat(keep.findings), p_entries: res.entries.concat(keep.entries), p_complete: true, p_why: "" });
     return { ok: true, night, counts };
   }
 
@@ -211,9 +216,10 @@ export function handler(deps: Deps) {
     const cl = ((await rest("/rest/v1/clients?select=id,firm_id,deleted&firm_id=in.(" + writes.map((m) => enc(String(m.firm_id))).join(",") + ")&id=eq." + enc(cid)).catch(() => [])) || [])[0];
     if (!cl || cl.deleted) return [404, { ok: false, kind: "client", error: "No such client in your firm." }] as const;
     const firm = String(cl.firm_id);
-    // made before (by the night or this button): said, never made again, the books not even read
-    const ex = await existingNow(rest, firm, cid, ym);
-    if (ex) return [200, { ok: true, kind: "already", id: ex.id, state: ex.state }] as const;
+    // made before (by the night or this button): said, never made again, the books not even read; (re-review 1) but the
+    // running month's entry still ready or held is made again from the salary kept now (applyNow: the same entry)
+    const ex = await existingNow(rest, firm, cid, ym), running = ym === istDay(now()).slice(0, 7).replace("-", "");
+    if (ex && !(running && (ex.state === "ready" || ex.state === "held"))) return [200, { ok: true, kind: "already", id: ex.id, state: ex.state }] as const;
     const got: any = deps.inputFor ? await deps.inputFor(firm, cid, ym, one) : await client(firm, cid, one, { ym });
     const made = got && got.made;
     if (!made) {
