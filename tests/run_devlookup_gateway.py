@@ -66,7 +66,8 @@ try:
     t0 = time.time(); c, r, h = call(dict(HELLO)); took = time.time() - t0
     ok(c == 200 and r.get("ok") is not False, "2. answered as usual after one more try (%s %s)" % (c, str(r)[:100]))
     ok(lookups() == 2, "2. the key looked up twice (%d)" % lookups())
-    ok(0.25 <= took < 5, "2. after a short wait (%.2f s)" % took)
+    ok(0.2 <= took < 5,     # (readRetry waits 200-400 ms: dbgateway.js)
+        "2. after a short wait (%.2f s)" % took)
     print("== 3. the gateway down the whole time")
     for code, words, ray in ((522, "Connection timed out", "0f0e0d0c0b0a0918"), (521, "Web server is down", "1234567890abcdef"), (525, "SSL handshake failed", "fedcba0987654321")):
         FS.CALLS.clear(); del log[:]
