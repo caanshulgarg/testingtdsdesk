@@ -23,12 +23,24 @@ DA, KA = "d2210000-0000-0000-0000-000000002210", "fcd_" + "d" * 48
 CG = "a2f776bd-4a48-4f7d-9c73-48a8f0872210"
 GA = {"id": "go-aaaaaa221022", "computer": "PC-MADEUP", "user": "madeup-a", "mode": "main", "runMode": "user", "version": "2.5.22"}
 GB = {"id": "go-bbbbbb221022", "computer": "PC-MADEUP", "user": "madeup-b", "mode": "main", "runMode": "user", "version": "2.5.16"}
+LOCKED = [False]
+def V(mid, day, amt="100.00", other=""):
+    return ('<VOUCHER REMOTEID="%s-%08x" VCHTYPE="Sales"><DATE>%s</DATE><GUID>%s-%08x</GUID><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>%d</VOUCHERNUMBER>'
+            '<PARTYLEDGERNAME>Spike Customer</PARTYLEDGERNAME><ALTERID> %d</ALTERID><MASTERID> %d</MASTERID>'
+            '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Customer</LEDGERNAME><AMOUNT>-%s</AMOUNT></ALLLEDGERENTRIES.LIST>'
+            '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') % (CG, mid, day, CG, mid, mid, 5000 + mid, mid, amt, amt if other == "" else other)
+def words_of(x):     # every text a reply carries (its keys' names aside: the bridge reads the key "upload")
+    if isinstance(x, dict): return [w for v in x.values() for w in words_of(v)]
+    if isinstance(x, list): return [w for v in x for w in words_of(v)]
+    return [x] if isinstance(x, str) else []
 OLD_WORDS = "Tally could not send 31-Aug-2025 in time on 3 days. Upload that day's Day Book to finish it."
 real = FS.rpc
 def rpc(name, a):
     if name.startswith("tally_period") or name.startswith("tally_check") or name in ("tally_days_claim", "tally_autoday_queue"):
         FS.ARGS.setdefault(name, []).append(a)
         if name in FS.NO_FN: raise LookupError("PGRST202")
+        if name in ("tally_period_entries", "tally_period_entries_logged") and LOCKED[0]: return {"ok": True, "locked": True, "stored": 0, "upload": "FinCom did not bring in 30-Aug-2025: its month is locked in FinCom. Unlock the month, then upload that day's Day Book."}
+        if name in ("tally_period_entries", "tally_period_entries_logged"): return {"ok": True, "stored": 1, "n": 1, "done": False}
         if name == "tally_period_day_stop": return {"ok": True, "fails": 3, "upload": True, "retryAt": "", "words": OLD_WORDS}
         if name == "tally_period_gate": return True
         if name in ("tally_period_next", "tally_period_next_paced", "tally_check_next", "tally_check_next_open", "tally_days_claim", "tally_period_retry_days"): return []
@@ -106,11 +118,22 @@ try:
     ok(ud.get("day") == "20250830" and "upload" not in ud.get("words", "upload").lower(), "3. the days the bridge lists: no ask (%s)" % ud)
     ra = (bt.get("renumberAlerts") or [{}])[0]
     ok(ra.get("words") == "Tally may have renumbered 3 entries. FinCom reads these days from Tally again by itself.", "3. a renumbering alert: no ask (%s)" % ra.get("words"))
+    replies = []
+    c, r = call(dict(b16, kind="period_entries", company="MADE UP CO", company_guid=CG, day="20250830", vouchers=[V(6, "20250830"), V(7, "20250830", other="90.00")], full=True)); replies.append(r)
+    ok(c == 200 and r.get("notTaken") == 1 and r.get("upload") == "FinCom could not read 30-Aug-2025 from Tally yet. FinCom tries again by itself.", "3. an entry whose lines do not total zero: plain words (%s)" % r.get("upload"))
+    LOCKED[0] = True
+    c, r = call(dict(b16, kind="period_entries", company="MADE UP CO", company_guid=CG, day="20250830", vouchers=[V(8, "20250830")], full=True)); replies.append(r)
+    LOCKED[0] = False
+    ok(c == 200 and r.get("locked") is True and r.get("upload") == "FinCom did not bring in 30-Aug-2025: its month is locked in FinCom. Unlock the month, then press Bring missing days on the Tally page.", "3. a locked month: what to press (%s)" % r.get("upload"))
+    c, r = call(dict(b16, kind="period_day_stop", company="MADE UP CO", company_guid=CG, day="20250831", why="over2s")); replies.append(r)
+    bad = [w for x in replies for w in words_of(x) if "upload" in w.lower()]
+    ok(not bad, "3. no reply's words contain 'upload' (%s)" % bad)
     code = [l for l in open(INDEX, encoding="utf-8").read().split("\n") if not l.lstrip().startswith("//")]
     asks = [l.strip()[:120] for l in code if re.search(r"(please upload|upload (the|that day's|this day's|the day's) day book|choose it again)", l.split(" // ")[0], re.I)]
     ok(not asks, "3. no ask for a Day Book upload left in index.ts (%s)" % asks)
 
     print("== 4. a line dated before the book's first day (01-Apr-2026)")
+    for bk in FS.T["tally_books"]: bk.update(from_date="2026-04-01", open_as_on="2026-03-31")     # (section 3's older day moved the book's start)
     HW = "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"
     def dl(lid, d): return {"line_id": lid, "event": "deleted", "object_guid": "", "master_id": lid[1:], "alter_id": None, "vch_type": "Receipt", "vch_no": lid, "vch_date": d,
                             "saved_at": "2026-11-24T10:00:00Z", "pc": "PC", "user": "TALLY User", "company_guid": CG, "ledgers": [], "narration": "", "fid": "", "xml": "", "source": "addon", "heldWhy": HW}
