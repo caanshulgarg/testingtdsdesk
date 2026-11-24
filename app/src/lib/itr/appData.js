@@ -2,9 +2,11 @@
 // (GSTR, src/js/12 and server/_shared/gst3b.js), the TDS returns (TDS, src/js/09), PF in the books, the 3CD draft
 // (Audit.form3cd), and the statements' own profit before tax (FinSt). Each part answers {ok: false, text} when its
 // source is not there, never a figure made up.
+import { page } from "./page.js";
+import { entityFrom } from "./pick.js";
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
-const G = () => (typeof window === "object" ? window : globalThis);
+const G = page;
 const MONTHS = (fy) => { const out = []; for (let i = 0; i < 12; i++) { const m = ((3 + i) % 12) + 1, y = m >= 4 ? +fy : +fy + 1; out.push(String(y) + String(m).padStart(2, "0")); } return out; };
 
 // GST as FILED (never the books' own working, which the books would trivially agree with): GSTR-1 from the filed
@@ -53,6 +55,9 @@ export function pfBooks(books) { return books && books.ok ? books.sched.pl.pf.cy
 // the client's entity (Client setup / the PAN), its PAN, name and GSTIN; firm or LLP is asked in the return (never read from the name)
 export function clientOf() {
   const g = G(), co = (g.CO && g.CO()) || {};
-  const ent = g.FS && g.FS.entityOf ? g.FS.entityOf(co).code : "";
-  return { id: co.id, name: co.name || "", pan: String(co.pan || "").toUpperCase(), gstin: co.gstin || "", entity: ent };
+  // the PAN's fourth letter settles the kind (pick.js entityFrom); Client setup's choice (FS.entityOf) only without a
+  // PAN. entitySet: what Client setup says, so the page can say when it differs from the PAN
+  const fsCode = g.FS && g.FS.entityOf ? g.FS.entityOf(co).code : "", setCode = String(co.entity || "").toUpperCase();
+  const ent = entityFrom(fsCode || setCode, co.pan, co.gstin).code || fsCode;
+  return { id: co.id, name: co.name || "", pan: String(co.pan || "").toUpperCase(), gstin: co.gstin || "", entity: ent, entitySet: setCode };
 }

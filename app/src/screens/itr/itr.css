@@ -22,6 +22,22 @@
 .itr .itr-chip[data-tone="warn"] { background: var(--itr-warn-bg); color: var(--itr-warn); }
 .itr .itr-chip[data-tone="bad"] { background: var(--itr-bad-bg); color: var(--itr-bad); }
 .itr .itr-chip-s { padding: 1px 6px; font-size: 11px; margin-left: 6px; }
+/* the form: the one in use, the recommended one and why (on every step) */
+.itr .itr-pick { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--itr-line); border-radius: 12px; background: var(--itr-card); min-width: 0; }
+.itr .itr-pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-width: 0; }
+.itr .itr-pick-f { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--itr-muted); min-width: 0; }
+.itr .itr-pick-f > span { font-weight: 550; }
+.itr .itr-pick-f select { font: inherit; font-size: 14px; color: var(--itr-ink); padding: 5px 8px; border: 1px solid var(--itr-line); border-radius: 8px; background: var(--itr-card); max-width: 100%; }
+.itr .itr-pick-row:not(.itr-pick-qs) > .itr-pick-f:first-child select { font-weight: 600; }
+.itr .itr-pick-why { flex: 1 1 280px; margin: 0; font-size: 13px; color: var(--itr-muted); overflow-wrap: anywhere; }
+.itr .itr-pick-why b { color: var(--itr-ink); font-weight: 600; }
+/* the note under the form: the info tone of the page's notes (no JSON yet, answers needed); a form that does not fit red */
+.itr .itr-pick-warn { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; background: var(--itr-tint); color: var(--itr-ink); overflow-wrap: anywhere; }
+.itr .itr-pick-warn[data-tone="bad"] { background: var(--itr-bad-bg); color: var(--itr-bad); }
+.itr .itr-pick-qs .itr-pick-f { flex: 0 1 auto; }
+.itr .itr-pick-row:not(.itr-pick-qs) > .itr-pick-f:first-child > span { white-space: nowrap; }
+.itr .itr-pick-qs .itr-pick-f > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .itr .itr-pick-f { flex-wrap: wrap; } .itr .itr-pick-qs .itr-pick-f select { flex: 1 1 100%; } }
 /* the steps */
 .itr .itr-steps { display: flex; gap: 6px; border-bottom: 1px solid var(--itr-line); overflow-x: auto; }
 .itr .itr-step { display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border: 0; background: none; color: var(--itr-muted); font: inherit; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }

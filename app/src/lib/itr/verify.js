@@ -14,6 +14,7 @@
 //     acceptance lapses and the check is open again.
 // gate() says whether the JSON may be offered.
 import { check as recheck, differences } from "./check.js";
+import { allowedForms } from "./pick.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -336,7 +337,8 @@ function schedules(c, M, S, im, ais, as26, bk) {
 // the rules a reviewer checks on any computation
 function sanity(M, S) {
   const out = [], ent = M.entity, form = M.form;
-  const okForm = { P: ["ITR-3", "ITR-4"], H: ["ITR-3", "ITR-4"], F: M.llp ? ["ITR-5"] : ["ITR-5", "ITR-4"], C: ["ITR-6"] }[ent] || ["ITR-5"];
+  // the forms the law allows for the kind of person (pick.js: ITR-1 / 2 for a person without business, ITR-7 for an exempt entity)
+  const okForm = allowedForms(ent, M.llp === true);
   if (!okForm.includes(form)) out.push(needs("form", "comp", "The right form", form + " is not the return for this entity (" + ent + (M.llp ? ", LLP" : "") + ").", "Use " + okForm.join(" or ") + ".", [], true));
   if (ent === "F" && M.llp == null) out.push(needs("llp", "comp", "Firm or LLP", "Say whether the client is a partnership firm or an LLP (Client setup has them as one choice).", "Answer on Data.", [], true));
   if (form === "ITR-4") {
