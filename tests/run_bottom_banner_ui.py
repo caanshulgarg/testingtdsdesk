@@ -1,5 +1,6 @@
-"""python3 run_bottom_banner_ui.py - the strip along the bottom of the testing site ("TESTING SITE …", or a review build's
-"REVIEW BUILD – …") and what is fixed to the bottom of the window. The owner's report of 14-Oct-2026: on the review build
+"""python3 run_bottom_banner_ui.py - the strip along the bottom of the testing site and what is fixed to the bottom of the
+window. Since 23-Nov-2026 (the owner: "remove that also") the testing site has no strip: checked first with none
+(--bottom-banner-h 0), then with a long review banner put in by hand, so the rules that stand on it stay tested. The owner's report of 14-Oct-2026: on the review build
 the banner covered the Ask FinCom button (right 22px, bottom 22px), and the last rows of pages sat under it.
 The fix: the banner's height as drawn is on :root as --bottom-banner-h (0 without a banner); every element fixed to the
 bottom (Ask FinCom, toasts, the undo snack, the phone's bottom bar, the action bar, sticky table footers) stands on it,
@@ -53,11 +54,22 @@ LAST_ROW = """() => {
   return {found: true, text: last.textContent.slice(0, 40), bottom: r.bottom, launchTop: b.top, bannerTop: innerHeight - bh, clear: r.bottom <= Math.min(b.top, innerHeight - bh) + 0.5};
 }"""
 
-def check(pg, name, phone):
+def check(pg, name, phone, none=False):
     g = pg.evaluate(GEOM)
     ok(g["r"] is not None, name + ": Ask FinCom is shown")
     if not g["r"]: return
-    ok(g["banner"] > 0 and g["v"] == "%dpx" % -(-g["banner"] // 1), name + ": --bottom-banner-h is the banner as drawn (%s; banner %.1fpx)" % (g["v"], g["banner"]))
+    if none:
+        # no bar: the button stands 22 px from the window's foot, where it may be over a row's button; then its own rule
+        # (AssistantLauncher.jsx) tucks it in or puts it away, as on the live site; the rest is checked with the banner below
+        ok(g["banner"] == 0 and g["v"] in ("", "0px"), name + ": no bar along the foot, --bottom-banner-h 0 (%s; banner %.1fpx)" % (g["v"], g["banner"]))
+        place = pg.evaluate("() => document.querySelector('[data-asst-launch]').getAttribute('data-asst-place')")
+        ok(place in ("away", "tab") or (g["inView"] and g["hit"]), name + ": Ask FinCom fully visible and clickable, or tucked away by its rule (%s)" % place)
+        pg.evaluate("toast('Saved.')"); pg.wait_for_timeout(250)
+        t = pg.locator(".toast").last.bounding_box()
+        ok(t is not None and t["y"] + t["height"] <= g["vh"] + 0.5, name + ": a toast shows inside the window")
+        pg.screenshot(path=os.path.join(OUT, name.replace(" ", "-") + ".png"))
+        return
+    else: ok(g["banner"] > 0 and g["v"] == "%dpx" % -(-g["banner"] // 1), name + ": --bottom-banner-h is the banner as drawn (%s; banner %.1fpx)" % (g["v"], g["banner"]))
     ok(g["inView"], name + ": Ask FinCom is fully visible, above the banner (button %s, window %dx%d, banner %.1fpx)" % ({k: round(v) for k, v in g["r"].items()}, g["vw"], g["vh"], g["banner"]))
     ok(g["hit"], name + ": the button is what is at its centre")
     if phone:
@@ -82,9 +94,10 @@ with sync_playwright() as p:
         pg.goto("http://localhost:8181/"); pg.wait_for_timeout(2500)
         if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate(SIGN_IN); pg.wait_for_timeout(1200)
-        check(pg, name + " testing banner", phone)
-        # a review build's banner, long: on a narrow desktop it takes two lines; the variable follows it (no fixed number)
-        pg.add_style_tag(content='body.is-test::after{content:"REVIEW BUILD – FinCom Assistant on by default + settings fix · staging database · not for real client work · a long review banner that wraps onto a second line on a narrower window";background:#6B3FA0;white-space:normal}')
+        # the owner, 23-Nov-2026: no bar along the foot of the testing site any more (its words: the sidebar's Synced tooltip)
+        check(pg, name + " no banner", phone, none=True)
+        # a banner put back by hand (a review build's, long), so what stands on --bottom-banner-h stays tested, long: on a narrow desktop it takes two lines; the variable follows it (no fixed number)
+        pg.add_style_tag(content='body.is-test::after{position:fixed;left:0;right:0;bottom:0;z-index:70;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none;content:"REVIEW BUILD – FinCom Assistant on by default + settings fix · staging database · not for real client work · a long review banner that wraps onto a second line on a narrower window";background:#6B3FA0;white-space:normal}')
         if not phone: pg.set_viewport_size({"width": 900, "height": 800})
         pg.evaluate("window.dispatchEvent(new Event('resize'))"); pg.wait_for_timeout(500)
         check(pg, name + " long review banner", phone)

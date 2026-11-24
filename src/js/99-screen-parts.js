@@ -988,6 +988,7 @@ Object.assign(Rec, {
   actWords(r){ return this.fromFincom(r) ? "Posted from FinCom" : (this.ACTS[r.event] || String(r.event || "")); },
   actOf(){
     const a = this.act, cid = S.syncClient || "";
+    if (typeof Live === "object" && Live.want){ Live.want("rec"); Live.want("sync"); }    // next-db-load-2: Sync activity is on screen
     if (!a.rows && !("at" in a)) Object.assign(a, {rows: null, at: 0, busy: false, no44: false, err: "", cid: ""});
     if (typeof TCloud === "object" && TCloud.on() && !a.busy && (a.cid !== cid || !a.at || (Date.now() - a.at > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()))){ a.at = Date.now(); a.cid = cid; setTimeout(() => this.actLoad(), 0); }
     return a;
