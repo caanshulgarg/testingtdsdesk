@@ -11,6 +11,7 @@
 // The same file again (same SHA-256) changes nothing; another file for the same key replaces the earlier one (its
 // stored copy is removed when its name differed).
 import { read, belongs } from "./imports.js";
+import { page } from "./page.js";
 
 export const AY_KEY = "2026";
 const ik = (ay, f) => ay + "|" + f.key;
@@ -71,7 +72,7 @@ export function makeStore(deps) {
 
 // the app's own deps (the legacy globals: S.books, saveBooks, Cloud, CO, S.companies)
 export function appDeps() {
-  const G = typeof window === "object" ? window : globalThis;
+  const G = page();
   const S = () => G.S || {};
   return {
     books: () => (S().books && S().books.cid === S().coId ? S().books : null),
