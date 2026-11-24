@@ -143,15 +143,23 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.recon") is None, "and closed")
     # round 15 (B1): a bank line posted by bridge 2.1.8 keeps Tally's confirmation (r.tally.vch, or batchEnd for a batch)
     # and its posted state says it with the company, the time in IST and who pressed Post; an older line as before
-    pg.evaluate("""() => { const b = B(); const r5 = b.rows.find(r => r.id === "r5"), r13 = b.rows.find(r => r.id === "r13");
-      r5.tally = {guid: "g5", vch: 777, company: "ZZ TEST", at: "2026-10-03T08:35:00Z", by: "Anshul"}; r5.sentAt = "2026-10-03T08:35:10Z"; r5.postedVia = "bridge";
-      r13.tally = {guid: "g13", batchEnd: 900, batchN: 50, company: "ZZ TEST", at: "2026-10-03T08:40:00Z", by: "Anshul"}; r13.sentAt = "2026-10-03T08:40:10Z"; r13.postedVia = "bridge";
-      b.q = ""; b.filter = "done"; b.grouped = false; render(); }"""); pg.wait_for_timeout(500)
+    # (next-hide-posted-24h: Done lists a line Tally confirmed in the last 24 hours, so these were posted an hour ago; the
+    # older line, no Tally id kept, was sent 2 hours ago)
+    import datetime as _dt
+    _now = _dt.datetime.now(_dt.timezone.utc).replace(second=0, microsecond=0)
+    _at5, _at13 = _now - _dt.timedelta(minutes=65), _now - _dt.timedelta(minutes=60)
+    _iso = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
+    _ist = lambda d: (d + _dt.timedelta(hours=5, minutes=30)).strftime("%d-%b-%Y %H:%M IST")
+    pg.evaluate("""([a5, a13, a21]) => { const b = B(); const r5 = b.rows.find(r => r.id === "r5"), r13 = b.rows.find(r => r.id === "r13");
+      r5.tally = {guid: "g5", vch: 777, company: "ZZ TEST", at: a5, by: "Anshul"}; r5.sentAt = a5; r5.postedVia = "bridge";
+      r13.tally = {guid: "g13", batchEnd: 900, batchN: 50, company: "ZZ TEST", at: a13, by: "Anshul"}; r13.sentAt = a13; r13.postedVia = "bridge";
+      b.rows.find(r => r.id === "r21").sentAt = a21;
+      b.q = ""; b.filter = "done"; b.grouped = false; render(); }""", [_iso(_at5), _iso(_at13), _iso(_now - _dt.timedelta(hours=2))]); pg.wait_for_timeout(500)
     row = lambda utr: pg.inner_text('#app table.bk-table tbody tr:has-text("%s")' % utr).replace("\n", " ") if pg.locator('#app table.bk-table tbody tr:has-text("%s")' % utr).count() else ""
     t5, t13, t21 = row("UTR100005"), row("UTR100013"), row("UTR100021")
-    ok("Posted to Tally: voucher id 777" in t5 and "· ZZ TEST ·" in t5 and "03-Oct-2026 14:05 IST" in t5 and "· by Anshul" in t5 and pg.locator('#app tr:has-text("UTR100005") [data-posted-line]').count() == 1,
-       "B1. a bank line with vchId: 'Posted to Tally: voucher id 777 · ZZ TEST · 03-Oct-2026 14:05 IST · by Anshul' (%s)" % t5[-150:])
-    ok("Posted to Tally, batch ending Tally id 900" in t13 and "voucher id" not in t13 and "14:10 IST" in t13, "B1. a line of a batch: 'Posted to Tally, batch ending Tally id 900', no inferred id (%s)" % t13[-150:])
+    ok("Posted to Tally: voucher id 777" in t5 and "· ZZ TEST ·" in t5 and _ist(_at5) in t5 and "· by Anshul" in t5 and pg.locator('#app tr:has-text("UTR100005") [data-posted-line]').count() == 1,
+       "B1. a bank line with vchId: 'Posted to Tally: voucher id 777 · ZZ TEST · %s · by Anshul' (%s)" % (_ist(_at5), t5[-150:]))
+    ok("Posted to Tally, batch ending Tally id 900" in t13 and "voucher id" not in t13 and _ist(_at13)[-9:] in t13, "B1. a line of a batch: 'Posted to Tally, batch ending Tally id 900', no inferred id (%s)" % t13[-150:])
     ok("Posted to Tally" not in t21 and "In Tally" in t21 and pg.locator('#app tr:has-text("UTR100021") [data-posted-line]').count() == 0, "B1. an older posted line shows as before (%s)" % t21[-100:])
     # round 17a (owner, 04-Oct-2026): a line FinCom Bridge 2.1.8 posted by Tally's reply (it never reads back) with no id from
     # Tally: posted, never "not found in Tally yet"; round 17: bankMatched (src/js/22) takes postByReply, so it is under Done
