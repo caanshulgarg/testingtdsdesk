@@ -219,7 +219,7 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 		if err, failed := fails[d]; failed {
 			var moved *vchKey
 			for i, e := range others[d] {
-				if e.date != d && hasTag(e.narration, tag) && !e.cancelled {
+				if e.date != d && hasTag(e.narration, tag) && !e.cancelled && !e.optional {
 					moved = &others[d][i]
 					break
 				}
@@ -239,14 +239,25 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 			}
 			continue
 		}
+		// next-bridge-reupload (the owner's rule of 24-Nov-2026): an Optional or cancelled voucher carrying the mark is not
+		// the entry in the books, never "already posted": the entry goes again
 		var hit *vchKey
+		void := ""
 		for i, e := range reads[d] {
-			if hasTag(e.narration, tag) && !e.cancelled {
-				hit = &reads[d][i]
-				break
+			if !hasTag(e.narration, tag) {
+				continue
 			}
+			if e.cancelled || e.optional {
+				void = map[bool]string{true: "cancelled", false: "Optional"}[e.cancelled]
+				continue
+			}
+			hit = &reads[d][i]
+			break
 		}
 		if hit == nil {
+			if void != "" {
+				writeLog("  entry " + k + ": its mark is in Tally only on " + map[bool]string{true: "a cancelled", false: "an Optional"}[void == "cancelled"] + " voucher of " + ddmmyyyy(d) + ", not in the books: sent again")
+			}
 			left = append(left, it)
 			continue
 		}

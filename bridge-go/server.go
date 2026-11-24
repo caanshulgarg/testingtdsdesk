@@ -593,6 +593,16 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return nil, err
 		}
 		return invokeImport(o)
+	case "/lookone":
+		// next-bridge-reupload: whether Tally has one entry (its FinCom mark on its date): reupload.go
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		return lookOneEntry(o)
 	case "/seed":
 		if err := needPost(r, "Send the day book with POST."); err != nil {
 			return nil, err

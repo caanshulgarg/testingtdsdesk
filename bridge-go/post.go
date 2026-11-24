@@ -324,8 +324,14 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 	// bridge that dies while the request is in flight never sends them again; the reply rewrites the note. The record
 	// not written (F1): nothing is sent (a "not reached" error: the job waits and tries later)
 	keys := r.keys()
+	dates := map[string]string{} // next-bridge-reupload: each entry's date, kept with its note
 	if r.kind == "voucher" {
-		if err := noteSentMany(keys, company, job, "", len(r.items), "", ""); err != nil {
+		for i, it := range r.items {
+			if d, _ := voucherDateType(str(it["xml"])); d != "" && i < len(keys) {
+				dates[keys[i]] = d
+			}
+		}
+		if err := noteSentMany(keys, company, job, "", len(r.items), "", "", sentMeta{dates: dates}); err != nil {
 			return importOutcome{err: errRecordNotWritten}
 		}
 	}
@@ -414,7 +420,7 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 			if s == 1 && lv != "" {
 				vchID = lv
 			}
-			_ = noteSentMany(keys, company, job, lv, s, lv, vchID) // one write for the request
+			_ = noteSentMany(keys, company, job, lv, s, lv, vchID, sentMeta{dates: dates}) // one write for the request
 			if len(forget) > 0 {
 				acceptedForgetMany(forget) // read back: not in Tally, with Tally's error: may go again
 			}
@@ -690,7 +696,7 @@ func invokeImport(p M) (M, error) {
 			onItem(r)
 		}
 	}
-	var masters, vouchers []M
+	var masters, vouchers, recLook []M
 	// one posting at a time per Tally from the record check to the end of its imports: two tabs posting the same voucher
 	// at once cannot both pass the check before either is recorded
 	gate := postGate(port)
@@ -717,6 +723,12 @@ func invokeImport(p M) (M, error) {
 			// is not answering
 			if g.kind == "voucher" {
 				if r := sentBeforeRefusal(id, x); r != nil {
+					// next-bridge-reupload: looked for in Tally before it is called sent (reupload.go); refused on the
+					// record as before when Tally cannot be asked
+					if ok, _ := recordLookable(id, x); ok && stopAll == nil && truthy(it["lookFirst"]) {
+						recLook = append(recLook, M{"id": id, "kind": "voucher", "xml": x, "bank": it["bank"]})
+						continue
+					}
 					r["company"], r["port"] = company, port
 					writeLog("  voucher " + str(id) + ": NOT SENT: " + str(r["message"]))
 					add(r)
@@ -736,6 +748,15 @@ func invokeImport(p M) (M, error) {
 			} else {
 				masters = append(masters, M{"id": id, "xml": x})
 			}
+		}
+	}
+	if len(recLook) > 0 {
+		send, rs := recordLookFirst(port, company, recLook)
+		for _, r := range rs {
+			add(r)
+		}
+		for _, it := range send {
+			vouchers = append(vouchers, M{"id": it["id"], "xml": it["xml"], "bank": it["bank"]})
 		}
 	}
 	reqs := planImports(masters, vouchers)

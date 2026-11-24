@@ -231,7 +231,13 @@ func noteSent(key, company, jobID, lv string, batchN int, batchEnd, vchID string
 
 // the same for every voucher of one request, written to posted-ids.json ONCE (fix review of 2.1.8); an error when the
 // file could not be written: nothing may then be sent
-func noteSentMany(keys []string, company, jobID, lv string, batchN int, batchEnd, vchID string) error {
+// next-bridge-reupload: what a later look in Tally for the entry (reupload.go) needs to know of its send: the date each
+// entry was sent with (key -> yyyymmdd)
+type sentMeta struct {
+	dates map[string]string
+}
+
+func noteSentMany(keys []string, company, jobID, lv string, batchN int, batchEnd, vchID string, meta ...sentMeta) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -253,6 +259,11 @@ func noteSentMany(keys []string, company, jobID, lv string, batchN int, batchEnd
 		}
 		e["sent"], e["sentAt"], e["company"], e["job"], e["batchN"] = true, now, company, or(jobID, str(e["job"])), batchN
 		e["lastVchId"], e["batchEnd"], e["vchId"] = lv, batchEnd, vchID
+		for _, m := range meta {
+			if d := m.dates[key]; d != "" {
+				e["date"] = d
+			}
+		}
 		delete(e, "held")
 		if e["verified"] != true {
 			e["verified"] = false
