@@ -247,6 +247,8 @@ export function carry(oldRows, newRows) {
     if (!o || !(o.userSet || o.ledger)) return;
     const flipped = dir(o) !== dir(r);
     CARRY.forEach((k) => { if (o[k] !== undefined && !(flipped && FLIP_DROP.includes(k))) r[k] = o[k]; });
+    // (never "sent" or "intally": a line read again is never marked in Tally by a carry; such a statement is not read again)
+    if (r.state === "sent" || r.state === "intally") r.state = r.ledger ? "suggested" : "attention";
     if (flipped && ["ready", "sent", "intally"].includes(r.state)) r.state = "suggested";
     carried++;
   });

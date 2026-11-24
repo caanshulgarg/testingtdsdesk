@@ -216,6 +216,11 @@ console.log("6. the review of aead82472: a wrong AI mapping is put right or not 
     const c2 = AC.carry([Lr("o1", "2026-09-02", 500, 0, "UPI to ZZ Rent", { state: "ready", ledger: "ZZ Rent", userSet: true })], [Lr("n1", "2026-09-02", 0, 500, "NEFT from ZZ Buyer"), Lr("n2", "2026-09-02", 500, 0, "UPI to ZZ Rent")]);
     ok(led(c2) === "n1:-:attention n2:ZZ Rent:ready" && c2.lost === 0, "carry: a deposit of the same date and amount never takes a payment's ledger");
   }
+    {
+      const c3 = AC.carry([Lr("o1", "2026-09-02", 500, 0, "UPI to ZZ Rent", { state: "sent", ledger: "ZZ Rent", userSet: true }), Lr("o2", "2026-09-03", 90, 0, "UPI to ZZ Tea", { state: "intally", ledger: "ZZ Tea" })],
+        [Lr("n1", "2026-09-02", 500, 0, "UPI to ZZ Rent"), Lr("n2", "2026-09-03", 90, 0, "UPI to ZZ Tea")]);
+      ok(c3.rows.every((r) => r.state !== "sent" && r.state !== "intally") && c3.rows[0].ledger === "ZZ Rent", "carry never copies \"sent\" or \"intally\" (a line read again is never marked in Tally)");
+    }
   // 1. (re-review) a line in Tally, or with any posting (live, done or posted), or being checked: the statement is not read again
   ok(AC.touched({ state: "sent" }) && AC.touched({ state: "intally" }) && AC.touched({ state: "ready", tally: { guid: "g" } }) && AC.touched({ state: "ready", postJob: "j1" }) && AC.touched({ state: "ready", checking: true })
     && AC.touched({ state: "ready", postError: "already sent from this computer on 01-Sep-2026, job abcdef123456" }) && AC.touched({ state: "ready" }, () => ({ status: "done" })) && !AC.touched({ state: "ready" }) && !AC.touched({ state: "attention" }, () => null),
