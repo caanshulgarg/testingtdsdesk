@@ -194,6 +194,8 @@ with sync_playwright() as p:
         # 1. Bank, Posted tab, everything posted older than 24 hours: "Check they are still in Tally" is still offered
         go(pg, H + "const b = B(); b.rows.find(r => r.id === 'r0').tally.at = h(30); b.rows.find(r => r.id === 'r8').matchedAt = h(30); window.__br = [Bridge.on, Bridge.up]; Bridge.on = () => true; Bridge.up = () => true; goClient('bank'); bankTabGo('done');", 1200)
         tc = pg.evaluate("tabCounts(B().rows)")
+        try: pg.get_by_role("button", name="Check they are still in Tally").wait_for(timeout=5000)   # (slow under load)
+        except Exception: pass
         ok(tc["done"] == 0 and tc["old"] == 4 and pg.get_by_role("button", name="Check they are still in Tally").count() == 1, look + "Bank: every posted line older than 24 hours: Check they are still in Tally is still there (%s)" % {k: tc.get(k) for k in ("done", "old")})
         go(pg, "Bridge.on = window.__br[0]; Bridge.up = window.__br[1]; const b = B(); b.rows.find(r => r.id === 'r0').tally.at = new Date(Date.now() - 2 * 3600e3).toISOString(); b.rows.find(r => r.id === 'r8').matchedAt = new Date(Date.now() - 3 * 3600e3).toISOString(); render();", 600)
         # 2. the statement reloaded while Tally worked: a line found in Tally keeps when it was found
