@@ -94,3 +94,46 @@ func TestReupHandedBackAfterCopyRelease(t *testing.T) {
 		t.Fatalf("the same release sent it twice: %d in Tally", len(reupTagged(f, "TDSDesk:u1")))
 	}
 }
+
+// the review of 24-Nov-2026 (B1): a client that posts Optional vouchers by its setting: the entry FinCom sends is itself
+// Optional, so an Optional voucher carrying its mark IS that entry: "already", never sent twice. Cancelled is always void
+func TestReupOptionalBySettingIsAlready(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	c := newStandCloud(t)
+	standBridge(t, f, `,"PostWaitMs":200`+c.cfg())
+	v := f.add(td, fgParty, "Q-1", "Electricity | TDSDesk:q1", "-41.00")
+	v.optional = true
+	w := f.add(td, fgParty, "Q-2", "Electricity | TDSDesk:q2", "-42.00")
+	w.optional, w.cancelled = true, true
+	opt := func(id, no, amt string) string {
+		return strings.Replace(finVoucher(id, fgParty, no, td, amt), "<ISOPTIONAL>No</ISOPTIONAL>", "<ISOPTIONAL>Yes</ISOPTIONAL>", 1)
+	}
+	c.mu.Lock()
+	c.takeJobs = []M{{"id": "job-reup-q-0001", "company": zz, "payload": M{"vouchers": []any{M{"id": "q1", "xml": opt("q1", "Q-1", "41.00")}, M{"id": "q2", "xml": opt("q2", "Q-2", "42.00")}}}, "resendOnly": []any{"q1", "q2"}}}
+	c.mu.Unlock()
+	cloudPostTake()
+	time.Sleep(300 * time.Millisecond)
+	p := waitJob(t, "job-reup-q-0001")
+	if n := len(reupTagged(f, "TDSDesk:q1")); n != 1 || !r2519Result(p, "q1", "already") {
+		t.Fatalf("an Optional entry whose Optional voucher is in Tally: %d vouchers carry its mark, %v", n, p["results"])
+	}
+	if n := len(reupTagged(f, "TDSDesk:q2")); n != 2 {
+		t.Fatalf("a cancelled voucher is never the entry, Optional or not: %d vouchers carry its mark", n)
+	}
+}
+
+// the same in the read back of a part Tally made only partly (post.go readBackTags): an Optional entry is found by its
+// Optional voucher; a regular entry never by an Optional one
+func TestReupReadBackOptionalBySetting(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	f.add(td, fgParty, "Q-3", "Electricity | TDSDesk:q3", "-43.00").optional = true
+	f.add(td, fgParty, "Q-4", "Electricity | TDSDesk:q4", "-44.00").optional = true
+	x3 := strings.Replace(finVoucher("q3", fgParty, "Q-3", td, "43.00"), "<ISOPTIONAL>No</ISOPTIONAL>", "<ISOPTIONAL>Yes</ISOPTIONAL>", 1)
+	found, _ := readBackTags(f.port, zz, []M{{"id": "q3", "xml": x3}, {"id": "q4", "xml": finVoucher("q4", fgParty, "Q-4", td, "44.00")}}, 0)
+	if found["q3"] == nil || found["q4"] != nil {
+		t.Fatalf("read back: the Optional entry by its Optional voucher, the regular one never (found %v)", found)
+	}
+}
