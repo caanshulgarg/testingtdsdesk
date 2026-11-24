@@ -59,7 +59,7 @@ const WAIT = "Waiting for Tally. It is saved there when Tally is open.";
 // no FinCom Bridge on this computer (review of 24-Nov-2026): kept, and sent from any computer where Tally is open
 const NOBRIDGE = "Waiting for Tally. It goes to Tally from the computer where Tally is open.";
 const CHANGED = "Changed in Tally since you opened it. This is how it is now.";
-const OLD = "This needs FinCom Bridge 2.5.21 or later on the Tally computer. Update it there, then press Save again.";
+const OLD = "This needs FinCom Bridge 2.5.20 or later on the Tally computer. Update it there, then press Save again.";
 const SAID = { done: "Saved in Tally", waiting: "Waiting for Tally", already: "Already in Tally" };
 const ALREADY = "Already in Tally: it holds this value now, though it was not sent from here.";
 const KEEP = 200; // changes kept with the books: the newest 200, the oldest dropped

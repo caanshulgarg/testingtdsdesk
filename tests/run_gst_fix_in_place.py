@@ -11,7 +11,7 @@ bridge-go/fixalter.go does), so the real Bridge.call is what FinCom's /fix goes 
   4. changed since: "Changed in Tally since you opened it", Tally's entry brought in, the next Save uses its AlterID;
   5. kept, unknown (Ask Tally again, by a person only), gone, a refusal before sending: said, never sent again by itself;
   6. held (Tally closed) and a network error: kept, Waiting for Tally, Save off; sent again when Tally is open;
-  7. an older FinCom Bridge (404 Unknown address /fix): says it needs FinCom Bridge 2.5.21, never sent again by itself;
+  7. an older FinCom Bridge (404 Unknown address /fix): says it needs FinCom Bridge 2.5.20, never sent again by itself;
   8. another client opened while a change is with Tally, and during the sending of the held ones: the answer goes to the
      books of the client it was made for, never the one open now; the window closes when a client opens;
   9. Undo: one change for a double click, marked used only once Tally took it; a place of supply goes back to Tally's
@@ -708,7 +708,7 @@ try:
         # 7. an older FinCom Bridge: says which one is needed, never sent again by itself
         pg.evaluate("() => { window.__calls = []; }")
         st = try_save(pg, vid, OLD)
-        ok(st and st[0] == "old" and "FinCom Bridge 2.5.21" in st[1], "404 Unknown address /fix: needs FinCom Bridge 2.5.21 (%s)" % st)
+        ok(st and st[0] == "old" and "FinCom Bridge 2.5.20" in st[1], "404 Unknown address /fix: needs FinCom Bridge 2.5.20 (%s)" % st)
         shot(pg, "classic-light-needs-newer-bridge")
         pump(pg); pg.evaluate("() => render()"); pg.wait_for_timeout(300)
         ok(len(calls(pg)) == 1, "an older bridge: never sent again by itself (%d calls)" % len(calls(pg)))
