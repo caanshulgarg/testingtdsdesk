@@ -966,7 +966,10 @@ with sync_playwright() as p:
     E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
 
     print("20. next-zoho-sheet-followups: Zoho's shipping, invoice discount, tax-inclusive prices and Adjustment, once an invoice")
-    E("() => { const l = S.bank.ledgers.list; if (!l.some(x => x.name === 'ZZ Round Off')) l.push({name: 'ZZ Round Off', group: 'Indirect Expenses'}); }")
+    # (made-up books for the posting: a Round Off ledger, the customer with its GSTIN, one output ledger a tax: step 18's
+    # "Alt" ledgers put aside)
+    E("""() => { S.bank.ledgers.list = S.bank.ledgers.list.filter(x => !/ Alt$/.test(x.name)).concat([{name: 'ZZ Round Off', group: 'Indirect Expenses'},
+      {name: 'Ujala Lamps', group: 'Sundry Debtors', gstin: '09AAACU5555J1ZZ'}]); Ledgers.st[S.coId] = null; delete Ledgers.busy[S.coId]; }""")
     upload("sales_zoho_more.csv", "#salesIn")
     zm = E("Object.fromEntries((SheetImport.st() && SheetImport.st().docs || []).map(d => [d.no, [d.taxable, r2(d.igst + d.cgst + d.sgst), d.total, d.check.ok, d.roundOff || 0]]))")
     ok(step() == "check" and E("SheetImport.st().how") == "builtin", "the more cases: Zoho's rule, no AI (%s)" % step())
@@ -983,18 +986,20 @@ with sync_playwright() as p:
     # no hold): Z-208 (+25) and Z-209 (-10.50) have no problem at all, are Ready, and post with it in Round Off
     E("() => { SheetImport.close(); SL().filter = 'all'; render(); }"); W(400)
     zz = E("""(() => SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => { const l = hasLedgerList() ? salesLines(v) : [];
-      return {no: v.x.number, st: v.status, ro: num(v.x.roundOff), probs: salesProblemsNow(v), lines: l.filter(x => x.role === 'roundoff').map(x => x.side + ' ' + x.amt + ' ' + x.ledger)}; }).sort((a, b) => a.no < b.no ? -1 : 1))()""")
+      return {no: v.x.number, st: v.status, ro: num(v.x.roundOff), probs: salesProblemsNow(v), why: [v.customerLedger, v.custSure, v.ledgerIssues, v.heldBack || false, v.source], lines: l.filter(x => x.role === 'roundoff').map(x => x.side + ' ' + x.amt + ' ' + x.ledger)}; }).sort((a, b) => a.no < b.no ? -1 : 1))()""")
     ok(len(zz) == 2 and zz[0]["probs"] == [] and zz[1]["probs"] == [], "Z-208 and Z-209: no problem at all, not one (%s)" % [(z["no"], z["probs"]) for z in zz])
-    ok([z["st"] for z in zz] == ["ready", "ready"], "both Ready to post (%s)" % [(z["no"], z["st"]) for z in zz])
+    ok([z["st"] for z in zz] == ["ready", "ready"], "both Ready to post (%s)" % [(z["no"], z["st"], z["why"]) for z in zz])
     ok([z["lines"] for z in zz] == [["Cr 25 ZZ Round Off"], ["Dr 10.5 ZZ Round Off"]], "Round Off: Cr 25 on Z-208, Dr 10.50 on Z-209 (%s)" % [z["lines"] for z in zz])
-    n0 = len(E("window.__enq") or [])
-    E("() => { SL().filter = 'ready'; SL().sel = new Set(SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => v.id)); render(); }"); W(500)
+    # (posted as step 17 does: the two alone, the faked queue answering "in Tally", nothing of theirs already there)
+    E("""() => { SL().list = SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)); SL().sel = new Set(); SL().dupSkipped = []; window.__enq.length = 0; window.__postAnswer = null;
+      window.__vin = []; window.__vinAnswer = () => []; window.__toasts = []; SL().filter = 'ready'; saveSales(); render(); }"""); W(500)
+    pb = btn.inner_text() if btn.count() else "no button"
     post()
-    en = (E("window.__enq") or [])[n0:]
+    en = E("window.__enq") or []
     xs = [x for e in en for x in (v["xml"] for v in e.get("vouchers", []))]
     x8 = next((x for x in xs if "Z-208" in x), ""); x9 = next((x for x in xs if "Z-209" in x), "")
     ro8 = re.search(r"<LEDGERNAME>ZZ Round Off</LEDGERNAME>.*?<AMOUNT>([^<]*)</AMOUNT>", x8, re.S); ro9 = re.search(r"<LEDGERNAME>ZZ Round Off</LEDGERNAME>.*?<AMOUNT>([^<]*)</AMOUNT>", x9, re.S)
-    ok(ro8 and ro9 and float(ro8.group(1)) == 25 and float(ro9.group(1)) == -10.5, "posted: Z-208 with Round Off Cr 25, Z-209 with Round Off Dr 10.50 (%s, %s)" % (ro8 and ro8.group(1), ro9 and ro9.group(1)))
+    ok(ro8 and ro9 and float(ro8.group(1)) == 25 and float(ro9.group(1)) == -10.5, "posted: Z-208 with Round Off Cr 25, Z-209 with Round Off Dr 10.50 (%s, %s; %r, %d postings, %s)" % (ro8 and ro8.group(1), ro9 and ro9.group(1), pb, len(en), E("window.__toasts")[-2:]))
     ok(E("SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => v.status)") == ["posted", "posted"], "both Posted (%s)" % E("SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => v.status)"))
     E("() => { SheetImport.close(); SL().list = []; SL().sel = new Set(); saveSales(); render(); }")
 
