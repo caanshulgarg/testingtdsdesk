@@ -50,7 +50,7 @@ def run(br, w, tag):
     print("1. (%s) a sheet with unknown headings, uploaded" % tag)
     cid = pg.evaluate(SETUP, "ZZ Test Client"); pg.wait_for_timeout(800)
     # charge() spied: the first read is charged as before, the second (columns put right) is not
-    pg.evaluate("() => { const was = charge; window.charge = async (...a) => { window.__charged.push(a); return true; }; }")
+    pg.evaluate("() => { const was = charge; window.charge = async (...a) => { window.__charged.push(a); return window.__chargeOk !== false; }; }")
     n = pg.evaluate(UPLOAD, CSV); pg.wait_for_timeout(900)
     ok(n == 4, "the 4 lines are read at once (%s)" % n)
     ok(pg.evaluate("window.__ai.length") == 1 and pg.evaluate("window.__ai[0].side") == "bank", "the AI was asked once, side bank")
@@ -86,6 +86,13 @@ def run(br, w, tag):
     ok(same() and pg.evaluate("B().stmts.length") == 1 and any("could not be read with these columns" in x or "no lines were read" in x for x in pg.evaluate("window.__toasts")),
        "the read again fails: the old statement stays where it was, said plainly")
     pg.evaluate("() => { S.files['st:' + B().cur] = S.__keep; }")
+    # (pre-release) a read again with more lines than were paid for, and the firm's charge refused: nothing changes, said
+    pg.evaluate("() => { window.__chargeOk = false; B().__lost = B().rows.pop(); window.__toasts = []; }")
+    c0 = pg.evaluate("window.__charged.length")
+    change()
+    ok(pg.evaluate("B().cur") == sid0 and pg.evaluate("B().rows.length") == 3 and pg.evaluate("B().stmts.length") == 1 and pg.evaluate("window.__charged.length") == c0 + 1
+       and any("could not be charged" in x for x in pg.evaluate("window.__toasts")), "the charge for the extra line refused: the statement stays exactly as it was, said plainly")
+    pg.evaluate("() => { window.__chargeOk = true; B().rows.push(B().__lost); delete B().__lost; }")
     ch0 = pg.evaluate("window.__charged.length")
     change(True)
     ok(pg.evaluate("B().cur") != sid0, "nothing in Tally: read again, the new statement in place of the old")

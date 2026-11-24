@@ -18,8 +18,8 @@ const who = () => { try { return whoAmI(); } catch (e) { return ""; } };
 // matched its postings, postReconcile); otherwise it stays as read and the columns are used for the next statement. The
 // file is read FIRST; the lines are checked again just before the swap; only then is the old statement put aside (as
 // "Delete this statement" does: kept to restore) and the new one put in its place, with the person's ledger choices
-// carried over (aiColumns.js carry); billed after the swap, only for lines beyond those paid for. Busy, or a read that
-// fails: the old statement stays where it was, said plainly. -> true when the statement was replaced
+// carried over (aiColumns.js carry); billed just before the swap, only for lines beyond those paid for. Busy, a read
+// that fails or a charge refused: the old statement stays where it was, said plainly. -> true when the statement was replaced
 const say = (m) => { try { toast(m); } catch (e) { /* no toast here */ } };
 export const IN_TALLY_WORDS = "Some lines of this statement are already in Tally, so it stays as read. The new columns will be used for the next statement.";
 const jobOf = (cid) => (r) => { try { return typeof postJobOf === "function" ? postJobOf(cid, r.id) : null; } catch (e) { return null; } };
@@ -48,6 +48,11 @@ export async function readAgain(b, st) {
     const old = await rowsOf(b, st);
     if (B() !== b || !b.stmts.some((s) => s.id === st.id) || old.some((r) => touched(r, jobOf(cid)))) { say(IN_TALLY_WORDS); return false; }
     const c = carry(old, x.rows), paid = old.filter((r) => !bankAside(r)).length, extra = extraLines(paid, x.rows.length - x.held);
+    // billed before anything moves: only the lines beyond those paid for the first time; refused (low credit, the module
+    // or the firm off, read-only): the statement stays exactly as it was
+    let billed = extra <= 0;
+    if (!billed) try { billed = !!(await charge("bank", extra, file.name, extra + " more statement lines read again")); } catch (e) { billed = false; }
+    if (!billed) { say("The " + extra + " more line" + (extra === 1 ? "" : "s") + " could not be charged to the firm, so the statement stays as it was. The columns are kept for this layout."); return false; }
     // the swap: the old statement to the deleted ones (More → Restore), the new one in its place
     await Trash.put(cid, "statement", (st.bank || "Statement") + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", { st, keys: oldKeys, rows: old }, "columns read again");
     oldKeys.forEach((k) => { delete b.keys[k]; });
@@ -61,8 +66,6 @@ export async function readAgain(b, st) {
     S.files["st:" + sid] = file; FileStore.put(cid, "st:" + sid, file); CloudDocs.add(cid, "st:" + sid, file, "stmt");
     await BankDB.set("stmt:" + cid + ":" + sid, c.rows);
     saveBank({ stmts: true, keys: true, rows: true });
-    // billed after the swap: only the lines beyond those paid for the first time
-    if (extra > 0) try { await charge("bank", extra, file.name, extra + " more statement lines read again"); } catch (e) { /* said by the billing */ }
     say(st.fileName + " read again with these columns: " + c.rows.length + " lines" + (c.carried ? ", " + c.carried + " with the ledger chosen before" : "") + (c.lost ? ". " + c.lost + " earlier lines not met are in More → Restore" : "") + ".");
     return true;
   } finally { on.delete(cid); b.busy = ""; render(); }
