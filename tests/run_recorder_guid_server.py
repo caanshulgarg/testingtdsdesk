@@ -67,6 +67,8 @@ def call(body):
     try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
 WORDS = "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"
+# 24-Nov-2026 (next-tally-tell-ingest): kept without the ask for an upload (tellday.js noUploadAsk)
+KEPT = "deleted in Tally; FinCom could not tell which entry. FinCom brings this day from Tally by itself."
 HELD = "not deleted in this Tally: held"
 def line(lid, event, mid, guid="", why=WORDS, cg=CG):
     l = {"line_id": lid, "event": event, "object_guid": guid, "master_id": str(mid), "alter_id": None, "vch_type": "Receipt", "vch_no": "1", "vch_date": "20261002",
@@ -96,8 +98,8 @@ try:
     ok(g("L3") == IMP, "a cancel of mid 3: an imported entry's GUID as Tally gave it with its entry, not the one its MasterID makes (%s)" % g("L3"))
     for k, why in (("L5", "no entry came with the line"), ("L6", "only the placeholder"), ("L7", "two GUIDs for one MasterID"), ("L8", "only a held line"),
                    ("L9", "another book's"), ("L10", "another company GUID's"), ("L11", "ids that did not belong together"), ("L12", "nothing known: never the GUID its MasterID makes")):
-        ok(not g(k) and got.get(k, {}).get("heldWhy") == WORDS and "guid" not in res.get(k, {}), "%s not resolved: %s; held with the bridge's words (%s)" % (k, why, g(k)))
-    ok(not g("L15") and got.get("L15", {}).get("heldWhy") == WORDS and "guid" not in res.get("L15", {}),
+        ok(not g(k) and got.get(k, {}).get("heldWhy") == KEPT and "guid" not in res.get(k, {}), "%s not resolved: %s; held with the bridge's words (%s)" % (k, why, g(k)))
+    ok(not g("L15") and got.get("L15", {}).get("heldWhy") == KEPT and "guid" not in res.get("L15", {}),
        "review H1: another computer's record (its key) is never used (%s)" % g("L15"))
     ok(not g("L16") and "guid" not in res.get("L16", {}),
        "review H1: another bridge's record (another Windows user's, same computer key) is never used (%s)" % g("L16"))

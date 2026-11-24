@@ -124,7 +124,7 @@ try:
     time.sleep(5.2); c, r = call(dict(beat, pickups=pk))
     dev = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
     got = ((dev.get("info") or {}).get("beat") or {}).get("pickups") or []
-    ok(any(x.get("code") == "dayRetry" and x.get("words") == "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)" for x in got), "3. kept with FinCom's words (%s)" % got)
+    ok(any(x.get("code") == "dayRetry" and x.get("words") == "Tally was slow for this day; FinCom tries it again by itself" for x in got), "3. kept with FinCom's words (%s)" % got)
     print("== 4. bridge 2.5.16: Tally port not saved, kept on the beat")
     time.sleep(5.2); c, r = call(dict(beat, tallyPortNotSaved={"port": 9050, "iniPort": 9000, "words": "Tally port not saved: x" * 40, "extra": "dropped"}))
     dev = next(d for d in FS.T["tally_devices"] if d["id"] == DA)

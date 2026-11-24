@@ -174,12 +174,12 @@ try:
     words = "Tally took too long to give 30-Aug-2025. Please upload that day's Day Book."
     c, r = call(dict(base, kind="period_heads", company="BIG CO", company_guid=CG, day="20250830", upload=True, why="over2s", type="Sales", words=words))
     u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
-    ok(c == 200 and r.get("ok") is True and u.get("p_why") == "over2s" and u.get("p_type") == "Sales" and u.get("p_words") == words and u.get("p_day") == "2025-08-30", "2. upload by hand: kept with its words (%s)" % u)
+    ok(c == 200 and r.get("ok") is True and u.get("p_why") == "over2s" and u.get("p_type") == "Sales" and u.get("p_words") == "Tally took too long to give 30-Aug-2025. FinCom brings this day from Tally by itself." and u.get("p_day") == "2025-08-30", "2. upload by hand: kept with its words (%s)" % u)
     # review 245 R15 (M1): the payroll entries of a day left out (their employees did not reach FinCom): why "payroll" kept
     pw = "FinCom could not read the payroll entries of 29-Aug-2025 from Tally (the payroll's employees did not reach FinCom). Please upload that day's Day Book."
     c, r = call(dict(base, kind="period_heads", company="BIG CO", company_guid=CG, day="20250829", upload=True, why="payroll", type="", words=pw))
     u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
-    ok(c == 200 and u.get("p_why") == "payroll" and u.get("p_words") == pw, "2. a day's payroll left out: why payroll kept (%s)" % u)
+    ok(c == 200 and u.get("p_why") == "payroll" and u.get("p_words") == pw.replace(" Please upload that day's Day Book.", " FinCom brings this day from Tally by itself."), "2. a day's payroll left out: why payroll kept (%s)" % u)
 
     print("== 3. period_entries")
     c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(2, "20250830"), V(3, "20250830")], gone=[], full=True))
@@ -194,7 +194,7 @@ try:
     c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(6, "20250830"), V(7, "20250830", other="90.00")], full=True))
     e = (FS.ARGS.get("tally_period_entries") or [{}])[-1]
     up = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
-    ok(c == 200 and [v["guid"][-2:] for v in e.get("p_vouchers") or []] == ["06"] and r.get("notTaken") == 1 and r.get("upload") == "FinCom could not read 30-Aug-2025 from Tally. Please upload that day's Day Book.",
+    ok(c == 200 and [v["guid"][-2:] for v in e.get("p_vouchers") or []] == ["06"] and r.get("notTaken") == 1 and r.get("upload") == "FinCom could not read 30-Aug-2025 from Tally yet. FinCom tries again by itself.",
        "3. lines not totalling zero: that entry not stored, the day to be uploaded (%s)" % r)
     ok(len(FS.ARGS.get("tally_period_upload") or []) == n2 + 1 and up.get("p_why") == "entries", "3. the day marked to upload")
     bank = V(8, "20250830").replace("</ALLLEDGERENTRIES.LIST></VOUCHER>", "<BANKALLOCATIONS.LIST><BANKEMPLOYEENAME>Asha Rao</BANKEMPLOYEENAME><ACCOUNTNUMBER>50100123456781</ACCOUNTNUMBER><IFSCODE>HDFC0001234</IFSCODE><AMOUNT>100.00</AMOUNT></BANKALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST></VOUCHER>")
@@ -231,7 +231,7 @@ try:
     FS.rpc = locked_rpc
     c, r = call(dict(base, kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(13, "20250830")], full=True))
     FS.rpc = real_e
-    ok(c == 200 and r.get("ok") is True and "Unlock the month" in str(r.get("upload")), "3. a locked month: ok, the words to upload (%s)" % r)
+    ok(c == 200 and r.get("ok") is True and "Unlock the month" in str(r.get("upload")) and "upload" not in str(r.get("upload")).lower(), "3. a locked month: ok, the words to upload (%s)" % r)
 
     # review 245 R3: a company GUID that is not the book's recorded one: refused, nothing kept
     FS.T["tally_sync_cursor"].append({"book_id": BOOK, "company_guid": CG})
@@ -272,7 +272,7 @@ try:
     nu = len(FS.ARGS.get("tally_period_upload") or [])
     c, r = call(dict(base, version="2.5.12", kind="period_entries", company="BIG CO", company_guid=CG, day="20250830", vouchers=[V(22, "20250830")], held=held[:1], full=True))
     u = (FS.ARGS.get("tally_period_upload") or [{}])[-1]
-    ok(c == 200 and len(FS.ARGS.get("tally_period_upload") or []) == nu + 1 and u.get("p_why") == "held" and u.get("p_words") == "1 entry on 30-Aug could not be read: upload the Day Book for this day." and r.get("upload") == u.get("p_words") and r.get("done") is False,
+    ok(c == 200 and len(FS.ARGS.get("tally_period_upload") or []) == nu + 1 and u.get("p_why") == "held" and u.get("p_words") == "1 entry on 30-Aug could not be read yet. FinCom tries again by itself." and r.get("upload") == u.get("p_words") and r.get("done") is False,
        "5. a cloud without 154: the day marked to upload with plain words, never done (%s)" % r)
     FS.NO_FN.discard("tally_period_hold")
     nr = len(FS.ARGS.get("tally_period_held_release") or [])

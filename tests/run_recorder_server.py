@@ -811,7 +811,7 @@ try:
     ix = open(os.path.join(HERE, "fixtures", "typed-item-invoice-no-sales-line.xml")).read()
     ix = ix[ix.index("<VOUCHER REMOTEID"):ix.index("</VOUCHER>", ix.index("<VOUCHER REMOTEID")) + 10]
     GIV = CGI + "-00006800"
-    WORDS = "the entry's details from Tally are incomplete (its lines do not add up: an item invoice's sales or purchase ledger may not have come): upload this day's Day Book to settle it"
+    WORDS = "the entry's details from Tally are incomplete (its lines do not add up: an item invoice's sales or purchase ledger may not have come): FinCom reads this day from Tally again by itself to settle it"
     bodyof = lambda lid: json.loads((db.rows("select coalesce(body::text, '{}') as b from tally_recorder_lines where book_id = %s and line_id = %s order by id desc limit 1" % (q(BI), q(lid))) or [{}])[0].get("b") or "{}")
     ivl = lambda lid, x, g=GIV, alter=54600, **kw: dict(base, line_id=lid, event="created", object_guid=g, master_id="26500", alter_id=alter, vch_type="Sales", vch_no="GSC/2026-27/130", vch_date="20261006", xml=x, **kw)
     n0 = nI()

@@ -1,0 +1,133 @@
+// next-tally-tell-ingest (the owner's decision of 24-Nov-2026: "There should be proper way to tell and auto import of tally
+// days into fincom"; the plan tally-tell-autoday, A.4, A.5 and B.3). Plain JS (no Deno or Supabase API) so the rules are
+// tested on their own (tellday_test.ts).
+//   - cleanTell: what bridge 2.5.22 says of why it reads nothing (skip, numbersWhy, addonSilent), cleaned, and the
+//     companies the cloud itself hands no day of for want of a starting point (unstarted), kept on info.bridges[id].tell.
+//     Codes only: the words are FinCom's own (migration 221's tally_tell_of), never the bridge's.
+//   - autoDaysFor / autoKept: a day FinCom queued by itself (held, delete, gap, future) goes only to a bridge of 2.5.16 or
+//     later, and only by claim (tally_days_claim, which hands a day only to a bridge serving the book: tally_read_serves).
+//   - due: migration 222's tally_autoday_queue at most once a book per 10 minutes.
+//   - noUploadAsk: FinCom never asks for a Day Book upload; it brings the day from Tally by itself.
+import { coName, coTrim } from "./linknow.js";
+
+export const SKIP_CODES = ["ownerUnknown", "twoTallys", "otherLogin", "notOpen", "otherCopy", "slow"];
+export const NUMBERS_CODES = ["ownerUnknown", "twoTallys", "lightFailed", "over2s", "notAsked"];
+export const ADDON_REASONS = ["addonShared", "addonAdded", "noFile", "fileUnreadable"];
+const MAX = 50;
+const ISO_Z = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,9})?(Z|[+-]\d\d:\d\d)$/;
+const plain = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+const alter = (v) => typeof v === "number" && Number.isFinite(v) && v > 0 && v < 1e15 ? Math.floor(v) : null;
+// index.ts altOf: a change number as the beat says it (a number or its digits); 0 or less, a boolean, blank: none
+const altOf = (v) => v === null || v === undefined || v === "" || typeof v === "boolean" ? null : alter(Number(v));
+
+// {company: code} with known codes only, names trimmed and cut to 200, the first of a name kept, at most 50
+function codesOf(x, known) {
+  const out = {}, seen = new Set();
+  for (const [k, v] of Object.entries(plain(x) ? x : {})) {
+    if (Object.keys(out).length >= MAX) break;
+    const name = coTrim(k);
+    if (!name || typeof v !== "string" || !known.includes(v) || seen.has(coName(name))) continue;
+    seen.add(coName(name)); out[name] = v;
+  }
+  return out;
+}
+function addonOf(x) {
+  const out = [], seen = new Set();
+  for (const a of Array.isArray(x) ? x : []) {
+    if (out.length >= MAX) break;
+    if (!plain(a)) continue;
+    const company = coTrim(a.company);
+    if (!company || seen.has(coName(company))) continue;
+    seen.add(coName(company));
+    const g = typeof a.guid === "string" ? a.guid.trim().toLowerCase() : "";
+    out.push({ company, guid: /^[0-9a-z-]{1,100}$/.test(g) ? g : "", reason: ADDON_REASONS.includes(a.reason) ? a.reason : "",
+      since: typeof a.since === "string" && ISO_Z.test(a.since) && !isNaN(Date.parse(a.since)) ? a.since : "",
+      tallyAlter: alter(a.tallyAlter), lastLineAlter: alter(a.lastLineAlter) });
+  }
+  return out;
+}
+
+// the companies this beat says open that are handed no day for want of a starting point (index.ts periodDaysFor's rule):
+// the bridge sends Tally's numbers for some company but none for this one and its startPoint lacks it (why noNumbers),
+// or the bridge refused one of its days with noStart in the last 10 minutes (why noStart). Map coName -> {name, why}
+export function unstartedOf(body, now = Date.now()) {
+  const out = new Map();
+  const sp = new Set(Object.keys(plain(body?.startPoint) ? body.startPoint : {}).map((k) => coName(coTrim(k))));
+  const noStart = new Set();
+  for (const x of (Array.isArray(body?.pickups) ? body.pickups : []).slice(0, 20)) {
+    if (x?.state === "refused" && x?.code === "noStart" && now - Date.parse(String(x?.at || "")) < 600000) noStart.add(coName(coTrim(x?.company)));
+  }
+  const cos = (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200);
+  const sendsAlt = cos.some((c) => plain(c) && ("altvchid" in c || "altmstid" in c));
+  for (const c of cos) {
+    if (!plain(c) || c.open !== true) continue;
+    const name = coTrim(c.name), k = coName(name);
+    if (!name || out.has(k)) continue;
+    if (noStart.has(k)) out.set(k, { name, why: "noStart" });
+    else if (sendsAlt && altOf(c.altvchid) === null && altOf(c.altmstid) === null && !sp.has(k)) out.set(k, { name, why: "noNumbers" });
+  }
+  return out;
+}
+
+// info.bridges[id].tell: {skip, numbersWhy, addonSilent} when the bridge sends any of them (2.5.22), {unstarted: {name:
+// {why, since}}} when the cloud hands a company no day for want of a starting point (since: when first seen so, kept from
+// the bridge's tell before), and at. {} when there is nothing to keep (an older bridge with every company started)
+export function cleanTell(body, prev, now = Date.now()) {
+  const sent = plain(body?.skip) || plain(body?.numbersWhy) || Array.isArray(body?.addonSilent);
+  const at = new Date(now).toISOString();
+  const before = plain(prev?.unstarted) ? prev.unstarted : {};
+  const unstarted = {};
+  for (const { name, why } of unstartedOf(body, now).values()) {
+    const was = before[name];
+    unstarted[name] = { why, since: plain(was) && typeof was.since === "string" && ISO_Z.test(was.since) ? was.since : at };
+  }
+  const has = Object.keys(unstarted).length > 0;
+  if (!sent && !has) return {};
+  return { tell: { ...(sent ? { skip: codesOf(body.skip, SKIP_CODES), numbersWhy: codesOf(body.numbersWhy, NUMBERS_CODES), addonSilent: addonOf(body.addonSilent) } : {}),
+    ...(has ? { unstarted } : {}), at } };
+}
+
+// a bridge of 2.5.16 or later (the typing clock lastKeySec and dayRetry, which the days FinCom queues by itself rely on)
+export function autoDaysFor(version) {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? "").trim());
+  if (!m) return false;
+  const [a, b, c] = [+m[1], +m[2], +m[3]];
+  return a !== 2 ? a > 2 : b !== 5 ? b > 5 : c >= 16;
+}
+
+// the sources of tally_check_days a person asked for (Upload, Check for changes, Bring missing days); any other (held,
+// delete, gap, future, or not known) is FinCom's own
+export const AUTO_SOURCES = new Set(["held", "delete", "gap", "future"]);
+const PERSON_SOURCES = new Set(["upload", "check", "fill"]);
+// whether a check day may go to this bridge in this answer. autoOn: the cloud has migration 222 (else as before);
+// newBridge: autoDaysFor; claimed: it came by tally_days_claim (the bridge serves the book)
+export function autoKept(source, { autoOn, newBridge, claimed }) {
+  if (!autoOn || PERSON_SOURCES.has(source)) return true;
+  return !!newBridge && !!claimed;
+}
+
+export const AUTO_EVERY_MS = 600000;
+// true (and noted) when key was not noted in the last `every` ms
+export function due(memo, key, now = Date.now(), every = AUTO_EVERY_MS) {
+  const last = memo.get(key);
+  if (last !== undefined && now - last < every) return false;
+  if (memo.size >= 5000) memo.clear();
+  memo.set(key, now);
+  return true;
+}
+
+export const BRING_WORDS = "FinCom brings this day from Tally by itself.";
+// words with any ask for an upload taken out: a sentence that asks is dropped, or cut at its colon when what comes
+// before says what happened; FinCom's own words (tail) then end it. Words that ask nothing: as they are
+export function noUploadAsk(words, tail = BRING_WORDS) {
+  const w = typeof words === "string" ? words.trim() : "";
+  if (!w || !/upload/i.test(w)) return w;
+  const kept = [];
+  for (const s of w.split(/(?<=[.!?])\s+/)) {
+    const i = s.search(/upload/i);
+    if (i < 0) { kept.push(s); continue; }
+    const head = s.slice(0, s.lastIndexOf(":", i) + 1 || 0).replace(/[\s:;,]+$/, "");
+    if (s.lastIndexOf(":", i) >= 0 && head) kept.push(head + ".");
+  }
+  return kept.length ? kept.join(" ") + " " + tail : tail;
+}

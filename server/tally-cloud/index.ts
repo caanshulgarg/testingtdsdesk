@@ -258,6 +258,7 @@ import { corsFor } from "../_shared/cors.ts";   // the one list of headers for e
 import { cloudReporter } from "../_shared/sentry.ts";
 // next-fix-devlookup (FINCOM-CLOUD-STAGING-8/B/C/9): the gateway's HTML error page as one short line, one more try for a read
 import { dbReport, readRetry } from "./dbgateway.js";
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
@@ -420,7 +421,11 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     ...recorderOf(body),
     // condition 4 (bridge 2.2.0): per company, the methods its 2-second rule switched off (the entry fetch, Tally's change
     // list, month slices), {bodies, B, C}; absent on an older bridge or when none is off
-    ...recorderOffOf(body) } };
+    ...recorderOffOf(body),
+    // the owner's decision of 24-Nov-2026 (bridge 2.5.22; migration 221's tally_tell_of reads it): why this bridge reads
+    // nothing of a company (skip, numbersWhy: codes only) and the add-on's silence (addonSilent), and the companies the cloud
+    // hands no day of for want of a starting point (unstarted, with since); absent when there is nothing to say
+    ...cleanTell(body, dev?.info?.bridges?.[id]?.tell, Date.now()) } };
 }
 function cosOf(body: any): { cos?: string[][] } {
   if (!Array.isArray(body?.companies)) return {};
@@ -1397,7 +1402,7 @@ function cleanRenumberAlerts(x: any) {
   if (!Array.isArray(x)) return null;
   const t = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
   const out = x.filter((a: any) => a && typeof a === "object" && !Array.isArray(a) && t(a.company, 200).trim() && t(a.words, 300).trim()).slice(0, 20).map((a: any) => ({
-    company: t(a.company, 200), words: t(a.words, 300), n: Math.max(0, Math.min(1e6, Math.floor(Number(a.n)) || 0)), more: a.more === true,
+    company: t(a.company, 200), words: noUploadAsk(t(a.words, 300), "FinCom reads these days from Tally again by itself."), n: Math.max(0, Math.min(1e6, Math.floor(Number(a.n)) || 0)), more: a.more === true,
     from: /^[0-9]{8}$/.test(String(a.from ?? "")) ? String(a.from) : "", type: t(a.type, 60), at: t(a.at, 30) }));
   return out.length ? out : null;
 }
@@ -2378,22 +2383,27 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
     // beat's startPoint none, or it refused one a moment ago with noStart) is left out of this beat: the bridge holds a
     // listed day as its current one, so that day held every other book's (head of the line). Listed again once its beat
     // has the numbers, or 10 minutes after the refusal (so a company is never left out for good)
+    // (a bridge that sends the numbers for any company sends them for each one it has them for: one without the key has
+    // none; an older bridge sending none for any is left as before: tellday.js unstartedOf, the same rule the bridge's
+    // tell records, so the page says why instead of nothing)
     const key = (v: unknown) => coName(coTrim(v));
-    const sp = new Set(Object.keys(body?.startPoint && typeof body.startPoint === "object" ? body.startPoint : {}).map(key));
-    const noStart = new Set<string>();
-    for (const x of (Array.isArray(body?.pickups) ? body.pickups : []).slice(0, 20) as any[]) {
-      if (x?.state === "refused" && x?.code === "noStart" && Date.now() - Date.parse(String(x?.at || "")) < 600000) noStart.add(key(x?.company));
-    }
+    const unstarted = unstartedOf(body);
     const open = new Map<string, string>();
     const cosIn = (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[];
-    // a bridge that sends the numbers for any company sends them for each one it has them for: one without the key has none
-    // (an older bridge sending none for any is left as before)
-    const sendsAlt = cosIn.some((c: any) => !!c && typeof c === "object" && ("altvchid" in c || "altmstid" in c));
     for (const c of cosIn) {
       const name = s(c?.name, 200);
-      const unstarted = sendsAlt && !!c && typeof c === "object" && altOf(c.altvchid) === null && altOf(c.altmstid) === null && !sp.has(key(name));
-      if (unstarted || noStart.has(key(name))) continue;
+      if (unstarted.has(key(name))) continue;
       if (name && c?.open === true && !open.has(name)) open.set(name, s(c?.guid, 100));
+    }
+    // the owner's decision of 24-Nov-2026 (migration 222): the days FinCom needs are queued by itself (tally_autoday_queue,
+    // once a book per 10 minutes), before the book's days are handed out; a company left out for want of its starting
+    // point is queued too (its days wait, and its line says why). The days FinCom queued by itself go only to a bridge of
+    // 2.5.16 or later serving the book (by claim); a cloud without 222: as before
+    const newBridge = autoDaysFor(claim?.dev ? bridgeVersionOf(claim.dev, claim.bridge, body) : body?.version);
+    for (const c of [...unstarted.values()].slice(0, 20)) {
+      let book: string | null = null;
+      try { book = await bookForBeat(firm, c.name); } catch { book = null; }
+      if (book) await autodayQueue(book);
     }
     const books = new Set<string>();
     for (const [company, beatGuid] of [...open].slice(0, 20)) {
@@ -2409,6 +2419,10 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       if (recorded && beatGuid && recorded.toLowerCase() !== beatGuid.toLowerCase()) continue;
       const guid = recorded || beatGuid;
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
+      await autodayQueue(book);
+      // migration 222: whether this answer may carry the days FinCom queued by itself (a cloud without it: always)
+      const autoOn = autodayOn(), serves = !!claim && claim.shared.has(company);
+      const ownDays = !autoOn || (newBridge && serves);
       // bridge 2.5.16 (migration 197): the days held for their 24 hours are never handed out; the lists are asked for that
       // many more days so the held ones never fill the answer
       const held = await dayRetryHeld(book), more = held.size, skipped = new Set<string>();
@@ -2426,7 +2440,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // next-fast-delete (migration 158): a day with a held delete this bridge sent (no entry GUID on the line) goes FIRST,
       // before the period's days (which fill a 3-day answer), once per day per 3 minutes (tally_held_front): its whole-day
       // list applies the delete at once (tally_held_delete_by_heads). A cloud without 158: as before (asked again in 10 min)
-      if (claim && Date.now() - heldFrontMissing >= 600000 && out.length < max) {
+      if (claim && ownDays && Date.now() - heldFrontMissing >= 600000 && out.length < max) {
         const { data: hf, error: he } = await db.rpc("tally_held_front", { p_book: book, p_device: claim.dev.id, p_bridge: claim.bridge, p_max: max - out.length });
         if (he) { if (missingFn(String(he.message || ""))) heldFrontMissing = Date.now(); else fail("held_front", he); }
         for (const d of Array.isArray(hf) ? hf as any[] : []) {
@@ -2445,7 +2459,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // next-fix-gap-after-post (migration 182): whether nobody would feel a read now (p_idle, lightIdle): the light reads
       // (a posting's read back, a gap's older days, the recount, the retry after a 2 s stop) go only then, one at a time,
       // paced by the cloud; a cloud without 182: 160's call (asked again in 10 minutes)
-      if (Date.now() - gapFrontMissing >= 600000 && out.length < max) {
+      if (ownDays && Date.now() - gapFrontMissing >= 600000 && out.length < max) {
         const idle182 = Date.now() - gapIdleMissing >= 600000;
         let { data: gf, error: ge } = await db.rpc("tally_gap_front", idle182 ? { p_book: book, p_max: max - out.length, p_idle: idle } : { p_book: book, p_max: max - out.length });
         if (idle182 && ge && missingFn(String(ge.message || ""))) {
@@ -2500,10 +2514,10 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         // that a "Bring books from Tally" stopped before the person's press no longer holds the check; a cloud without 135:
         // 133's tally_check_next as before (asked again after 10 minutes)
         const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length + more) };
-        let got: any = null;
+        let got: any = null, claimed = false;
         if (byClaim && Date.now() - daysClaimMissing >= 600000) {
           got = await db.rpc("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false });
-          if (got.error && missingFn(String(got.error.message || ""))) { daysClaimMissing = Date.now(); got = null; }
+          if (got.error && missingFn(String(got.error.message || ""))) { daysClaimMissing = Date.now(); got = null; } else claimed = true;
         }
         if (!got && Date.now() - openMissing >= 600000) {
           got = await db.rpc("tally_check_next_open", cArgs);
@@ -2518,13 +2532,16 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
           const rows = (Array.isArray(cd) ? cd as any[] : []).filter((d) => isDay(String(d?.day || "")));
           // bridge 2.5.10: a day queued by Bring missing days (tally_check_days.source 'fill') is handed out as kind fill,
           // any other as check (one read of the days' sources, only when there are days; not read: check)
-          const fills = await fillDaysOf(book, rows.map((d) => String(d.day)));
+          // the owner's decision of 24-Nov-2026: a day FinCom queued by itself (held, delete, gap, future) only by claim to a
+          // bridge of 2.5.16 or later (tellday.js autoKept); a person's day (upload, check, fill) as before
+          const srcs = await checkSourcesOf(book, rows.map((d) => String(d.day)));
           for (const d of rows) {
             if (out.length >= max) break;
             const day = String(d?.day || "");
+            if (!autoKept(srcs.get(day), { autoOn, newBridge, claimed })) continue;
             if (isHeld(day) || out.some((x) => x.company === company && x.day === day)) continue;
             // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
-            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: fills.has(day) ? "fill" : "check" });
+            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: srcs.get(day) === "fill" ? "fill" : "check" });
           }
         }
       }
@@ -2537,16 +2554,39 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
   // nothing listed while one company's days could not be worked out: the key left out (the bridge keeps the day it reads)
   return unsure && out.length === 0 ? null : out;
 }
-// bridge 2.5.10: which of a book's check days were queued by Bring missing days (yyyymmdd); none when not read
-async function fillDaysOf(book: string, days: string[]): Promise<Set<string>> {
-  const out = new Set<string>();
+// bridge 2.5.10: why each of a book's check days was queued (tally_check_days.source by yyyymmdd: 'fill' is Bring missing
+// days, handed out as kind fill); none when not read (the kind is check then, and the day is taken as FinCom's own)
+async function checkSourcesOf(book: string, days: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
   if (!days.length) return out;
   try {
     const { data, error } = await db.from("tally_check_days").select("day, source").eq("book_id", book).in("day", days.slice(0, 30).map(iso));
     if (error) return out;
-    for (const r of (data || []) as any[]) if (r?.source === "fill") out.add(String(r.day || "").slice(0, 10).replace(/-/g, ""));
-  } catch { /* the kind is check then */ }
+    for (const r of (data || []) as any[]) out.set(String(r.day || "").slice(0, 10).replace(/-/g, ""), String(r?.source || ""));
+  } catch { /* none known */ }
   return out;
+}
+// the owner's decision of 24-Nov-2026 (migration 222): tally_autoday_queue(book) queues the days FinCom needs by itself
+// (stuck lines' days, possible deletes, future-dated lines on their day, the period started, the days of an unlinked book
+// parked). Once a book per 10 minutes from the beat (the sweep every 15 minutes does the rest); never fails the beat. A
+// cloud without 222: not asked (again after 10 minutes), and the days are handed out as before
+let autodayMissing = 0;
+const autodayMemo = new Map<string, number>();
+const autodayOn = () => Date.now() - autodayMissing >= 600000;
+async function autodayQueue(book: string) {
+  if (!autodayOn() || !due(autodayMemo, book)) return;
+  try {
+    const { error } = await db.rpc("tally_autoday_queue", { p_book: book });
+    if (error) {
+      if (missingFn(String(error.message || ""))) { if (!autodayMissing) console.log("tally-ingest beat: the days are not queued by themselves: migration 222 is not applied"); autodayMissing = Date.now(); }
+      else fail("autoday_queue", error);
+    }
+  } catch (e) { fail("autoday_queue", e); }
+}
+// the version of the bridge this beat is from (its own beat's, else its record's)
+function bridgeVersionOf(dev: any, bridge: string, body: any): string {
+  const v = typeof body?.version === "string" && body.version ? body.version : typeof body?.bridge?.version === "string" ? body.bridge.version : "";
+  return v || String(dev?.info?.bridges?.[bridge]?.version || "");
 }
 // bridge 2.5.10 (the owner's request of 08-Nov-2026): each book's days as the bridge took them from this answer, said in
 // its next beat: started (when, the first day) or refused (a known reason's code and the bridge's fixed words). Kept on
@@ -2574,10 +2614,10 @@ const PICK_WORDS: Record<string, string> = {
   earlier: "Tally is still on an earlier request; reading follows by itself",
   stoppedHere: "single days are not read from this Tally until FinCom Bridge restarts",
   otherCompany: "the company open in Tally here is another copy than the book's (its GUID differs)",
-  stopped: "reading older entries of this company was stopped because Tally was too slow; choose it again in FinCom",
+  stopped: "Tally was too slow for this company; FinCom tries again by itself",
   queued: "other days are being read first, one day at a time; this follows by itself",
   // bridge 2.5.16 (migration 197)
-  dayRetry: "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)",
+  dayRetry: "Tally was slow for this day; FinCom tries it again by itself",
 };
 const PICK_CODES = Object.keys(PICK_WORDS);
 const ISO_T = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/;
@@ -2650,7 +2690,7 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
   if (body?.upload === true) {
     const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
     const why = ["over2s", "dates", "shape", "toomany", "entries", "payroll"].includes(String(body.why)) ? String(body.why) : "other";
-    const { data, error } = await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: why, p_type: s(body.type, 100), p_words: s(body.words, 300) });
+    const { data, error } = await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: why, p_type: s(body.type, 100), p_words: noUploadAsk(s(body.words, 300)).slice(0, 300) });
     if (error) return periodError(error);
     return reply(200, { ok: !!(data as any)?.ok, ...((data as any)?.ok ? {} : { error: String((data as any)?.error || "not kept") }) });
   }
@@ -2713,10 +2753,12 @@ async function periodStop(book: string, body: any) {
   // review 103: the choice the bridge was reading (an older stop never stops a newer choice)
   const chosen = typeof body?.chosenAt === "string" && !isNaN(Date.parse(body.chosenAt)) ? body.chosenAt.slice(0, 40) : "";
   if (!chosen) return reply(400, { ok: false, error: "no choice" });
-  const { data, error } = await db.rpc("tally_period_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300), p_chosen_at: chosen });
+  // (24-Nov-2026: the bridge's words never ask for an upload here: FinCom brings the day by itself)
+  const words = noUploadAsk(s(body?.words, 300), "FinCom tries again by itself.").slice(0, 300);
+  const { data, error } = await db.rpc("tally_period_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: words, p_chosen_at: chosen });
   if (error) return periodError(error);
   // migration 133: the upload check stops with it (one rule: Tally is not asked again until the person presses Resume)
-  const { error: ce } = await db.rpc("tally_check_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300), p_chosen_at: chosen });
+  const { error: ce } = await db.rpc("tally_check_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: words, p_chosen_at: chosen });
   if (ce && !missingFn(String(ce.message || ""))) fail("check_stop", ce);
   console.log("tally-ingest period_stop: older entries stopped by the bridge", book, day, why);
   return reply(200, { ok: !!(data as any)?.ok });
@@ -2736,13 +2778,15 @@ async function periodDayStop(book: string, body: any) {
   }
   const d = (data || {}) as any;
   console.log("tally-ingest period_day_stop: one day held for later", book, day, why, d.fails);
-  return reply(200, { ok: d.ok === true, fails: Number(d.fails) || 0, upload: d.upload === true, retryAt: String(d.retryAt || ""), ...(d.upload === true ? { words: String(d.words || "").slice(0, 300) } : {}) });
+  return reply(200, { ok: d.ok === true, fails: Number(d.fails) || 0, upload: d.upload === true, retryAt: String(d.retryAt || ""), ...(d.upload === true ? { words: noUploadAsk(String(d.words || "").slice(0, 300), "FinCom tries it again by itself.") } : {}) });
 }
 // the entries FinCom lacked, as FinComVoucherObject's answers kept them (the bridge's strip): read as a Day Book's entries
 // (parse.js), never a salary payment's bank details, each dated the day (another date: refused whole, nothing stored), each
 // whose ledger lines total zero (else not stored, and the day is to be uploaded by hand), then tally_period_entries
 const MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const PERIOD_ENTRY_WORDS = (d: string) => "FinCom could not read " + d.slice(6, 8) + "-" + MONS[Number(d.slice(4, 6)) - 1] + "-" + d.slice(0, 4) + " from Tally. Please upload that day's Day Book.";
+// 24-Nov-2026: a day of a month locked in FinCom is not read again by itself: the words say what to press, never "upload"
+const LOCKED_TAIL = "Unlock the month, then press Bring missing days on the Tally page.";
+const PERIOD_ENTRY_WORDS = (d: string) => "FinCom could not read " + d.slice(6, 8) + "-" + MONS[Number(d.slice(4, 6)) - 1] + "-" + d.slice(0, 4) + " from Tally yet. FinCom tries again by itself.";
 // migration 133: 98's tally_period_entries with each entry it brings in logged ("Today from Tally"); a cloud without 133: 98's
 async function periodEntriesRpc(args: Record<string, unknown>) {
   const r = await db.rpc("tally_period_entries_logged", args);
@@ -2771,7 +2815,7 @@ async function periodHold(book: string, day: string, held: Record<string, unknow
   if (!error) return (data || {}) as any;
   if (!missingFn(String(error.message || ""))) { fail("period_hold", error); return { ok: false }; }
   if (!held.length) return { ok: true, held: 0 };
-  const words = (held.length === 1 ? "1 entry" : held.length + " entries") + " on " + day.slice(6, 8) + "-" + MONS[Number(day.slice(4, 6)) - 1] + " could not be read: upload the Day Book for this day.";
+  const words = (held.length === 1 ? "1 entry" : held.length + " entries") + " on " + day.slice(6, 8) + "-" + MONS[Number(day.slice(4, 6)) - 1] + " could not be read yet. FinCom tries again by itself.";
   await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: "held", p_type: "", p_words: words });
   return { ok: true, held: held.length, manual: true, words, upload: words };
 }
@@ -2813,7 +2857,7 @@ async function periodEntries(book: string, body: any) {
     if (c.ok === true && !c.locked){ await periodEntriesRpc(pArgs); gstWant(book); }     // (a day not of the period: refused there in words, nothing done)
     if (bad.length) console.log("tally-ingest period_entries (upload check): " + bad.length + " entr" + (bad.length === 1 ? "y" : "ies") + " not taken (lines do not total zero)", book, day);
     if (c.ok !== true) return reply(200, { ok: false, locked: c.locked === true, error: String(c.error || "not stored") });
-    if (c.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(c.upload || PERIOD_ENTRY_WORDS(day)) });
+    if (c.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: noUploadAsk(String(c.upload || PERIOD_ENTRY_WORDS(day)), LOCKED_TAIL) });
     const hk = held ? await periodHold(book, day, held, version) : null;
     return reply(200, { ok: true, stored: c.stored, added: c.added, updated: c.updated, done: c.done === true && !(held && held.length), ...(bad.length ? { notTaken: bad.length } : {}),
       ...(held && held.length ? { held: held.length, heldWords: String(hk?.words || HELD_WORDS(day, held.length)) } : {}) });
@@ -2827,14 +2871,14 @@ async function periodEntries(book: string, body: any) {
   }
   if (d.ok !== true) return reply(200, { ok: false, locked: d.locked === true, error: String(d.error || "not stored"), ...(bad.length ? { upload: PERIOD_ENTRY_WORDS(day) } : {}) });
   // a month locked in FinCom: the day is not fetched again; the one quiet line asks for it to be uploaded once unlocked
-  if (d.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(d.upload || PERIOD_ENTRY_WORDS(day)) });
+  if (d.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: noUploadAsk(String(d.upload || PERIOD_ENTRY_WORDS(day)), LOCKED_TAIL) });
   if ((Number(d.stored) || 0) > 0) gstWant(book);
   // 2.5.12 (migration 154): the day's held entries: the day stays open (never done while one is held), tried again by itself
   const hk = held && !bad.length ? await periodHold(book, day, held, version) : null;
   if (held && held.length) console.log("tally-ingest period_entries: " + held.length + " entr" + (held.length === 1 ? "y" : "ies") + " held, the day stays open", book, day, hk?.manual ? "(the manual step)" : "");
   return reply(200, { ok: true, stored: d.stored, stale: d.stale, held: d.held, n: d.n, done: d.done === true && !(held && held.length), ...(bad.length ? { notTaken: bad.length, upload: PERIOD_ENTRY_WORDS(day) } : {}),
     ...(held && held.length ? { heldEntries: held.length, heldWords: String(hk?.words || HELD_WORDS(day, held.length)) } : {}),
-    ...(hk?.upload ? { upload: String(hk.upload) } : {}) });
+    ...(hk?.upload ? { upload: noUploadAsk(String(hk.upload)) } : {}) });
 }
 // the ledger read's progress (Connect Tally step 5)
 async function ledgerProgress(book: string, dev: any, body: any) {
@@ -2965,7 +3009,7 @@ function periodPullOf(b: any, speed: { book: string; perMin: number }[] = []) {
   const p = b?.periodPull;
   if (!p || typeof p !== "object") return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-  const up = (Array.isArray(p.uploadDays) ? p.uploadDays : []).slice(0, 50).map((x: any) => ({ company: s(x?.company, 200), day: s(x?.day, 8), words: s(x?.words, 300) }));
+  const up = (Array.isArray(p.uploadDays) ? p.uploadDays : []).slice(0, 50).map((x: any) => ({ company: s(x?.company, 200), day: s(x?.day, 8), words: noUploadAsk(s(x?.words, 300)) }));
   // next-fast-entries: a fast bridge's own speed per book (speedBooksFor: matched by the book's company GUID), for the
   // page's "about N min left" while this beat is fresh; nothing from a bridge with the switch off
   return { periodPull: { uploadDays: up, ...(speed.length ? { speed } : {}) } };
@@ -3240,7 +3284,7 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // information only), and the bridge's plain reason when the line goes without the entry's body (heldWhy)
   if (x?.idsMismatch === true) line.idsMismatch = true;
   const lg = s(x?.lineGuid, 100); if (lg) line.lineGuid = lg;
-  const hw = s(x?.heldWhy, 300); if (hw) line.heldWhy = hw;
+  const hw = noUploadAsk(s(x?.heldWhy, 300)).slice(0, 300); if (hw) line.heldWhy = hw;     // (24-Nov-2026: never an ask for an upload)
   // bridge 2.3.0 review H1: a cancel / delete the bridge's own Tally does not show happened there (guidHeld): kept held,
   // never resolved from FinCom's record (guidsFromRecord)
   if (x?.guidHeld === true && (event === "deleted" || event === "cancelled")) line.guidHeld = true;
@@ -3283,7 +3327,7 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
       if (bl.length < 2 || Math.abs(sum) > 0.01) {
         const why = "the entry's details from Tally are incomplete (" + (bl.length < 2 ? "fewer than two ledger lines came"
           : hasInventory(xml, og as string) ? "its lines do not add up: an item invoice's sales or purchase ledger may not have come" : "its lines do not add up")
-          + "): upload this day's Day Book to settle it";
+          + "): FinCom reads this day from Tally again by itself to settle it";
         console.log("tally-ingest recorder_lines: body not taken (" + bl.length + " lines, sum " + sum + ")", line.line_id, og);
         line.vouchers = []; line.lines = []; line.heldWhy = why;
         (line.payload as Record<string, unknown>).heldWhy = why;
@@ -3467,7 +3511,7 @@ async function ledgerWait(book: string, send: Record<string, any>[]) {
     const bad = all.filter((n) => !askableName(n)), names = all.filter(askableName).slice(0, 10);
     if (!all.length) continue;
     const why = bad.length
-      ? ("the ledger " + bad.slice(0, 3).map((n) => "'" + n + "'").join(", ") + " is not in FinCom and cannot be fetched from Tally by its name (a quote mark or a line break in it): upload this day's Day Book, or Update now for the ledger list, to settle it").slice(0, 300)
+      ? ("the ledger " + bad.slice(0, 3).map((n) => "'" + n + "'").join(", ") + " is not in FinCom and cannot be fetched from Tally by its name (a quote mark or a line break in it): press Update now for the ledger list to settle it").slice(0, 300)
       : ledgerWaitWords(names);
     console.log("tally-ingest recorder_lines: " + why, l.line_id, l.object_guid);
     l.vouchers = []; l.lines = []; l.heldWhy = why;
