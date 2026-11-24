@@ -166,8 +166,6 @@ try:
     before = live()
     for i in range(3): c, r = heads([[1, 100], [150, None]]); age()
     ok(c == 200 and before == ["065", "066"] and live() == before and r.get("partial") is True, "4. a hole: nothing deleted, three lists on (%s, %s)" % (live(), r))
-    for i in range(2): c, r = heads(None); age()
-    ok(live() == before, "4. bands without their ranges: nothing deleted (%s)" % live())
     db.sql("update tally_check_days set gone1 = null, gone1_at = null where book_id = %s and day = %s" % (q(BOOK), q(DD.isoformat())))
     c, r = heads([[1, 100], [101, None]]); ok(live() == before, "4. whole bands, the first list: nothing deleted yet (%s)" % r)
     age(); c, r = heads([[1, 100], [101, None]])

@@ -193,3 +193,13 @@ export function bandsWhole(bands, heads) {
   }
   return heads.every((h) => Array.isArray(h) && /^\d{1,18}$/.test(String(h[1] ?? "")) && Number(h[1]) > 0 && s.some(([a, z]) => Number(h[1]) >= a && (z === null || Number(h[1]) <= z)));
 }
+
+// how a day's list is taken (the SQL builder's second round of 222): {via, bands} - via "day" (whole) or "split" (partial)
+// for the held deletes and the period's count; bands: the cleaned ranges for 222's 5-argument tally_check_heads, or null
+// (then the 4-argument call with via). A bands list with its ranges: whole only end to end with no hole; one without
+// them (bridges 2.5.19-2.5.21): today's mapping, a whole day; "split": partial; anything else: a whole day
+export function headsVia(via, bands, heads) {
+  const b = via === "bands" ? cleanBands(bands) : null;
+  if (b) return { via: bandsWhole(b, heads) ? "day" : "split", bands: b };
+  return { via: via === "split" ? "split" : "day", bands: null };
+}

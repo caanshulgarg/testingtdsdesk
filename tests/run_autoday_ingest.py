@@ -12,7 +12,7 @@ fake_supabase.py). Checks:
   6. the check's days before the period's (a stuck line's day never waits behind older days)
   7. each new pick-up word of this bridge for a check day told to tally_autoday_pickup, once
   8. a day read in bands: 222's 5-argument tally_check_heads with the bands; the held deletes and the period's count only
-     for whole bands; without 222: as before
+     for whole bands; bands without their ranges (2.5.19-2.5.21): today's whole-day mapping; without 222: as before
   5. a cloud without 222: everything as before (asked again after 10 minutes)
 Needs Deno (DENO). Made-up books only."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil, datetime
@@ -173,7 +173,8 @@ try:
        "8. a hole: no held delete, the period's count partial (%s)" % r)
     c, r = heads(via="bands")
     ch = (FS.ARGS.get("tally_check_heads") or [{}])[-1]
-    ok(ch.get("p_via") == "bands" and ch.get("p_bands") is None and not FS.ARGS.get("tally_held_delete_by_heads") and r.get("partial") is True, "8. bands without their ranges (a bridge before 2.5.22): partial (%s)" % ch)
+    ok(ch.get("p_via") == "day" and "p_bands" not in ch and FS.ARGS.get("tally_held_delete_by_heads") and r.get("partial") is not True and (FS.ARGS.get("tally_period_heads") or [{}])[-1].get("p_via") == "day",
+       "8. bands without their ranges (bridges 2.5.19-2.5.21): as today, a whole day (4 arguments), so heavy days still close (%s)" % ch)
     c, r = heads(via="day")
     ok(len(FS.ARGS.get("tally_check_heads") or []) == 1 and "p_bands" not in FS.ARGS["tally_check_heads"][-1] and FS.ARGS.get("tally_held_delete_by_heads"), "8. a whole day: as before (4 arguments)")
 

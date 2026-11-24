@@ -258,7 +258,7 @@ import { corsFor } from "../_shared/cors.ts";   // the one list of headers for e
 import { cloudReporter } from "../_shared/sentry.ts";
 // next-fix-devlookup (FINCOM-CLOUD-STAGING-8/B/C/9): the gateway's HTML error page as one short line, one more try for a read
 import { dbReport, readRetry } from "./dbgateway.js";
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk, beforeStartWhy, pickupsToSay, cleanBands, bandsWhole } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, due, noUploadAsk, beforeStartWhy, pickupsToSay, headsVia } from "./tellday.js";   // the owner's decision of 24-Nov-2026: say why, and bring the days by itself (migrations 221, 222)
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
 import { autoLinkFor } from "../_shared/tallyname.js";
 import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
@@ -2731,10 +2731,9 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
   // migration 222 (B.6, the delete guards): a day read in bands is a whole list only when its bands (bridge 2.5.22's
   // body.bands, [[from, to], ...], the last to null) run from 1 end to end with no hole (bandsWhole, 222's own rule): only
   // then the held deletes and the period's count take it as whole; the check gets 'bands' with its bands as they came
-  // (222's 5-argument tally_check_heads decides there). Bands without their ranges: partial with 222; a cloud without
-  // 222: as before (a whole day)
-  const isBands = body?.via === "bands", bands = isBands ? cleanBands(body?.bands) : null;
-  const via = !isBands ? periodHeadsVia(body?.via) : bands ? (bandsWhole(bands, heads) ? "day" : "split") : (autodayOn() && Date.now() - heads5Missing >= 600000 ? "split" : "day");
+  // (222's 5-argument tally_check_heads decides there). Bands without their ranges (bridges 2.5.19-2.5.21): today's
+  // mapping, a whole day, so a heavy day still closes (the SQL builder's second round of 222)
+  const { via, bands } = headsVia(body?.via, body?.bands, heads) as { via: "day" | "split"; bands: number[][] | null };
   // next-fast-delete (migration 158): a whole-day list of a day being checked first applies the held deletes it proves (the
   // line's MasterID, number and type name one live entry, whose GUID Tally makes from that MasterID, and the list has
   // neither; the line this computer's bridge's own, in the last 10 minutes, the entry held before it): the entry leaves
@@ -2747,7 +2746,7 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
     } catch (e) { fail("held_delete_by_heads", e); }
   }
   let ck: any = null, ce: any = null;
-  if (isBands && Date.now() - heads5Missing >= 600000) {
+  if (bands && Date.now() - heads5Missing >= 600000) {
     ({ data: ck, error: ce } = await db.rpc("tally_check_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: "bands", p_bands: bands }));
     if (ce && missingFn(String(ce.message || ""))) { heads5Missing = Date.now(); ck = null; ce = null; }
   }

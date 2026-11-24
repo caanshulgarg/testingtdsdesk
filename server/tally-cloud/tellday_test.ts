@@ -11,7 +11,7 @@
 //   8. cleanBands / bandsWhole: a day read in MasterID bands is whole only end to end with no hole (222's rule, mirrored)
 //   6. beforeStartWhy: a line dated before the book's first day never says FinCom reads that day by itself (the owner, 24-Nov:
 //      an earlier year is never added or read by itself; the page offers "Add 2025-26")
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS, pickupsToSay, cleanBands, bandsWhole } from "./tellday.js";
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS, pickupsToSay, cleanBands, bandsWhole, headsVia } from "./tellday.js";
 
 function assert(c: unknown, w: string) { if (!c) throw new Error(w); }
 const T0 = Date.parse("2026-11-24T06:00:00Z");
@@ -163,4 +163,13 @@ Deno.test("bandsWhole: from 1, each next right after, the last open, every head 
   assert(!bandsWhole(null, H([5])) && !bandsWhole([], H([5])), "no bands: never whole");
   assert(!bandsWhole([[1, 100], [101, null]], [["g", 0, 1, "x"]]), "a head with no MasterID");
   assert(bandsWhole([[1, null]], []), "one band, an empty day");
+});
+
+Deno.test("headsVia: bands with their ranges judged; without them as today (a whole day)", () => {
+  const H = [["g-5", 5, 405, "Payment"]];
+  assert(JSON.stringify(headsVia("bands", [[1, 100], [101, null]], H)) === JSON.stringify({ via: "day", bands: [[1, 100], [101, null]] }), "whole bands");
+  assert(JSON.stringify(headsVia("bands", [[1, 100], [150, null]], H)) === JSON.stringify({ via: "split", bands: [[1, 100], [150, null]] }), "a hole: partial, with its bands for 222");
+  assert(JSON.stringify(headsVia("bands", undefined, H)) === JSON.stringify({ via: "day", bands: null }), "2.5.19-2.5.21 (no ranges): a whole day, the 4-argument call");
+  assert(JSON.stringify(headsVia("bands", "junk", H)) === JSON.stringify({ via: "day", bands: null }), "ranges not readable: as today");
+  assert(headsVia("split", [[1, null]], H).via === "split" && headsVia("day", null, H).via === "day" && headsVia(undefined, null, H).via === "day", "the other kinds as today");
 });
