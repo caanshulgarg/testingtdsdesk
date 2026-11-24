@@ -447,6 +447,26 @@ with sync_playwright() as p:
         ok(m == ["In Tally", "In Tally", "Not found in Tally", "Gone from Tally"], look + "Transactions: invoices found in Tally say In Tally; a bank line in a Tally file not found says Not found in Tally; one gone, Gone from Tally: %s" % m)
         m = pg.evaluate("(() => { const e = D().entries.b1; e.goneFromTally = new Date().toISOString(); const l = txnRowsBills().find(x => x.id === 'b1').label; delete e.goneFromTally; return l; })()")
         ok(m == "Gone from Tally", look + "Transactions: a bill gone from Tally says Gone from Tally: %s" % m)
+        # Sales: a re-upload of an invoice FinCom posted (salesCheckSafe's salesDupOf, the same entry) is In Tally from the
+        # moment Post finds it, timed then (matchedAt): it stays listed under In Tally for 24 hours, not hidden at once
+        go(pg, "goClient('sales'); salesTabGo('done');", 1200)
+        m = pg.evaluate("""async () => { const s = SL(), o = s.list.find(x => x.id === 's1');
+          const v = JSON.parse(JSON.stringify(o)); v.id = 's7'; v.status = 'ready'; delete v.postedAt; delete v.postedVia; v.addedAt = new Date().toISOString(); s.list.push(v); saveSales();
+          const now = new Date().toISOString(), kb = TCloud.book, kc = window.salesCheckTally; TCloud.book = () => ({book: 'bk', daysAt: now, state: {seen: now}}); window.salesCheckTally = async () => 0;
+          const dup = !!salesDupOf(v); try { await salesCheckSafe([v]); } finally { TCloud.book = kb; window.salesCheckTally = kc; } render();
+          return {dup, status: v.status, timed: Math.abs(Date.parse(v.matchedAt || '') - Date.now()) < 60000, old: salesOld(v), listed: salesVisible().some(x => x.id === 's7')}; }""")
+        pg.wait_for_timeout(800)
+        ok(m == {"dup": True, "status": "intally", "timed": True, "old": False, "listed": True}, look + "Sales: a re-upload of a posted invoice, found at Post as the same entry: In Tally, timed, and still listed: %s" % m)
+        go(pg, "SL().list = SL().list.filter(x => x.id !== 's7'); saveSales(); render();", 600)
+        # Sales: one drawing's answers are not kept into the next (memoKeep, the top bar's redraws): an invoice posted 25
+        # hours ago that gets Tally's error after a drawing is listed at the next one
+        go(pg, "render();", 800)
+        m = pg.evaluate("""() => { const v = SL().list.find(x => x.id === 's2'), was = salesOld(v); v.postError = 'Made-up error'; saveSales();
+          const kept = memoKeep(() => salesVisible().map(x => x.id)), keptOld = memoKeep(() => salesOld(v)); return {was, keptOld, listed: kept.includes('s2')}; }""")
+        go(pg, "render();", 800)
+        t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
+        ok(m == {"was": True, "keptOld": False, "listed": True} and "SI-s2" in t, look + "Sales: Tally's error on an old invoice after a drawing: listed at the next drawing, also one that reuses the last (%s)" % m)
+        go(pg, "delete SL().list.find(x => x.id === 's2').postError; saveSales(); render();", 600)
         # Restore of a deleted bill posted more than 24 hours ago: the message says it is in Transactions, and no bill is left open
         go(pg, "window.__t = []; const t0 = window.toast; window.toast = (m, ...a) => { window.__t.push(String(m)); return t0(m, ...a); }; goClient('bills'); softDeleteEntry(D().entries.b2, 'Made-up reason'); goState('deleted', 'bills'); S.selected = 'b2'; render();", 1500)
         go(pg, "billRestore('b2');", 1200)

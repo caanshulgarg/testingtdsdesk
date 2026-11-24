@@ -112,7 +112,7 @@ const EINV = {
   },
   // GSTF.aato(fy).v, worked out once for the books open and the year: from the books it reads every outward entry of a
   // year (seconds on large books), and Sales asks it of each invoice (salesOld, in drawings and outside them: Select
-  // all, salesCounts). Held while the same books object, its saves (BOOKS_REV) and its entries are the same; a figure
+  // all, salesCounts). Held while the same books object, its saves (BOOKS_REV), its entries (vouchers, mapV) are the same; a figure
   // typed in GST settings is read afresh each time (S.books.gstAato)
   aato(fy){
     const b = typeof GSTF === "object" ? S.books : null;
@@ -120,7 +120,7 @@ const EINV = {
     const typed = num((b.gstAato || {})[fy]);
     if (typed) return typed;
     const k = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, (b.vouchers || []).length].join("|"), m = this.aatoMemo;
-    if (!m || m.books !== b || m.k !== k) this.aatoMemo = {books: b, k, v: {}};
+    if (!m || m.books !== b || m.vouchers !== b.vouchers || m.mapV !== b.mapV || m.k !== k) this.aatoMemo = {books: b, vouchers: b.vouchers, mapV: b.mapV, k, v: {}};
     const v = this.aatoMemo.v;
     if (!(fy in v)){ try { v[fy] = num(GSTF.aato(fy).v); } catch (e){ v[fy] = 0; } }
     return v[fy];
