@@ -22,6 +22,8 @@ removed after; never a real database), with 221 applied first, made-up firm, boo
      second list a minute later; a FinCom posting settled under 10 minutes ago is not deleted, and is once settled 10
      minutes; a plain entry: deleted on the second list; an unfinished day (6 lists) waits, never "upload the Day Book"
   8. the words: tally_check_status_of and tally_held_status never ask for an upload; the sweep answers, each book in turn
+  9. 197's tally_period_day_stop: a slow day waits 1 h, 3 h, then 24 h; its 3rd try no longer marks it to upload (plain
+     words instead), its check day waits too; two stops while it waits are one try
 RED_WITHOUT_222=1: the same checks without the file (they fail)."""
 import os, re, sys, json, hashlib, datetime, difflib
 os.environ["TMPDIR"] = os.environ.get("PG222_DIR") or "/tmp/tell222"
@@ -71,6 +73,8 @@ marked(block(S("migration-133-fetch-check.sql"), "tally_check_heads"), block(tex
 marked(block(S("migration-196-recorder-no-held.sql"), "tally_recorder_fetching_sweep"), block(text, "tally_recorder_fetching_sweep"), "tally_recorder_fetching_sweep (196's)")
 marked(block(S("migration-196-recorder-no-held.sql"), "tally_held_status"), block(text, "tally_held_status"), "tally_held_status (196's)")
 marked(block(S("migration-182-gap-after-post.sql"), "tally_check_status_of"), block(text, "tally_check_status_of"), "tally_check_status_of (182's)")
+marked(block(S("migration-197-day-retry.sql"), "tally_period_day_stop"), block(text, "tally_period_day_stop"), "tally_period_day_stop (197's)")
+ok("grant execute on function public.tally_period_day_stop(uuid, date, text) to service_role;" in text and "revoke all on function public.tally_period_day_stop(uuid, date, text) from public, anon, authenticated;" in text, "tally_period_day_stop: 197's grants restated (service_role)")
 
 st = T.build(int(os.environ.get("PG222_PORT") or 31222), with221=True); db = st.db; j = st.j
 if RED:   # the columns alone (so the checks read them), none of 222's functions: every behaviour below must fail
@@ -313,6 +317,27 @@ try:
     j("select tally_check_heads(%s, %s, %s, 'day')::text" % (q(BK[k2]), q(UD.isoformat()), js([["g-unknown", 9, 9, "Payment"]])))
     c = cday(k2, UD)
     ok(c.get("up") == "false" and c.get("why") == "unfinished" and c.get("next_at") != "" and "upload" not in c.get("words", "").lower(), "an unfinished day after 6 lists: waits, never 'upload the Day Book' (%s)" % c)
+
+    print("== 9. a slow day of the period (197's tally_period_day_stop): waits, never 'upload'")
+    k = 7; SD = D(30)
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'check') on conflict do nothing" % (q(BK[k]), q(F), q(SD.isoformat())))
+    pstop = lambda: j("select tally_period_day_stop(%s, %s, 'over2s')::text" % (q(BK[k]), q(SD.isoformat())))
+    wait_h = lambda: db.one("select round(extract(epoch from (retry_at - now())) / 3600)::text from tally_period_day_retry where book_id = %s and day = %s" % (q(BK[k]), q(SD.isoformat())))
+    over = lambda: db.sql("update tally_period_day_retry set retry_at = now() - interval '1 minute' where book_id = %s and day = %s" % (q(BK[k]), q(SD.isoformat())))
+    seen9 = []
+    for i in range(4):
+        a9 = pstop(); seen9.append((a9.get("fails"), wait_h(), a9.get("upload"), a9.get("words"))); over()
+    words9 = "Tally was slow for %s. FinCom tries it again by itself." % SD.strftime("%d-%b-%Y")
+    ok([x[:2] for x in seen9] == [(1, "1"), (2, "3"), (3, "24"), (4, "24")], "each try after its wait: 1 h, 3 h, 24 h, 24 h (%s)" % seen9)
+    ok(all(x[2] is False and x[3] == words9 for x in seen9), "never upload; said plainly: %r (%s)" % (words9, seen9[-1]))
+    pdy = db.rows("select coalesce(upload_why, '') as why, (upload_at is not null)::text as up from tally_period_days where book_id = %s and day = %s" % (q(BK[k]), q(SD.isoformat())))
+    c = cday(k, SD)
+    ok(not [r_ for r_ in pdy if r_["up"] == "true"] and c.get("up") == "false" and c.get("next_at") != "" and c.get("why") == "over2s",
+       "its 3rd and 4th try: the period's day not marked to upload, its check day waits (%s, %s)" % (pdy, c))
+    a9 = pstop(); a10 = pstop()
+    ok(a9.get("fails") == a10.get("fails") == 5, "two stops while it still waits: one try (%s, %s)" % (a9.get("fails"), a10.get("fails")))
+    r9 = j("set fincom.role = 'anon'; select tally_period_day_stop(%s, %s, 'over2s')::text" % (q(BK[k]), q(SD.isoformat())))
+    ok("_error" in r9, "anyone but the service role or an owner: refused, as 197")
 
     print("== 8. the words, the sweep")
     hs = j("select tally_held_status(null)::text", uid=OWNER, role="authenticated")

@@ -24,7 +24,8 @@
 -- waits instead of the whole check stopping), tally_check_heads (133's: no delete of a FinCom posting not settled or settled
 -- under 10 minutes ago; 'bands' never whole by itself; an unfinished day waits instead of asking for an upload),
 -- tally_recorder_fetching_sweep (196's: a line goes 'stale' only once its day was listed after it came),
--- tally_held_status (196's) and tally_check_status_of (182's): their words never ask for an upload.
+-- tally_held_status (196's) and tally_check_status_of (182's): their words never ask for an upload; tally_period_day_stop
+-- (197's): a slow day waits 1 h, 3 h, then 24 h, and its 3rd try no longer marks it "to upload".
 -- ADD-ONLY: six columns added, no table made, no row deleted, nothing dropped. A name guard stops the file when a name it
 -- makes is used by something that is not this migration's. One transaction, lock_timeout 10 s, safe twice. Tested by
 -- tests/run_migration222.py (on tests/tell_stand.py).
@@ -46,7 +47,8 @@ begin
                                  ('tally_check_heads(uuid,date,jsonb,text)', '056a70c490c8681a1c8b55240425b7d6'),
                                  ('tally_recorder_fetching_sweep(integer)', '162277df8a310baca3c012c242879014'),
                                  ('tally_held_status(text)', '2d2abcd9dcbd0c738553d72f176f4e0c'),
-                                 ('tally_check_status_of(uuid)', 'a42410209eda217c9713d61ede864027')) v(sig, h) loop
+                                 ('tally_check_status_of(uuid)', 'a42410209eda217c9713d61ede864027'),
+                                 ('tally_period_day_stop(uuid,date,text)', '4a6af131af1ea7b85fa489971ce24f53')) v(sig, h) loop
     if to_regprocedure('public.' || x.sig) is null then bad := bad || ('function ' || x.sig || ' (missing)');
     elsif not exists (select 1 from pg_proc p where p.oid = to_regprocedure('public.' || x.sig)
                        and (md5(p.prosrc) = x.h or coalesce(obj_description(p.oid, 'pg_proc'), '') = 'tally autoday (migration 222)')) then
@@ -564,6 +566,32 @@ begin
 end $function$;
 comment on function public.tally_check_status_of(uuid) is 'tally autoday (migration 222)';
 
+-- a slow day of the period (197's text, lines marked 222): on its 3rd try it no longer asks for the Day Book: it waits
+create or replace function public.tally_period_day_stop(p_book uuid, p_day date, p_why text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare f uuid; r tally_period_day_retry%rowtype; n int; up boolean := false; w text;
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  select firm_id into f from tally_books where book_id = p_book;
+  if f is null or p_day is null then return jsonb_build_object('ok', false, 'error', 'no such book or day'); end if;
+  insert into tally_period_day_retry (book_id, firm_id, day, fails, first_at, last_at, retry_at, why)
+  values (p_book, f, p_day, 0, now(), now() - interval '1 day', now(), left(coalesce(p_why, ''), 40))
+  on conflict (book_id, day) do nothing;
+  select * into r from tally_period_day_retry where book_id = p_book and day = p_day for update;
+  -- 222: each try after the day's wait is over counts; a stop while it still waits is the same try's
+  n := case when r.fails = 0 or r.retry_at <= now() then r.fails + 1 else r.fails end;     -- 222
+  update tally_period_day_retry set fails = n, last_at = case when n > r.fails then now() else last_at end, retry_at = now() + tally_autoday_backoff(n),     -- 222: 1 h, 3 h, then 24 h
+         why = left(coalesce(p_why, ''), 40)
+   where book_id = p_book and day = p_day;
+  -- 222: never "upload the Day Book": the day waits (1 h, 3 h, then every 24 h) and is read again by itself, said plainly;
+  -- its check day (if any) waits the same
+  w := 'Tally was slow for ' || to_char(p_day, 'DD-Mon-YYYY') || '. FinCom tries it again by itself.';     -- 222
+  update tally_check_days set tries = greatest(tries, n), last_why = left(coalesce(nullif(p_why, ''), 'slow'), 40), next_at = now() + tally_autoday_backoff(n)     -- 222
+   where book_id = p_book and day = p_day and done_at is null and upload_at is null;     -- 222
+  return jsonb_build_object('ok', true, 'fails', n, 'upload', up, 'retryAt', now() + tally_autoday_backoff(n), 'words', w);     -- 222
+end $function$;
+comment on function public.tally_period_day_stop(uuid, date, text) is 'tally autoday (migration 222)';
+
 -- ---------------------------------------------------------------- 8. grants (explicit)
 revoke all on function public.tally_autoday_backoff(integer), public.tally_autoday_prio(text), public.tally_autoday_fy(date), public.tally_autoday_words(text, date),
   public.tally_autoday_fresh_post(uuid, text), public.tally_autoday_bands_whole(jsonb, jsonb), public.tally_autoday_put(uuid, uuid, date, text, integer, timestamptz),
@@ -586,6 +614,8 @@ grant execute on function public.tally_recorder_fetching_sweep(integer) to servi
 revoke all on function public.tally_held_status(text) from public, anon;
 grant execute on function public.tally_held_status(text) to authenticated, service_role;
 revoke all on function public.tally_check_status_of(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.tally_period_day_stop(uuid, date, text) from public, anon, authenticated;
+grant execute on function public.tally_period_day_stop(uuid, date, text) to service_role;
 
 -- ---------------------------------------------------------------- 9. the jobs (pg_cron where it is there)
 do $cron$
