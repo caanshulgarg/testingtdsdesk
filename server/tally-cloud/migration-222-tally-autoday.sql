@@ -45,7 +45,7 @@
 -- Re-review: the period days' kept upload words said plainly (a data step), the locked words of tally_period_entries and
 -- tally_period_next_paced too, and a locked period day read again once its month is unlocked.
 -- Ingest review: tally_days_claim(..., p_auto) and tally_check_next_open(..., p_auto): with p_auto false (a bridge before
--- 2.5.16) only upload, check and fill days are claimed, so FinCom's own days are never held from a newer bridge; the
+-- 2.5.16) only upload, check, fill, held and gap days are claimed (as today), never delete, future or retry; the
 -- 7- and 2-argument calls as before. A given-up period day (over2s, dates, shape, entries, payroll, other) is read
 -- again as a check day of its own source 'retry' (so never by an old bridge), under the backoff, and unmarked once that
 -- day is read whole; 'toomany' is not (a check read hits the same limit) and says so plainly; tally_period_upload backs
@@ -432,7 +432,7 @@ end $function$;
 comment on function public.tally_autoday_pickup(uuid, date, text) is 'tally autoday (migration 222)';
 
 -- ---------------------------------------------------------------- 4. the hand-out, the stop (182's texts, lines marked 222)
-create or replace function public.tally_check_next_open(p_book uuid, p_max integer, p_auto boolean) returns jsonb     -- 222: p_auto false (a bridge before 2.5.16): only upload, check, fill
+create or replace function public.tally_check_next_open(p_book uuid, p_max integer, p_auto boolean) returns jsonb     -- 222: p_auto false (a bridge before 2.5.16): only upload, check, fill, held, gap
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare r tally_check_runs%rowtype; p tally_period_pulls%rowtype; has_p boolean; ca timestamptz; out jsonb := '[]'::jsonb; d date; lim int := least(greatest(coalesce(p_max, 3), 0), 30);
   today date := (now() at time zone 'Asia/Kolkata')::date; ra timestamptz; n int := 0;
@@ -452,7 +452,7 @@ begin
   for d in select x.day from tally_check_days x where x.book_id = p_book and x.done_at is null and x.upload_at is null and x.day <= today
               and (ra is null or x.queued_at > ra)
               and x.parked_at is null and (x.next_at is null or x.next_at <= now()) and (d0 is null or x.day >= d0)     -- 222: not parked, not held back, not before the book
-              and (coalesce(p_auto, true) or x.source in ('upload', 'check', 'fill'))     -- 222: FinCom's own days only to a bridge that reads them
+              and (coalesce(p_auto, true) or x.source in ('upload', 'check', 'fill', 'held', 'gap'))     -- 222: delete, future, retry only to a bridge that reads them
             order by least(x.prio, tally_autoday_prio(x.source)), (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit lim loop     -- 222: prio first
     out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true));
     n := n + 1;
@@ -461,7 +461,7 @@ begin
     perform 1 from tally_light_pace where book_id = p_book for update;
     if tally_light_may(p_book) then
       for d in select x.day from tally_check_days x where x.book_id = p_book and x.done_at is null and x.upload_at is null and x.day <= today and x.queued_at <= ra
-                  and x.parked_at is null and (x.next_at is null or x.next_at <= now()) and (d0 is null or x.day >= d0) and (coalesce(p_auto, true) or x.source in ('upload', 'check', 'fill'))     -- 222
+                  and x.parked_at is null and (x.next_at is null or x.next_at <= now()) and (d0 is null or x.day >= d0) and (coalesce(p_auto, true) or x.source in ('upload', 'check', 'fill', 'held', 'gap'))     -- 222
                 order by least(x.prio, tally_autoday_prio(x.source)), (x.asked_at is not null and x.asked_at > now() - interval '2 minutes'), x.day desc limit 1 loop     -- 222
         out := out || jsonb_build_array(jsonb_build_object('day', to_char(d, 'YYYYMMDD'), 'fetch', true, 'chosenAt', ca, 'check', true));
         perform tally_light_took(p_book, d, 'check');
@@ -482,8 +482,8 @@ begin
 end $function$;
 comment on function public.tally_check_next_open(uuid, integer) is 'tally autoday (migration 222)';
 
--- the claim (146's text, lines marked 222): p_auto false, for a bridge before 2.5.16, never claims FinCom's own days (held,
--- delete, gap, future), so they are never held from a bridge that reads them. The 7-argument call as before (p_auto true).
+-- the claim (146's text, lines marked 222): p_auto false, for a bridge before 2.5.16, claims upload, check, fill, held and
+-- gap days (as today) and never the days only a newer bridge reads (delete, future, retry, or a source it does not know). The 7-argument call as before (p_auto true).
 -- (No default on p_auto: with one, a 7-argument call would match both and fail as not unique.)
 create or replace function public.tally_days_claim(p_firm uuid, p_book uuid, p_device uuid, p_bridge text, p_kind text, p_max integer, p_night boolean, p_auto boolean)     -- 222: p_auto
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
