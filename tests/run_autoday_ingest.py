@@ -50,7 +50,7 @@ def rpc(name, a):
         if name == "tally_period_gate": return True
         if name in ("tally_period_next", "tally_period_next_paced") or (name == "tally_days_claim" and a["p_kind"] == "period"): return PERIOD[0][: a["p_max"]]
         if name in ("tally_check_next", "tally_check_next_open") or name == "tally_days_claim":
-            return [{"day": d, "fetch": True, "chosenAt": CA, "check": True} for d in sorted(DAYS, reverse=True) if a.get("p_auto") is not False or DAYS[d] not in ("delete", "future")][: a["p_max"]]     # (222: p_auto false lists none of its new sources)
+            return [{"day": d, "fetch": True, "chosenAt": CA, "check": True} for d in sorted(DAYS, reverse=True) if a.get("p_auto") is not False or DAYS[d] not in ("delete", "future", "retry")][: a["p_max"]]     # (222: p_auto false lists none of its new sources)
         if name == "tally_held_front": return [{"day": "20260401", "chosenAt": CA}]
         if name == "tally_gap_front": return [{"day": "20260402", "chosenAt": CA}]
         if name == "tally_period_retry_days": return []

@@ -88,7 +88,7 @@ Deno.test("autoDaysFor: 2.5.16 or later only", () => {
 });
 
 Deno.test("autoKept: a day of 222's new sources only by claim to a 2.5.16 bridge; the rest as before", () => {
-  for (const s of ["delete", "future"]) {
+  for (const s of ["delete", "future", "retry"]) {
     assert(AUTO_SOURCES.has(s), s + " is FinCom's own");
     assert(autoKept(s, { autoOn: true, newBridge: true, claimed: true }), s + ": claimed, new bridge");
     assert(!autoKept(s, { autoOn: true, newBridge: false, claimed: true }), s + ": an older bridge");

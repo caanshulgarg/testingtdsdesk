@@ -104,7 +104,7 @@ export function autoDaysFor(version) {
 // the sources of tally_check_days a person asked for (Upload, Check for changes, Bring missing days); any other (held,
 // delete, gap, future, or not known) is FinCom's own
 // (review of fbaad9811: only 222's NEW sources are gated; 196's held days and 160's gap days stay as older bridges read them)
-export const AUTO_SOURCES = new Set(["delete", "future"]);
+export const AUTO_SOURCES = new Set(["delete", "future", "retry"]);     // (retry: a period day given up, read again as a check day)
 const PERSON_SOURCES = new Set(["upload", "check", "fill", "held", "gap"]);
 // whether a check day may go to this bridge in this answer. autoOn: the cloud has migration 222 (else as before);
 // newBridge: autoDaysFor; claimed: it came by tally_days_claim (the bridge serves the book)
