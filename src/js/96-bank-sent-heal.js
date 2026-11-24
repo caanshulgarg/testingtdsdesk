@@ -54,7 +54,7 @@ async function bankSentHeal(cid, rows, tname, ids){
   for (const r of todo){
     const rg = typeof postRegOf === "function" ? postRegOf(cid, r.id) : undefined;
     if (rg){
-      if (rg.state === "in_tally"){ const x = postRegResult(rg); bankPosted(cid, r, Object.assign({}, x, {jobId: rg.job_id}), rg.company || tname, x.sentAt, {by: postMyName()}); out.n++; out.rows.push(r); if (!out.at || x.sentAt > out.at) out.at = x.sentAt; }
+      if (rg.state === "in_tally"){ const x = postRegResult(rg); bankPosted(cid, r, Object.assign({}, x, {jobId: rg.job_id}), rg.company || tname, x.sentAt, {by: postMyName(), queuedAt: rg.created_at || ""}); out.n++; out.rows.push(r); if (!out.at || x.sentAt > out.at) out.at = x.sentAt; }
       else if (rg.state === "refused"){ r.postError = "Not in Tally: Tally refused this line (" + (postReasonText(rg.tally_words) || "no words") + ")."; delete r.postJob; out.refused.push(r); }
       continue;
     }
@@ -77,7 +77,7 @@ async function bankSentHeal(cid, rows, tname, ids){
     if (!x || !postTaken(x)) continue;
     const guess = sp ? sp.guess : bankBatchGuesses(j.results).get(String(r.id));
     const at = x.sentAt || j.finishedAt || j.updatedAt || new Date().toISOString();
-    bankPosted(cid, r, Object.assign({}, x, {jobId: job, vchGuess: guess || ""}), j.company || tname, at, {by: postMyName()});
+    bankPosted(cid, r, Object.assign({}, x, {jobId: job, vchGuess: guess || ""}), j.company || tname, at, {by: postMyName(), queuedAt: j.created_at || j.createdAt || ""});
     out.n++; out.rows.push(r);
     if (!out.at || at > out.at) out.at = at;
     if (+x.batchEnd > +(out.batchEnd || 0)) out.batchEnd = String(x.batchEnd);

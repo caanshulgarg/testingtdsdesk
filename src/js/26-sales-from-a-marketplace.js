@@ -385,7 +385,7 @@ async function salesQueuedSync(){
     // confirmed is not; one Tally already had is In Tally; an IRN cancelled keeps its mark while it may be in Tally
     let maybeIn = false;
     if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.matchedAt = new Date().toISOString(); v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
-    else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); v.sentOptional = salesSentOptional(co); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
+    else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); v.sentOptional = salesSentOptional(co, (j && j.created_at) || (r && r.sentAt)); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     // (the bridge's "already" refusal: said on the invoice, as a direct post says it)
     else if (r && r.already){ n++; delete v.postJob; v.postError = plainMsg(r.message) || "Tally did not confirm this invoice."; maybeIn = true; }
@@ -413,7 +413,8 @@ async function salesAutoSync(checkOnly, asked){
 function salesOptional(r, co){ return !!(r && r.optional) || !!(co && co.createOptional); }
 // (re-upload polish 3) whether FinCom itself sent the invoice as an Optional voucher (the client's setting as it sends:
 // ISOPTIONAL in its voucher), never Tally's answer: a voucher type Optional by default in Tally is not FinCom's choice
-function salesSentOptional(co){ return !!(co && co.createOptional); }
+// (F1) since: the posting's queued time (a posting marked late, salesQueuedSync), else its send time
+function salesSentOptional(co, since){ return sentOptionalAt(co, "", since); }
 // an answer Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
 function salesUnconfirmed(x){ return "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x && x.verifyNote ? " [" + x.verifyNote + "]" : ""); }
 async function postSalesToTally(){ try { return await postSalesRun(); } catch (e){ salesPostFailed(e); } }

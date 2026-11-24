@@ -193,6 +193,34 @@ with sync_playwright() as p:
     A.evaluate("(id) => salesNotInTally(id)", vi); A.wait_for_timeout(500)
     ok(copyrpc() == [{"p_job": "j-" + vi, "p_id": vi}] and A.evaluate(STATE, vi)["st"] == "posted", "the one Tally called Optional: the copy asked too (%s)" % copyrpc())
     A.evaluate("() => { window.__ids = []; window.__copy = () => ({ok: false, state: 'none'}); }")
+    print(" j. (polish 3, F1) a posting marked late: the Optional setting as it was when it was queued, cautiously")
+    LATE = """([id, n, onAtQueue, changedAfter]) => { const co = CO(), q = '2026-11-20T10:00:00.000Z';
+      co.createOptional = false; co.createOptionalAt = changedAfter ? '2026-11-20T10:05:00.000Z' : '2026-11-20T09:00:00.000Z';
+      const v = SL().list.find(v => v.id === id); v.postJob = 'j-late-' + n;
+      window.__rows['j-late-' + n] = {id: 'j-late-' + n, status: 'done', created_at: q, company: 'ZZ Test Reupload Traders', results: [{id: v.id, ok: true, byReply: true, verified: false, sentAt: '2026-11-20T10:00:02.000Z'}]};
+      return v.id; }"""
+    # on when queued, turned off while the posting waited (its stamp newer than the queued time): FinCom sent it Optional
+    vk = A.evaluate(LATE, [A.evaluate(ADD, ["ZR/0467", "2026-11-14", G["k"]]), "ZR/0467", True, True]); A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(500)
+    sk = A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); return {st: v.status, sent: v.sentOptional}; }", vk)
+    # turned off before it was queued (stamp older): sent regular
+    vl = A.evaluate(LATE, [A.evaluate(ADD, ["ZR/0468", "2026-11-14", G["k"]]), "ZR/0468", False, False]); A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(500)
+    sl = A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); return {st: v.status, sent: v.sentOptional}; }", vl)
+    ok(sk["st"] == "posted" and sk["sent"] is True, "on when queued, off while it waited: sent as Optional (%s)" % sk)
+    ok(sl["st"] == "posted" and sl["sent"] is False, "off before it was queued: sent regular (%s)" % sl)
+    A.evaluate("() => { CO().createOptional = false; SL().filter = 'done'; SL().openId = null; render(); }"); A.wait_for_timeout(400)
+    ok(A.locator("[data-not-in-tally='%s']" % vk).count() == 0 and A.locator("[data-not-in-tally='%s']" % vl).count() == 1, "the button only on the one sent regular (%d, %d)" % (A.locator("[data-not-in-tally='%s']" % vk).count(), A.locator("[data-not-in-tally='%s']" % vl).count()))
+    # bank lines and bills marked late (postReconcile, bankSentHeal): the posting's queued time handed in
+    bb = A.evaluate("""() => { const co = CO(), cid = co.id, q = '2026-11-20T10:00:00.000Z', out = {};
+      const mk = (id) => { const r = {id, fp: id, state: 'ready', date: '2026-11-10', narr: 'NEFT ZZ', debit: 340, credit: 0, ledger: 'Kappa Retail', dec: {name: 'Kappa Retail'}}; B().rows.push(r); return r; };
+      const x = {ok: true, byReply: true, verified: false, sentAt: '2026-11-20T10:00:02.000Z'};
+      co.bankOptional = false; co.bankOptionalAt = '2026-11-20T10:05:00.000Z'; const r1 = mk('stzr-l1'); bankPosted(cid, r1, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.bankAfter = r1.sentOptional;
+      co.bankOptionalAt = '2026-11-20T09:00:00.000Z'; const r2 = mk('stzr-l2'); bankPosted(cid, r2, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.bankBefore = r2.sentOptional;
+      const e1 = {id: 'bill-zr-l1', status: 'approved', x: {invoiceNo: 'ZB/L1', invoiceDate: '2026-11-12', total: 600, vendorName: 'Made-up Vendor'}, snapshot: {lines: []}}, e2 = Object.assign({}, e1, {id: 'bill-zr-l2', x: Object.assign({}, e1.x, {invoiceNo: 'ZB/L2'})});
+      co.createOptional = false; co.createOptionalAt = '2026-11-20T10:05:00.000Z'; billPosted(cid, e1, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.billAfter = e1.sentOptional;
+      co.createOptionalAt = '2026-11-20T09:00:00.000Z'; billPosted(cid, e2, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.billBefore = e2.sentOptional;
+      co.bankOptional = true; const r3 = mk('stzr-l3'); bankPosted(cid, r3, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.bankOnNow = r3.sentOptional;
+      co.bankOptional = false; delete co.bankOptionalAt; delete co.createOptionalAt; return out; }""")
+    ok(bb == {"bankAfter": True, "bankBefore": False, "billAfter": True, "billBefore": False, "bankOnNow": True}, "bank lines and bills marked late: the same cautious rule (%s)" % bb)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally (%s)" % A.evaluate("() => window.__bridgeCalls"))
 
     print("2. Not in Tally? Post again on a posted invoice")
@@ -311,7 +339,9 @@ with sync_playwright() as p:
     ok(t.startswith("4 not sent: see the red note on each") and "0 posted" not in t, "the toast the sales way, no \"0 posted\" (%s)" % t)
     ok(rp == "4 not sent: see the red note on each", "and the line in the posting's report (%s)" % rp)
     P.evaluate("() => { B().filter = 'all'; render(); }"); P.wait_for_timeout(400)
-    ok("4 not sent: see the red note on each" in (P.inner_text("[data-bank-report]") if P.locator("[data-bank-report]").count() else ""), "shown in the report on the page")
+    br_t = P.inner_text("[data-bank-report]") if P.locator("[data-bank-report]").count() else ""
+    ok("4 not sent: see the red note on each" in br_t, "shown in the report on the page")
+    ok("0 in Tally (verified)" not in br_t, "(F2) no \"0 in Tally (verified)\" when only earlier lines are reported (%s)" % br_t.replace("\n", " ")[:200])
     print(" b. an earlier posting Tally took, a regular voucher in the copy: posted before, said once")
     P.evaluate("""() => { const b = B(); b.rows = window.__bankRows(1); b.postReport = null; b.postedTags = {}; window.__rpc = []; window.__toasts = []; window.__sent = [];
       window.__copy = (a) => ({ok: false, state: "there", vtype: "Receipt", vno: "77", day: "2026-09-02"});
@@ -340,7 +370,9 @@ with sync_playwright() as p:
     ok(ex.startswith("2026-11-18") and t == "1 bill was posted before by FinCom and is in Tally: not sent again.", "posted before, the toast the sales way (%s; %s)" % (ex, t))
     ok(bp == "1 bill was posted before by FinCom and is in Tally: not sent again" and len(P.evaluate("() => window.__toasts")) == 1, "the line in S.billPost, one toast (%s; %s)" % (bp, P.evaluate("() => window.__toasts")))
     P.wait_for_timeout(300)
-    ok(bp and bp in (P.inner_text("[data-post-result]") if P.locator("[data-post-result]").count() else ""), "and on the Post screen's result line")
+    pr_t = P.inner_text("[data-post-result]") if P.locator("[data-post-result]").count() else ""
+    ok(bp and bp in pr_t, "and on the Post screen's result line")
+    ok(pr_t.strip().startswith(bp) and "0 in Tally (verified)" not in pr_t, "(F2) the line starts with it, no \"0 in Tally (verified)\" (%s)" % pr_t)
     if SHOTS:
         P.locator("[data-post-result]").first.scroll_into_view_if_needed(); P.wait_for_timeout(200); P.screenshot(path=os.path.join(SHOTS, "4-bills-post-result.png"))
     ok(P.evaluate("() => window.__bcalls.filter(u => /^\\/(vouchers|ledgerlines|tags|daybook)/.test(u))") == [], "nothing read from Tally")

@@ -424,6 +424,17 @@ function clientOptKeep(data, mine, theirs, base){
   return data;
 }
 // when an Optional tick was made: now, or 1 ms after the stamp of the copy it was made on when this clock is behind it
+// (re-upload polish 3, F1) whether FinCom sent an entry as an Optional voucher, for a posting marked when its answer
+// comes (perhaps long after it was queued): cautiously yes when the client's setting is on now, or was changed after
+// the posting was queued (since: the posting's queued time, else its send time), as it may have been on then.
+// kind "bank": bankOptional (bank lines); else createOptional (bills and invoices)
+function sentOptionalAt(co, kind, since){
+  if (!co) return false;
+  const k = kind === "bank" ? "bankOptional" : "createOptional";
+  if (co[k]) return true;
+  const at = Date.parse(co[k + "At"] || ""), t = Date.parse(since || "");
+  return !!(at && t && at > t);
+}
 function optStamp(prev){ const n = Date.now(), p = Date.parse(prev || ""); return new Date(p >= n ? p + 1 : n).toISOString(); }
 const ClientBase = {
   async get(id){ try { const v = await BankDB.get("cbase:" + id); return v === undefined || v === null ? NOBASE : v; } catch (e){ return NOBASE; } },

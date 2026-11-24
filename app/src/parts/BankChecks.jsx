@@ -204,7 +204,9 @@ export function PostReport({ rep }) {
   // one quiet line, nothing red, nothing to post again
   if (rep.alreadyLine && !(rep.posted || 0) && !(rep.failed || []).length && !rep.earlier) return <div className="bk-alert" data-already-posted="">{rep.alreadyLine}{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
-  const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
+  // (F2) only lines an earlier posting holds: no "0 in Tally (verified)" before them
+  const bits = rep.checking ? [(rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…"]
+    : verified || !rep.earlier ? [verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")] : [];
   if (rep.alreadyLine) bits.push(rep.alreadyLine.replace(/\.$/, ""));
   // (polish 2) lines an earlier posting of FinCom holds, decided by FinCom's copy of Tally (src/js/96 postEarlier)
   if (rep.earlier) bits.push(rep.earlier);
