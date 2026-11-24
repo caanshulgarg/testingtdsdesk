@@ -323,7 +323,9 @@ function schedules(c, M, S, im, ais, as26, bk) {
   const P = c.profile || {}, faRows = M.fa ? Object.values(M.fa).filter(Array.isArray).reduce((a, v) => a + v.length, 0) : 0;
   const lrs = as26 ? as26.tcs.filter((x) => /1G/i.test(String(x.sec || ""))) : [];
   if (lrs.length && !faRows) out.push(needs("fa_lrs", "sch", "Money sent abroad (TCS 206C(1G))", lrs.length + " remittances with TCS in 26AS. A resident holding any asset abroad at any time in calendar year 2025 fills Schedule FA (Black Money Act, section 43: penalty).", "Say on Schedules whether any foreign asset was held; answer with a note.", lrs.map((x) => ({ label: x.name + " (" + x.tan + ")", b: R(x.amount) }))));
-  if (faRows && M.resident === false) out.push(needs("fa_nr", "sch", "Schedule FA for a non-resident", "Schedule FA is for residents (ordinarily resident) only.", "Remove the rows, or correct the residential status.", [], true));
+  // Schedule FA is for an ordinarily resident only: a non-resident and a not ordinarily resident (NOR) are flagged
+  const nor = M.resStatus === "NOR";
+  if (faRows && (M.resident === false || nor)) out.push(needs("fa_nr", "sch", nor ? "Schedule FA for a not ordinarily resident" : "Schedule FA for a non-resident", "Schedule FA is for residents (ordinarily resident) only.", "Remove the rows, or correct the residential status.", [], true));
   if (M.form === "ITR-6" && (P.indAs === true || M.indAs === true) && bk && bk.sched) {
     const pref = R(Object.values(bk.sched.bs).flatMap((l) => l.trace).filter((x) => x.code === "3B").reduce((s2, x) => s2 + N(x.amt), 0));
     if (pref && P.prefEquity !== true && P.prefEquity !== false) out.push(needs("indas_pref", "sch", "Preference shares under Ind AS", "Preference share capital of " + pref + " is shown as a financial liability (Ind AS 32: a redeemable preference share is a liability), not as equity.",

@@ -620,6 +620,13 @@ export async function approveTallyPayroll(e, env = {}) {
   if (done.size && todo.length) await holdNext(co, e, todo[todo.length - 1], A);
   try { const c = await rpc("entry_claim", { p_id: e.id }); if (c && c.ok === false) return no(c.why || "This entry is not ready."); }
   catch (x) { return no(errWords(x) || "This entry is not ready."); }
+  // (review 4) the entry read again after the claim: made again meanwhile (the running month's update after a save), it
+  // is not what was checked: released, nothing posted, said ("Updated to the salary kept now; check and approve.")
+  {
+    const again = env.again || await import("../screens/daily/again.js");
+    const moved = await again.stillAsChecked(e, env.entryOf || ((id) => g.Cloud.api("night_entries?select=id,voucher&id=eq." + encodeURIComponent(id)).then((r) => (r || []).find((x) => x && x.id === id) || null)));
+    if (moved) { await rpc("entry_release", { p_id: e.id, p_why: moved.slice(0, 200) }).catch(() => null); return no(moved); }
+  }
   // 4. each voucher alone, in order; a refusal stops the rest; each answer saved straight away (above)
   const proof = [];
   for (const v of plan) {

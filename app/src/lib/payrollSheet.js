@@ -344,8 +344,9 @@ export function typedRow(t, ym, heads) {
   const gross = (heads.earn || []).length ? earnSum : r2(amount(t.gross));
   const tds = r2(amount(t.tds)), pt = r2(amount(t.pt)), pf = r2(amount(t.pf)), esi = r2(amount(t.esi));
   const net = String(t.net == null ? "" : t.net).trim() !== "" ? r2(amount(t.net)) : R(P(gross) - P(tds) - P(pt) - P(pf) - P(esi) - P(otherDed));
+  // (review) the employer's PF and ESI of a month kept, changed by hand: carried (not typed here; not in the employee's pay)
   return Object.assign(blankRow(ym), { name: String(t.name || "").trim(), code: String(t.code || "").trim(), days: String(t.days == null ? "" : t.days).trim() === "" ? null : amount(t.days),
-    gross, tds, profTax: pt, pf, esi, net, earn, ded, otherDed, grossMapped: !(heads.earn || []).length });
+    gross, tds, profTax: pt, pf, esi, net, pfEr: r2(amount(t.pfEr)), esiEr: r2(amount(t.esiEr)), earn, ded, otherDed, grossMapped: !(heads.earn || []).length });
 }
 
 // ---------------------------------------------------------------- how the company books salary

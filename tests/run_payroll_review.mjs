@@ -82,12 +82,16 @@ function world(rows, o = {}) {
   };
   const answer = o.answer || ((v) => ({ id: v.id, ok: true, created: 1, vchId: String(100 + posts.length), word: "In Tally" }));
   const g = { tallyVia: () => "bridge", Bridge: { st: { version: "2.5.18" }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers[0].id); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
-    TCloud: { on: () => true, has: () => false }, Cloud: { api: async (path) => (String(path).startsWith("night_findings") ? (o.findings || []) : []) } };
+    TCloud: { on: () => true, has: () => false }, Cloud: { api: async (path) => (String(path).startsWith("night_findings") ? (o.findings || [])
+      // (review 5) the entry read again after the claim: the cloud's row, as the entry being approved has it
+      : String(path).startsWith("night_entries") ? (cur ? [JSON.parse(JSON.stringify(cur))] : []) : []) } };
+  let cur = null;
   const rpc = async (fn) => { log.push(fn); return { ok: true }; };
   const env = Object.assign({ g, A, rpc, co: rows.co, books: b, pay: b.payroll, bookId: "b1", jobs: {} }, o.noPrior ? {} : { prior: [] }, o.readMonth ? { readMonth: o.readMonth } : {});
   const run = async (e) => {
     Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E.GSTR, GSTF: E.GSTF, GSTSet: E.GSTSet, Books: E.Books, ledGroupPath: E.ledGroupPath });
-    try { return await TPost.approveTallyPayroll(Object.assign({ id: "n1", client_id: "c1", state: "ready" }, e), Object.assign({}, env, run.extra || {})); }
+    cur = Object.assign({ id: "n1", client_id: "c1", state: "ready" }, e);
+    try { return await TPost.approveTallyPayroll(Object.assign({}, cur), Object.assign({}, env, run.extra || {})); }
     finally { ["S", "CO", "GSTR", "GSTF", "GSTSet", "Books", "ledGroupPath"].forEach((k) => delete globalThis[k]); }
   };
   return { log, drafts, posts, env, b, run };
@@ -750,7 +754,8 @@ console.log("seventh review: through FinCom's cloud queue (the bridge's releases
   };
   const wire = (w, q) => { w.env.g.TCloud = { on: () => true, has: () => true, book: () => ({ book: "b1" }), postThrough: () => ({ version: "2.5.18", computer: "PC-X", id: "go-x" }), rpc: q.rpc };
     w.env.g.Bridge.post = async (pl, progress) => { w.posts.push(pl); return q.post(pl, progress); };
-    w.env.g.Cloud = { api: q.api }; w.env.g.payrollSleep = async () => {}; w.env.readMonth = q.readMonth; return w; };
+    const own = w.env.g.Cloud.api;   // (review 5) the entry read again after the claim: the world's row, never an empty list
+    w.env.g.Cloud = { api: (path) => (String(path).startsWith("night_entries") ? own(path) : q.api(path)) }; w.env.g.payrollSleep = async () => {}; w.env.readMonth = q.readMonth; return w; };
   const sheet = many(150), rows = rowsOf({ sheet }), t = night(rows);
   const once = (q, n) => { const p = q.paid(); return p.length === n && new Set(p).size === n; };
   for (const lostJob of [false, true]) {
