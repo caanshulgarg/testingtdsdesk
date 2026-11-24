@@ -29,9 +29,12 @@ func prSent(f *standTally, id string) int {
 	return n
 }
 
-// FinCom's answer to post_ok, as a test sets it: before part 2 of the first try, "could not confirm in time"; else go
+// FinCom's answer to post_ok, as a test sets it: from the stopAt-th ask of the first try on, "could not confirm in time"
+// (bridge 2.5.20 P1 asks again up to 3 times before it stops, so every ask of that try stays unsure, the waits short);
+// else go
 func prCloud(t *testing.T, c *standCloud, stopAt int) (handBack func(id string, n int)) {
 	t.Helper()
+	r2520Fast(t)
 	var mu sync.Mutex
 	asked, round := 0, 1
 	c.mu.Lock()
@@ -40,7 +43,7 @@ func prCloud(t *testing.T, c *standCloud, stopAt int) (handBack func(id string, 
 			mu.Lock()
 			defer mu.Unlock()
 			asked++
-			if round == 1 && asked == stopAt {
+			if round == 1 && asked >= stopAt {
 				return 200, M{"ok": true, "post": false, "stop": "checking", "error": prUnsure}
 			}
 			return 200, M{"ok": true, "post": true}
