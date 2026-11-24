@@ -169,7 +169,7 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
 }
 body:has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: calc(96px + var(--bottom-banner-h, 0px)); }
 @media (min-width: 901px) { body:has(.side:not(.hidden):not(.side-folded)):has(#toast.toast:not(.hidden)) .mainwrap { padding-bottom: 0; } }
-@media (max-width: 600px) { #toast.toast { right: 8px; left: 8px; max-width: none; bottom: calc(var(--bottom-banner-h, 0px) + 68px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 600px) { #toast.toast { right: 8px; left: 8px; max-width: none; bottom: calc(var(--bottom-banner-h, 0px) + var(--toast-lift, 0px) + 68px + env(safe-area-inset-bottom, 0px)); } }
 
 #toast.toast[data-tone="ok"] { border-color: color-mix(in oklab, var(--ok) 35%, var(--border)); }
 #toast.toast[data-tone="ok"]::before { background: var(--ok); }
