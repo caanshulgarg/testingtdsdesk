@@ -376,6 +376,14 @@ function salesDiscountFix(x, text){
   if (!(t > 0 && off(t) <= 1 && FREE_GST_RATES.some(r => Math.abs(gst / t * 100 - r) <= 0.15))) return false;
   x.taxable = t; return true;
 }
+// the invoice's own round off as it states it: its Adjustment (added, or "(-)" taken off) and its Rounding ("Rounding
+// -0.44", "Round off (-) 0.20"), 0 when it states neither (the owner, 24-Nov-2026: these go to Round Off and post)
+function salesStatedRound(text){
+  let t = 0;
+  String(text || "").split(/\n/).forEach(l => { const m = /^(adjustment|round(?:ing|ed)?(?:\s*-?\s*off)?)\b\s*(\(-\)\s*|-\s*)?(?:\u20b9|rs\.?|inr)?\s*(-?)\s*([\d,]+(?:\.\d{1,2})?)\s*$/i.exec(l.replace(/\s+/g, " ").trim());
+    if (m) t += (m[2] || m[3] ? -1 : 1) * num(m[4].replace(/,/g, "")); });
+  return r2(t);
+}
 // the text of an invoice's pages, without drawing them (most PDFs are read from their text alone)
 async function salesPdfText(file, pages){
   const pdf = await getPdf(file); let text = "";
@@ -394,7 +402,8 @@ async function salesReadFile(file, cid, progress, pageList, force){
   const tryText = (t, label) => {
     const fp = freeParse(t, cid, file.name, {ocr: kind !== "pdf_text"});
     const x = salesFromFree(fp, co, t);
-    const fixed = salesDiscountFix(x, t);
+    const fixed = salesDiscountFix(x, t), stated = salesStatedRound(t);
+    if (stated && Math.abs(num(x.taxable) + num(x.cgst) + num(x.sgst) + num(x.igst) + stated - num(x.total)) < 0.01) x.roundOff = stated;
     const why = fp.why.filter(w => !/supplier GSTIN not found|client's own sales invoice|not a standard rate/.test(w) && !(fixed && /taxable value plus GST does not equal the total/.test(w)));
     const ok = why.length === 0 && x.number && x.date && x.total > 0;
     trace.push({step: label, ok, note: ok ? "all checks passed" : why.join("; ")});

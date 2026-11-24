@@ -56,7 +56,7 @@ with sync_playwright() as p:
     ok(len(seen) == N and " of %d" % N in seen[0], "while it reads, the page says which invoice of how many: \"%s\"" % (seen[:1] or [""])[0])
     ok(" of %d" % N in str(pg.evaluate("window.__after")), "after the sync, the reading still shows on the page: \"%s\"" % pg.evaluate("window.__after"))
     pg.evaluate("() => { window.readSalesFile = window.__read; }")
-    got = pg.evaluate("SL().list.filter(v => v.source === 'upload').map(v => ({number: v.x.number, date: v.x.date, customer: v.x.customerName, gstin: v.x.customerGstin, pos: v.x.pos, taxable: v.x.taxable, cgst: v.x.cgst, sgst: v.x.sgst, igst: v.x.igst, total: v.x.total, method: v.method, docOf: v.docOf || '', file: !!S.files['sv:' + v.id], problems: (v.problems || []).join('; ')}))")
+    got = pg.evaluate("SL().list.filter(v => v.source === 'upload').map(v => ({stated: v.x.roundOff || 0, number: v.x.number, date: v.x.date, customer: v.x.customerName, gstin: v.x.customerGstin, pos: v.x.pos, taxable: v.x.taxable, cgst: v.x.cgst, sgst: v.x.sgst, igst: v.x.igst, total: v.x.total, method: v.method, docOf: v.docOf || '', file: !!S.files['sv:' + v.id], problems: (v.problems || []).join('; ')}))")
     ok(len(got) == N, "all %d invoices of the PDF in Sales (%d)" % (N, len(got)))
     ok(pg.evaluate("SL().list.some(v => v.x.number === 'OTHER/1')"), "and the invoice the sync brought")
     ok(pg.evaluate("BankDB.get('sales:' + SL().cid).then(l => (l || []).length)") == N + 1, "all of them kept in this browser")
@@ -67,6 +67,8 @@ with sync_playwright() as p:
         bad = [k for k in ("date", "customer", "pos", "taxable", "cgst", "sgst", "total") if g[k] != e[k]] + (["B2C"] if g["gstin"] else []) + (["igst"] if g["igst"] else [])
         ok(not bad, "%s: %s, %s, taxable %s, CGST %s, SGST %s, rounding %s, total %s, B2C%s" % (e["number"], e["date"], e["customer"], e["taxable"], e["cgst"], e["sgst"], e["rounding"], e["total"],
            "" if not bad else "  -- wrong: " + ", ".join("%s=%r" % (k, g.get(k.lower(), g.get("gstin"))) for k in bad)))
+    st = [e["number"] for e in EXP if abs((by.get(e["number"]) or {}).get("stated", 99) - round(e["adjustment"] + e["rounding"], 2)) > 0.005]
+    ok(not st, "each invoice's own Adjustment and Rounding read as its round off" + ("" if not st else ": wrong on " + ", ".join(st)))
     ok(all(g["method"] == "free" for g in got), "every one read on this computer, every check passed (%s)" % sorted(set(g["method"] for g in got)))
     ok(not [g for g in got if "plus GST" in g["problems"] or "differ" in g["problems"]], "no invoice held for its figures")
     ok(pg.evaluate("window.__puts") == 1 and sum(1 for g in got if not g["docOf"]) == 1 and all(g["file"] for g in got), "the PDF kept once, every invoice opens it")
@@ -82,6 +84,17 @@ with sync_playwright() as p:
     e = ONE_EXP[0]
     ok(one["number"] == e["number"] and one["customer"] == e["customer"] and one["taxable"] == e["taxable"] and one["total"] == e["total"] and not one["gstin"] and one["method"] == "free",
        "one invoice on its own (2 pages): %s, %s, taxable %s, total %s" % (one["number"], one["customer"], one["taxable"], one["total"]))
+    # the owner, 24-Nov-2026: a Zoho "Adjustment" (and Rounding) goes to Round Off with no separate ledger, and an invoice
+    # whose difference is its own stated Adjustment plus Rounding posts with it there; only a difference the invoice does
+    # not explain is held
+    ro = pg.evaluate("""() => { const mk = (no, ro, total) => { const v = newInvoice({number: no, date: "2026-10-05", customerName: "Cash", pos: "29", taxable: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, roundOff: ro, total}, "upload");
+        v.customerLedger = "Cash"; SL().list.push(v); mapInvoice(v); return v; };
+      const one = v => { const l = salesLines(v).filter(l => l.role === "roundoff"); return {ro: l.map(l => (l.side === "Cr" ? 1 : -1) * l.amt), held: (v.problems || []).filter(p => /Round Off/.test(p)).length}; };
+      const r = {plus: one(mk("ADJ/1", 25, 1205)), minus: one(mk("ADJ/2", -25, 1155)), gap: one(mk("ADJ/3", 0, 1205)), wrong: one(mk("ADJ/4", 10, 1205))}; saveSales(); render(); return r; }""")
+    ok(ro["plus"] == {"ro": [25], "held": 0}, "Adjustment \u20b925 on the invoice: posts, with \u20b925 to Round Off (%s)" % ro["plus"])
+    ok(ro["minus"] == {"ro": [-25], "held": 0}, "Adjustment (-) \u20b925: posts, with \u20b925 to Round Off on the debit side (%s)" % ro["minus"])
+    ok(ro["gap"]["held"] == 1, "a \u20b925 gap the invoice does not explain: still held (%s)" % ro["gap"])
+    ok(ro["wrong"]["held"] == 1, "a \u20b925 gap with only \u20b910 stated: still held (%s)" % ro["wrong"])
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
