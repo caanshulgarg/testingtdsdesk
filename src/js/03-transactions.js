@@ -67,7 +67,14 @@ function billNeedsAction(e, cid){ const w = billDocWarns(e, CO(cid || S.coId));
 function bankNeedsAction(r){ const b = S.bank; return !!(r.postedOptional || r.postJob || r.postError || r.postReview || r.checking || r.pendingCheck || r.goneFromTally || (b && postNeeds(b.cid).has("bank:" + r.id))); }
 function billOld(e, cid){ const t = e.tally || {}; return e.status === "approved" && billInTally(e) && postedOld((t.byOwner && t.byOwnerAt) || t.at || e.exportedAt) && !billNeedsAction(e, cid); }
 function bankOld(r){ return bankMatched(r) && postedOld(r.state === "intally" ? r.matchedAt : (r.tally && r.tally.at) || r.sentAt) && !bankNeedsAction(r); }
-function salesOld(v){ return (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && postedOld(v.status === "intally" ? v.matchedAt : v.postedAt) && !salesNeedsAction(v); }
+// (asked of each invoice several times in a drawing, by the list, its counts, the ticks and the totals: once a drawing)
+function salesOld(v){
+  reactScope(); const m = IN_RENDER ? perRender(salesOld, "m", () => new WeakMap()) : null;
+  if (m && m.has(v)) return m.get(v);
+  const r = (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && postedOld(v.status === "intally" ? v.matchedAt : v.postedAt) && !salesNeedsAction(v);
+  if (m) m.set(v, r);
+  return r;
+}
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
   if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];
