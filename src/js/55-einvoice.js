@@ -107,10 +107,25 @@ const EINV = {
   irnLate(v, co){
     const x = v.x || {}, d = Date.parse(String(x.date || "").slice(0, 10));
     if (!d || Date.now() - d <= this.IRN_DAYS * 864e5) return false;
-    let a = 0;
-    try { a = typeof GSTF === "object" && S.books ? num(GSTF.aato(GSTF.fyOf(String(x.date).slice(0, 7).replace("-", ""))).v) : 0; } catch (e){ a = 0; }
+    const a = this.aato(GSTF.fyOf(String(x.date).slice(0, 7).replace("-", "")));
     return a ? a >= 1e8 : !!(co || {}).turnover10cr;
   },
+  // GSTF.aato(fy).v, worked out once for the books open and the year: from the books it reads every outward entry of a
+  // year (seconds on large books), and Sales asks it of each invoice (salesOld, in drawings and outside them: Select
+  // all, salesCounts). Held while the same books object, its saves (BOOKS_REV) and its entries are the same; a figure
+  // typed in GST settings is read afresh each time (S.books.gstAato)
+  aato(fy){
+    const b = typeof GSTF === "object" ? S.books : null;
+    if (!b) return 0;
+    const typed = num((b.gstAato || {})[fy]);
+    if (typed) return typed;
+    const k = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, (b.vouchers || []).length].join("|"), m = this.aatoMemo;
+    if (!m || m.books !== b || m.k !== k) this.aatoMemo = {books: b, k, v: {}};
+    const v = this.aatoMemo.v;
+    if (!(fy in v)){ try { v[fy] = num(GSTF.aato(fy).v); } catch (e){ v[fy] = 0; } }
+    return v[fy];
+  },
+  aatoMemo: null,
   // what keeps Make the IRN from being pressed that the person cannot set right on the Sales page: EINV.problems, less
   // the client's own address PIN (Sales settings, opened from that page)
   irnBlocked(v, co, cfg){

@@ -15,6 +15,10 @@ SALES (default 4000) made-up sales invoices on it, half posted, half to review. 
      switcher open; Esc closes it, Sales still shown;
   3. the duplicate check still says it: an invoice to review of a number already posted (same type and year) shows
      "Already in Tally as ..." on its row and in its problems; one of another year does not.
+  4. the 24-hour rule's e-invoice check (salesNeedsAction, src/js/03): with the firm's GST API on, every invoice to a
+     GSTIN, over 30 days old and with no IRN, the IRP's 30 days are read from the year before's turnover (EINV.aato:
+     the books' outward entries, once for the books and the year, not once an invoice): on In Tally, Select all, the
+     grid's search and salesCounts() outside a drawing each within ACT_MS of script (default 200; 12.2 s, 9.4 s before).
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 BIG_DIR=a folder with Master.xml and DayBook.xml from mis_big_books.py (made in a temporary folder when not given)."""
 import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.server
@@ -28,6 +32,7 @@ PORT = int(os.environ.get("HANG_SALES_PORT") or 8348)
 OPEN_MS = int(os.environ.get("OPEN_MS") or 2200)
 CLICK_MS = int(os.environ.get("CLICK_MS") or 900)
 SALES = int(os.environ.get("SALES") or 4000)
+ACT_MS = int(os.environ.get("ACT_MS") or 200)
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
@@ -100,6 +105,25 @@ try:
             dupA: !!salesDupOf(a), dupB: !!salesDupOf(b)}; }""")
         ok(d["rowA"] and d["probA"] == 1 and d["dupA"], "3. an invoice to review of a number posted the same year: \"Already in Tally as\" on its row and in its problems (%s)" % d)
         ok(not d["rowB"] and d["probB"] == 0 and not d["dupB"], "   the same number a year later: not a duplicate")
+        # 4. the e-invoice part of the 24-hour rule on these books: the turnover worked out once, not per invoice
+        GON = "GSTAPI.on = () => true; const g = String(CO().gstin).toUpperCase(); EINV.accounts[g] = {user: 'made-up'}; EINV.asked[g] = Date.now(); "
+        pg.evaluate("() => { " + GON + """SL().list.forEach(v => { v.x.customerGstin = '09AABCT1234E1Z2'; v.x.address = 'Made-up Road, Lucknow 226001'; v.x.irn = ''; v.x.items = [{desc: 'x', hsn: '998314', qty: 1, rate: v.x.taxable, taxable: v.x.taxable, gstRate: 18}]; });
+          S.books.gstAato = {}; CO().turnover10cr = false; EINV.aatoMemo = null; window.__lf = [];
+          new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__lf.push(Math.round((e.scripts || []).reduce((a, x) => a + x.duration, 0))))).observe({type: 'long-animation-frame'}); }""")
+        late = pg.evaluate("() => SL().list.filter(v => Date.now() - Date.parse(v.x.date) > 30 * 864e5 && !v.x.irn && v.x.customerGstin).length")
+        pg.evaluate("() => salesTabGo('done')"); pg.wait_for_timeout(8000)
+        shown = pg.locator("#app table.bk-table tbody tr").count()
+        ok(late >= SALES and shown > 0, "4. %d invoices to a GSTIN, over 30 days old, no IRN, the GST API on; In Tally shows %d rows" % (late, shown))
+        cnt = pg.evaluate("() => { const t = performance.now(); const c = salesCounts(); return [Math.round(performance.now() - t), c]; }")
+        ok(cnt[0] <= ACT_MS, "   salesCounts() outside a drawing: %d ms (at most %d; 9.4 s before) %s" % (cnt[0], ACT_MS, cnt[1]))
+        pg.evaluate("() => { window.__lf = []; }")
+        pg.locator('#app input[aria-label="Select all"]').first.click(timeout=120000); pg.wait_for_timeout(4000)
+        lf = pg.evaluate("window.__lf.slice()")
+        ok(max(lf or [0]) <= ACT_MS, "   Select all: the longest frame's script %d ms (at most %d; 12.2 s before): %s" % (max(lf or [0]), ACT_MS, lf[:6]))
+        pg.evaluate("() => { SL().sel.clear(); window.__lf = []; }")
+        pg.fill("#app input.bk-search", "ZS/1"); pg.wait_for_timeout(4000)
+        lf = pg.evaluate("window.__lf.slice()")
+        ok(max(lf or [0]) <= ACT_MS and pg.evaluate("SL().q") == "ZS/1", "   the grid's search: the longest frame's script %d ms (at most %d): %s" % (max(lf or [0]), ACT_MS, lf[:6]))
         br.close()
 finally:
     srv.shutdown(); shutil.rmtree(root, ignore_errors=True)
