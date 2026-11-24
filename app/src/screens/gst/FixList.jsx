@@ -139,7 +139,7 @@ function FixPop({ list, at }) {
   if (!p || p.at !== at || p.cid !== (S.books || {}).cid) return null;
   const c = list.find((x) => x.what === p.what) || { what: p.what }, [, , why, tally] = sayOf(c);
   const close = () => { st.pop = null; render(); };
-  return <FixEntry key={p.d.id || p.d.no} d={p.d} c={c} why={why} tally={tally} onClose={close} onLookup={() => { close(); openDoc(p.d); }} />;
+  return <FixEntry key={p.d.id || p.d.no} d={p.d} c={c} why={why} tally={tally} at={at} onClose={close} onLookup={() => { close(); openDoc(p.d); }} />;
 }
 
 // the entries reported in B2CS as summaries of many B2C sales (GSTR.b2cSumWhy), each with the rule that made it so

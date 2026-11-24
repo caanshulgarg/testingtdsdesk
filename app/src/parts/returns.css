@@ -512,6 +512,9 @@ details.more .more-words p{margin:0 0 6px}
 .fx-hist summary { cursor: pointer; font-weight: 600; min-height: 32px; }
 .fx-hist ul { margin: 4px 0 0; padding-left: 18px; }
 .fx-hist li { margin: 3px 0; overflow-wrap: anywhere; }
+.fx-inv { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fx-inv .fx-tick { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; overflow-wrap: anywhere; }
+.fx-inv td { overflow-wrap: anywhere; }
 /* next-gst-pos: setting the place of supply of sales that have none (GST › What to fix, GSTR-1 Details) */
 .pos-bulk { margin: 4px 0 10px; display: flex; flex-direction: column; gap: 8px; }
 .pos-all, .pos-tk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }

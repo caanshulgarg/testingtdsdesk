@@ -161,7 +161,7 @@ Object.assign(GSTR, {
   // its document count are kept while its st and g are the same; what looks across months (checksJoin: the document
   // numbers, the advances, from each month's kept rows) while all is. A save that changes one month works out that one.
   // tests/run_hang_gst_year.py
-  NOT_GST: new Set(["vouchers", "challans", "alloc", "allocFrom", "allocLog", "pans", "salary", "payroll", "certs", "audit", "auditCfg", "auditRel", "auditWp", "ledSnaps", "fs", "tb", "tbCheck", "mis", "misCfg",
+  NOT_GST: new Set(["vouchers", "fixq", "challans", "alloc", "allocFrom", "allocLog", "pans", "salary", "payroll", "certs", "audit", "auditCfg", "auditRel", "auditWp", "ledSnaps", "fs", "tb", "tbCheck", "mis", "misCfg",
     "msme", "budget", "letters", "ai", "trashLog", "gone", "nrInfo", "tcsCodes", "tcsCodesFixed", "panInoperative", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "tracesChStatus",
     "payDetails", "chPortions", "tdsCorr", "fixedAssets", "tdsEdits", "matchNo", "tdsSplits", "panFix", "tdsAdded", "tdsPayKind"]),
   _ck: new WeakMap(), _ckAt: null,

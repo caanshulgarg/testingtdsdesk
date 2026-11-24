@@ -3,8 +3,12 @@
 // books also"; the forms approved the same day, findings/fix-in-place-plan.md section 2.3, decisions 1, 2, 4-7).
 //   - "Open the entry" opens this window on the same page: the entry as FinCom Books hold it, and only the box this kind
 //     of error needs: the invoice number (too long, characters, used twice), the place of supply (none, or the tax type not
-//     matching it), the party's GSTIN (none, or not valid: changed on the party ledger only, decision 5). Every other kind
-//     shows the entry and Open in Look up.
+//     matching it), the party's GSTIN (none, or not valid). Every other kind shows the entry and Open in Look up.
+//   - A GSTIN (the owner, 24-Nov-2026, amending decision 5): the party ledger first, then that party's invoices of the
+//     month on screen that carry another GSTIN or none, listed all ticked, each sent on its own (the voucher's PARTYGSTIN,
+//     shape A), read back, one after another; a row leaves What to fix only when its own invoice is corrected. The
+//     ledger already right: Save goes on to the invoices. A ledger FinCom holds no change number for is read from Tally
+//     first in the same Save (the bridge's one-ledger read), then the fix goes with that change number.
 //   - Save in Tally sends the one change to FinCom Bridge (POST /fix, bridge-go/fixalter.go), which checks Tally's change
 //     number (AlterID) first and never overwrites a later change, makes the change, reads the entry back and gives it to
 //     FinCom's cloud. The entry read back replaces FinCom's (Books.importDayBook of that one voucher), so the list is worked
@@ -13,7 +17,7 @@
 //     Tally is open (decision 4), checked against Tally's change number then.
 //   - Every change is kept in Changes made here, with Undo where the earlier value is one Tally can be given again.
 // Anyone who can post to Tally may fix (decision 6). Plain words only, no warnings.
-/* global S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent */
+/* global S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
 import { useState, useEffect } from "react";
 import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 
@@ -41,7 +45,9 @@ const amountOf = (d) => (d.total != null ? d.total : num(d.taxable) + num(d.igst
 const WAIT = "Waiting for Tally. It is saved there when Tally is open.";
 const CHANGED = "Changed in Tally since you opened it. This is how it is now.";
 const OLD = "This needs FinCom Bridge 2.5.21 or later on the Tally computer. Update it there, then press Save again.";
-const SAID = { done: "Saved in Tally", waiting: "Waiting for Tally" };
+const SAID = { done: "Saved in Tally", waiting: "Waiting for Tally", already: "Already in Tally" };
+const ALREADY = "Already in Tally: it holds this value now, though it was not sent from here.";
+const KEEP = 200; // changes kept with the books: the newest 200, the oldest dropped
 
 // the changes kept with the client's books: held ones, and the history (b.fixq, one of BOOKS_KEYS). Each change carries
 // the client it was made for (cid) and that client's Tally company (coGuid): it is sent for that client and its answer
@@ -59,13 +65,22 @@ export const FixQ = {
   async coGuid(co) { try { return (typeof LinkRec === "object" && (await LinkRec.guidFor(co, tallyCoName(co)))) || ""; } catch (e) { return ""; } },
   // a change waiting, or with Tally now, for this entry (or ledger)
   waitingFor(key) { return !!key && FixQ.list().some((x) => x.state === "waiting" && (x.vid === key || (x.ask && x.ask.target === "ledger" && x.ask.ledger === key))); },
-  // Tally holds what was asked (a change whose answer was lost, sent again: the change number has moved, to this value)
+  // Tally holds exactly what was asked (the number as typed, letter case too; a state by its code or Tally's name)
   mine(rec, now) {
     if (!now) return false;
-    const f = rec.ask.fields || {}, k = Object.keys(f)[0], want = String(f[k] || "").toLowerCase();
-    const got = String(k === "gstin" ? now.gstin || "" : k === "number" ? now.number || "" : now.pos || "").toLowerCase();
-    return !!want && (got === want || (k === "pos" && got === String((GST_STATES || {})[f[k]] || "").toLowerCase()));
+    const f = rec.ask.fields || {}, k = Object.keys(f)[0], want = String(f[k] || "");
+    const got = String(k === "gstin" ? now.gstin || "" : k === "number" ? now.number || "" : now.pos || "");
+    return !!want && (got === want || (k === "pos" && got === String((GST_STATES || {})[want] || "")));
   },
+  // this computer (a browser's own id, kept in it): only the changes made here are sent again by themselves
+  dev() {
+    if (typeof AlertClear === "object" && AlertClear && typeof AlertClear.device === "function") return AlertClear.device();
+    try { let d = localStorage.getItem("fincom:device-id"); if (!d) { d = "dev-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem("fincom:device-id", d); } return d; }
+    catch (e) { return FixQ.memDev || (FixQ.memDev = "dev-" + Math.random().toString(36).slice(2, 10)); }
+  },
+  here(x) { return !!x && !!x.dev && x.dev === FixQ.dev(); },
+  // the changes Tally took (Changes made here (N))
+  taken(l) { return (l || FixQ.list()).filter((x) => x.state === "done").length; },
   // the bridge asked once: what the answer means. Bridge.call throws on any answer that says no; its body comes with it
   // (src/js/24). Only an answer held by the bridge (Tally closed or in use) and no answer at all wait to be sent again.
   async ask(rec, co) {
@@ -75,21 +90,43 @@ export const FixQ = {
     if (!lg || !lg.guid) return { state: "refused", words: (lg && lg.why) || "Not sent: this client's Tally company is not linked." };
     if (rec.coGuid && lg.guid !== rec.coGuid) return { state: "refused", words: "Not sent: this client's Tally company is not the one this change was made for." };
     if (typeof auditEvent === "function") auditEvent("tally.fix", tname + " · " + rec.label, rec.cid || "");
-    let r;
-    try { r = await Bridge.call("/fix", Object.assign({ company: tname, companyGuid: lg.guid }, rec.ask), 30000); }
-    catch (e) {
-      if (e && e.status === 404) return { state: "old", words: OLD };
-      if (e && e.status === 200 && e.body && typeof e.body === "object") r = e.body;
-      else if (!e || e.code === "bridge_down") return { state: "waiting", words: WAIT };
-      else return { state: "refused", words: (e && e.message) || "FinCom Bridge did not take it." };
-    }
-    r = r || {};
+    // one /fix: its answer, or {fail} for what is said at once (an older bridge, a network fault: no answer at all)
+    const call = async (body) => {
+      try { return { r: (await Bridge.call("/fix", Object.assign({ company: tname, companyGuid: lg.guid }, body), 30000)) || {} }; }
+      catch (e) {
+        if (e && e.status === 404) return { fail: { state: "old", words: OLD } };
+        if (e && e.status === 200 && e.body && typeof e.body === "object") return { r: e.body };
+        if (!e || e.code === "bridge_down") return { fail: { state: "waiting", words: WAIT }, lost: true };
+        return { fail: { state: "refused", words: (e && e.message) || "FinCom Bridge did not take it." } };
+      }
+    };
     const at = new Date().toISOString(), p = { coGuid: lg.guid, tried: at };
+    // a ledger FinCom holds no change number for (the owner, 24-Nov-2026): read from Tally by its name first (the bridge's
+    // one-ledger read, its 2 s stop and the typing gate; nothing sent), then the fix with that change number, in the
+    // same Save. Tally's GSTIN not the one shown: changed since, nothing sent.
+    if (rec.ask.target === "ledger" && !rec.ask.alterId) {
+      const a = await call(Object.assign({}, rec.ask, { readFirst: true }));
+      if (a.fail) return a.fail;
+      const r0 = a.r;
+      if (r0.held) return Object.assign(p, { state: "waiting", words: WAIT });
+      if (!r0.read) return Object.assign(p, r0.gone ? { state: "gone", words: r0.message || "Tally has no such ledger." } : { state: "refused", words: r0.message || r0.error || "Tally did not change it." });
+      const now = r0.now || {}, alt = String(r0.alterNow || now.alterId || "");
+      const field = rec.ask.fields && rec.ask.fields.pan != null ? "pan" : "gstin";
+      if (!/^\d+$/.test(alt) || String(now[field] || "").toUpperCase() !== String(((rec.ask.was || {})[field]) || "").toUpperCase())
+        return Object.assign(p, FixQ.mine(rec, now) ? { state: "already", words: ALREADY, after: now, doneAt: at } : { state: "changed", words: CHANGED, now }, { r: { now } });
+      rec.ask = p.ask = Object.assign({}, rec.ask, { alterId: alt });
+    }
+    const sentBefore = !!rec.mayHave;
+    const a = await call(rec.ask);
+    if (a.fail) return Object.assign(a.fail, a.lost ? { mayHave: true } : {}); // no answer: Tally may have it
+    const r = a.r;
     if (r.ok) return Object.assign(p, { state: "done", before: r.before, after: r.after, doneAt: at, r });
     if (r.held) return Object.assign(p, { state: "waiting", words: WAIT });
-    if (r.changed) return Object.assign(p, FixQ.mine(rec, r.now) ? { state: "done", after: r.now, doneAt: at } : { state: "changed", words: CHANGED, now: r.now }, { r });
+    // changed since, but Tally holds exactly what was asked: this computer's earlier send whose answer was lost (done,
+    // with Undo), else someone else's (already in Tally, no Undo)
+    if (r.changed) return Object.assign(p, !FixQ.mine(rec, r.now) ? { state: "changed", words: CHANGED, now: r.now } : sentBefore ? { state: "done", after: r.now, doneAt: at } : { state: "already", words: ALREADY, after: r.now, doneAt: at }, { r });
     if (r.kept) return Object.assign(p, { state: "kept", words: r.message || "Tally kept its own value.", after: r.after, r });
-    if (r.unknown) return Object.assign(p, { state: "unknown", words: r.message || "Tally did not answer. Ask Tally again to see whether it changed." });
+    if (r.unknown) return Object.assign(p, { state: "unknown", mayHave: true, words: r.message || "Tally did not answer. Ask Tally again to see whether it changed." });
     if (r.gone) return Object.assign(p, { state: "gone", words: r.message || "Tally no longer has this entry." });
     return Object.assign(p, { state: "refused", words: r.message || r.error || "Tally did not change it." });
   },
@@ -111,6 +148,7 @@ export const FixQ = {
     const bk = await FixQ.books(rec.cid);
     const got = !!(r && bk && (await FixQ.back(bk, rec, r)));
     if (p.state === "done") p.words = got ? "Saved in Tally and FinCom Books." : "Saved in Tally. FinCom Books take it at the next read from Tally.";
+    if (p.state === "already" && !got) p.words = ALREADY + " FinCom Books take it at the next read from Tally.";
     Object.assign(rec, p);
     if (!bk) return;
     const x = FixQ.list(bk).find((y) => y.id === rec.id);
@@ -134,8 +172,11 @@ export const FixQ = {
       if (a.gstin == null && a.pan == null) return false;
       if (a.gstin != null) { b.gstins = b.gstins || {}; if (a.gstin) b.gstins[led] = a.gstin; else delete b.gstins[led]; }
       if (a.pan) { b.pans = b.pans || {}; b.pans[led] = a.pan; }
-      const li = (b.ledInfo || {})[led];
-      if (li && /^\d+$/.test(String(a.alterId || ""))) li.alt = +a.alterId;
+      // its change number kept, also for a ledger FinCom has no other details of (a changed or read answer)
+      if (/^\d+$/.test(String(a.alterId || ""))) {
+        const li = (b.ledInfo = b.ledInfo || {})[led] || (b.ledInfo[led] = { gstin: a.gstin || "", pan: a.pan || "" });
+        li.alt = +a.alterId;
+      }
       return true;
     }
     if (!r.xml) return false;
@@ -156,7 +197,8 @@ export const FixQ = {
     if (!cid || b.loading || FixQ.busy || (!force && Date.now() - FixQ.last < 60000)) return;
     const co = CO(cid);
     if (!co || typeof bridgeLive !== "function" || !bridgeLive(co)) return;
-    const w = FixQ.list(b).filter((x) => x.state === "waiting" && x.cid === cid && !FixQ.flying.has(x.id));
+    // only the changes made on this computer: a colleague's are shown here, never sent from here
+    const w = FixQ.list(b).filter((x) => x.state === "waiting" && x.cid === cid && FixQ.here(x) && !FixQ.flying.has(x.id));
     if (!w.length) return;
     FixQ.busy = true; FixQ.last = Date.now();
     try {
@@ -173,8 +215,12 @@ export const FixQ = {
     if (!cid) return null;
     const co = CO(cid), coGuid = co ? await FixQ.coGuid(co) : "";
     const rec = Object.assign({ id: "fx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(),
-      by: (window.Cloud && Cloud.st && Cloud.st.email) || "", cid, coGuid, ask, label, state: "waiting", words: "Saving in Tally…" }, extra || {});
-    FixQ.list(b).push(rec);
+      by: (window.Cloud && Cloud.st && Cloud.st.email) || "", dev: FixQ.dev(), cid, coGuid, ask, label, state: "waiting", words: "Saving in Tally…" }, extra || {});
+    const l = FixQ.list(b);
+    l.push(rec);
+    // the newest KEEP kept: the oldest dropped first, a change still waiting for Tally last
+    for (let i = 0; l.length > KEEP && i < l.length;) { if (l[i].state !== "waiting" && l[i] !== rec) l.splice(i, 1); else i++; }
+    while (l.length > KEEP) l.splice(l[0] === rec ? 1 : 0, 1);
     if (typeof saveBooks === "function") await saveBooks({}, b);
     return FixQ.send(rec);
   },
@@ -183,65 +229,136 @@ if (typeof window === "object") window.FixQ = FixQ;
 
 // the voucher of a row in FinCom Books
 const voucherOf = (id) => ((S.books || {}).vouchers || []).find((v) => v.id === id) || null;
+const SUPPLIER = /^(Purchases with no supplier GSTIN|Supplier GSTINs that are not valid)$/;
+// the rows of the month on screen that GST reads (the sales side, or the purchases for a supplier's GSTIN)
+const rowsOf = (what, ym, reg) => { try { return (SUPPLIER.test(what) ? GSTR.inward(ym, reg) : GSTR.outward(ym, reg)) || []; } catch (e) { return []; } };
+// a party's invoices of the month whose GSTIN on the invoice is not this one (none, or another): the ones the GSTIN fix
+// corrects after the ledger (each must carry Tally's change number to be sent)
+export function partyInvoices(what, ym, reg, party, gstin) {
+  const seen = new Map();
+  rowsOf(what, ym, reg).forEach((r) => {
+    if (!r || !r.id || r.party !== party || r.b2cSum || r.b2cNote || r.fromHold || seen.has(r.id)) return;
+    if (String(r.gstin || "").toUpperCase() === gstin) return;
+    const v = voucherOf(r.id);
+    if (v && v.alt != null) seen.set(r.id, { id: r.id, no: r.no || v.no || "", date: v.date, gstin: String(r.gstin || ""), amount: amountOf(r) });
+  });
+  return [...seen.values()];
+}
+// the row of an entry as the list works it out now (after Tally's entry came in: its number, place of supply, GSTIN)
+const rowNow = (what, ym, reg, id) => (id && rowsOf(what, ym, reg).find((r) => r.id === id)) || null;
+const posCodeOf = (v) => (v && v.pos && typeof stateCodeFrom === "function" ? stateCodeFrom(v.pos) : "");
 
 // the window
-export function FixEntry({ d, c, why, tally, onClose, onLookup }) {
-  const kind = fixKind(c.what), v = d && d.id ? voucherOf(d.id) : null;
+export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
+  const [ym, reg] = String(at || "").split("|");
+  const kind = fixKind(c.what), v = d0 && d0.id ? voucherOf(d0.id) : null;
+  const [val, setVal] = useState(null), [st, setSt] = useState(null), [busy, setBusy] = useState(false);
+  // the invoices step of a GSTIN: the invoices listed (fixed when it began), the ones unticked, how each went
+  const [inv, setInv] = useState(null), [off, setOff] = useState(() => new Set()), [invSt, setInvSt] = useState({});
+  // the entry as it is now: after "changed since" (or kept) the list's own row of Tally's entry, else the one opened
+  const fresh = st && (st.state === "changed" || st.state === "kept") && kind !== "gstin" ? rowNow(c.what, ym, reg, d0.id) : null;
+  const d = fresh || d0;
   const led = String(d.party || ""), ledG = String(((S.books || {}).gstins || {})[led] || "").toUpperCase();
-  const posNow = d.posCode || String(d.pos || "").slice(0, 2);
-  const startVal = kind === "number" ? String(d.no || "") : kind === "pos" ? (/^\d{2}$/.test(posNow) ? posNow : (d.gstin ? String(d.gstin).slice(0, 2) : "")) : kind === "gstin" ? ledG : "";
-  const [val, setVal] = useState(startVal), [st, setSt] = useState(null), [busy, setBusy] = useState(false);
-  const clean = kind === "gstin" ? val.trim().toUpperCase() : val.trim();
-  const ok = kind === "number" ? numberOk(clean) && clean !== String(d.no || "") : kind === "pos" ? /^\d{2}$/.test(clean) && clean !== posNow : kind === "gstin" ? gstOk(clean) && clean !== ledG : false;
+  const posNow = (fresh && fresh.posCode) || (st && st.state === "changed" && posCodeOf(v)) || d.posCode || String(d.pos || "").slice(0, 2);
+  const noNow = fresh ? String(fresh.no || "") : String(d.no || "");
+  const startVal = kind === "number" ? String(d0.no || "") : kind === "pos" ? (/^\d{2}$/.test(posNow) ? posNow : (d0.gstin ? String(d0.gstin).slice(0, 2) : "")) : kind === "gstin" ? ledG : "";
+  const value = val == null ? startVal : val;
+  const clean = kind === "gstin" ? value.trim().toUpperCase() : value.trim();
+  const gstGood = kind === "gstin" && gstOk(clean);
+  // the invoices of this party in the month on screen with another GSTIN (or none) than the one in the box
+  const invNow = gstGood ? partyInvoices(c.what, ym, reg, led, clean) : [];
+  const ledDone = kind === "gstin" && gstGood && clean === ledG;
+  const step = kind === "gstin" && (inv || (ledDone && invNow.length)) ? "invoices" : "entry";
+  const invList = inv || (step === "invoices" ? invNow : []);
+  const invLeft = invList.filter((x) => !off.has(x.id) && !(invSt[x.id] && (invSt[x.id].state === "done" || invSt[x.id].state === "already")));
+  const ok = kind === "number" ? numberOk(clean) && clean !== noNow : kind === "pos" ? /^\d{2}$/.test(clean) && clean !== posNow
+    : kind === "gstin" ? gstGood && (clean !== ledG || (step === "invoices" ? invLeft.length > 0 : invNow.length > 0)) : false;
   const canFix = kind && (kind === "gstin" ? !!led : !!(v && v.id && v.alt != null));
-  // a change of this entry (or ledger) waiting for Tally, or with Tally now: not asked twice
-  const held = busy || (st && st.state === "waiting") || FixQ.waitingFor(kind === "gstin" ? led : d.id);
+  // a change of this entry (or ledger, or one of the invoices) waiting for Tally, or with Tally now: not asked twice
+  const held = busy || (st && st.state === "waiting") || FixQ.waitingFor(kind === "gstin" ? led : d0.id) || invList.some((x) => FixQ.waitingFor(x.id));
   const ledAlt = (((S.books || {}).ledInfo || {})[led] || {}).alt;
+  const finished = (r) => r && (r.state === "done" || r.state === "already");
+  const later = (f) => setTimeout(f, 1200);
+  // the ticked invoices, one at a time, each read back (Tally closed: that one waits, the rest are not sent now)
+  const sendInvoices = async (list) => {
+    setInv(list);
+    const said = {};
+    for (const x of list) {
+      if (off.has(x.id) || finished(invSt[x.id])) continue;
+      const iv = voucherOf(x.id);
+      if (!iv || iv.alt == null) { said[x.id] = { state: "refused", words: "Not sent: FinCom has no change number of this invoice. Read the books from Tally again." }; setInvSt(Object.assign({}, invSt, said)); continue; }
+      said[x.id] = { state: "waiting", words: "Saving in Tally…" }; setInvSt(Object.assign({}, invSt, said));
+      const ask = { target: "voucher", guid: iv.id, alterId: String(iv.alt), vchType: Books.unesc(iv.type), vchDate: iv.date, fields: { gstin: clean } };
+      const rec = await FixQ.add(ask, "GSTIN on " + (x.no || "the invoice") + " of " + day(iv.date) + ": " + (iv.gstin || "none") + " → " + clean, { was: String(iv.gstin || ""), to: clean, kind: "gstin", vid: iv.id });
+      if (!rec) break;
+      said[x.id] = { state: rec.state, words: rec.words }; setInvSt(Object.assign({}, invSt, said));
+      if (rec.state === "waiting") break;
+    }
+    render();
+    if (list.every((x) => off.has(x.id) || finished(said[x.id]) || finished(invSt[x.id]))) later(onClose);
+  };
   const save = async () => {
-    setBusy(true); setSt({ state: "waiting", words: "Saving in Tally…" });
-    const ask = kind === "gstin"
-      ? Object.assign({ target: "ledger", ledger: led, was: { gstin: ledG }, fields: { gstin: clean } }, ledAlt != null && ledAlt !== "" ? { alterId: String(ledAlt) } : {})
-      : { target: "voucher", guid: v.id, alterId: String(v.alt), vchType: v.type, vchDate: v.date, fields: { [kind]: clean } };
-    const label = kind === "gstin" ? "GSTIN of " + led + ": " + (ledG || "none") + " → " + clean
-      : kind === "number" ? "Number of the " + (v.type || "entry") + " of " + day(v.date) + ": " + (d.no || "none") + " → " + clean
-      : "Place of supply of " + (d.no || "the entry") + ": " + ((GST_STATES || {})[posNow] || "none") + " → " + ((GST_STATES || {})[clean] || clean);
-    const p = FixQ.add(ask, label, { was: kind === "gstin" ? ledG : kind === "number" ? String(d.no || "") : posNow, to: clean, kind, vid: d.id || "" });
-    const rec = await p;
-    setBusy(false);
-    if (!rec) return;
-    setSt(rec); render();
-    if (rec.state === "done") setTimeout(onClose, 1200);
+    setBusy(true);
+    try {
+      if (kind === "gstin" && step === "invoices") { await sendInvoices(invList); return; }
+      // a ledger with no change number in FinCom Books is read from Tally first, in this same Save (FixQ.ask)
+      setSt({ state: "waiting", words: kind === "gstin" && (ledAlt == null || ledAlt === "") ? "Reading the party from Tally, then saving…" : "Saving in Tally…" });
+      const ask = kind === "gstin"
+        ? Object.assign({ target: "ledger", ledger: led, was: { gstin: ledG }, fields: { gstin: clean } }, ledAlt != null && ledAlt !== "" ? { alterId: String(ledAlt) } : {})
+        : { target: "voucher", guid: v.id, alterId: String(v.alt), vchType: Books.unesc(v.type), vchDate: v.date, fields: { [kind]: clean } };
+      const label = kind === "gstin" ? "GSTIN of " + led + ": " + (ledG || "none") + " → " + clean
+        : kind === "number" ? "Number of the " + (Books.unesc(v.type) || "entry") + " of " + day(v.date) + ": " + (noNow || "none") + " → " + clean
+        : "Place of supply of " + (noNow || "the entry") + ": " + ((GST_STATES || {})[posNow] || "none") + " → " + ((GST_STATES || {})[clean] || clean);
+      const rec = await FixQ.add(ask, label, { was: kind === "gstin" ? ledG : kind === "number" ? noNow : posNow, to: clean, kind, vid: kind === "gstin" ? "" : d0.id || "" });
+      if (!rec) return;
+      setSt(rec); render();
+      if (!finished(rec)) return;
+      // the ledger saved: its invoices of the month with another GSTIN next, all ticked (none: done)
+      if (kind === "gstin") { const l = partyInvoices(c.what, ym, reg, led, clean); if (l.length) { setInv(l); return; } }
+      later(onClose);
+    } finally { setBusy(false); }
   };
   // Tally did not say whether it changed: asked again only when the person presses it (the change number decides)
-  const again = async () => { if (!st) return; setBusy(true); await FixQ.send(st); setBusy(false); if (st.state === "done") setTimeout(onClose, 1200); };
+  const again = async () => { if (!st) return; setBusy(true); await FixQ.send(st); setBusy(false); if (finished(st)) later(onClose); };
+  const tick = (id) => { const n = new Set(off); if (n.has(id)) n.delete(id); else n.add(id); setOff(n); };
   const lines = v ? (v.ent || []).filter((e) => e && e.l) : [];
-  return <PanelDialog open={true} onClose={onClose} title={(d.no || "Entry") + (d.date ? " · " + day(d.date) : "")} description={undefined} attrs={{ "data-fix-entry": d.id || "", "data-fix-kind": kind || "none" }}>
+  const gstNow = fresh ? fresh.gstin : (v && st && st.state === "changed" ? v.gstin : d.gstin);
+  return <PanelDialog open={true} onClose={onClose} title={(noNow || "Entry") + (d.date ? " · " + day(d.date) : "")} description={undefined} attrs={{ "data-fix-entry": d0.id || "", "data-fix-kind": kind || "none", "data-fix-step": step }}>
     <div className="fx-pop">
-      <p className="fx-pop-head" data-fix-head="">{[v && v.type, d.party, d.id ? money(amountOf(d)) : ""].filter(Boolean).join(" · ")}</p>
-      {why && <p className="note" data-fix-why="">{why}</p>}
-      {canFix && <div className="fx-field">
-        {kind === "number" && <label>Invoice number <input type="text" data-fix-input="number" value={val} maxLength={40} onChange={(e) => setVal(e.target.value)} autoFocus />
+      <p className="fx-pop-head" data-fix-head="">{[v && Books.unesc(v.type), d.party, d.id ? money(amountOf(d)) : ""].filter(Boolean).join(" · ")}</p>
+      {why && step === "entry" && <p className="note" data-fix-why="">{why}</p>}
+      {canFix && step === "entry" && <div className="fx-field">
+        {kind === "number" && <label>Invoice number <input type="text" data-fix-input="number" value={value} maxLength={40} onChange={(e) => setVal(e.target.value)} autoFocus />
           <span className="note" data-fix-count="">{clean.length} of 16{numberOk(clean) ? " ✓" : ""}</span></label>}
-        {kind === "pos" && <label>Place of supply <select data-fix-input="pos" value={val} onChange={(e) => setVal(e.target.value)} autoFocus>
+        {kind === "pos" && <label>Place of supply <select data-fix-input="pos" value={value} onChange={(e) => setVal(e.target.value)} autoFocus>
           <option value="">Choose the state</option>{STATES().map(([cd, n]) => <option key={cd} value={cd}>{cd} {n}</option>)}</select></label>}
-        {kind === "gstin" && <label>GSTIN of {led} <input type="text" data-fix-input="gstin" value={val} maxLength={15} onChange={(e) => setVal(e.target.value.toUpperCase())} autoFocus />
+        {kind === "gstin" && <label>GSTIN of {led} <input type="text" data-fix-input="gstin" value={value} maxLength={15} onChange={(e) => setVal(e.target.value.toUpperCase())} autoFocus />
           <span className="note" data-fix-count="">{gstOk(clean) ? "✓ " + ((GST_STATES || {})[clean.slice(0, 2)] || "") : clean.length + " of 15"}</span>
-          <span className="note fx-sub">Changed on the party ledger in Tally.</span></label>}
+          <span className="note fx-sub">Changed on the party ledger in Tally, then on this party's invoices of the month.</span></label>}
         {kind === "number" && <p className="note fx-sub">Up to 16 letters, digits, / and -.</p>}
       </div>}
-      <table className="bk-table fx-lines" data-fix-lines=""><tbody>
+      {step === "invoices" && <div className="fx-inv" data-fix-invoices={invList.length}>
+        <p className="note">{ledDone && !inv ? "The party ledger has this GSTIN. " : "The party ledger is saved. "}These invoices of {led}{ym ? " in " + (GSTR.label ? GSTR.label(ym) : ym) : ""} carry {invList.some((x) => x.gstin) ? "another GSTIN" : "no GSTIN"}. Ticked ones get {clean} in Tally.</p>
+        <table className="bk-table fx-lines"><tbody>
+          {invList.map((x) => { const r = invSt[x.id]; return <tr key={x.id} data-fix-inv={x.id} data-fix-inv-state={r ? r.state : ""}>
+            <td><label className="fx-tick"><input type="checkbox" data-fix-tick={x.id} checked={!off.has(x.id)} disabled={held || finished(r)} onChange={() => tick(x.id)} /> {x.no || "—"} · {day(x.date)}</label></td>
+            <td className="n">{x.gstin || "no GSTIN"}</td>
+            <td className="n">{r ? (finished(r) ? SAID[r.state] : r.words) : money(x.amount)}</td></tr>; })}
+        </tbody></table>
+      </div>}
+      {step === "entry" && <table className="bk-table fx-lines" data-fix-lines=""><tbody>
         {lines.map((e, i) => <tr key={i}><td>{e.l}</td><td className="n">{e.a < 0 ? "Dr" : "Cr"} {INR.format(r2(Math.abs(num(e.a))))}</td></tr>)}
-        <tr><td>Place of supply</td><td className="n">{(GST_STATES || {})[posNow] || (d.pos || "—")}</td></tr>
-        <tr><td>GSTIN</td><td className="n">{d.gstin || ledG || "—"}</td></tr>
-      </tbody></table>
+        <tr><td>Place of supply</td><td className="n" data-fix-pos="">{(GST_STATES || {})[posNow] || (d.pos || "—")}</td></tr>
+        <tr><td>GSTIN</td><td className="n" data-fix-gstin="">{gstNow || ledG || "—"}</td></tr>
+      </tbody></table>}
       {!kind && tally && <p className="fx-tally" data-fix-tally="">{tally}</p>}
-      {st && <p className={"fx-state" + (st.state === "done" ? " good" : "")} data-fix-state={st.state}>{st.words}
+      {st && <p className={"fx-state" + (finished(st) ? " good" : "")} data-fix-state={st.state}>{st.words}
         {st.state === "unknown" && <>{" "}<button type="button" className="linkbtn" data-fix-again="" disabled={busy} onClick={again}>Ask Tally again</button></>}</p>}
       <div className="fx-pop-act">
         <button type="button" className="linkbtn" data-fix-lookup="" onClick={onLookup}>Open in Look up</button>
         <span className="fx-pop-btns">
-          <button type="button" className="btn" data-fix-cancel="" onClick={onClose}>{st && st.state === "done" ? "Close" : "Cancel"}</button>
-          {canFix && <button type="button" className="btn primary" data-fix-save="" disabled={!ok || held || (st && st.state === "done")} onClick={save}>Save in Tally</button>}
+          <button type="button" className="btn" data-fix-cancel="" onClick={onClose}>{finished(st) && step === "entry" ? "Close" : "Cancel"}</button>
+          {canFix && <button type="button" className="btn primary" data-fix-save="" disabled={!ok || held || (step === "entry" && finished(st))} onClick={save}>Save in Tally</button>}
         </span>
       </div>
     </div>
@@ -272,9 +389,9 @@ export function FixHistory() {
     } finally { FixQ.undoing.delete(x.id); render(); }
   };
   return <details className="fx-hist" data-fix-history={l.length}>
-    <summary>Changes made here ({l.length})</summary>
+    <summary>Changes made here ({FixQ.taken(l)})</summary>
     <ul>{l.slice().reverse().slice(0, 50).map((x) => <li key={x.id} data-fix-rec={x.state}>
-      <span>{x.label}</span> <span className="note">· {SAID[x.state] || x.words}{x.by ? " · " + x.by : ""}</span>
+      <span>{x.label}</span> <span className="note">· {SAID[x.state] || x.words}{x.by ? " · " + x.by : ""}{x.state === "waiting" && !FixQ.here(x) ? " · sent from the computer it was made on" : ""}</span>
       {x.state === "unknown" && <>{" · "}<button type="button" className="linkbtn" data-fix-again={x.id} disabled={FixQ.flying.has(x.id)} onClick={() => FixQ.send(x)}>Ask Tally again</button></>}
       {can(x) && <>{" · "}<button type="button" className="linkbtn" data-fix-undo={x.id} disabled={pending(x)} onClick={() => undo(x)}>Undo</button></>}
     </li>)}</ul>

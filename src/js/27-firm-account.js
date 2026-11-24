@@ -1741,7 +1741,7 @@ function doAct(act, t){
       Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.openFor(co).name) + Bridge.pinQ(), null, 180000).then(async j => {
         const info = {}, groups = {};
         [].concat(j.ledgers || []).forEach(l => { if (!l || !l.name) return;
-          info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", rate: num(l.rate) || undefined, gstin: l.gstin || "", pan: l.pan || ""};
+          info[l.name] = {group: l.group || "", taxType: String(l.taxType || "").replace(/[^A-Za-z ]/g, "").trim(), dutyHead: l.dutyHead || "", tdsNature: l.tdsNature || "", rate: num(l.rate) || undefined, gstin: l.gstin || "", pan: l.pan || "", alt: Math.round(num(l.alterId)) || undefined};
           // contact details, from bridge 1.12.9: for letters to the party
           if (l.email) info[l.name].email = String(l.email).trim(); if (l.phone) info[l.name].phone = String(l.phone).trim(); if (l.mobile) info[l.name].mobile = String(l.mobile).trim();
           if (l.address) info[l.name].addr = [].concat(l.address).filter(Boolean).join("\n");

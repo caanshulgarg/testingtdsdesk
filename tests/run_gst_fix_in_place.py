@@ -16,8 +16,19 @@ bridge-go/fixalter.go does), so the real Bridge.call is what FinCom's /fix goes 
      books of the client it was made for, never the one open now; the window closes when a client opens;
   9. Undo: one change for a double click, marked used only once Tally took it; a place of supply goes back to Tally's
      own value (the bridge's before); the ledger's AlterID is sent when FinCom Books have it.
+ 10. A GSTIN (the owner, 24-Nov-2026): after the ledger is saved, that party's invoices of the month on screen with
+     another GSTIN or none are listed, all ticked; each is sent on its own (target voucher, fields {gstin}, the voucher
+     type unescaped: "Sales & Services") and read back; the row leaves What to fix only when its invoice is corrected.
+     The ledger already right: Save is offered and goes to the invoices only. A ledger with no change number in FinCom
+     Books: the same Save reads it from Tally first (readFirst), then saves with Tally's change number; Tally closed:
+     held; Tally's GSTIN another: changed since.
+ 11. Changed since: the window's title, place of supply and GSTIN rows and the unchanged test follow Tally's entry;
+     FixQ.mine compares exactly; Tally holding the value though this computer did not send it: "Already in Tally", no
+     Undo; only changes made on this computer are sent again by themselves (rec.dev); Changes made here (N) counts the
+     ones Tally took; at most 200 kept, the oldest dropped; fixq is not a GST part (GSTR.NOT_GST); ledRead keeps alterId.
 Made-up books only (tests/fixtures/books). Screenshots (deviceScaleFactor 2) go to FIX_SHOTS when set: classic light and
-New look dark of refused, changed, needs the newer bridge and waiting. Runs on the React build: app/dist-test."""
+New look dark of refused, changed, needs the newer bridge and waiting, and (SHOT_PREFIX) the invoices step and the ledger
+read from Tally first. Runs on the React build: app/dist-test."""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -27,6 +38,7 @@ from playwright.sync_api import sync_playwright
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = int(os.environ.get("FIXIP_PORT") or 8341)
 SHOTS = os.environ.get("FIX_SHOTS", "")
+PFX = os.environ.get("SHOT_PREFIX", "")
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
@@ -126,7 +138,7 @@ def try_save(pg, vid, js, ms=900):
 
 def shot(pg, name):
     if SHOTS:
-        os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, name + ".png"))
+        os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, PFX + name + ".png"))
 
 REFUSED = "(b) => ({body: {ok: false, refused: true, message: \"Tally did not change it: Voucher Number 'LFE/25-26/006' already exists.\"}})"
 CHANGED = "(b) => ({body: {ok: false, changed: true, now: {number: 'LFE/2025-26/000106', alterId: '61'}, alterNow: '61', xml: window.__xml, message: 'Changed in Tally since it was opened here. This is how it is now.'}})"
@@ -144,6 +156,135 @@ def dark_shots(pg, vid, tag):
     try_save(pg, vid, OLD); shot(pg, tag + "-needs-newer-bridge"); cancel(pg)
     try_save(pg, vid, HELD); shot(pg, tag + "-waiting"); cancel(pg)
     answer(pg, DONE); pump(pg)
+
+# Tally's invoice as read back after its GSTIN fix: the voucher type as Tally gives it (escaped once, as FinCom keeps it)
+XMLG = """(a) => { const v = S.books.vouchers.find(x => x.id === a[0]), e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  return '<VOUCHER VCHTYPE="' + v.type + '"><GUID>' + e(v.id) + '</GUID><ALTERID>' + a[2] + '</ALTERID><DATE>' + v.date + '</DATE><VOUCHERTYPENAME>' + v.type +
+    '</VOUCHERTYPENAME><VOUCHERNUMBER>' + e(v.no) + '</VOUCHERNUMBER><PARTYLEDGERNAME>' + e(v.party) + '</PARTYLEDGERNAME><PARTYGSTIN>' + e(a[1]) +
+    '</PARTYGSTIN><PLACEOFSUPPLY>' + e(v.pos) + '</PLACEOFSUPPLY>' + (v.ent || []).map(l => '<ALLLEDGERENTRIES.LIST><LEDGERNAME>' + e(l.l) + '</LEDGERNAME><ISDEEMEDPOSITIVE>' +
+    (l.a < 0 ? 'Yes' : 'No') + '</ISDEEMEDPOSITIVE><AMOUNT>' + l.a + '</AMOUNT></ALLLEDGERENTRIES.LIST>').join('') + '</VOUCHER>'; }"""
+# the bridge: a ledger read first, a ledger fix, an invoice's GSTIN fix (read back with the GSTIN sent)
+GSTFIX = """(b) => b.readFirst ? {body: {ok: false, read: true, now: {gstin: window.__tallyG, pan: '', alterId: '40'}, alterNow: '40', message: 'Read from Tally.'}}
+  : b.target === 'ledger' ? {body: {ok: true, after: {gstin: b.fields.gstin, pan: '', alterId: String(+b.alterId + 1)}, before: {gstin: b.was.gstin, alterId: b.alterId}}}
+  : {body: {ok: true, message: 'Saved in Tally.', before: {gstin: 'x', alterId: b.alterId}, after: {gstin: b.fields.gstin, alterId: String(+b.alterId + 1)}, xml: (""" + XMLG + """)([b.guid, b.fields.gstin, +b.alterId + 1])}}"""
+def inv_state(pg):
+    return pg.evaluate("""() => { const w = document.querySelector('[data-fix-entry]'); if (!w) return null; const l = w.querySelector('[data-fix-invoices]');
+      return {step: w.dataset.fixStep, rows: l ? Array.from(l.querySelectorAll('[data-fix-inv]')).map(r => [r.dataset.fixInv, r.querySelector('[data-fix-tick]').checked, r.dataset.fixInvState]) : null,
+        save: (() => { const b = w.querySelector('[data-fix-save]'); return !!b && !b.disabled; })(), text: w.innerText.replace(/\\s+/g, ' ')}; }""")
+def bad_again(pg, gid, g):
+    """the invoice with a GSTIN that is not valid again (as a new read brings it)"""
+    pg.evaluate("(a) => { const vs = S.books.vouchers, i = vs.findIndex(v => v.id === a[0]); vs[i] = Object.assign({}, vs[i], {gstin: a[1], alt: (vs[i].alt || 70) + 5}); BOOKS_REV++; render(); }", [gid, g])
+
+def invoice_steps(pg, what2, gid, led, good):
+    # 10. the ledger saved: the party's invoices of the month with another GSTIN, all ticked
+    pg.wait_for_timeout(300)
+    s1 = inv_state(pg)
+    ok(s1 and s1["step"] == "invoices" and s1["rows"] and [gid, True, ""] in s1["rows"] and s1["save"],
+       "the ledger saved: the party's invoices of the month with another GSTIN listed, all ticked, Save offered (%s)" % (s1 and {k: s1[k] for k in ("step", "rows", "save")}))
+    ok(gid in (group(pg, what2) or []), "the ledger saved but the invoice not yet: its row is still in What to fix")
+    shot(pg, "classic-light-invoices")
+    # the voucher type as Tally gives it, escaped once in FinCom Books: sent as Tally's own name
+    pg.evaluate("(g) => { const v = S.books.vouchers.find(x => x.id === g); v.type = 'Sales &amp; Services'; if (v.alt == null) v.alt = 70; }", gid)
+    alt0 = pg.evaluate("(g) => S.books.vouchers.find(x => x.id === g).alt", gid)
+    pg.evaluate("() => { window.__calls = []; window.__fix = " + GSTFIX + "; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(1200)
+    c = calls(pg); b = c[0][1] if c else {}
+    ok(len(c) == 1 and b.get("target") == "voucher" and b.get("guid") == gid and b.get("fields") == {"gstin": good} and b.get("alterId") == str(alt0)
+       and b.get("vchType") == "Sales & Services" and b.get("vchDate"), "each invoice sent on its own: its GSTIN only, its change number, the type as Tally's name 'Sales & Services' (%s)" % b)
+    v = pg.evaluate("(g) => { const v = S.books.vouchers.find(x => x.id === g); return [v.gstin, v.alt, v.type]; }", gid)
+    ok(v == [good, alt0 + 1, "Sales &amp; Services"], "the invoice read back is in FinCom Books (%s)" % v)
+    pg.wait_for_timeout(1300)
+    ok(not pg.evaluate("() => !!document.querySelector('[data-fix-entry]')"), "every ticked invoice saved: the window closes by itself")
+    rows = group(pg, what2)
+    ok(not rows or gid not in rows, "the invoice corrected: its row has left What to fix (%s)" % rows)
+
+    # the ledger already right, the invoice not: the box pre-filled valid, Save offered for the invoices only
+    bad_again(pg, gid, BADG); month(pg, "202504")
+    rows = group(pg, what2)
+    ok(rows and gid in rows, "the invoice with a bad GSTIN again: listed (%s)" % rows)
+    w = open_entry(pg, what2, gid); s2 = inv_state(pg)
+    ok(s2["step"] == "invoices" and [gid, True, ""] in (s2["rows"] or []) and s2["save"] and "The party ledger has this GSTIN." in s2["text"],
+       "the ledger already right: straight to its invoices, ticked, Save offered (%s)" % {k: s2[k] for k in ("step", "rows", "save")})
+    # unticked: nothing to send, Save off; ticked again
+    pg.click("[data-fix-entry] [data-fix-tick]"); pg.wait_for_timeout(150)
+    ok(not inv_state(pg)["save"], "every invoice unticked: Save is off")
+    pg.click("[data-fix-entry] [data-fix-tick]"); pg.wait_for_timeout(150)
+    pg.evaluate("() => { window.__calls = []; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(1500)
+    c = calls(pg)
+    ok(len(c) == 1 and c[0][1].get("target") == "voucher" and c[0][1].get("fields") == {"gstin": good}, "the ledger already right: only the invoice is sent (%s)" % [x[1].get("target") for x in c])
+    rows = group(pg, what2)
+    ok(not rows or gid not in rows, "the row leaves the list once its invoice is fixed (%s)" % rows)
+
+    # a ledger FinCom Books hold no change number for: the same Save reads it from Tally first, then saves
+    bad_again(pg, gid, BADG)
+    pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; delete S.books.ledInfo[a[0]]; BOOKS_REV++; render(); }", [led, BADG]); month(pg, "202504")
+    open_entry(pg, what2, gid); typein(pg, good)
+    pg.evaluate("() => { window.__calls = []; window.__tallyG = '" + BADG + "'; const f = " + GSTFIX + "; window.__go = null; window.__fix = (b) => b.readFirst ? new Promise((r) => { window.__go = () => r(f(b)); }) : f(b); }")
+    pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(500)
+    st = state(pg)
+    ok(st and st[0] == "waiting" and "Reading the party from Tally" in st[1] and save_off(pg), "no change number: Save reads the party from Tally first (%s)" % st)
+    ok(not pg.evaluate("() => /Read the ledgers from Tally first/.test(document.body.innerText)"), "no step asked of the person: no 'Read the ledgers from Tally first'")
+    shot(pg, "classic-light-ledger-read-first")
+    pg.evaluate("() => window.__go && window.__go()"); pg.wait_for_timeout(1200)
+    c = calls(pg)
+    ok(len(c) == 2 and c[0][1].get("readFirst") is True and "alterId" not in c[0][1] and c[1][1].get("alterId") == "40" and "readFirst" not in c[1][1] and c[1][1].get("target") == "ledger",
+       "one Save: the ledger read from Tally, then its fix with Tally's change number (%s)" % [(x[1].get("readFirst"), x[1].get("alterId")) for x in c])
+    s3 = inv_state(pg)
+    ok(s3 and s3["step"] == "invoices" and pg.evaluate("(l) => S.books.ledInfo[l] && S.books.ledInfo[l].alt", led) == 41, "then the invoices step; the ledger's change number kept even with no ledger details before (%s)" % (s3 and s3["step"]))
+    cancel(pg)
+    # Tally closed at the read: held as usual; Tally's GSTIN another: changed since, nothing sent
+    pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; delete S.books.ledInfo[a[0]]; BOOKS_REV++; render(); }", [led, BADG]); month(pg, "202504")
+    open_entry(pg, what2, gid); typein(pg, good)
+    pg.evaluate("() => { window.__calls = []; window.__fix = (b) => ({body: {ok: false, held: true, message: 'Tally is closed. The change is made when it opens.'}}); }")
+    pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(900)
+    st = state(pg)
+    ok(st and st[0] == "waiting" and len(calls(pg)) == 1 and calls(pg)[0][1].get("readFirst") is True, "no change number, Tally closed: held, Waiting for Tally (%s)" % st)
+    pg.evaluate("() => { window.__calls = []; window.__tallyG = '27AAPFU0939F1ZV'; window.__fix = " + GSTFIX + "; }")
+    pump(pg, 1200)
+    last = pg.evaluate("() => S.books.fixq[S.books.fixq.length - 1]")
+    ok(len(calls(pg)) == 1 and last["state"] == "changed", "sent when Tally opens: Tally's GSTIN is another, so changed since and nothing sent (%s, %d calls)" % (last["state"], len(calls(pg))))
+    ok(pg.evaluate("(l) => S.books.gstins[l]", led) == "27AAPFU0939F1ZV", "changed since: FinCom Books take Tally's GSTIN of the ledger")
+    cancel(pg)
+    pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; S.books.ledInfo[a[0]] = {alt: 33}; BOOKS_REV++; render(); }", [led, good])
+
+def should_fix(pg, vid):
+    """11. the review's should-fix items"""
+    b0 = pg.evaluate("() => S.books.fixq.length")
+    # only this computer's changes are sent again by themselves; a colleague's shown
+    pg.evaluate("""() => { const b = S.books, x = JSON.parse(JSON.stringify(b.fixq.filter(y => y.ask && y.ask.target === 'voucher').slice(-1)[0]));
+      x.id = 'fx-colleague'; x.state = 'waiting'; x.dev = 'dev-colleague'; x.by = 'colleague@example.com'; x.words = 'Waiting'; b.fixq.push(x); render(); }""")
+    pg.evaluate("() => { window.__calls = []; window.__fix = (b) => ({body: {ok: true, after: {}}}); }")
+    pump(pg)
+    ok(len(calls(pg)) == 0, "a colleague's waiting change is never sent from this computer (%d calls)" % len(calls(pg)))
+    h = pg.evaluate("() => { const h = document.querySelector('#app [data-fix-history]'); h.open = true; return h.textContent.replace(/\\s+/g, ' '); }")
+    ok("colleague@example.com" in h and "sent from the computer it was made on" in h, "a colleague's change is shown, with who made it (%r)" % h[-200:])
+    pg.evaluate("() => { S.books.fixq = S.books.fixq.filter(x => x.id !== 'fx-colleague'); render(); }")
+    ok(pg.evaluate("() => S.books.fixq.every(x => !x.ask || x.id.startsWith('fx-') && !x.dev || x.dev === FixQ.dev())"), "each change made here carries this computer's id")
+    # FixQ.mine: exact
+    m = pg.evaluate("""() => [FixQ.mine({ask: {fields: {number: 'Lfe/1'}}}, {number: 'LFE/1'}), FixQ.mine({ask: {fields: {number: 'LFE/1'}}}, {number: 'LFE/1'}),
+      FixQ.mine({ask: {fields: {pos: '27'}}}, {pos: 'Maharashtra'}), FixQ.mine({ask: {fields: {gstin: '07AAJFQ3158R1ZJ'}}}, {gstin: '07aajfq3158r1zj'})]""")
+    ok(m == [False, True, True, False], "FixQ.mine compares exactly (letter case too), a state by code or Tally's name (%s)" % m)
+    # Tally holds the value, not sent from here: already in Tally, no Undo
+    alt[0] += 2; pg.evaluate(PLANT, [vid, LONG, alt[0]])
+    month(pg, "202507"); group(pg, WHAT); open_entry(pg, WHAT, vid); typein(pg, SHORT)
+    answer(pg, "(b) => ({body: {ok: false, changed: true, now: {number: b.fields.number, alterId: '777'}, alterNow: '777', xml: window.__xmlOf(Object.assign({}, b, {alterId: 776}))}})")
+    pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(900)
+    st = state(pg)
+    last = pg.evaluate("() => S.books.fixq[S.books.fixq.length - 1]")
+    ok(st and st[0] == "already" and "Already in Tally" in st[1] and last["state"] == "already", "Tally already holds it, not sent from here: Already in Tally (%s)" % st)
+    pg.wait_for_timeout(1300)
+    ok(not pg.evaluate("(i) => Array.from(document.querySelectorAll('#app [data-fix-undo]')).some(u => u.dataset.fixUndo === i)", last["id"]), "already in Tally: no Undo")
+    # Changes made here (N): only the ones Tally took
+    n = pg.evaluate("() => [S.books.fixq.filter(x => x.state === 'done').length, (document.querySelector('#app [data-fix-history] summary') || {}).textContent]")
+    ok(n[1] == "Changes made here (%d)" % n[0] and n[0] < pg.evaluate("() => S.books.fixq.length"), "Changes made here counts the changes Tally took (%s)" % n)
+    # at most 200 kept, the oldest dropped
+    pg.evaluate("""() => { const b = S.books; for (let i = 0; i < 210; i++) b.fixq.push({id: 'fx-old' + i, cid: b.cid, at: '2026-01-01', state: 'refused', label: 'old ' + i, ask: {target: 'voucher', fields: {number: 'X'}}, dev: FixQ.dev()}); window.__live = false; }""")
+    pg.evaluate("(v) => FixQ.add({target: 'voucher', guid: v, alterId: '1', vchType: 'Sales', vchDate: '20250701', fields: {number: 'CAP-1'}}, 'cap', {kind: 'number', vid: v, was: 'x', to: 'CAP-1'})", vid); pg.wait_for_timeout(300)
+    q = pg.evaluate("() => [S.books.fixq.length, S.books.fixq[S.books.fixq.length - 1].label, S.books.fixq.some(x => x.id === 'fx-old0'), S.books.fixq.some(x => x.id === 'fx-old209')]")
+    ok(q == [200, "cap", False, True], "at most 200 changes kept, the oldest dropped (%s)" % q)
+    pg.evaluate("() => { S.books.fixq = S.books.fixq.filter(x => !String(x.id).startsWith('fx-old') && x.label !== 'cap'); window.__live = true; render(); }")
+    ok(pg.evaluate("() => GSTR.NOT_GST.has('fixq')"), "fixq is not a part GST reads (GSTR.NOT_GST)")
 
 try:
     with sync_playwright() as p:
@@ -197,6 +338,11 @@ try:
         st = state(pg)
         ok(st and st[0] == "changed" and st[1].startswith("Changed in Tally since you opened it"), "changed since: said plainly, nothing saved (%s)" % st)
         ok(voucher(pg, vid) == {"no": "LFE/2025-26/000106", "alt": 61}, "changed since: FinCom takes the entry as Tally has it now (%s)" % voucher(pg, vid))
+        tt = pg.evaluate("() => document.querySelector('[data-fix-entry]').innerText")
+        ok("LFE/2025-26/000106" in tt.split("\n")[0] and LONG not in tt.split("\n")[0], "changed since: the window's title is Tally's number now (%r)" % tt[:80])
+        typein(pg, "LFE/2025-26/000106"); pg.wait_for_timeout(150)
+        ok(save_off(pg), "changed since: the unchanged test is against Tally's number now (Save off for it)")
+        typein(pg, SHORT)
         shot(pg, "classic-light-changed")
         pump(pg); ok(len(calls(pg)) == 1, "changed since: never sent again by itself (%d calls)" % len(calls(pg)))
 
@@ -320,7 +466,7 @@ try:
         rows = group(pg, what2)
         gid = rows[0] if rows else ""
         w = open_entry(pg, what2, gid)
-        ok(w["kind"] == "gstin" and w["input"] == ["gstin", BADG] and "Changed on the party ledger in Tally." in w["text"], "GSTIN not valid: the party ledger's GSTIN in its box (%s)" % {k: w[k] for k in ("kind", "input")})
+        ok(w["kind"] == "gstin" and w["input"] == ["gstin", BADG] and "Changed on the party ledger in Tally, then on this party's invoices of the month." in w["text"], "GSTIN not valid: the party ledger's GSTIN in its box (%s)" % {k: w[k] for k in ("kind", "input")})
         led = pg.evaluate("(g) => S.books.vouchers.find(v => v.id === g).party", gid)
         pg.evaluate("(l) => { S.books.ledInfo = S.books.ledInfo || {}; S.books.ledInfo[l] = Object.assign({}, S.books.ledInfo[l], {alt: 33}); }", led)
         good = pg.evaluate("() => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid('07AAJFQ3158R1Z' + c)) return '07AAJFQ3158R1Z' + c; }")
@@ -331,6 +477,7 @@ try:
         ok(b.get("target") == "ledger" and b.get("fields") == {"gstin": good} and b.get("was") == {"gstin": BADG} and b.get("ledger") == led and b.get("alterId") == "33",
            "the ledger's GSTIN is sent, with the one FinCom showed and the ledger's AlterID (%s)" % b)
         ok(pg.evaluate("(l) => S.books.gstins[l]", led) == good and pg.evaluate("(l) => S.books.ledInfo[l].alt", led) in (34, "34"), "FinCom Books take the ledger read back, with its AlterID")
+        invoice_steps(pg, what2, gid, led, good)
         cancel(pg); month(pg, "202504")
         # a GSTIN changed from one valid GSTIN to another: Undo offered
         good2 = pg.evaluate("() => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid('07AAJFQ3159R1Z' + c)) return '07AAJFQ3159R1Z' + c; }")
@@ -363,6 +510,20 @@ try:
         pg.evaluate("() => { const u = document.querySelector('#app [data-fix-undo=\"fx-pos\"]'); if (u) u.click(); }"); pg.wait_for_timeout(800)
         c = calls(pg); b = c[0][1] if c else {}
         ok(b.get("fields") == {"pos": "Haryana"} and b.get("alterId") == "41", "Undo of a place of supply: Tally's own earlier value, with the change number after (%s)" % b)
+
+        should_fix(pg, vid)
+
+        # the invoices step and the ledger read first, in New look, dark
+        pg.evaluate("() => { window.FCNewLook.set(true); }"); pg.emulate_media(color_scheme="dark"); pg.wait_for_timeout(800)
+        month(pg, "202504"); what2 = "Buyer GSTINs that are not valid"
+        bad_again(pg, gid, BADG); pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; delete S.books.ledInfo[a[0]]; BOOKS_REV++; render(); }", [led, BADG]); month(pg, "202504")
+        open_entry(pg, what2, gid); typein(pg, good)
+        pg.evaluate("() => { window.__tallyG = '" + BADG + "'; const f = " + GSTFIX + "; window.__go = null; window.__fix = (b) => b.readFirst ? new Promise((r) => { window.__go = () => r(f(b)); }) : f(b); }")
+        pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(500); shot(pg, "newlook-dark-ledger-read-first")
+        pg.evaluate("() => window.__go && window.__go()"); pg.wait_for_timeout(1200); shot(pg, "newlook-dark-invoices")
+        ok((inv_state(pg) or {}).get("step") == "invoices", "New look dark: the invoices step after the ledger read first and saved")
+        pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_timeout(1500)
+        pg.evaluate("() => { window.FCNewLook.set(false); }"); pg.emulate_media(color_scheme="light")
 
         # the four answers in New look, dark
         pg.evaluate("() => { window.FCNewLook.set(true); }"); pg.emulate_media(color_scheme="dark"); pg.wait_for_timeout(800)
