@@ -47,10 +47,11 @@ const SALES_CFG_DEFAULT = {voucherType: "Sales", series: "INV/{FY}/", next: 1, p
   terms: "Goods once sold will not be taken back. Interest at 18% p.a. will be charged on payments made after the due date. Subject to local jurisdiction.", signatory: "", ledgers: {}, auto: true, items: {}};
 // (old: the list open on screen, read again after a change from the cloud, next-fix-sales-delete-shake: the owner,
 // 24-Nov-2026 "the window was shaking". It stays as it is drawn while the copy is read, with its tab, search, ticks,
-// open invoice, Undo and bar: never the loading page in between. The copy read is laid into the same list and the same
-// invoice objects, so work under way on them (a posting, an upload) keeps what it sets; an invoice here and not in the
-// copy, never removed here or by the cloud, stays: one just uploaded, not saved yet. The review of a85572b8b)
-async function loadSales(cid, old){
+// open invoice, Undo and bar: never the loading page in between. ids: the invoices the cloud changed; the copy read is
+// laid over those only, into the same list and the same invoice objects, and every other invoice is left as it is here
+// (one Posted or uploaded meanwhile keeps that: the reviews of a85572b8b and 8fc130d15). The page is then drawn once the
+// changes stop coming (salesSettleSoon))
+async function loadSales(cid, old, ids){
   old = old && old === S.sales && old.cid === cid && !old.loading ? old : null;
   const st = old || {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
   if (!old){ S.sales = st; render(); }
@@ -60,20 +61,35 @@ async function loadSales(cid, old){
   if (S.sales !== st) return;
   let list = list0 || [];
   if (old){
-    const got = new Map(list.map(v => [v.id, v])), marks = Cloud.marks(), dels = Cloud.dels(), had = new Set();
+    const got = new Map(list.map(v => [v.id, v])), marks = typeof Cloud === "object" ? Cloud.marks() : {}, dels = typeof Cloud === "object" ? Cloud.dels() : {};
+    // (removed here, sent or waiting: never brought back by a copy read)
     const gone = v => { const k = "sales|" + cid + "|" + cid + ":" + v.id; return marks[k] === "gone" || k in dels; };
-    const kept = old.list.filter(v => { const n = got.get(v.id); if (!n) return !gone(v); had.add(v.id);
-      Object.keys(v).forEach(k => { if (!(k in n)) delete v[k]; }); Object.assign(v, n); return true; });
-    old.list.splice(0, old.list.length, ...kept, ...list.filter(v => !had.has(v.id)));
+    const lay = (v, n) => { Object.keys(v).forEach(k => { if (!(k in n)) delete v[k]; }); Object.assign(v, n); };
+    if (ids){
+      ids.forEach(id => { const i = old.list.findIndex(v => v.id === id), n = got.get(id);
+        if (i >= 0 && n) lay(old.list[i], n); else if (i >= 0) old.list.splice(i, 1); else if (n && !gone(n)) old.list.push(n); });
+    } else {
+      const had = new Set(), kept = old.list.filter(v => { const n = got.get(v.id); if (!n) return !gone(v); had.add(v.id); lay(v, n); return true; });
+      old.list.splice(0, old.list.length, ...kept, ...list.filter(v => !had.has(v.id) && !gone(v)));
+    }
     list = old.list;
-    const ids = new Set(list.map(v => v.id));
-    [...old.sel].forEach(id => { if (!ids.has(id)) old.sel.delete(id); });
-    if (old.openId && !ids.has(old.openId)) old.openId = null;
-    if (old.dupSkipped) old.dupSkipped = old.dupSkipped.filter(id => ids.has(id));
+    const here = new Set(list.map(v => v.id));
+    [...old.sel].forEach(id => { if (!here.has(id)) old.sel.delete(id); });
+    if (old.openId && !here.has(old.openId)) old.openId = null;
+    if (old.dupSkipped) old.dupSkipped = old.dupSkipped.filter(id => here.has(id));
     old.remapKey = null;   // the invoices read again are mapped again on this computer (salesRemapWaiting)
   }
   SALES_REV++; Object.assign(S.sales, {list, cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
   salesCfgTook(S.sales);
+  if (old) salesSettleSoon(cid); else salesAfterRead(cid);
+}
+// the changes coming from the cloud drawn once: 300 ms after the last, or every second while they keep coming
+let salesSettleT = 0, salesSettleAt = 0;
+function salesSettleSoon(cid){
+  const now = Date.now(); if (!salesSettleT) salesSettleAt = now; clearTimeout(salesSettleT);
+  salesSettleT = setTimeout(() => { salesSettleT = 0; const s = SL(); if (s && s.cid === cid && !s.loading) salesAfterRead(cid); }, Math.max(0, Math.min(300, salesSettleAt + 1000 - now)));
+}
+function salesAfterRead(cid){
   // next-fix-sales-sync: with the ledger list here, every invoice waiting is mapped again on this computer
   const remapped = typeof salesRemapWaiting === "function" && salesRemapWaiting();
   // invoices filed from elsewhere are matched now

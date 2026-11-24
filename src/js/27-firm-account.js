@@ -21,10 +21,11 @@ const Cloud = {
   // deleted, and blanked all three clients of a firm). Only what is on this list is ever sent as deleted.
   dels(){ let m = {}; try { m = JSON.parse(lsGet("tdsdesk:clouddels") || "{}"); } catch (e){} return m; },
   setDels(m){ lsSet("tdsdesk:clouddels", JSON.stringify(m)); },
-  // (own: what was removed on this page since it was opened, until it is sent again as a record (Undo): its removal
-  // coming back from the cloud is this page's own, next-fix-sales-delete-shake)
-  own: new Set(),
-  delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const k = kind + "|" + (cid || "") + "|" + id, d = this.dels(); d[k] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); this.own.add(k); },
+  // (quiet: set only while a copy from the server is being laid in, synchronously (takeClientHere and the like), so a
+  // removal that comes from the server is not sent back; never while a row merely waits its turn (Live.applying), when a
+  // person's own delete must still be recorded: the review of 8fc130d15, N4)
+  quiet: false,
+  delete(kind, cid, id, why){ if (this.quiet) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
   setMarks(m){ lsSet("tdsdesk:cloudmarks", JSON.stringify(m)); },
   // reliability (11-Nov-2026; the cloud held requests for minutes and every poll's "busy" stayed set, the page silently
   // stale): no request to FinCom's cloud waits for ever. timed(ms, f, idle): f(signal, alive) is given up when its answer
@@ -270,12 +271,15 @@ function cloudChanges(){
   // not open all look like absence. A record is sent as deleted only when the user removed it (Cloud.delete), and the
   // server keeps its last data even then (migration-19).
   const dels = Cloud.dels(), gone = [];
+  let back = false;
   Object.keys(dels).forEach(k => {
-    if (k in seen){ delete dels[k]; return; }                      // it came back (restored): not deleted
+    if (k in seen){ delete dels[k]; back = true; return; }         // it came back (restored): not deleted, and kept so
     if (marks[k] === "gone") return;
     const bits = k.split("|");
     gone.push({kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone", why: (dels[k] || {}).why || ""});
   });
+  // (the review of 8fc130d15, N2: a removal put back, by Undo, was left in the stored list and skipped colleagues' removals)
+  if (back) Cloud.setDels(dels);
   // the open statement now has fewer rows than before: its chunks past the end are sent empty, not deleted
   const b = S.bank && !S.bank.loading ? S.bank : null;
   if (b && bankWhole(b)) Object.keys(marks).forEach(k => {
@@ -324,7 +328,7 @@ async function cloudPush(pre){
     const del = part.filter(r => r.deleted), up = part.filter(r => !r.deleted);
     if (up.length) await sendBatch("records", up.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: false})));
     for (const r of del) await cloudMarkDeleted("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), r.why);
-    part.forEach(r => { marks[cloudKey(r)] = r.hash; if (!r.deleted && r.json) cloudBaseSet(cloudKey(r), r.json); if (!r.deleted && Cloud.own) Cloud.own.delete(cloudKey(r)); });
+    part.forEach(r => { marks[cloudKey(r)] = r.hash; if (!r.deleted && r.json) cloudBaseSet(cloudKey(r), r.json); });
     Cloud.setMarks(marks); cloudDelsSent(part);
   }
   return changes.length;
@@ -436,8 +440,8 @@ const ClientBase = {
 };
 // the merged copy, kept on this computer too; returns the mark (fingerprint) of what is now here
 function takeClientHere(id, data){
-  const was = Live.applying; Live.applying = true;
-  try { S.companies[id] = fixCompany(clone(data)); Store.saveCompany(S.companies[id]); } finally { Live.applying = was; }
+  const was = Live.applying, q = Cloud.quiet; Live.applying = true; Cloud.quiet = true;
+  try { S.companies[id] = fixCompany(clone(data)); Store.saveCompany(S.companies[id]); } finally { Live.applying = was; Cloud.quiet = q; }
   return fpHash(JSON.stringify(S.companies[id]));
 }
 async function cloudPushClient(r, sendBatch){
@@ -454,8 +458,8 @@ async function cloudPushClient(r, sendBatch){
       return r.hash;
     }
     if (cur.deleted){                                             // removed on another computer: not brought back by a save here
-      const was = Live.applying; Live.applying = true;
-      try { delete S.companies[r.id]; Store.put("companies/" + r.id, null); } finally { Live.applying = was; }
+      const was = Live.applying, q = Cloud.quiet; Live.applying = true; Cloud.quiet = true;
+      try { delete S.companies[r.id]; Store.put("companies/" + r.id, null); } finally { Live.applying = was; Cloud.quiet = q; }
       return "gone";
     }
     const theirs = plainObj(cur.data) ? cur.data : {};
@@ -545,10 +549,10 @@ function cloudApply(rows){
   return run;
 }
 async function cloudApplyNow(rows){
-  const marks = Cloud.marks(), dels0 = typeof Cloud.dels === "function" ? Cloud.dels() : {};
+  const marks = Cloud.marks();
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
-  const touchedBank = new Set(), touchedSales = new Set();
+  const touchedBank = new Set(), touchedSales = new Set(), salesIds = new Set();
   const mine = new Map(), mineData = new Map();
   try { cloudSnapshot().forEach(r => { const k = cloudKey(r); mine.set(k, stableStr(r.data)); mineData.set(k, r.data); }); } catch (e){}
   // a sales list or bank statement with a save waiting here: written first, so the reload below does not lose it
@@ -561,11 +565,6 @@ async function cloudApplyNow(rows){
   let sendAfter = false, took = 0;
   for (let r of rows){
     const k = cloudKey(r);
-    // this computer's own removal of an invoice coming back (Realtime hands each to the browser that made it, one row at
-    // a time): removed on this page and not sent again since (Cloud.own), or known removed here (sent or waiting) and not
-    // in the list. Nothing is done: the list is not read again (next-fix-sales-delete-shake: 22 invoices deleted read it
-    // 22 times, the page shaking), and one put back by Undo meanwhile stays, to be sent again as it is
-    if (r.deleted && r.kind === "sales" && ((Cloud.own && Cloud.own.has(k)) || ((marks[k] === "gone" || k in dels0) && !mine.has(k)))) continue;
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
       // next-db-load: the mark of the copy HERE (the server's comes in its own key order: marked by it, the record was
       // sent again at every sync)
@@ -640,8 +639,8 @@ async function cloudApplyNow(rows){
       // a colleague's change to an invoice this computer's Undo covers: that Undo is taken away (it would bring back
       // their removed invoice, or write over their change: the review of a85572b8b)
       const u = S.sales && S.sales.cid === cid && S.sales.undo, vid = String(r.id).split(":").slice(1).join(":");
-      if (u && r.kind === "sales" && (u.before || []).some(o => o.id === vid)) S.sales.undo = null;
-      await cloudApplySales(r); touchedSales.add(cid);
+      if (u && r.kind === "sales" && (u.before || []).some(o => o.id === vid)){ S.sales.undo = null; if (typeof salesLightRefresh === "function") salesLightRefresh(); }
+      await cloudApplySales(r); touchedSales.add(cid); if (r.kind === "sales") salesIds.add(vid);
     }
   }
   keepMark.forEach((was, k) => { marks[k] = was; });
@@ -658,10 +657,12 @@ async function cloudApplyNow(rows){
       if (sameStmt){ if (S.bank.cur !== keep.cur && typeof openStatement === "function") await openStatement(keep.cur); S.bank.sel = new Set([...keep.sel].filter(id => S.bank.rows.some(r => r.id === id))); }
     }
   }
-  if (S.sales && touchedSales.has(S.sales.cid)){
-    // (read again in place: the page as it is stays drawn, src/js/25 loadSales)
-    await loadSales(S.sales.cid, S.sales);
-  }
+  // the Sales list open on screen: what the cloud changed is laid over the invoices it names, in place, now (in this
+  // turn of the sync, so a save after it keeps it); the page is drawn once the rows stop coming (src/js/25 loadSales,
+  // next-fix-sales-delete-shake: each of 22 removals coming back drew the loading page and back, the page shaking).
+  // A list still being read is read afresh (the newest read is the one drawn)
+  if (S.sales && touchedSales.has(S.sales.cid)) await (S.sales.loading ? loadSales(S.sales.cid) : loadSales(S.sales.cid, S.sales, salesIds));
+
   if (took) Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
   // how many rows changed something here (this computer's own saves coming back are not counted): the page is drawn again
   // only when one did (quiet refresh, 14-Oct-2026)
