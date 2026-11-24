@@ -16,9 +16,9 @@ import { load } from "../gst-run/data.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf, monthEndsIST, daysOfBooks } from "./nightinput.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { journals, payrollNow } from "../_shared/dailyjournals.js";
+import { journals, payrollNow, payrollMonths } from "../_shared/dailyjournals.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { existingNow, applyNow } from "./paynow.js";
+import { existingNow, applyNow, keepNow } from "./paynow.js";
 import { corsFor } from "../_shared/cors.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { message } from "../_shared/asks.js";
@@ -145,8 +145,12 @@ export function handler(deps: Deps) {
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }
+    // (review B2) the running month's payroll entry made with "Make the journal now": kept (the night does not make that
+    // month, and night_apply withdraws on a complete run what the run did not pass); not read: the night stops for the client
+    let keep: any[];
+    try { keep = await keepNow(rest, firm, cid, payrollMonths(today)); } catch { await fail("failed", "the payroll entries made now could not be read"); return { ok: false, error: "keep" }; }
     const version = String(book.book_id) + ":" + (b.vouchers || []).length + ":" + (book.ledgers_at || "");
-    const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings, p_entries: res.entries, p_complete: true, p_why: "" });
+    const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings, p_entries: res.entries.concat(keep), p_complete: true, p_why: "" });
     return { ok: true, night, counts };
   }
 

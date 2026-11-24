@@ -21,6 +21,10 @@ made-up books and sheets (tests/payroll_sheets.mjs), FinCom's AI mocked (window.
      payroll_now faked); made: said, opened on Daily Check › Entries; made already (by the night or the button): said and
      opened, no button; the running month: offered, with a plain note that it is not over; Tally Payroll: "Make the Tally
      Payroll entry now", then Approve on this page
+ 13. (review B1) a draft per month: rows typed for Oct, Cancel, "Change by hand" on a kept Sep, back to Oct: Oct's rows
+     still there; rows typed for Oct, Cancel, the Month picker to Sep, Enter by hand: Sep's rows; Oct's still there; no
+     question asked. "Change by hand" on a kept month keeps the employer's PF and ESI. A kept month with its journal made:
+     the "Replace them" confirm says "A journal is already made for Sep 2026. Replacing changes it."
 Screenshots (deviceScaleFactor 2, desktop 1440 and phone 390) into SHOTS (default scratchpad/shots-payroll). UI_PORT (8476)."""
 import os, sys, json, subprocess, threading, functools, http.server, tempfile
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -385,20 +389,80 @@ def now_flow(br, w, kind, nl):
     ok(pg.evaluate("() => window.__pr.posts") == 0, kind + " 12. nothing posted to Tally by making it")
     if w < 600: ok(noside(pg), kind + " 12. no sideways scroll")
     ctx.close()
+
+SEP = """() => { S.books.salary = [{name: "Asha Verma", code: "", pan: "", days: null, month: "202609", date: "2026-09-30", gross: 30000, tds: 0, profTax: 200, pf: 1800, esi: 0, net: 28000,
+    pfEr: 1800, esiEr: 975, earn: {Basic: 20000, HRA: 10000}, ded: {}, otherDed: 0, earnMapped: true, grossMapped: false, src: "manual"}]; render(); return true; }"""
+def draft_flow(br, w, kind, nl):
+    ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
+    if nl: ctx.add_init_script(NL_ON)
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
+    pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
+    pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
+    pg.evaluate(NOWMOCK); pg.evaluate(SEP); settle(pg, 300)
+    pg.click("[data-pick=journal]"); settle(pg, 250)
+    f = lambda i, k, v: pg.fill("[data-entry-row='%d'] input[aria-label='%s row %d']" % (i, k, i + 1), v)
+    row1 = lambda: pg.input_value("input[aria-label='Employee row 1']") if pg.locator("input[aria-label='Employee row 1']").count() else ""
+    def by_hand(month=None):
+        if month: pg.fill("[data-sheet-month] input[type=month]", month); settle(pg, 150)
+        pg.click("[data-manual]"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    def cancel(): pg.click("[data-manual-cancel]"); settle(pg, 200)
+    asked = lambda: pg.locator("[data-step=manual] .pr-warn, [role=dialog], [data-replace-warn]").count()
+    # case 1: Oct typed, Cancel, Change by hand on the kept Sep, back to Oct
+    by_hand("2026-10")
+    f(0, "Employee", "Ravi Kumar"); f(0, "Basic", "25,000"); f(0, "HRA", "10,000"); settle(pg, 200)
+    cancel()
+    pg.click("[data-kept-edit='202609']"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    ok(row1() == "Asha Verma" and asked() == 0, kind + " 13. case 1: Change by hand on Sep: Sep's rows kept, no question")
+    shot(pg, "18-draft-sep", kind)
+    cancel(); by_hand("2026-10")
+    ok(row1() == "Ravi Kumar" and pg.input_value("input[aria-label='Basic row 1']") in ("25,000", "25000"), kind + " 13. case 1: back to Oct: the rows typed for Oct still there")
+    # case 2: Oct typed (still), Cancel, the Month picker to Sep, Enter by hand
+    cancel(); by_hand("2026-09")
+    ok(row1() == "Asha Verma" and asked() == 0, kind + " 13. case 2: Month Sep, Enter by hand: Sep's rows, no question")
+    cancel(); by_hand("2026-10")
+    ok(row1() == "Ravi Kumar", kind + " 13. case 2: Oct's rows still there")
+    shot(pg, "19-draft-oct-kept", kind)
+    # the month picker inside the typing: to Sep (its own draft) and back, nothing lost
+    pg.fill("[data-step=manual] input[type=month]", "2026-09"); settle(pg, 200)
+    ok(row1() == "Asha Verma", kind + " 13. the month changed while typing, to a month with its own rows: that month's rows")
+    pg.fill("[data-step=manual] input[type=month]", "2026-10"); settle(pg, 200)
+    ok(row1() == "Ravi Kumar", kind + " 13. and back: Oct's rows")
+    # Change by hand on the kept Sep: the employer's PF and ESI kept; its journal made: said in the Replace confirm
+    cancel()
+    pg.evaluate("() => { window.__now.entries['202609'] = {id: '00000000-0000-4000-8000-000000000901', state: 'approved'}; return true; }")
+    pg.click("[data-kept-edit='202609']"); pg.wait_for_selector("[data-step=manual]"); settle(pg, 200)
+    f(0, "HRA", "11,000"); f(0, "Net", "29,000"); settle(pg, 200)
+    pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 500)
+    rw = pg.inner_text("[data-replace-warn]") if pg.locator("[data-replace-warn]").count() else ""
+    ok("A journal is already made for Sep 2026. Replacing changes it." in rw, kind + " 13. Sep's journal made: the Replace confirm says so plainly: " + rw[:160])
+    shot(pg, "20-replace-made", kind)
+    if pg.locator("[data-keep-sure]").count(): pg.click("[data-keep-sure]"); settle(pg, 400)
+    sal = [r for r in pg.evaluate("() => S.books.salary") if r.get("month") == "202609"]
+    ok(len(sal) == 1 and sal[0]["gross"] == 31000 and sal[0]["pfEr"] == 1800 and sal[0]["esiEr"] == 975, kind + " 13. Change by hand on Sep: the employer's PF 1,800 and ESI 975 kept: " + json.dumps([{k: r.get(k) for k in ("gross", "pfEr", "esiEr")} for r in sal]))
+    # Oct (no journal made): the confirm, when asked, does not say it
+    by_hand("2026-10")
+    ok(row1() == "Ravi Kumar", kind + " 13. Oct's rows still there after Sep was kept")
+    if w < 600: ok(noside(pg), kind + " 13. no sideways scroll")
+    ctx.close()
 with sync_playwright() as p:
     br = p.chromium.launch()
-    if not os.environ.get("ONLY8"): run(br, 1440, "desktop")
-    if not os.environ.get("ONLY8"): run(br, 390, "phone")
-    if not os.environ.get("ONLY11"):
+    O13 = os.environ.get("ONLY13")
+    if not O13 and not os.environ.get("ONLY8"): run(br, 1440, "desktop")
+    if not O13 and not os.environ.get("ONLY8"): run(br, 390, "phone")
+    if not O13 and not os.environ.get("ONLY11"):
         approve_flow(br, 1440, "desktop")
         approve_flow(br, 390, "phone")
-    if not os.environ.get("ONLY12"):
+    if not O13 and not os.environ.get("ONLY12"):
         hand_flow(br, 1440, "hand-classic", False)
         hand_flow(br, 1440, "hand-newlook", True)
         hand_flow(br, 390, "hand-phone", True)
-    now_flow(br, 1440, "now-classic", False)
-    now_flow(br, 1440, "now-newlook", True)
-    now_flow(br, 390, "now-phone", True)
+    draft_flow(br, 1440, "draft-classic", False)
+    draft_flow(br, 390, "draft-phone", True)
+    if not O13:
+        now_flow(br, 1440, "now-classic", False)
+        now_flow(br, 1440, "now-newlook", True)
+        now_flow(br, 390, "now-phone", True)
     br.close()
 ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
 print("FAILED: %d" % len(fails) if fails else "all passed")

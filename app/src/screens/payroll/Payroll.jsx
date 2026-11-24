@@ -146,7 +146,7 @@ function draftOf(rows) {
   const earn = Array.from(new Set(rows.flatMap((r) => Object.keys(r.earn || {})))), ded = Array.from(new Set(rows.flatMap((r) => Object.keys(r.ded || {}))));
   const s = (v) => (v == null || v === 0 || v === "" ? "" : String(v)), heads = { earn: earn.length ? earn : ["Gross"], ded };
   return { heads, t: rows.length ? rows.map((r) => ({ name: r.name || "", code: r.code || "", days: s(r.days), earn: earn.length ? Object.fromEntries(earn.map((h) => [h, s((r.earn || {})[h])])) : { Gross: s(r.gross) },
-    ded: Object.fromEntries(ded.map((h) => [h, s((r.ded || {})[h])])), tds: s(r.tds), pt: s(r.profTax), pf: s(r.pf), esi: s(r.esi), net: s(r.net) })) : [{}] };
+    ded: Object.fromEntries(ded.map((h) => [h, s((r.ded || {})[h])])), tds: s(r.tds), pt: s(r.profTax), pf: s(r.pf), esi: s(r.esi), net: s(r.net), pfEr: s(r.pfEr), esiEr: s(r.esiEr) })) : [{}] };
 }
 const BLANK = { heads: { earn: ["Basic", "HRA"], ded: [] }, t: [{}] };
 function Manual({ ym, setYm, onDone, draft, setDraft, onCancel }) {
@@ -321,7 +321,7 @@ function KeptMonths({ list, onOpen, onEdit }) {
 
 // ---------------------------------------------------------------- the page
 export default function PayrollPage() {
-  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [draft, setDraft] = useState(null), [, kick] = useState(0), [made, setMade] = useState(false), [tick, setTick] = useState(0);
+  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [drafts, setDrafts] = useState({}), [sureMade, setSureMade] = useState(null), [, kick] = useState(0), [made, setMade] = useState(false), [tick, setTick] = useState(0);
   useEffect(() => { let on = true; import("../../lib/asstEntries.js").then((A) => A.clientLedgers(co)).then((l) => { if (on && l) setLedgers(l.map((x) => x.name)); }).catch(() => {}); return () => { on = false; }; }, [co && co.id]);
   useEffect(() => { if (co && !(S.books && S.books.cid === co.id) && typeof openBooks === "function") Promise.resolve(openBooks(co.id)).then(() => kick((x) => x + 1), () => {}); }, [co && co.id]);
   if (!co) return null;
@@ -345,16 +345,35 @@ export default function PayrollPage() {
   const rows = st && st.step === "read" ? st.rows : null, chk = rows ? PS.check(rows) : null, month = chk ? chk.months[0] || "" : "";
   // (review 7) a month kept before (for 24Q too) is replaced only once the person has seen it said
   const was = rows && !kept ? PS.replacing(books().salary, rows) : { n: 0 };
+  // (review) the month's entry already made or approved: the confirm says so (looked up as it is asked; Replace waits for it)
   const keep = async () => {
-    if (was.n && !sure) { setSure(true); return; }
-    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); if (st && st.how === "manual") setDraft(null); say(rows.length + " employee" + (rows.length === 1 ? "" : "s") + " kept for " + PS.monLabel(month) + ".");
+    if (was.n && !sure) {
+      setSure(true); setSureMade(cloudOn() ? undefined : null);
+      if (cloudOn()) madeOf(co.id, month).then((x) => setSureMade(x && x.state !== "rejected" ? x : null), () => setSureMade(null));
+      return;
+    }
+    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); if (st && st.how === "manual") putDraft(month, null); say(rows.length + " employee" + (rows.length === 1 ? "" : "s") + " kept for " + PS.monLabel(month) + ".");
   };
-  // by hand: the draft typed so far, else the month's rows typed in and kept with the books (to change), else a blank row;
-  // a month kept from a sheet is changed by hand from its own line (Change by hand)
+  // by hand: a draft per month (review B1), so nothing typed is lost and nothing is asked: the month's own draft typed so
+  // far, else the rows given (Change by hand on a month kept, from a sheet too), else the month's rows typed in and kept
+  // with the books, else a blank row
+  const draft = drafts[ym] || null;
+  const putDraft = (m, d) => setDrafts((o) => { const n = Object.assign({}, o); if (d) n[m] = d; else delete n[m]; return n; });
+  const typed = (d) => !!(d && d.t.some((x) => String(x.name || "").trim()));
+  const keptDraft = (m, rows0) => { const r = rows0 || (keptMonths(books().salary).find((x) => x.ym === m) || {}).rows; return r && (rows0 || r.every((x) => x.src === "manual")) ? draftOf(r) : null; };
   const openManual = (m, rows0) => {
-    const k = m || ym, has = draft && draft.t.some((x) => String(x.name || "").trim());
-    if (rows0) setDraft(draftOf(rows0)); else if (!has || (draft.ym && draft.ym !== k)) { const r = (keptMonths(books().salary).find((x) => x.ym === k) || {}).rows; setDraft(r && r.every((x) => x.src === "manual") ? draftOf(r) : null); }
+    const k = m || ym;
+    if (!typed(drafts[k])) putDraft(k, keptDraft(k, rows0));
     setYm(k); setSt(null); setKept(false); setSure(false); setManual(true);
+  };
+  // the month changed while typing: the rows typed go with it, unless that month has rows of its own (then they are shown,
+  // and these stay with their month)
+  const manualMonth = (m) => {
+    if (!/^\d{6}$/.test(m) || m === ym) return;
+    const cur = drafts[ym];
+    if (!typed(drafts[m]) && typed(cur)) setDrafts((o) => { const n = Object.assign({}, o); n[m] = cur; delete n[ym]; return n; });
+    else if (!typed(drafts[m])) putDraft(m, keptDraft(m) || (cur ? { heads: cur.heads, t: [{}] } : null));
+    setYm(m);
   };
   const openKept = (m, r) => { setManual(false); setYm(m); setSure(false); setSt({ step: "read", rows: r, skipped: [], how: "kept", rule: null }); setKept(true); };
   const kept0 = keptMonths(books().salary);
@@ -376,11 +395,11 @@ export default function PayrollPage() {
       <span className="note">{(co.payrollFormats || []).filter((r) => !r.deleted).length} saved layout{(co.payrollFormats || []).filter((r) => !r.deleted).length === 1 ? "" : "s"}</span>
     </section>}
     {st && st.step === "map" && (st.busy ? <section className="pr-card"><p className="pr-line note">Reading the columns…</p></section> : <MapStep st={st} setSt={setSt} co={co} />)}
-    {manual && <Manual ym={ym} setYm={(m) => { setYm(m); setDraft(Object.assign({}, draft || BLANK, { ym: m })); }} draft={draft} setDraft={(d) => setDraft(Object.assign({ ym }, d))} onCancel={() => setManual(false)}
+    {manual && <Manual ym={ym} setYm={manualMonth} draft={draft} setDraft={(d) => putDraft(ym, d)} onCancel={() => setManual(false)}
       onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
     {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} method={method} made={made} />}
     {rows && kept && chk.ok && method && month && cloudOn() && canWrite() && <MakeNow co={co} ym={month} tally={method === "tally" && !once} onState={(m, fresh) => { setMade(m); if (fresh) setTick((x) => x + 1); }} />}
-    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
+    {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{sureMade ? " A " + (method === "tally" && !once ? "Tally Payroll entry" : "journal") + " is already made for " + PS.monLabel(month) + ". Replacing changes it." : ""}{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" disabled={sureMade === undefined} onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
     {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} tick={tick} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}

@@ -5,6 +5,8 @@
 // service-role PostgREST call.
 //   existingNow(rest, firm, cid, ym)  the month's entry already made (by the night or this button), or null
 //   applyNow({rest, firm, cid, night, by}, res)  -> {kind: made | already | you | kept | none, id?, state?}
+//   keepNow(rest, firm, cid, months)  (review B2) for tonight's run: the entries made now for a month the night does not
+//     make itself (the running month), as dedupes for night_apply to keep
 const enc = encodeURIComponent;
 const LIVE = ["ready", "held", "approving", "approved", "rejected"];
 const where = (firm, cid) => "firm_id=eq." + enc(firm) + "&client_id=eq." + enc(cid);
@@ -64,4 +66,20 @@ export async function applyNow(ctx, res) {
   }
   await log("payroll_now", id, { ym, by, kind: "made", ready: !!e.ready });
   return { kind: "made", id, state: row.state };
+}
+
+// (review B2) night_apply (migration 207) withdraws, on a complete run, every ready or held entry whose dedupe the run did not
+// pass, and the night makes only the months that have ended (months: dailyjournals.js payrollMonths): the running month's
+// entry made with the button would be withdrawn the same night. The night passes these with its own entries: a dedupe only
+// (no finding_key, so night_apply makes and counts nothing of it, it only keeps it). Ready or held only: an approved one is
+// never withdrawn, and one passed would be put back as ready. A month the night makes itself stays the night's to keep or
+// withdraw. Not read: thrown (the night stops for the client rather than withdraw it unseen)
+export async function keepNow(rest, firm, cid, months) {
+  const last = (months || []).slice().sort().pop() || "";
+  const rows = await rest("/rest/v1/night_entries?select=dedupe,state&" + where(firm, cid) + "&dedupe=like." + enc("payroll:*") + "&state=in.(ready,held)");
+  if (!Array.isArray(rows)) throw new Error("the payroll entries could not be read");
+  const out = [];
+  rows.forEach((r) => { const m = /^payroll:(\d{6})$/.exec(String((r && r.dedupe) || ""));
+    if (m && m[1] > last && (r.state === "ready" || r.state === "held") && !out.some((x) => x.dedupe === r.dedupe)) out.push({ dedupe: r.dedupe }); });
+  return out;
 }

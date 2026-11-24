@@ -6,11 +6,15 @@
 //   3. kept in the cloud as the night keeps it (server/assistant-night/paynow.js, a stand-in database): the finding and
 //      the entry once; never twice (an entry already there is said and opened); a person's choice on the finding stays;
 //      a withdrawn entry made again; nothing in night_runs (tonight's run is not touched)
+//   4. (review B2) the running month's entry made now is left alone by tonight's run: the night passes its dedupe to
+//      night_apply as one to keep (keepNow: ready or held only, never one approved; the months the night makes itself are
+//      the night's own to keep or withdraw). night_apply itself on a real PostgreSQL: tests/run_payroll_now_night.py
 import { booksOf, gstOf, nightInput } from "../server/assistant-night/nightinput.js";
 import * as J from "../server/_shared/dailyjournals.js";
 import { sheetMonth } from "../server/_shared/nightchecks.js";
 import { gstRows, head, L, keepFiled } from "./daily2_books.mjs";
-import { existingNow, applyNow } from "../server/assistant-night/paynow.js";
+import * as PN from "../server/assistant-night/paynow.js";
+const { existingNow, applyNow } = PN;
 
 let fails = 0, n = 0;
 const ok = (c, w) => { n++; console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -104,6 +108,23 @@ const F = "11111111-1111-4111-8111-111111111111";
   const y = J.payrollNow("202610", input(pay({ more: [{ date: "2026-10-31", lines: [["Salary", -90000], ["Salary Payable", 90000]] }] }))), cy = cloud();
   const ya = await applyNow({ rest: cy.rest, firm: F, cid: "c1", night: "2026-11-23", by: "u1" }, y);
   ok(ya.kind === "you" && cy.db.night_entries.length === 0 && cy.db.night_findings[0].state === "you", "Needs you: the finding kept for Daily Check, no entry");
+}
+
+console.log("4. tonight's run leaves the running month's entry alone (keepNow)");
+{
+  ok(typeof PN.keepNow === "function", "keepNow is there for the night");
+  if (typeof PN.keepNow === "function") {
+    const months = J.payrollMonths("20261124"), E = (ym, state, x = {}) => Object.assign({ id: "e" + ym + state, firm_id: F, client_id: "c1", dedupe: "payroll:" + ym, state, source: "payroll", decided_by: null }, x);
+    const c = cloud({ entries: [E("202611", "ready"), E("202610", "ready"), E("202612", "held"), Object.assign(E("202611", "approved"), { dedupe: "payroll:202611x" }), E("202611", "ready", { client_id: "c2", id: "other" }), Object.assign(E("202611", "ready"), { dedupe: "setoff:x:202611", id: "so" })] });
+    const k = await PN.keepNow(c.rest, F, "c1", months);
+    ok(same(k.map((e) => e.dedupe).sort(), ["payroll:202611", "payroll:202612"]), "kept: the running month's (and a later month's) payroll entry, ready or held; never a month the night makes, another client's or another kind: " + JSON.stringify(k.map((e) => e.dedupe)));
+    ok(k.every((e) => !e.finding_key && !e.voucher), "each one only a dedupe to keep: night_apply makes nothing of it");
+    const a = cloud({ entries: [E("202611", "approved")] });
+    ok((await PN.keepNow(a.rest, F, "c1", months)).length === 0, "an approved one is not passed (night_apply would put an approval back as ready)");
+    const bad = async () => { throw new Error("HTTP 500"); };
+    let threw = false; try { await PN.keepNow(bad, F, "c1", months); } catch (e) { threw = true; }
+    ok(threw, "not read: said (the night stops for the client, never withdraws it unseen)");
+  }
 }
 
 console.log(fails ? "\n" + fails + " of " + n + " FAILED" : "\nall " + n + " passed");
