@@ -727,7 +727,8 @@ function customerMasterXml(l){
 function customerFromText(text, custGstin, co){
   const lines = String(text || "").split(/\n/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
   const bad = l => /gstin|gst\s*no|pan\b|address|place\s*of|state\b|phone|mobile|email|invoice|date|^\d|pin\s*code|\b\d{6}\b|tax\s*invoice|original|duplicate/i.test(l) || normName(l) === normName(co.name) || l.length < 3;
-  const clean = l => l.replace(/^(bill(ed)?\s*to|buyer|customer|consignee|party|ship(ped)?\s*to|details\s+of\s+receiver)\s*(\(.*?\))?\s*[:\-]?\s*/i, "").replace(/^m\/s\.?\s*/i, "").trim();
+  // (the invoice's own details beside the name on the same line, as Zoho prints "Terms : Due on Receipt": not the name)
+  const clean = l => l.replace(/^(bill(ed)?\s*to|buyer|customer|consignee|party|ship(ped)?\s*to|details\s+of\s+receiver)\s*(\(.*?\))?\s*[:\-]?\s*/i, "").replace(/^m\/s\.?\s*/i, "").replace(/\s+(terms|due\s*date|invoice\s*(date|no\.?|#)|p\.?\s*o\.?\s*#?|balance\s*due)\s*[:#].*$/i, "").trim();
   const at = lines.findIndex(l => /^(bill(ed)?\s*to|buyer|customer|consignee|details\s+of\s+receiver)\b/i.test(l));
   if (at >= 0){
     const same = clean(lines[at]);
