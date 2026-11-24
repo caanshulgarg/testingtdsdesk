@@ -256,7 +256,12 @@ async function salesCheckTally(list, call){
   // type, "Sales UP", is not known before), the Sales-class ones kept here (salesTypeClasses)
   const cfg = SL().cfg, lc = s => String(s || "").toLowerCase().trim(), notes = [cfg.creditNoteType || "Credit Note", cfg.debitNoteType || "Debit Note", "Credit Note", "Debit Note"];
   const got = await salesVouchersIn(co, addDays(dates[0], -1), addDays(dates[dates.length - 1], 1), call);
-  const all = got.filter(v => !/^yes$/i.test(v.cancelled || ""));
+  // (never a cancelled or an Optional voucher: not in the books, the owner's case of 24-Nov-2026)
+  const all = got.filter(v => !/^yes$/i.test(v.cancelled || "") && !/^yes$/i.test(v.optional || ""));
+  // the copy's last read (as salesCopyAt): a voucher of a copy not read since FinCom's own earlier posting of that entry
+  // is no evidence by itself; the earlier posting then is, and only when Tally confirmed it as a regular voucher
+  const bk = typeof dupCopy === "function" && call === dupCopy && typeof TCloud === "object" && TCloud.book ? TCloud.book(co.id) : null, bst = (bk && bk.state) || {};
+  const copyAt = bk ? Math.max(0, ...[bst.readAt, bst.seen, bk.daysAt].map(x => Date.parse(x || "") || 0)) : Infinity;
   const own = list.filter(v => !v.x.noteKind).map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales");
   const isInv = salesTypeClasses(own), noteTypes = new Set(notes.concat(list.filter(v => v.x.noteKind).map(v => salesVt(v.x))).map(lc));
   const vs = all.filter(x => !x.type || isInv(x.type) || noteTypes.has(lc(x.type)) || own.some(t => lc(t) === lc(x.type)));
@@ -281,7 +286,11 @@ async function salesCheckTally(list, call){
     // invoice: nothing holds it, it is posted. Nor the Tally entry of a FinCom invoice a person said is not this one
     const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
     const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
-    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""}; return salesSameEntry(me, e, isInv) && !gone.some(g => salesSameEntry(g, e, isInv)); });
+    const prior = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id));
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""};
+      if (!salesSameEntry(me, e, isInv) || gone.some(g => salesSameEntry(g, e, isInv))) return false;
+      const was = prior.filter(o => salesSameEntry(salesEntryOf(o), e, isInv) && Date.parse(o.postedAt || "") >= copyAt);
+      return !was.length || was.some(salesInBooks); });
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (had) mapInvoice(v);
   });
@@ -307,11 +316,10 @@ async function salesVouchersIn(co, from, to, call){
 // whether a voucher type of Tally's answer is of the Sales class, for an invoice: the client's own sales type (Sales
 // settings, the invoices' own), Tally's "Sales", or a type with "sales" in its name; never a Journal, Receipt, Payment,
 // Contra, a note, a return or an order, whatever its entries; nor a type with any of those words in its name ("Sales CN",
-// "Sales Journal", "Sales Advance Receipt": never a sale, review of 03ffa5eed)
+// "Sales Journal", "Sales Advance Receipt", "Sales Rtn": SALES_NOT_SALE)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  const never = /\b(?:journal|receipts?|payments?|contra|notes?|cn|dn|credit|debit|returns?)\b|return|order|quotation|delivery|memo/i;
-  return t => { const n = lc(t); if (!n || never.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
+  return t => { const n = lc(t); if (!n || SALES_NOT_SALE.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's

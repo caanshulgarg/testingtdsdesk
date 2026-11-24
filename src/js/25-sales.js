@@ -579,7 +579,8 @@ function salesSameEntry(a, b, isInv){
   if (!up(a.gstin) || !up(b.gstin)) return same && !!lc(a.party) && lc(a.party) === lc(b.party);
   if (up(a.gstin) !== up(b.gstin)) return false;
   if (same) return true;
-  if (salesOwnGstins().length > 1 || (up(a.seller) && up(b.seller) && up(a.seller) !== up(b.seller))) return false;
+  // (several registrations: only when both sellers are known and the same; one registration: unless they differ)
+  if (up(a.seller) && up(b.seller) ? up(a.seller) !== up(b.seller) : salesOwnGstins().length > 1) return false;
   const cls = isInv || salesTypeClasses([].concat((SL() && SL().cfg || {}).voucherType || []));
   return !a.note && !b.note && cls(a.type) && cls(b.type);
 }
@@ -587,22 +588,31 @@ function salesSameEntry(a, b, isInv){
 function salesEntryOf(v){ return {no: normInvNo(v.x.number), type: (v.status === "intally" && v.tallyMatch && v.tallyMatch.type) || salesVt(v.x), date: v.x.date, amount: Math.abs(num(v.x.total)), gstin: v.x.customerGstin, party: v.customerLedger, note: !!v.x.noteKind, seller: v.x.sellerGstin || ""}; }
 // the entries a person said are not this invoice's (Not this Tally entry): on it, and kept for its number (cfg.notTally)
 function salesNotOf(v){ return (v.notTally || []).concat(((SL().cfg || {}).notTally || {})[normInvNo(v.x.number)] || []); }
+// (the owner's case, 24-Nov-2026: an Optional voucher deleted in Tally, the invoice uploaded again, was marked In Tally)
+// a FinCom invoice really in the books: posted with Tally's own answer (never a file only), not as an Optional voucher, or
+// found in Tally itself (not In Tally only because of another FinCom invoice, "fincom:")
+function salesInBooks(o){ return !!o && !o.postedOptional && ((o.status === "posted" && o.postedVia !== "file") || (o.status === "intally" && !!o.tallyMatch && !/^fincom:/.test(o.tallyMatch.key || ""))); }
 // the same entry posted from FinCom (salesSameEntry), posted or found in Tally: {src, type, number, date, amount, party,
 // id}, or null; never one a person said is not it ("fincom:" + its id). Never a hold: salesCheckSafe marks it In Tally quietly
 function salesDupOf(v){
   if (!v || !["review", "ready"].includes(v.status)) return null;
   const e = salesEntryOf(v); if (!e.no || !e.date) return null;
   const not = salesNotOf(v);
-  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id) && !(o.tallyMatch && o.tallyMatch.key && not.includes(o.tallyMatch.key)) && salesSameEntry(e, salesEntryOf(o)));
+  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && salesInBooks(o) && !not.includes("fincom:" + o.id) && !(o.tallyMatch && o.tallyMatch.key && not.includes(o.tallyMatch.key)) && salesSameEntry(e, salesEntryOf(o)));
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), party: o.customerLedger || o.x.customerName || "", id: o.id} : null;
 }
+// a voucher type that is never a sale, by a word of its name (spaces, "_", "-", brackets between words): a credit or
+// debit note (also "Cr Note", "Dr Note", CN, DN), a return (Rtn, Ret), a Journal, a receipt, a payment, a contra, an
+// order, a quotation, a delivery note or a memo. "Credit" or "Debit" alone is a sale ("Credit Sales", "Sales (Credit)");
+// salesBooksVts and salesTypeClasses use this one test (reviews of 03ffa5eed and ab2f0a96e)
+const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|cn|dn|journals?|receipts?|payments?|returns?|rtn|ret|contra|orders?|quotations?|delivery|memo)(?=$|[^a-z0-9])/i;
 // next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already
 // reads (the client's books): the Sales-class type most used, the default for uploads, shown as "(from your Tally)"; a
 // type a person typed in Sales settings stands (cfg.vtBy "you"), and when the books use more than one in real use the
 // person is asked once (cfg.vtBy "asked")
 function salesBooksVts(){
   const s = SL(), bk = S.books && s && S.books.cid === s.cid ? S.books : null; if (!bk) return [];
-  const n = new Map(), never = /note|return|order|quotation|delivery|memo|journal|receipt|payment|contra/i;
+  const n = new Map(), never = SALES_NOT_SALE;
   (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || never.test(t) || !/\bsales\b/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
   const all = Array.from(n.entries()).sort((a, b) => b[1] - a[1]), tot = all.reduce((a, x) => a + x[1], 0);
   // (in real use: at least 3 vouchers and a twentieth of the client's sales)

@@ -64,8 +64,8 @@ DUPW = ["Post duplicate anyway", "Post again anyway?"]
 NODUP = lambda t: not any(w in t for w in DUPW)
 QUIET = lambda t: NOTE not in t and "Looks already" not in t and "Post anyway" not in t and NODUP(t) and "Checked against" not in t
 PAGE = "() => document.querySelector('#app').innerText + ' | ' + window.__toasts.join(' | ') + ' | ' + JSON.stringify(SL().list.map(v => [v.problems || [], v.postError || ''])) + ' | ' + JSON.stringify((SL().oneByOne || {}).rows || [])"
-def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail", gstin="", cmp=""):
-    return "{guid: 'g-%s', masterId: '%s', date: '%s', %s%s%snumber: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", ("partyGstin: '%s', " % gstin) if gstin else "", ("cmpGstin: '%s', " % cmp) if cmp else "", n, party, party, amt)
+def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail", gstin="", cmp="", opt="No", can="No"):
+    return "{guid: 'g-%s', masterId: '%s', date: '%s', %s%s%snumber: '%s', party: '%s', optional: '%s', cancelled: '%s', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", ("partyGstin: '%s', " % gstin) if gstin else "", ("cmpGstin: '%s', " % cmp) if cmp else "", n, party, opt, can, party, amt)
 def sfresh(A, *nos, d="2026-11-02"):
     A.evaluate("() => { SL().list = []; SL().dupSkipped = []; SL().oneByOne = null; }"); A.evaluate(RESET)
     return [A.evaluate(ADD, [n, d, G["k"], 0]) for n in nos]
@@ -84,7 +84,7 @@ BANK = """async () => {
     showSettings: false, q: "", limit: 500, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
   try { localStorage.setItem(wideCheckKey(), String(Date.now())); } catch (e){}
   render(); return c.id; }"""
-def bv(no, d, amt): return "{guid: 'gb-%s', masterId: '%s', date: '%s', type: 'Receipt', number: '%s', party: 'Sundry Receipts', narration: 'by hand', cancelled: 'No', entries: [{ledger: 'Zeta Bank', amount: '-%s'}, {ledger: 'Sundry Receipts', amount: '%s'}]}" % (no, no, d, no, amt, amt)
+def bv(no, d, amt, opt="No", can="No"): return "{guid: 'gb-%s', masterId: '%s', date: '%s', type: 'Receipt', number: '%s', party: 'Sundry Receipts', narration: 'by hand', optional: '%s', cancelled: '%s', entries: [{ledger: 'Zeta Bank', amount: '-%s'}, {ledger: 'Sundry Receipts', amount: '%s'}]}" % (no, no, d, no, opt, can, amt, amt)
 BST = "() => B().rows.map(r => ({id: r.id, st: r.state, err: r.postError || ''}))"
 def bfresh(A, n=3):
     A.evaluate("(n) => { const b = B(); b.rows = window.__bankRows(n); b.postedTags = {}; b.postReport = null; b.tallyLook = null; b.books = {}; S.dupFind = null; }", n); A.evaluate(RESET)
@@ -101,7 +101,7 @@ BILLS = """async () => {
     e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); return e; };
   window.postReconcile = () => 0; window.postJobStates = () => new Map(); window.remoteIdTrial = () => false; window.autoPostTo = async () => {};
   refreshStats(c.id); goStep("post", "bills"); render(); return c.id; }"""
-def billv(no, party, amt): return "{guid: 'gp-%s', masterId: '1%s', date: '20260701', type: 'Journal', number: 'J-%s', reference: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '%s'}]}" % (no, len(no), no, no, party, party, amt)
+def billv(no, party, amt, opt="No", can="No"): return "{guid: 'gp-%s', masterId: '1%s', date: '20260701', type: 'Journal', number: 'J-%s', reference: '%s', party: '%s', optional: '%s', cancelled: '%s', entries: [{ledger: '%s', amount: '%s'}]}" % (no, len(no), no, no, party, opt, can, party, amt)
 EST = "(ids) => ids.map(id => { const e = D().entries[id]; return {id, sent: !!e.exportedAt, note: e.postNote || '', vch: e.tallyVchNo || ''}; })"
 def billfresh(A, *spec):
     A.evaluate("() => { Object.keys(D().entries).forEach(k => delete D().entries[k]); S.billPost = null; }"); A.evaluate(RESET)
@@ -325,8 +325,8 @@ with sync_playwright() as p:
     A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
 
     print("SALES 14. never a note, a return, a Journal or a receipt by any word of its type; several registrations: the exact type")
-    for i, t in enumerate(["Sales CN", "Sales DN", "Sales Journal", "Sales Advance Receipt", "Sales Credit Note", "Debit Sales", "Sales Returns", "Payment Sales"]):
-        a, st, sent = one("ZS/10%d" % i, G["k"], sv("ZS/10%d" % i, typ=t))
+    for i, t in enumerate(["Sales CN", "Sales DN", "Sales Journal", "Sales Advance Receipt", "Sales Credit Note", "Sales Rtn", "Sales Returns", "Payment Sales", "Sales Cr Note", "Sales_Ret"]):
+        a, st, sent = one("ZS/1%02d" % i, G["k"], sv("ZS/1%02d" % i, typ=t))
         ok(st == "posted" and sent == [[a]], "cloud copy: '%s', the same GSTIN: never the sale, posted (%s)" % (t, st))
     a, st, sent = one("ZS/110", G["k"], sv("ZS/110", typ="Sales UP", cmp=G["up"]))
     ok(st == "intally Sales UP", "cloud copy: 'Sales UP' issued from the client's own GSTIN, one registration: In Tally (%s)" % st)
@@ -345,8 +345,15 @@ with sync_playwright() as p:
     ok(st == "posted" and sent == [[a]], "cloud copy: the client with two registrations, 'Sales UP' against 'Sales': the exact type, posted (%s)" % st)
     a, st, sent = one("ZS/114", G["k"], sv("ZS/114", typ="Sales"))
     ok(st == "intally Sales", "cloud copy: two registrations, the exact type: In Tally (%s)" % st)
+    a, st, sent = one("ZS/117", G["k"], sv("ZS/117", typ="Sales UP", cmp=G["up"]))
+    ok(st == "intally Sales UP", "cloud copy: two registrations, both issued from the UP GSTIN, 'Sales' against 'Sales UP': In Tally (%s)" % st)
     a, st, sent = own("ZS/115", G["k"])
-    ok(st == "posted" and sent == [[a]], "FinCom's own: two registrations, 'Sales UP' In Tally against 'Sales': posted (%s)" % st)
+    ok(st == "intally", "FinCom's own: two registrations, both invoices from the UP GSTIN, 'Sales UP' In Tally against 'Sales': In Tally (%s)" % st)
+    ids = sfresh(A, "ZS/118")
+    A.evaluate("(id) => { const p = SL().list.find(v => v.id === id); p.status = 'intally'; p.x.sellerGstin = ''; p.tallyMatch = {key: 'k-' + id, number: p.x.number, type: 'Sales UP', date: '20261102'}; }", ids[0])
+    a = A.evaluate(ADD, ["ZS/118", "2026-11-02", G["k"], 0])
+    A.evaluate("() => { window.__cloud.vouchers = []; postSalesToTally(); }"); A.wait_for_timeout(700)
+    ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "posted", "FinCom's own: two registrations, the seller of the one In Tally not known: posted (%s)" % A.evaluate(SST1, a))
     A.evaluate("() => { CO().otherGstins = ''; }")
     ids = sfresh(A, "ZS/116")
     A.evaluate("([id, g]) => { const p = SL().list.find(v => v.id === id); p.status = 'intally'; p.x.sellerGstin = g; p.tallyMatch = {key: 'k-' + id, number: p.x.number, type: 'Sales UP', date: '20261102'}; }", [ids[0], G["up2"]])
@@ -354,6 +361,40 @@ with sync_playwright() as p:
     A.evaluate("([id, g]) => { const v = SL().list.find(v => v.id === id); v.x.sellerGstin = g; mapInvoice(v); window.__cloud.vouchers = []; }", [a, G["up"]])
     A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
     ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "posted", "FinCom's own: another seller GSTIN, 'Sales UP' against 'Sales': posted (%s)" % A.evaluate(SST1, a))
+
+    print("SALES 14b. 'Credit' or 'Debit' alone is a sale")
+    for i, t in enumerate(["Credit Sales", "Sales on Credit", "Sales - Credit", "Sales (Credit)", "Debit Sales"]):
+        a, st, sent = one("ZS/13%d" % i, G["k"], sv("ZS/13%d" % i, typ=t))
+        ok(st == "intally " + t, "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally (%s)" % (t, st))
+
+    print("SALES 15. an entry not really in the books never makes a new upload the same entry (an Optional voucher deleted in Tally)")
+    a, st, sent = one("ZS/120", G["k"], sv("ZS/120", opt="Yes"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: an Optional voucher of the same number, amount, year and customer: posted (%s)" % st)
+    a, st, sent = one("ZS/121", G["k"], sv("ZS/121", can="Yes"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: a cancelled voucher of the same entry: posted (%s)" % st)
+    a, st, sent = one("ZS/122", G["k"], sv("ZS/122"))
+    ok(st == "intally Sales", "cloud copy: a regular voucher of the same entry: In Tally (%s)" % st)
+    def earlier(n, how, copy="", copyAt=None):
+        ids = sfresh(A, n)
+        A.evaluate("([id, how]) => { const p = SL().list.find(v => v.id === id); p.status = 'posted'; p.postedAt = new Date(Date.now() - 3600000).toISOString(); if (how === 'optional') p.postedOptional = true; if (how === 'file') p.postedVia = 'file'; }", [ids[0], how])
+        a = A.evaluate(ADD, [n, "2026-11-02", G["k"], 0])
+        A.evaluate("([c, at]) => { window.__cloud.vouchers = c ? [eval('(' + c + ')')] : []; window.__cloud.at = at === null ? new Date().toISOString() : new Date(Date.now() - at * 60000).toISOString(); }", [copy, copyAt])
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        r = A.evaluate("(id) => SL().list.find(v => v.id === id).status", a), A.evaluate("() => window.__sent") == [[a]]
+        A.evaluate("() => { window.__cloud.at = new Date().toISOString(); window.__cloud.vouchers = []; }")
+        return r
+    st, sent = earlier("ZS/123", "optional")
+    ok(st == "posted" and sent, "FinCom's own: the earlier posting went in as an Optional voucher: the upload again is posted (%s)" % st)
+    st, sent = earlier("ZS/124", "optional", copy=sv("ZS/124", opt="Yes"))
+    ok(st == "posted" and sent, "FinCom's own Optional posting, the copy still holding the Optional voucher: posted (%s)" % st)
+    st, sent = earlier("ZS/125", "file")
+    ok(st == "posted" and sent, "FinCom's own: the earlier one only exported to a file, never confirmed in Tally: posted (%s)" % st)
+    st, sent = earlier("ZS/126", "regular")
+    ok(st == "intally" and not sent, "FinCom's own: the earlier posting confirmed by Tally as a regular voucher: In Tally (%s)" % st)
+    st, sent = earlier("ZS/127", "file", copy=sv("ZS/127"), copyAt=120)
+    ok(st == "posted" and sent, "the copy last read before the earlier posting (not confirmed): its voucher is no evidence, posted (%s)" % st)
+    st, sent = earlier("ZS/128", "file", copy=sv("ZS/128"), copyAt=None)
+    ok(st == "intally", "the copy read after the earlier posting holds a regular voucher: In Tally (%s)" % st)
 
     print("SALES 11. the duplicate check's line on the invoice: the info tone, not amber")
     sfresh(A, "ZS/50")
@@ -404,6 +445,13 @@ with sync_playwright() as p:
     A.evaluate("() => { B().filter = 'all'; render(); }"); A.wait_for_timeout(600)
     ok("Post anyway" not in A.inner_text("#app") and "Looks already in Tally" not in A.inner_text("#app"), "no warning on the page")
 
+    print("BANK 2b. an Optional or cancelled voucher in the copy: the line posted")
+    for label, kw in [("Optional", {"opt": "Yes"}), ("cancelled", {"can": "Yes"})]:
+        bfresh(A)
+        A.evaluate("() => { window.__cloud.vouchers = [" + bv("R-78", "20260903", "2100.00", **kw) + "]; }")
+        A.evaluate("() => postBankToTally()"); A.wait_for_timeout(900)
+        st = A.evaluate(BST)
+        ok([x["st"] for x in st] == ["sent"] * 3, label + ": all three posted (%s)" % st)
     print("BANK 3. the copy cannot be read: posted, nothing said")
     for label, cl in [("no copy", "{has: false, fail: false, at: '', vouchers: []}"), ("the copy does not answer", "{has: true, fail: true, at: new Date().toISOString(), vouchers: []}")]:
         bfresh(A, 2)
@@ -432,6 +480,13 @@ with sync_playwright() as p:
     ok(A.evaluate(TALLY_READS) == [] and not A.evaluate("() => S.billPost.checkNote"), "Tally not read, no note")
     ok("Post anyway" not in A.inner_text("#app") and "Looks already in Tally" not in A.inner_text("#app"), "no warning on the page")
 
+    print("BILLS 2b. an Optional or cancelled voucher in the copy: the bill posted")
+    for k, (label, kw) in enumerate([("Optional", {"opt": "Yes"}), ("cancelled", {"can": "Yes"})]):
+        pid, no = "p%d" % (7 + k), "A/9%d" % k
+        billfresh(A, (pid, "Alpha Consultants", no, 30000))
+        A.evaluate("() => { window.__cloud.vouchers = [" + billv(no, "Alpha Consultants", "27000.00", **kw) + "]; }")
+        A.evaluate("() => postBillsToTally()"); A.wait_for_timeout(900)
+        ok(A.evaluate("() => window.__sent") == [[pid]], label + ": sent (%s | %s | %s)" % (A.evaluate("() => window.__sent"), A.evaluate(EST, [pid]), last(A)))
     print("BILLS 3. the copy cannot be read: posted, nothing said")
     for k, (label, cl) in enumerate([("no copy", "{has: false, fail: false, at: '', vouchers: []}"), ("the copy does not answer", "{has: true, fail: true, at: new Date().toISOString(), vouchers: []}")]):
         billfresh(A, ("p6", "Alpha Consultants", "A/3%d" % k, 30000))

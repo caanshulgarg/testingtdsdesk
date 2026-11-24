@@ -1115,6 +1115,8 @@ async function postBankToTally(ids){
     let pre = null;
     b.busy = "Looking at " + acc.ledger + " in FinCom\u2019s copy of Tally before posting\u2026"; render();
     try { pre = await dupCopy(co, ledgerLinesUrl(tname, acc.ledger, from, to)); } catch (e){ pre = null; }
+    // (never a cancelled or an Optional voucher: not in the books, the owner's case of 24-Nov-2026)
+    if (pre && Array.isArray(pre.vouchers)) pre = Object.assign({}, pre, {vouchers: pre.vouchers.filter(v => !/^yes$/i.test((v && v.cancelled) || "") && !/^yes$/i.test((v && v.optional) || ""))});
     // (only what the copy has is matched: a copy with nothing for these days leaves the bank book as it was, and a look
     // before posting never marks a posted line as gone from Tally: the copy may simply not hold that day)
     if (pre && !copyNotCovered(pre) && [].concat(pre.vouchers || []).length) try {
@@ -1349,7 +1351,8 @@ async function postBillsToTally(opts){
       const vt = co.voucherType || "Journal";
       let j0 = null;
       try { j0 = await dupCopy(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(ds[0], -5)) + "&to=" + isoToTally(addDays(ds[ds.length - 1], 5)) + "&types=" + encodeURIComponent([...new Set([vt, "Purchase", "Journal", co.debitNoteType || "Debit Note"])].join(","))); } catch (e){ j0 = null; }
-      const vs0 = [].concat((j0 && j0.vouchers) || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
+      // (never a cancelled or an Optional voucher: not in the books, the owner's case of 24-Nov-2026)
+      const vs0 = [].concat((j0 && j0.vouchers) || []).filter(v => !/^yes$/i.test(v.cancelled || "") && !/^yes$/i.test(v.optional || ""));
       const has = (v, e) => String(v.narration || "").includes("TDSDesk:" + e.id) || [].concat(v.entries || []).some(en => norm(en.ledger) === norm(e.partyLedger) && [].concat(en.bills || []).some(bl => norm(bl.name) === norm(e.x.invoiceNo)))
         || (norm(v.reference) === norm(e.x.invoiceNo) && norm(v.party) === norm(e.partyLedger));
       todo.forEach(e => {
