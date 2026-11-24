@@ -39,10 +39,11 @@ C.CO = (id) => clients[id || C.S.coId];
 C.Store = { saveCompany: (co) => saved.push(co.id) };
 C.whoAmI = () => "tester@example.test";
 const calls = [];
-let aiOn = true;
+let aiOn = true, answer = null;   // answer: the review's probes (a wrong or nonsense mapping), when set
 C.SheetAI = { map: async (req) => {
   calls.push(req);
   if (!aiOn) throw new Error("FinCom's AI is switched off here");
+  if (answer) return typeof answer === "function" ? answer(req) : answer;
   if (req.side === "bank") return { ok: true, map: { date: "Txn On", narration: "Remarks", ref: "Chq", debit: "Money Out", credit: "Money In", balance: "Running Total" } };
   if (req.side === "payroll") return { ok: true, map: { name: "Staff", pan: "Tax No", month: "Pay Month", gross: "Total Pay", tds: "IT Deducted" }, earn: [], ded: [] };
   throw new Error("no answer for side " + req.side);
@@ -124,6 +125,73 @@ console.log("4b. wide sheets and empty answers (the 80-column cut, the answer th
   const bwide = Array.from({ length: 100 }, (_, i) => "Col " + (i + 1)); bwide[90] = "Txn On"; bwide[91] = "Remarks"; bwide[92] = "Money Out"; bwide[93] = "Money In"; bwide[94] = "Running Total";
   const bs = AC.bankSample(bwide, [bwide.map((h, i) => (i === 90 ? "01/09/2026" : i === 91 ? "ZZ" : i === 92 ? "250.00" : i === 94 ? "9750.00" : ""))]);
   ok(bs.head.length <= 80 && bs.head.includes("Money Out") && bs.head.includes("Running Total") && bs.rows[0].length === bs.head.length, "a 100-column bank sheet: at most 80 columns sent, those with values first");
+}
+
+console.log("6. the review of aead82472: a wrong AI mapping is put right or not used, never posted the wrong way");
+{
+  const M = (m) => ({ ok: true, map: m });
+  let k = 0;
+  const fresh = () => { const id = "r" + (++k); clients[id] = { id, name: "ZZ Review " + k }; C.S.coId = id; return clients[id]; };
+  const back = () => { C.S.coId = "c1"; answer = null; };
+  const dirs = (p) => p.rows.map((r) => r.debit + "/" + r.credit).join(" ");
+  const RIGHT = "0/10000 250/0 0/1250.5 1000.5/0";
+  // 1. the blocker: Withdrawal and Deposit swapped, a balance column: the running balance turns the mapping round, kept so
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", debit: "Money In", credit: "Money Out", balance: "Running Total" });
+    const p = await read("zz.csv", BANK), kept = Object.values(co.aiColumns || {})[0]; back();
+    return dirs(p) === RIGHT && kept && kept.map.debit === "Money Out" && kept.map.credit === "Money In" && C.checkBalances(p.rows, p.meta).od === false; },
+    "debit and credit swapped by the AI, with a running balance: turned round by the balance, the right way kept (no overdraft)");
+  const NOBAL = BANK.split("\n").map((l) => l.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).slice(0, 5).join(",")).join("\n");
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", debit: "Money In", credit: "Money Out" });
+    const p = await read("zz.csv", NOBAL), kept = Object.values(co.aiColumns || {})[0]; back();
+    return dirs(p) === RIGHT && kept.map.debit === "Money Out"; }, "swapped, no balance, both headings say so (Money In as debit, Money Out as credit): turned round by the headings");
+  const NEUTRAL = NOBAL.replace("Money Out,Money In", "Amt 1,Amt 2");
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", debit: "Amt 2", credit: "Amt 1" });
+    try { await read("zz.csv", NEUTRAL); return false; } catch (e) { return e.code === "bank_unreadable" && e.diag.head.includes("Amt 1") && !co.aiColumns; } finally { back(); } },
+    "no balance and headings that do not say which way: the AI's mapping not used (Choose the columns), not kept");
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", debit: "Money In", credit: "Remarks" });
+    try { await read("zz.csv", NOBAL); return false; } catch (e) { return e.code === "bank_unreadable" && !co.aiColumns; } finally { back(); } },
+    "a debit heading that reads as money in, with no balance to settle it: not used");
+  // 2. nonsense mappings
+  const AMT = ["Txn On,Remarks,Amt,Type,Running Total", '01/09/2026,Opening,"10,000.00",C,"10,000.00"', "02/09/2026,UPI out,250.00,D,\"9,750.00\"", '05/09/2026,NEFT in,"1,250.50",C,"11,000.50"', '07/09/2026,Chq,"1,000.50",D,"10,000.00"'].join("\n");
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", debit: "Amt", credit: "Running Total" });
+    try { await read("zz.csv", AMT); return false; } catch (e) { return e.code === "bank_unreadable" && !co.aiColumns; } finally { back(); } }, "lines with both a debit and a credit: not used");
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", amount: "Amt", balance: "Running Total" });
+    const p = await read("zz.csv", AMT), kept = Object.values(co.aiColumns || {})[0]; back();
+    return dirs(p) === RIGHT && kept.map.drcr === "Type"; }, "one Amount with no Dr / Cr while a column holds only C and D: that column filled in as Dr / Cr");
+  await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", amount: "Running Total", drcr: "Type", balance: "Amt" });
+    try { await read("zz.csv", AMT); return false; } catch (e) { return e.code === "bank_unreadable" && !co.aiColumns; } finally { back(); } }, "the amount and the balance taken for each other: the running balance does not fit, not used, not kept");
+  // 8. a kept mapping is for this very header
+  ok(AC.kept({ aiColumns: { ["bank:" + AC.layoutKey(["A", "B", "C"])]: { head: ["X", "Y", "Z"], map: { date: "A" } } } }, "bank", ["A", "B", "C"]) === null, "a kept mapping whose stored header is not this one is not used");
+  // 9. a workbook: after the AI is off (or the cap reached) on one sheet, it is not asked for the next
+  await tryOk(async () => { fresh(); aiOn = false; const was = calls.length;
+    const wb = C.XLSX.utils.book_new(), rows = NOBAL.split("\n").map((l) => l.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((x) => x.replace(/"/g, "")));
+    C.XLSX.utils.book_append_sheet(wb, C.XLSX.utils.aoa_to_sheet(rows), "One"); C.XLSX.utils.book_append_sheet(wb, C.XLSX.utils.aoa_to_sheet(rows), "Two");
+    const buf = C.XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    try { await read("zz.xlsx", new Uint8Array(buf)); } catch (e) { /* not read */ } finally { aiOn = true; back(); }
+    return calls.length - was === 1; }, "a two-sheet workbook with the AI off: asked once, not again for the second sheet");
+  // 5. the person's choices carried to the lines read again
+  const old = [{ id: "s1-0", date: "2026-09-02", narr: "UPI to ZZ Grocer", debit: 0, credit: 250, state: "ready", ledger: "ZZ Grocer", userSet: true },
+    { id: "s1-1", date: "2026-09-07", narr: "Cheque paid", debit: 0, credit: 1000.5, state: "sent", ledger: "ZZ Rent", tally: { guid: "g1" } },
+    { id: "s1-2", date: "2026-09-09", narr: "Gone line", debit: 5, credit: 0, state: "ready", ledger: "X", userSet: true }];
+  const nw = [{ id: "s2-0", date: "2026-09-02", narr: "UPI to ZZ Grocer", debit: 250, credit: 0, state: "attention", ledger: "" },
+    { id: "s2-1", date: "2026-09-07", narr: "Cheque paid", debit: 1000.5, credit: 0, state: "attention", ledger: "" },
+    { id: "s2-2", date: "2026-09-05", narr: "NEFT from ZZ Buyer", debit: 0, credit: 1250.5, state: "attention", ledger: "" }];
+  await tryOk(async () => { const c = AC.carry(old, nw), g = c.rows.find((r) => r.narr === "UPI to ZZ Grocer"), q = c.rows.find((r) => r.narr === "Cheque paid");
+    return g.ledger === "ZZ Grocer" && g.userSet && g.debit === 250 && g.state === "suggested" && q.id === "s1-1" && q.state === "sent" && q.credit === 1000.5 && c.rows.length === 3 && c.lost === 1 && c.carried === 1 && c.kept === 1; },
+    "carry: a ledger chosen goes with its line (to check again when its direction changed), a line in Tally stays as it is, a line not read again stays in Restore");
+  // 4. a line being posted: nothing read again
+  ok(AC.inFlight({ state: "ready", postJob: "j1" }) && AC.inFlight({ state: "sent", checking: true }) && AC.inFlight({ state: "ready" }, () => ({ status: "waiting" })) && !AC.inFlight({ state: "ready" }) && !AC.inFlight({ state: "sent" }),
+    "a line queued for Tally, or held for checking, counts as being posted");
+  // 6. billing on a re-read: only the lines more than were paid for
+  ok(AC.extraLines(4, 4) === 0 && AC.extraLines(4, 6) === 2 && AC.extraLines(5, 3) === 0, "read again: charged only for lines more than the first read (max(0, new - paid))");
+  // 7. 24Q: a Date of Joining is no pay date for the AI either; Cess and Regime filled by names; TDS above gross not used
+  const SAL2 = ["Staff,Tax No,Date of Joining,Pay Month,Total Pay,IT Deducted,Cess,Regime", 'ZZ One,AAAPZ1234A,15/06/2019,Sep-2026,"50,000","2,500",100,New', 'ZZ Two,AAAPZ5678B,01/02/2021,Sep-2026,"40,000","1,000",40,New'].join("\n");
+  await tryOk(async () => { fresh(); C.S.books.cid = C.S.coId; answer = (req) => req.side === "payroll" ? { ok: true, map: { name: "Staff", pan: "Tax No", date: "Date of Joining", month: "Pay Month", gross: "Total Pay", tds: "IT Deducted" }, earn: [], ded: [] } : null;
+    const r = await C.TDS24Q.fromFile(file("zz-sal2.csv", SAL2)); C.S.books.cid = "c1"; back();
+    return r.rows.length === 2 && r.rows[0].date === "2026-09-30" && r.rows[0].cess === 100 && r.rows[0].regime === "N" && r.rows[1].tds === 1000; }, "24Q: the Date of Joining dropped (the month's last day), Cess and Regime read by their names");
+  await tryOk(async () => { const co = fresh(); C.S.books.cid = C.S.coId; answer = (req) => ({ ok: true, map: { name: "Staff", pan: "Tax No", month: "Pay Month", gross: "IT Deducted", tds: "Total Pay" }, earn: [], ded: [] });
+    const r = await C.TDS24Q.fromFile(file("zz-sal2.csv", SAL2)); C.S.books.cid = "c1"; back();
+    return !!r.error && !co.aiColumns; }, "24Q: a mapping with TDS above the gross is not used, not kept");
 }
 
 console.log("5. the server's half (sheetmap.ts): side bank");

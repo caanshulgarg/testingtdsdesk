@@ -36,7 +36,9 @@ const FROM_PAY = { name: "name", pan: "pan", code: "code", month: "month", date:
 // ---------------------------------------------------------------- kept per client and layout
 export function kept(co, kind, head) {
   const k = kind + ":" + layoutKey(head), v = co && co.aiColumns && co.aiColumns[k];
-  return v && v.map && !v.deleted ? v : null;
+  // (the header kept with it must be this one, name by name: a hash alone could meet another layout)
+  const same = v && Array.isArray(v.head) && v.head.map(norm).join("|") === (head || []).map(norm).join("|");
+  return v && v.map && !v.deleted && same ? v : null;
 }
 export function keep(co, kind, head, map, how, who) {
   if (!co) return null;
@@ -107,38 +109,143 @@ export function bankMap(answer, head) {
   });
   return map;
 }
+// ---------------------------------------------------------------- an AI mapping checked before it is used or kept
+// (the review of aead82472: a mapping with Withdrawal and Deposit swapped posted every line the wrong way). FinCom's
+// own checks, never the person's: the running balance decides the direction (a mapping that fits only turned round is
+// turned round), the headings decide when there is no balance, and a mapping nothing settles is not used (the person
+// chooses the columns). Also not used: lines that often have both a debit and a credit, one Amount with no Dr / Cr when
+// a column holds only D / C (that column is taken as Dr / Cr), a running balance that does not fit either way.
+const IN_WORDS = /(^|[^a-z])(in|deposits?|credits?|cr|receipts?|received)([^a-z]|$)/i, OUT_WORDS = /(^|[^a-z])(out|withdrawals?|withdrawn|debits?|dr|payments?|paid)([^a-z]|$)/i;
+const says = (h) => { const i = IN_WORDS.test(h), o = OUT_WORDS.test(h); return i && !o ? "in" : o && !i ? "out" : ""; };
+const DC_ONLY = /^(d|c|dr|cr|debit|credit)\.?$/i;
+const fit = (p, r, v) => Math.abs(Math.round((p - r.debit + r.credit) * 100) / 100 - v) <= 0.011;
+// how many lines fit their running balance as read, and turned round: {as, round, n}
+export function balanceFit(rows) {
+  const list = rows.length > 1 && rows[0].date > rows[rows.length - 1].date ? rows.slice().reverse() : rows;
+  let as = 0, round = 0, n = 0;
+  for (let i = 1; i < list.length; i++) {
+    const p = list[i - 1].balance, r = list[i];
+    if (p == null || r.balance == null) continue;
+    n++;
+    if (fit(p, r, r.balance)) as++;
+    if (fit(p, { debit: r.credit, credit: r.debit }, r.balance)) round++;
+  }
+  return { as, round, n };
+}
+const swapMap = (m) => { const x = Object.assign({}, m); x.debit = m.credit; x.credit = m.debit; return x; };
+// -> {map, rows} to use, or {why} when the mapping is not to be used. read(map) reads the rows by a mapping
+export function bankCheck(map, head, body, read) {
+  let m = Object.assign({}, map);
+  const names = (head || []).map(text);
+  if (m.amount && !m.drcr) {
+    const used = new Set(Object.values(m).map(norm)), filled = (i) => body.map((r) => text((r || [])[i])).filter(Boolean);
+    const dc = names.findIndex((h, i) => h && !used.has(norm(h)) && filled(i).length * 2 >= body.length && filled(i).every((v) => DC_ONLY.test(v)));
+    if (dc >= 0) m.drcr = names[dc];
+  }
+  let rows = read(m);
+  if (!rows.length) return { why: "no lines were read with FinCom's AI's columns" };
+  if (m.debit && m.credit && rows.filter((r) => r.debit && r.credit).length * 5 > rows.length) return { why: "lines read with both a withdrawal and a deposit" };
+  const two = !!(m.debit && m.credit), dSays = two ? says(m.debit) : "", cSays = two ? says(m.credit) : "";
+  const headsRight = dSays === "out" || cSays === "in", headsRound = dSays === "in" || cSays === "out";
+  if (m.balance) {
+    const f = balanceFit(rows);
+    if (f.n && f.as * 2 > f.n && f.as >= f.round) return headsRound && !headsRight && f.round < f.as ? { why: "the headings and the balance disagree" } : { map: m, rows };
+    // fits only turned round: Withdrawal and Deposit were swapped (unless the headings say they were right: an
+    // overdraft printed without its minus, which the balance check knows, src/js/22-bank-guards.js)
+    if (f.n && f.round * 2 > f.n && two) { if (headsRight && !headsRound) return { map: m, rows }; const sw = swapMap(m); return { map: sw, rows: read(sw), swapped: true }; }
+    return { why: "the running balance does not fit the columns" };
+  }
+  if (!two) return m.drcr ? { map: m, rows } : { why: "one amount column with nothing saying which way" };
+  if (headsRight && !headsRound) return { map: m, rows };
+  if (headsRound && !headsRight && dSays === "in" && cSays === "out") { const sw = swapMap(m); return { map: sw, rows: read(sw), swapped: true }; }
+  return { why: "nothing says which column is the withdrawal" };
+}
+
 // o: {co, ai (SheetAI.map), save(co), who, H: the bank reader's own functions {rowsFromCells, statementMeta, cellText, bankDate}}
 export async function bankFromGrids(grids, o) {
   const H = o.H, ai = o.ai || (globalThis.SheetAI && globalThis.SheetAI.map && ((r) => globalThis.SheetAI.map(r)));
-  let why = null, seen = null;
+  let why = null, seen = null, aiDown = false;
   for (const grid of grids || []) {
     const hi = bankHead(grid, H);
     if (hi < 0) continue;
     const head = (grid[hi] || []).map(text);
     seen = seen || { head, hi };
-    let got = kept(o.co, "bank", head), how = got ? got.how : "";
+    const body = grid.slice(hi + 1), line = (r) => (r || []).map(text).filter(Boolean).join(" ");
+    const read = (m) => { const c = indexes(m, head); return bankOk(c) ? H.rowsFromCells(body, c, (r, x) => r[x], line) : []; };
+    let got = kept(o.co, "bank", head), how = got ? got.how : "", rows = null;
     let cols = got ? indexes(got.map, head) : null;
     if (!cols || !bankOk(cols)) {
-      if (typeof ai !== "function") { why = why || "FinCom's AI is not available here"; continue; }
+      // (the AI off, or the firm's cap reached, on one sheet: not asked again for the next sheets of the file)
+      if (typeof ai !== "function" || aiDown) { why = why || "FinCom's AI is not available here"; continue; }
       let answer;
-      try { answer = await ai(Object.assign(bankSample(head, grid.slice(hi + 1)), { side: "bank", fields: ["date", "valuedate", "narration", "ref", "debit", "credit", "amount", "drcr", "balance"] })); }
-      catch (e) { why = (e && e.message) || String(e); continue; }
-      const map = bankMap(answer, head);
-      cols = indexes(map, head);
-      if (!bankOk(cols)) { why = "FinCom's AI could not tell the date, narration and amount columns"; continue; }
-      got = keep(o.co, "bank", head, map, "ai", o.who); how = "ai";
+      try { answer = await ai(Object.assign(bankSample(head, body), { side: "bank", fields: ["date", "valuedate", "narration", "ref", "debit", "credit", "amount", "drcr", "balance"] })); }
+      catch (e) { why = (e && e.message) || String(e); aiDown = true; continue; }
+      const map0 = bankMap(answer, head);
+      if (!bankOk(indexes(map0, head))) { why = "FinCom's AI could not tell the date, narration and amount columns"; continue; }
+      const c = bankCheck(map0, head, body, read);
+      if (!c.map) { why = c.why; continue; }
+      got = keep(o.co, "bank", head, c.map, "ai", o.who); how = "ai"; rows = c.rows; cols = indexes(c.map, head);
       if (o.save) try { o.save(o.co); } catch (e) { /* kept on this page */ }
     }
-    const body = grid.slice(hi + 1), line = (r) => (r || []).map(text).filter(Boolean).join(" ");
     const top = grid.slice(0, hi).map(line), tail = body.filter((r) => !H.bankDate(r[cols.date])).map(line);
-    const rows = H.rowsFromCells(body, cols, (r, c) => r[c], line);
+    rows = rows || read(got.map);
     if (!rows.length) continue;
     return { meta: H.statementMeta(top.concat(tail)), rows, source: "sheet", cols: { kind: "bank", key: layoutKey(head), how, head, map: Object.assign({}, got.map) } };
   }
   throw Object.assign({ code: "bank_no_header" }, why ? { why } : {}, seen ? { head: seen.head } : {});
 }
 
+// ---------------------------------------------------------------- a statement read again with its columns put right
+// a line being posted: queued for Tally (its posting job, here or in FinCom's cloud) or held for checking. jobOf(r): the
+// cloud's live posting holding it, if any
+export function inFlight(r, jobOf) {
+  if (!r) return false;
+  if (r.checking || r.postJob || r.postJobNew) return true;
+  if (r.state === "ready" && /already sent from this computer on .*?, job /.test(String(r.postError || ""))) return true;
+  const j = typeof jobOf === "function" ? jobOf(r) : null;
+  return !!(j && !/^(done|failed|cancel)/.test(String(j.status || "")));
+}
+// the lines read again are charged only beyond those paid for the first time
+export const extraLines = (paid, now) => Math.max(0, (now || 0) - (paid || 0));
+const nk = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
+const amt = (r) => Math.round(Math.max(Number(r.debit) || 0, Number(r.credit) || 0) * 100);
+const inTally = (r) => r.state === "sent" || r.state === "intally";
+const CARRY = ["ledger", "userSet", "state", "vtype", "note", "splits", "billId", "billRef", "tdsAtPay", "tdsLedger", "salesIds", "narrEdit", "why"];
+// the person's choices on the old lines carried to the lines read again, matched by date, amount and narration (else by
+// date and amount when only one fits): a line in Tally stays exactly as it is (the read again never changes it); a
+// ledger chosen goes with its line, to check again (suggested) when its direction changed; an old line matched by none
+// stays in the deleted copy (More → Restore). -> {rows, carried, kept, lost}
+export function carry(oldRows, newRows) {
+  const left = (oldRows || []).slice(), out = [];
+  let carried = 0, keptN = 0;
+  const take = (r) => {
+    let i = left.findIndex((o) => o.date === r.date && amt(o) === amt(r) && nk(o.narr) === nk(r.narr));
+    if (i < 0) { const c = left.map((o, j) => (o.date === r.date && amt(o) === amt(r) ? j : -1)).filter((j) => j >= 0); if (c.length === 1) i = c[0]; }
+    return i < 0 ? null : left.splice(i, 1)[0];
+  };
+  (newRows || []).forEach((r) => {
+    const o = take(r);
+    if (o && inTally(o)) { out.push(o); keptN++; return; }
+    if (o && (o.userSet || o.ledger)) {
+      const flipped = !!o.debit !== !!r.debit;
+      CARRY.forEach((k) => { if (o[k] !== undefined && !(flipped && ["vtype", "billId", "billRef", "salesIds", "tdsAtPay", "tdsLedger", "splits"].includes(k))) r[k] = o[k]; });
+      if (flipped && ["ready", "sent", "intally"].includes(r.state)) r.state = "suggested";
+      carried++;
+    }
+    out.push(r);
+  });
+  // a line in Tally the new reading did not meet is kept too (never lost from the books)
+  left.filter(inTally).forEach((o) => { out.push(o); keptN++; });
+  return { rows: out, carried, kept: keptN, lost: left.filter((o) => !inTally(o)).length };
+}
+
 // ---------------------------------------------------------------- the 24Q salary sheet
+const tdsSane = (m, head, body, PS) => {
+  if (!m.gross) return true;
+  const ix = indexes(m, head);
+  if (ix.gross === ix.tds) return false;
+  return !body.some((r) => { const g = PS.amount((r || [])[ix.gross]), t = PS.amount((r || [])[ix.tds]); return g > 0 && t > g; });
+};
 // o: {co, ai (SheetAI.map), save(co), who, PS: payrollSheet.js}. The client's confirmed Payroll rule for this layout first
 // (co.payrollFormats), then a mapping kept here, then the AI once (side "payroll": the header and 3 masked rows)
 export async function salaryCols(grid, o) {
@@ -157,7 +264,9 @@ export async function salaryCols(grid, o) {
     if (typeof ai !== "function") return null;
     const m = await PS.propose(head, grid.slice(hi + 1), ai);
     const got = from(m.map);
-    if (!ok(got)) return null;
+    // (a date of birth, joining or leaving is never the pay date; TDS is never above the gross)
+    if (got.date && /birth|join|leav|dob|doj/i.test(norm(got.date))) delete got.date;
+    if (!ok(got) || !tdsSane(got, head, grid.slice(hi + 1), PS)) return null;
     map = got; how = "ai";
     keep(co, "salary", head, map, "ai", o.who);
     if (o.save) try { o.save(co); } catch (e) { /* kept on this page */ }
@@ -167,7 +276,7 @@ export async function salaryCols(grid, o) {
   return { hi, idx, cols: { kind: "salary", key: layoutKey(head), how, head, map } };
 }
 
-export const AiCols = { layoutKey, kept, keep, indexes, saidCols, bankHead, bankSample, bankMap, bankFromGrids, salaryCols, BANK_FIELDS, SALARY_FIELDS };
+export const AiCols = { layoutKey, kept, keep, indexes, saidCols, bankHead, bankSample, bankMap, bankCheck, balanceFit, bankFromGrids, inFlight, extraLines, carry, salaryCols, BANK_FIELDS, SALARY_FIELDS };
 
 // what the page calls (registers.js: window.AiCols = forPage(window)), on its own globals: the open client, its store,
 // who is signed in, the firm's AI (SheetAI.map) and the bank reader's functions (src/js/20-bank-statements.js)

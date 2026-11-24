@@ -46,13 +46,14 @@ const TDS24Q = {
     if (hi < 0){ ai = await registersLoad().then(() => AiCols.salary(grid, sheet)).catch(() => null); if (ai) hi = ai.hi; }
     if (hi < 0) return {error: "That sheet needs at least an employee name column and a TDS column."};
     const head = grid[hi], idx = ai ? ai.idx : {}, body = grid.slice(hi + 1), H = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
-    if (!ai) Object.keys(this.cols).forEach(k => { idx[k] = this.pick(head, this.cols[k]); });
+    // (the AI's columns: the fields it did not name are found by their names, a column never used twice)
+    Object.keys(this.cols).forEach(k => { if (ai && idx[k] >= 0) return; const j = this.pick(head, this.cols[k]); idx[k] = ai && Object.values(idx).includes(j) ? -1 : j; });
     // the PAN: the column whose values are PANs (most of them; PANNOTAVBL, PANAPPLIED, PANINVALID count, as 24Q writes
     // them); the named one kept unless another column passes (review of e7bf15906: it became -1, every PAN "")
     const pans = i => { const v = body.map(r => String(r[i] || "").trim()).filter(Boolean); return v.length && v.filter(x => /^([A-Z]{5}\d{4}[A-Z]|PAN(NOTAVBL|APPLIED|INVALID))$/i.test(x)).length * 2 >= v.length; };
     if (idx.pan < 0 || !pans(idx.pan)){ const j = head.findIndex((x, i) => pans(i)); if (j >= 0) idx.pan = j; }
     // a date only by its own name when there is a month column ("Date of Joining" is no payment date)
-    if (!ai && idx.month >= 0 && idx.date >= 0 && !this.cols.date.includes(H[idx.date])) idx.date = -1;
+    if (idx.date >= 0 && (/birth|join|leav|dob|doj/.test(H[idx.date]) || (!ai && idx.month >= 0 && !this.cols.date.includes(H[idx.date])))) idx.date = -1;
     const get = (r, k) => idx[k] >= 0 ? r[idx[k]] : "";
     const rows = [];
     let undated = 0;

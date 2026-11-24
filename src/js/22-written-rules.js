@@ -439,8 +439,7 @@ async function uploadStatements(files, force){
       if (!rows.length && x.top){ b.busy = ""; await bankOpenHeld(b.cid, x.top); continue; }
       // a line held aside as a repeat is not charged (review of 08-Nov-2026), nor one already uploaded (audit of 22-Nov-2026)
       const paid = x.rows.length - x.held;
-      // (force.again: the same statement read again with its columns put right, parts/bank/ColsRead.jsx: not charged twice)
-      if (paid > 0 && !(force && force.again) && !(await charge("bank", paid, file.name, paid + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
+      if (paid > 0 && !(await charge("bank", paid, file.name, paid + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
       st.otherClient = other ? other.name : "";
       // another client (or this one afresh) opened while the file was read: the statement is kept under its own client,
       // written there, never on the page open now (audit of 22-Nov-2026), and suggested when its page is opened
