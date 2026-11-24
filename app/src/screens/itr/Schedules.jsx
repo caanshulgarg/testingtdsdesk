@@ -68,7 +68,7 @@ export default function Schedules({ X, refresh, schema }) {
     {f === "ITR-6" && (st.profile || {}).indAs === true && <Oci X={X} set={set} />}
     <Other X={X} set={set} />
     {f !== "ITR-4" && <Losses X={X} set={set} />}
-    {M.form === "ITR-4" && <p className="itr-note">ITR-4 takes one house and long-term gains under 112A up to Rs 1.25 lakh; anything more needs ITR-3.</p>}
+    {M.form === "ITR-4" && <p className="itr-note">ITR-4 takes up to two houses (AY 2026-27) and long-term gains under 112A up to Rs 1.25 lakh; anything more needs ITR-3.</p>}
   </div>;
 }
 

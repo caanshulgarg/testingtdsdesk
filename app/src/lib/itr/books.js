@@ -9,6 +9,7 @@ const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sig
 
 // a neutral line -> the trial balance codes it adds, and the sign that makes it positive in the ITR
 // (TB amounts: debit positive; a liability or income line is the negative of its codes)
+import { page } from "./page.js";
 export const BS_LINES = [
   // sources of funds
   // (3S, 4F: what the Profit & Loss A/c took in the year, the statements' own lines: the profit credited to the partners, appropriations)
@@ -292,7 +293,7 @@ export function tallyPbt(movements, groupOf, stock) {
 // fy "2025"; returns {ok, sched, adj, f, dep, findings, plTally, openingTally, pyBs, capital, dues43B, msme, tds, form3cd,
 // esiBooks, nrAsk} or {ok: false, missing: [...]}: what is not there is said ("Missing data"), never made up
 export function fromApp(fy, imports, due) {
-  const G = typeof window === "object" ? window : globalThis, FinSt = G.FinSt, b = G.S && G.S.books;
+  const G = page(), FinSt = G.FinSt, b = G.S && G.S.books;
   if (!b || !(b.vouchers || []).length) return { ok: false, missing: ["The day book is not in yet: bring the books in from Tally."] };
   if (!FinSt) return { ok: false, missing: ["The statements' program is not loaded."] };
   const d = FinSt.build(fy, { unit: 1, dec: 0 });

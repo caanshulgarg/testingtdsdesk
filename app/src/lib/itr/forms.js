@@ -3,6 +3,7 @@
 // from the computation so a new schema version changes only this file. fill.js completes the JSON (zeros for amounts
 // FinCom does not map; questions for anything else), validate.js checks it against the official schema.
 import { put } from "./fill.js";
+import { AY, itr4Houses } from "./law.js";
 import { fit, salarySchedule, tdsSalary, hpSchedule, cgSchedule, siSchedule, tiCapGain, alSchedule, faSchedule, shSchedule, al6Schedule, bsIndAs, ociIndAs } from "./sched.js";
 
 const N = (v) => +v || 0;
@@ -245,7 +246,9 @@ export function coverage(X, map) {
   if (f === "ITR-4" && H.c112A && !M.cg112A) add("ltcg112a", "LTCG under 112A (sale and cost)", "Long-term gains under 112A: give the sales on Schedules.");
   if (f !== "ITR-4" && (H.c111A || H.c112A || H.c112 || H.cOth) && !M.cgHead) add("cg", "Schedule CG and SI (capital gains)", "Capital gains of " + R(H.cg) + " have no sales behind them: give each sale on Schedules.");
   if (f === "ITR-4" && M.cgHead && M.cgHead.rows.some((x) => x.bucket !== "s112A")) add("cg_itr4", "Capital gains in ITR-4", "ITR-4 takes only long-term gains under 112A: the other sales need ITR-3 / ITR-5.");
-  if (f === "ITR-4" && M.hpHead && M.hpHead.props.length > 1) add("hp_itr4", "More than one house in ITR-4", "ITR-4 is for one house property: two or more need ITR-3.");
+  // ITR-4's houses: as many as the year's schema takes (law.js itr4Houses: two for AY 2026-27, one before)
+  const maxHp = itr4Houses(X.ay || AY);
+  if (f === "ITR-4" && M.hpHead && M.hpHead.props.length > maxHp) add("hp_itr4", "More houses than ITR-4 takes", maxHp > 1 ? "ITR-4 takes up to " + (maxHp === 2 ? "two" : maxHp) + " house properties: more need ITR-3." : "ITR-4 is for one house property: two or more need ITR-3.");
   if (M.salaryHead && M.entity !== "P") add("salary_ent", "Salary for this person", "Only an individual has salary income (Schedule S is blank for an HUF, rule 199).");
   ["80C", "80D", "80DD", "80DDB", "80U", "80E", "80EE", "80EEA", "80EEB", "80G", "80GGA", "80GGC"].forEach((k) => { if (claimed(k)) add("via_" + k, "Schedule " + k + " (details)", "Section " + k + " is claimed: the schema's own Schedule " + k + " (each policy, donee or loan) is not filled by FinCom yet."); });
   if ((f === "ITR-5" || f === "ITR-6") && R(S.ded)) add("via_entity", "Schedule VIA and its details (firm / company)", "Deductions under Chapter VI-A of " + R(S.ded) + ": the firm's / company's Schedule VIA and its detail schedules are not filled by FinCom yet.");
