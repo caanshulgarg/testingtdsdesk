@@ -74,6 +74,10 @@ ROWS["night_findings"].append({"id": "00000000-0000-4000-8000-000000000997", "cl
 ROWS["night_findings"].append({"id": "00000000-0000-4000-8000-000000000996", "client_id": "d5", "kind": "setoff_due", "key": "setoff:07:202610", "state": "you",
   "facts": {"party": "GST set-off Oct", "short": "Set-off Oct 2026: check", "title": "Set-off Oct 2026: waiting on a tax journal that may be its set-off", "waits": True, "ask_text": ""}, "evidence": [], "candidates": [], "last_seen": "2026-11-22", "undone_at": None})
 sal = [e["id"] for e in ROWS["night_entries"] if e["source"] == "bank_self_answer" and any(x.get("t") == "salary" for x in e["evidence"])][0]
+# next-payroll (review 5): a Tally Payroll company's month, as the night prepares it: a payroll voucher, not journal lines
+_tp = dict(_pay); _tp.update({"id": "00000000-0000-4000-8000-000000000998", "client_id": "d3", "dedupe": "payroll:202609", "voucher": {"type": "Payroll", "kind": "tallyPayroll", "date": "20260930", "no": "", "party": "Salary Payable",
+  "period": "202609", "book": "b1", "lines": [], "n": 3, "gross": 85838.71, "net": 76255.71, "ded": {"tds": 2500, "pt": 400, "pf": 4413, "esi": 270, "other": 2000}, "narration": "Salary for Sep 2026 as per the salary sheet (3 employees)"}})
+ROWS["night_entries"].append(_tp)
 with sync_playwright() as p:
     br = p.chromium.launch()
     ctx, pg = start(br)
@@ -82,6 +86,12 @@ with sync_playwright() as p:
     ok("GSTR-3B Oct 2026" in txt(ids["gst_setoff"]) and "GST set-off" in txt(ids["gst_setoff"]) and "Journal" in txt(ids["gst_setoff"]), "1. the set-off: Journal · GSTR-3B Oct 2026 · GST set-off")
     ok("Salary sheet Oct 2026" in txt(ids["payroll"]) and "Payroll" in txt(ids["payroll"]), "1. the payroll: Salary sheet Oct 2026 · Payroll")
     ok("Ravi Kumar" in txt(sal) and "Salary sheet" in txt(sal) and "Payment" in txt(sal), "1. the salary payment: the employee's name, Salary sheet")
+    tpr = "00000000-0000-4000-8000-000000000998"
+    ok("Tally Payroll" in txt(tpr) and "Salary sheet Sep 2026" in txt(tpr) and "76,255.71" in txt(tpr), "1. a Tally Payroll month: Tally Payroll · Salary sheet Sep 2026 · the net")
+    pg.click("[data-row='%s'] .dc-open" % tpr); settle(pg, 200)
+    tm = pg.inner_text("[data-row='%s'] [data-tp-facts]" % tpr) if pg.locator("[data-row='%s'] [data-tp-facts]" % tpr).count() else ""
+    ok("Payroll voucher · 3 employees" in tm and "Other deductions" in tm and "Net to Salary Payable" in tm, "1. opened: the payroll voucher (employees, deductions, net to the payable), not journal lines")
+    pg.click("[data-row='%s'] .dc-open" % tpr); settle(pg, 150)
     ok("Sample Landlord" in txt(ids["recurring"]) and "Monthly" in txt(ids["recurring"]), "1. the monthly rent: the party, Monthly")
     ok(pg.locator("[data-row='%s'] .dc-more" % ids["gst_setoff"]).count() == 0, "1. collapsed: no details until opened")
     pg.click("[data-row='%s'] .dc-open" % ids["gst_setoff"]); settle(pg, 200)

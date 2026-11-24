@@ -24,8 +24,9 @@
 // The input is nightchecks' input (server/assistant-night/nightinput.js) plus:
 //   gst        gstMonths' rows      drafts  Daily Check's journals already approved ([{dedupe, state, removed}])
 //   picks      a person's ledger choices ({role: ledger}), from prior ledger_pick findings
-import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries } from "./nightchecks.js";
+import { r2, num, ymd, ledgerKey, groupsOf, inr, dmon, monYear, checkEntry, sheetMonth, sheetNet, salaryClass, salaryEntries, earningHead, notSalaryHeadName } from "./nightchecks.js";
 import { voucherId } from "./dailytrust.js";
+import { partsIn, tpIdRe } from "./tpparts.js";
 export { voucherId, TRUST_KINDS, TRUST_WORDS, LEVEL_WORDS, kindOfSource, PROMOTE_AFTER, AUTO_POSTING, trustGate, promotion } from "./dailytrust.js";
 
 export const KINDS = ["setoff_due", "payroll_due", "recurring_due", "ledger_pick", "setoff_exclude", "sent_check"];
@@ -111,12 +112,12 @@ const posted = (inp, vid) => live(inp.books).some((v) => String(v.narr || "").in
 const pending = (inp, dedupe) => (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed");
 // (last fix) sent to Tally and not confirmed there for 24 hours: never offered again silently. Needs you: a sent_check
 // finding for that draft ("Not in Tally: offer it again", the owner's, through entry_unconfirm); the entry waits on it
-function sentCheck(inp, dedupe, label, you) {
+function sentCheck(inp, dedupe, label, you, why) {
   const d = (inp.drafts || []).find((x) => x && x.dedupe === dedupe && x.state === "unconfirmed");
   if (!d) return null;
   return { finding: you(label + ": waiting on Tally to confirm it", [], { waits: true }).finding,
     picks: [finding("sent_check", "sent:" + dedupe + ":" + d.ver, "you", { party: label, dedupe, at: d.at, ver: d.ver, short: "Not confirmed in Tally",
-      title: label + ": sent to Tally but not confirmed there after 24 hours. Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, ver: d.ver }])] };
+      title: label + ": " + (why || "sent to Tally but not confirmed there after 24 hours") + ". Check it in Tally." }, [], [{ t: "retry", ref: "retry:" + dedupe, label: "Not in Tally: offer it again", dedupe, ver: d.ver }])] };
 }
 function finding(kind, key, state, facts, evidence, candidates) {
   return { kind, key, state, facts: Object.assign({ ask_text: "" }, facts), evidence: evidence || [], candidates: candidates || [] };
@@ -330,28 +331,73 @@ export function setoffOne(m, inp, others) {
 // ---------------------------------------------------------------- 2. the payroll journal (the salary sheet)
 // The sheet's rows (TDS24Q.fromFile, src/js/17-24q.js): {name, date|month, gross, tds, profTax, surcharge, cess} and, when
 // the sheet has them, net, pf, esi. Each employee: gross = net + TDS + professional tax + PF + ESI, to the paisa.
+// (review: other deductions) an advance recovered, canteen, LWF (r.otherDed, the sheet's own heads) are out of the pay too
 export function payrollPlain(rows) {
-  let g = 0, t = 0, pt = 0, pf = 0, esi = 0, n = 0, bad = "";
+  let g = 0, t = 0, pt = 0, pf = 0, esi = 0, o = 0, n = 0, bad = "";
   for (const r of rows) {
-    const gr = P(r.gross), td = P(r.tds), p = P(r.profTax), f = P(r.pf), e = P(r.esi);
-    const nt = r.net != null && r.net !== "" ? P(r.net) : gr - td - p - f - e;
-    if (gr !== nt + td + p + f + e && !bad) bad = String(r.name || "?");
+    const gr = P(r.gross), td = P(r.tds), p = P(r.profTax), f = P(r.pf), e = P(r.esi), od = P(r.otherDed);
+    const nt = r.net != null && r.net !== "" ? P(r.net) : gr - td - p - f - e - od;
+    if (gr !== nt + td + p + f + e + od && !bad) bad = String(r.name || "?");
     if (nt < 0 && !bad) bad = String(r.name || "?");
-    g += gr; t += td; pt += p; pf += f; esi += e; n += nt;
+    g += gr; t += td; pt += p; pf += f; esi += e; o += od; n += nt;
   }
-  return { gross: R(g), tds: R(t), profTax: R(pt), pf: R(pf), esi: R(esi), net: R(n), bad, adds: g === n + t + pt + pf + esi };
+  return { gross: R(g), tds: R(t), profTax: R(pt), pf: R(pf), esi: R(esi), other: R(o), net: R(n), bad, adds: g === n + t + pt + pf + esi + o };
+}
+// next-payroll: how the client books salary, as kept on the client (Payroll page: co.payrollMethod, co.payrollJournal,
+// co.payrollPayable, co.payrollVchType) and the pay heads Tally's payroll has (tally_ledgers.for_payroll): the night reads
+// them from the client's record, the page's second check from CO() and S.books.payroll (the same object both ways)
+// heads: the ledgers of Tally's payroll, as names or {name, type} (Tally's pay head type): heads keeps the earnings,
+// notEarn the rest (the employer's contributions, gratuity, deductions ...: never salary booked)
+export function payrollSettings(co, heads) {
+  const c = co || {}, m = (c.payrollMethod || {}).value, earn = new Set(), not = new Set(), typed = new Set();
+  (heads || []).forEach((h) => { const name = String(typeof h === "string" ? h : (h && h.name) || ""), type = typeof h === "string" ? "" : (h && (h.type || h.pay_type)) || ""; if (!name) return; (earningHead(name, type) ? earn : not).add(name); if (String(type).trim()) typed.add(name); });
+  return { method: m === "tally" || m === "journal" ? m : "", journal: Object.assign({}, c.payrollJournal || {}), payable: String(c.payrollPayable || ""),
+    vchType: String(c.payrollVchType || ""), heads: Array.from(earn).sort(), notEarn: Array.from(not).sort(), typed: Array.from(typed).sort() };
+}
+export const TP_ID = (ym) => "dc-tp-" + ym;                // the Tally Payroll vouchers' ids: dc-tp-<yyyymm>-<client>-<part> (tpparts.js)
+// (fifth, sixth reviews) a Tally Payroll part holds a journal back while it may be in Tally: its FinCom id in the books, or
+// its own day (the part's voucher date, else the month-end) not read from Tally at least 5 minutes after the part was sent
+// or answered (tally_days.at: inp.daysAt; tally_books.days_at moves with any day read, so it proves nothing here)
+const isoDay = (x) => { const s = String(x || "").replace(/-/g, "").slice(0, 8); return /^\d{8}$/.test(s) ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; };
+export const tpDayRead = (inp, d) => { const ym = (String(d.vid || "").match(/^dc-tp-(\d{6})-/) || [])[1] || "", day = isoDay(d.date || (ym ? lastDay(ym) : ""));
+  const r = Date.parse(String((inp.daysAt || {})[day] || "")), t = Math.max(Date.parse(String(d.sentAt || "")) || 0, Date.parse(String(d.at || "")) || 0); return isFinite(r) && t > 0 && r >= t + 5 * 60000; };
+const tpHolds = (inp, d) => live(inp.books).some((v) => String(v.narr || "").includes("TDSDesk:" + d.vid)) || !tpDayRead(inp, d);
+const ownTp = (v, ym, cid) => tpIdRe(ym, cid).test(String(v.narr || ""));   // (212 re-review) the client's own part ids
+// the salary booked for a month (review H2, N5; next-payroll review B1): any entry with a salary expense on the debit side
+// (salaryClass), a pay head of Tally's payroll (an earning: an expense ledger for payroll, "Basic", "HRA"), or any ledger
+// a payroll-type voucher debits; FinCom's own Tally Payroll vouchers of the month left out when skipOwn (a split month
+// half posted is finished, not taken for salary booked by hand)
+function bookedFor(ym, inp, skipOwn) {
+  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", ph = new Set(((inp.payroll || {}).heads) || []), ne = new Set(((inp.payroll || {}).notEarn) || []), ty = new Set(((inp.payroll || {}).typed) || []);
+  // (third review) a pay head Tally gives a type to goes by its type alone; the name only for one with none
+  const not = (l) => ne.has(l) || (!ty.has(l) && !ph.has(l) && notSalaryHeadName(l));
+  const V = live(inp.books).filter((v) => !(skipOwn && ownTp(v, ym, inp.clientId)));
+  const pt = new Set(); V.forEach((v) => { if (/payroll/i.test(String(v.type || ""))) (v.ent || []).forEach((e) => { if (e.a < 0 && A.isExpense(e.l) && !not(e.l)) pt.add(e.l); }); });
+  // (re-review 1) the employer's contributions, gratuity and the like are never salary: an entry touching only them is not
+  // salary booked
+  const cls = (l) => (not(l) ? "" : (ph.has(l) || pt.has(l)) && A.isExpense(l) ? "yes" : salaryClass(A, l, sbase, inp.ledgers));
+  return { cls, booked: salaryEntries(V, ym, (l) => cls(l) !== "") };
 }
 export function payrollOne(ym, rows, inp) {
   const key = "payroll:" + ym, dedupe = key, vid = voucherId(dedupe), label = monYear(ym), date = lastDay(ym);
   const base = { party: "Payroll " + label.split(" ")[0], ym, date, n: rows.length };
   const you = (title, extra) => ({ finding: finding("payroll_due", key, "you", Object.assign({}, base, { short: "Payroll " + label + ": check", title }, extra || {})) });
+  const tp = inp.payroll || {};
+  if (tp.method === "tally" && !(tp.journal || {})[ym]) return tallyOne(ym, rows, inp, { key, dedupe, vid, label, date, base, you });
   if (posted(inp, vid)) return null;
   { const sc = sentCheck(inp, dedupe, "Payroll " + label, you); if (sc) return sc; }
-  if (pending(inp, dedupe)) return null;
+  // (fourth, fifth reviews) a Tally Payroll part of this month (posted as Tally Payroll before the owner chose a journal)
+  // holds the journal back while it may be in Tally (tpHolds); one not in a copy read after it does not (Approve settles
+  // it from Tally first)
+  if ((inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && (!/^dc-tp-/.test(String(d.vid || "")) || tpHolds(inp, d)))) return null;
   // 1. the sheet itself
   if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you("Payroll " + label + ": the sheet has surcharge or cess on TDS. Book it by hand.");
   const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });
   if (twice) return you("Payroll " + label + ": " + twice.name + " is on the sheet twice.");
+  // (review) other deductions (an advance recovered, canteen, LWF) have no ledger in the payroll journal: said so (a month
+  // posted through Tally Payroll takes them, each to its own pay head)
+  const other = rows.filter((r) => P(r.otherDed));
+  if (other.length) return you("Payroll " + label + ": other deductions (" + Array.from(new Set(other.flatMap((r) => Object.keys(r.ded || {})))).join(", ") + ") have no ledger in the payroll journal. Book this month by hand, or post it through Tally Payroll.");
   // the builder: each employee's net, then the totals by ledger (rupees with paise, as the sheet keeps them)
   // (review L2) each employee's net by the one net function (nightchecks sheetNet: TDS, PT, PF and ESI)
   const per = rows.map((r) => { const gross = r2(num(r.gross)), ded = r2(num(r.tds) + num(r.profTax) + num(r.pf) + num(r.esi)); return { name: r.name, gross, tds: r2(num(r.tds)), pt: r2(num(r.profTax)), pf: r2(num(r.pf)), esi: r2(num(r.esi)), net: sheetNet(r), ded }; });
@@ -364,8 +410,7 @@ export function payrollOne(ym, rows, inp) {
   // next, or naming the month. The same gross: nothing; anything else: Needs you
   // (review N5) salary "yes" (the payroll's own salary ledger, or its all-salary sub-group) is compared; a "maybe" (another
   // ledger named like salary) cannot be decided exactly: Needs you. Each entry counts for one month (salaryEntries)
-  const A = groupsOf(inp.books || {}), sbase = (pickLedger("salaryExpense", inp).ledger) || "", cls = (l) => salaryClass(A, l, sbase, inp.ledgers);
-  const booked = salaryEntries(live(inp.books), ym, (l) => cls(l) !== "");
+  const A = groupsOf(inp.books || {}), { cls, booked } = bookedFor(ym, inp, false);
   const maybe = booked.find((v) => v.ent.some((e) => e.a < 0 && cls(e.l) === "maybe"));
   if (maybe) return you("Payroll " + label + ": an entry of " + dmon(maybe.date) + " to " + maybe.ent.find((e) => e.a < 0 && cls(e.l) === "maybe").l + " may be salary. Check it first.", { amt: tot.gross });
   const sal = (e) => e.a < 0 && cls(e.l) === "yes";
@@ -399,6 +444,87 @@ export function payrollOne(ym, rows, inp) {
   const f = finding("payroll_due", key, "resolved", Object.assign({}, base, { amt: tot.gross, short: "Payroll " + label }), ev);
   const e = entryOf(f, "payroll", dedupe, voucher, "Payroll", ev, checks);
   if (!e.ready) return you("Payroll " + label + ": " + checks.filter((c) => !c.ok).map((c) => c.why || CHECK_WORDS[c.k]).join("; "), { amt: tot.gross });
+  return { finding: f, entry: e };
+}
+
+// next-payroll (the owner, 23-Nov-2026: "Night prepares every month"): a Tally Payroll company's month is prepared as ONE
+// entry for Tally's own payroll voucher (posted on Approve by app/src/lib/payrollPost.js: the employees and pay heads
+// are Tally's, the net to the salary payable ledger), for every month kept with the books, other deductions (an advance,
+// canteen, LWF: each to its own pay head on Approve) included. No journal ledger is needed: the entry is the month's
+// totals (gross, each deduction, net, the employees), worked out two ways. Books first: salary booked for the month by
+// any other entry (a hand payroll voucher to "Basic" or "HRA" too) stops it (Needs you when the amount differs); the
+// month's own Tally Payroll vouchers (TDSDesk:dc-tp-<yyyymm>-<n>) are what is being finished: a month split in parts
+// with some in Tally stays ready until every part is there (each part's draft says how many there are)
+function tallyOne(ym, rows, inp, c) {
+  const { key, dedupe, vid, label, date, base, you } = c, tp = inp.payroll || {}, T = "Tally Payroll " + label;
+  if (posted(inp, vid) || (inp.drafts || []).some((d) => d && d.dedupe === dedupe && !d.removed && d.state !== "failed" && !/^dc-tp-/.test(String(d.vid || "")))) return null;   // booked as a journal through Daily Check
+  // (third review) a part whose FinCom id is in the books is in Tally, whatever its draft says: never "Not confirmed"
+  // (fifth review) and how many parts the month has, from those vouchers' own narration ("part 1 of 2", the builder's
+  // own words: tpparts.js) when the drafts are lost
+  const inBooks = new Set(); let tagParts = 0;
+  live(inp.books).forEach((v) => { const m = String(v.narr || "").match(tpIdRe(ym, inp.clientId)); if (m) { inBooks.add(m[1]); tagParts = Math.max(tagParts, partsIn(v.narr)); } });
+  // (sixth review) a part "sent before" with no Tally id (the posting computer's own record) waits while its day was not
+  // read from Tally after the send, and is "Not confirmed in Tally" (Needs you) at once when it was and the id is not
+  // there: no 24 hours either way
+  const drafts = (inp.drafts || []).map((d) => (!d ? d : inBooks.has(String(d.vid || "")) ? Object.assign({}, d, { state: "posted" })
+    : /^dc-tp-/.test(String(d.vid || "")) && (d.state === "pending" || d.state === "unconfirmed") ? Object.assign({}, d, { state: tpDayRead(inp, Object.assign({ date }, d)) ? "unconfirmed" : "pending" }) : d));
+  { const sc = sentCheck(Object.assign({}, inp, { drafts }), dedupe, "Payroll " + label, you, "sent to Tally (the posting computer says so) but not in Tally’s copy of its day read since"); if (sc) return sc; }
+  // (eighth review) a part retired as not in Tally (posted again under fresh ids) is replaced: neither missing nor counted.
+  // (ninth review) one in Tally after all: Needs you (its people were posted again), never counted toward done
+  const back = drafts.find((d) => d && d.dedupe === dedupe && !d.removed && d.retired && inBooks.has(String(d.vid)));
+  if (back) return you(T + ": part " + String(back.vid) + " was set aside as not in Tally, but Tally has it now, and its people were posted again in another part. Check Tally (Day Book) and delete one of them.");
+  const mine = drafts.filter((d) => d && d.dedupe === dedupe && !d.removed && /^dc-tp-/.test(String(d.vid || "")) && !d.retired);
+  if (mine.some((d) => d.state === "live" || d.state === "pending")) return null;           // a part on its way to Tally
+  const done = new Set(mine.filter((d) => d.state === "posted").map((d) => String(d.vid)));
+  inBooks.forEach((x) => done.add(x));
+  // the month is done when as many of its parts are in Tally as it has (the parts' ids need not run 1..n once one is retired)
+  const parts = Math.max(tagParts, ...mine.map((d) => Number(d.parts) || 0));
+  if (parts > 0 && done.size >= parts) return null;
+  // 1. the sheet
+  if (rows.some((r) => P(r.surcharge) || P(r.cess))) return you(T + ": the sheet has surcharge or cess on TDS. Book it by hand.");
+  const seen = new Set(), twice = rows.find((r) => { const k = ledgerKey(r.name) + "|" + String(r.code || r.pan || ""); if (seen.has(k)) return true; seen.add(k); return false; });
+  if (twice) return you(T + ": " + twice.name + " is on the sheet twice.");
+  const per = rows.map((r) => { const gross = r2(num(r.gross)), other = r2(num(r.otherDed)), ded = r2(num(r.tds) + num(r.profTax) + num(r.pf) + num(r.esi) + other);
+    const net = r.net != null && r.net !== "" ? r2(num(r.net)) : r2(gross - ded);
+    return { name: r.name, gross, tds: r2(num(r.tds)), pt: r2(num(r.profTax)), pf: r2(num(r.pf)), esi: r2(num(r.esi)), other, net, ded }; });
+  const wrong = per.find((p) => Math.abs(r2(p.net + p.ded) - p.gross) >= 0.005 || p.net < 0 || p.gross <= 0);
+  if (wrong) return you(T + ": " + wrong.name + "'s gross " + inr(wrong.gross) + " is not net " + inr(wrong.net) + " plus deductions " + inr(wrong.ded) + ".");
+  // (review, low) Tally Payroll takes an employee only with something to pay: said before anything is posted
+  const zero = per.find((p) => P(p.net) === 0);
+  if (zero) return you(T + ": " + zero.name + "'s net pay is ₹0. Tally Payroll can't take an employee with nothing to pay: leave them off this month's sheet, or post this month as a journal.");
+  const sum = (k) => r2(per.reduce((s, p) => s + p[k], 0));
+  const tot = { gross: sum("gross"), tds: sum("tds"), pt: sum("pt"), pf: sum("pf"), esi: sum("esi"), other: sum("other"), net: sum("net") };
+  // 2. the books first: salary booked by any other entry (the month's own Tally Payroll vouchers left out)
+  const { cls, booked } = bookedFor(ym, inp, true);
+  const maybe = booked.find((v) => v.ent.some((e) => e.a < 0 && cls(e.l) === "maybe"));
+  if (maybe) return you(T + ": an entry of " + dmon(maybe.date) + " to " + maybe.ent.find((e) => e.a < 0 && cls(e.l) === "maybe").l + " may be salary. Check it first.", { amt: tot.gross });
+  if (booked.length) {
+    const amt = r2(booked.reduce((s, v) => s + v.ent.filter((e) => e.a < 0 && cls(e.l) === "yes").reduce((x, e) => x - e.a, 0), 0));
+    if (Math.abs(amt - tot.gross) <= 1) return null;
+    return you(T + ": salary booked " + inr(amt) + ", the sheet says " + inr(tot.gross) + ".", { amt: tot.gross });
+  }
+  // 3. the salary payable ledger: the one picked on Payroll, else the one certain by name and group; none yet is no stop
+  // (Approve asks for it on Payroll)
+  const L = new Set(inp.ledgers || []), payable = tp.payable && L.has(tp.payable) ? tp.payable : (pickLedger("salaryPayable", inp).ledger || "");
+  // 4. two ways
+  const plain = payrollPlain(rows);
+  const agree = !plain.bad && plain.adds && [["gross", "gross"], ["tds", "tds"], ["profTax", "pt"], ["pf", "pf"], ["esi", "esi"], ["other", "other"], ["net", "net"]].every(([a, b]) => P(plain[a]) === P(tot[b]))
+    && P(tot.gross) === P(tot.net) + P(tot.tds) + P(tot.pt) + P(tot.pf) + P(tot.esi) + P(tot.other);
+  const voucher = { type: tp.vchType || "Payroll", kind: "tallyPayroll", date, no: "", party: payable, period: ym, book: inp.bookId || "", lines: [], n: rows.length,
+    gross: tot.gross, net: tot.net, ded: { tds: tot.tds, pt: tot.pt, pf: tot.pf, esi: tot.esi, other: tot.other },
+    narration: "Salary for " + label + " as per the salary sheet (" + rows.length + " employee" + (rows.length === 1 ? "" : "s") + ")" };
+  const checks = checkEntry({ voucher: { date }, source: "journal" }, inp).filter((x) => x.k === "period");
+  checks.push({ k: "duplicate", ok: true, why: "" });
+  checks.push({ k: "adds", ok: plain.adds && !plain.bad, why: plain.bad ? plain.bad + " does not add up" : "" });
+  checks.push({ k: "twoways", ok: agree, why: agree ? "" : "The plain sums and the totals differ" });
+  const ev = [{ t: "salary", ref: "sheet:" + ym, label: "Salary sheet " + label + " · " + rows.length + " employee" + (rows.length === 1 ? "" : "s") },
+    { t: "salary", ref: "sheet:" + ym + ":tot", label: "Gross " + inr(tot.gross) + " = net " + inr(tot.net) + (tot.tds ? " + TDS " + inr(tot.tds) : "") + (tot.pt ? " + PT " + inr(tot.pt) : "") + (tot.pf ? " + PF " + inr(tot.pf) : "") + (tot.esi ? " + ESI " + inr(tot.esi) : "") + (tot.other ? " + other deductions " + inr(tot.other) : "") }]
+    .concat(per.slice(0, 4).map((p, i) => ({ t: "salary", ref: "sheet:" + ym + ":" + i, label: p.name + ": " + inr(p.gross) + (p.ded ? " − " + inr(p.ded) : "") + " = " + inr(p.net) })))
+    .concat(per.length > 4 ? [{ t: "salary", ref: "sheet:" + ym + ":more", label: "and " + (per.length - 4) + " more on the sheet" }] : [])
+    .concat(done.size ? [{ t: "entry", ref: "tp:" + ym + ":done", label: done.size + " part" + (done.size === 1 ? "" : "s") + " already in Tally: Approve posts the rest" }] : []);
+  const f = finding("payroll_due", key, "resolved", Object.assign({}, base, { amt: tot.gross, short: T }), ev);
+  const e = entryOf(f, "payroll", dedupe, voucher, "Tally Payroll", ev, checks);
+  if (!e.ready) return you(T + ": " + checks.filter((x) => !x.ok).map((x) => x.why || CHECK_WORDS[x.k]).join("; "), { amt: tot.gross });
   return { finding: f, entry: e };
 }
 
@@ -485,18 +611,43 @@ export function journals(inp) {
     (r.picks || []).forEach((p) => { if (!byKey.has(p.kind + "|" + p.key)) { byKey.set(p.kind + "|" + p.key, p); findings.push(p); } });
     findings.push(r.finding); if (r.entry) entries.push(r.entry);
   };
-  const months = []; for (let i = LOOKBACK; i >= 1; i--) months.push(ymAdd(cur, -i));
+  const months = payrollMonths(today);
   // the set-off: each month's own journal, so one month's journal in the books is not taken for another's
   const gst = (inp.gst || []).filter((m) => months.includes(m.ym));
   const others = gst.filter((m) => m.journal).map((m) => ({ ym: m.ym, lines: m.journal.lines.map((l) => P(l.dr) ? { ledger: l.l, dr: l.dr } : { ledger: l.l, cr: l.cr }) }));
   gst.forEach((m) => put(setoffOne(m, inp, others)));
   // the payroll: each month of the sheet, after it ends, not before the books begin
-  const sheet = new Map();
-  (inp.salary || []).forEach((r) => { const m = sheetMonth(r); if (m && months.includes(m) && (!inp.booksFrom || m >= ymOf(inp.booksFrom))) { if (!sheet.has(m)) sheet.set(m, []); sheet.get(m).push(r); } });
+  const sheet = sheetMonths(inp, months);
   Array.from(sheet.keys()).sort().forEach((m) => put(payrollOne(m, sheet.get(m), inp)));
   recurringAll(inp).forEach(put);
   // a ledger a person picked earlier stays answered (its finding is kept as they left it)
   return { findings, entries };
+}
+// the months the night looks at (the last LOOKBACK that have ended), and the salary kept for each (not before the books)
+export function payrollMonths(today) { const cur = ymOf(today), out = []; for (let i = LOOKBACK; i >= 1; i--) out.push(ymAdd(cur, -i)); return out; }
+function sheetMonths(inp, months) {
+  const sheet = new Map();
+  (inp.salary || []).forEach((r) => { const m = sheetMonth(r); if (m && months.includes(m) && (!inp.booksFrom || m >= ymOf(inp.booksFrom))) { if (!sheet.has(m)) sheet.set(m, []); sheet.get(m).push(r); } });
+  return sheet;
+}
+// "Make the journal now" (the Payroll page; the owner, 23-Nov-2026): ONE month, by the night's own rules and builder, so
+// the entry is the very one the night would make. kind: made (finding + entry), you (finding: Needs you, words), none,
+// notyet (a month not begun), old (before the months the night looks at, or before the books). The running month may be
+// made too (the owner): running true, with a plain note that the month is not over (the night makes it only after)
+export function payrollNow(ym, inp) {
+  const today = inp.today || "", cur = ymOf(today), label = monYear(ym);
+  if (!/^\d{6}$/.test(String(ym || ""))) return { kind: "none", words: "Say the month." };
+  if (ym > cur) return { kind: "notyet", words: label + " hasn’t begun yet." };
+  const running = ym === cur, months = payrollMonths(today).concat(running ? [cur] : []);
+  if (!months.includes(ym)) return { kind: "old", words: "Daily Check makes payroll entries for the last " + LOOKBACK + " months only." };
+  if (inp.booksFrom && ym < ymOf(inp.booksFrom)) return { kind: "old", words: "The books in FinCom’s cloud begin after " + label + "." };
+  const rows = sheetMonths(inp, months).get(ym);
+  if (!rows || !rows.length) return { kind: "none", nosalary: true, words: "No salary is kept with the books for " + label + "." };
+  const r = payrollOne(ym, rows, inp);
+  if (!r) return { kind: "none", words: label + "’s salary is already in the books, or its entry is on its way to Tally." };
+  const note = running ? label + " isn’t over yet. This is made from the salary kept now." : "";
+  if (r.entry) return Object.assign({ kind: "made", finding: r.finding, picks: r.picks || [], entry: r.entry }, running ? { running, words: note } : {});
+  return Object.assign({ kind: "you", finding: r.finding, picks: r.picks || [], words: String((r.finding.facts || {}).title || "Daily Check needs you for " + label + ".") }, running ? { running } : {});
 }
 // the people's ledger choices, from what earlier nights found (ledger_pick answered)
 // (review N2) the hand journals the owner said are not a month's set-off: "<reg>:<ym>:<voucher id>"

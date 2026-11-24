@@ -30,7 +30,7 @@ const AlertHub = {
   },
   heldOf(){
     const h = this.held;
-    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > (Live.recorderLive || Live.copyLive ? SLOW_MS : 60000) && pollOk()){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
     return [].concat(h.rows || []);
   },
   async heldLoad(){
@@ -48,7 +48,9 @@ const AlertHub = {
   // the lines still waiting, as known now: the bell's own read, each brought up to date by Sync activity's lines (read
   // later, or come in live), so a line applied there is not counted as waiting here
   waitingRows(){
-    const rows = this.heldOf(), act = typeof Rec === "object" && Rec.act && Array.isArray(Rec.act.rows) ? Rec.act.rows : [];
+    // (review of 370f28773) Sync activity's lines only while they come live, or read after the bell's own
+    const ra = typeof Rec === "object" && Rec.act, fresh = ra && Array.isArray(ra.rows) && ((typeof Live === "object" && Live.recorderLive) || (ra.at || 0) >= (this.held.at || 0));
+    const rows = this.heldOf(), act = fresh ? ra.rows : [];
     const by = new Map(act.map(r => [String(r.id), r]));
     const out = rows.map(r => by.get(String(r.id)) || r);
     const seen = new Set(out.map(r => String(r.id)));
@@ -186,7 +188,7 @@ const AlertHub = {
           // next-gap-autoread (migration 160): FinCom asks FinCom Bridge to read Tally's Day Book of the gap's days itself;
           // a read that matches closes the gap, one that shows a missing entry brings it in. Information, no button
           out.push(Object.assign(base, {sev: "info", text: who + ": Checking with Tally… (no action needed)",
-            fix: "FinCom is reading Tally's Day Book for " + this.days(b.gap.since) + " by itself; nothing to do."}));
+            fix: b.gap.older ? "FinCom is reading the older days from Tally by itself; nothing to do." : "FinCom is reading Tally's Day Book for " + this.days(b.gap.since) + " by itself; nothing to do."}));
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
           // a real gap: entries made in Tally that never reached FinCom; the Day Book of those days brings them in
           const gap = b.gap || {since: b.rows[0] && b.rows[0].at};

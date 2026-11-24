@@ -14,6 +14,7 @@
 //     acceptance lapses and the check is open again.
 // gate() says whether the JSON may be offered.
 import { check as recheck, differences } from "./check.js";
+import { allowedForms } from "./pick.js";
 
 const N = (v) => +v || 0;
 const R = (v) => { const x = N(v), r = Math.round(Math.abs(x) + 1e-9) * Math.sign(x); return r === 0 ? 0 : r; };
@@ -322,7 +323,9 @@ function schedules(c, M, S, im, ais, as26, bk) {
   const P = c.profile || {}, faRows = M.fa ? Object.values(M.fa).filter(Array.isArray).reduce((a, v) => a + v.length, 0) : 0;
   const lrs = as26 ? as26.tcs.filter((x) => /1G/i.test(String(x.sec || ""))) : [];
   if (lrs.length && !faRows) out.push(needs("fa_lrs", "sch", "Money sent abroad (TCS 206C(1G))", lrs.length + " remittances with TCS in 26AS. A resident holding any asset abroad at any time in calendar year 2025 fills Schedule FA (Black Money Act, section 43: penalty).", "Say on Schedules whether any foreign asset was held; answer with a note.", lrs.map((x) => ({ label: x.name + " (" + x.tan + ")", b: R(x.amount) }))));
-  if (faRows && M.resident === false) out.push(needs("fa_nr", "sch", "Schedule FA for a non-resident", "Schedule FA is for residents (ordinarily resident) only.", "Remove the rows, or correct the residential status.", [], true));
+  // Schedule FA is for an ordinarily resident only: a non-resident and a not ordinarily resident (NOR) are flagged
+  const nor = M.resStatus === "NOR";
+  if (faRows && (M.resident === false || nor)) out.push(needs("fa_nr", "sch", nor ? "Schedule FA for a not ordinarily resident" : "Schedule FA for a non-resident", "Schedule FA is for residents (ordinarily resident) only.", "Remove the rows, or correct the residential status.", [], true));
   if (M.form === "ITR-6" && (P.indAs === true || M.indAs === true) && bk && bk.sched) {
     const pref = R(Object.values(bk.sched.bs).flatMap((l) => l.trace).filter((x) => x.code === "3B").reduce((s2, x) => s2 + N(x.amt), 0));
     if (pref && P.prefEquity !== true && P.prefEquity !== false) out.push(needs("indas_pref", "sch", "Preference shares under Ind AS", "Preference share capital of " + pref + " is shown as a financial liability (Ind AS 32: a redeemable preference share is a liability), not as equity.",
@@ -336,7 +339,8 @@ function schedules(c, M, S, im, ais, as26, bk) {
 // the rules a reviewer checks on any computation
 function sanity(M, S) {
   const out = [], ent = M.entity, form = M.form;
-  const okForm = { P: ["ITR-3", "ITR-4"], H: ["ITR-3", "ITR-4"], F: M.llp ? ["ITR-5"] : ["ITR-5", "ITR-4"], C: ["ITR-6"] }[ent] || ["ITR-5"];
+  // the forms the law allows for the kind of person (pick.js: ITR-1 / 2 for a person without business, ITR-7 for an exempt entity)
+  const okForm = allowedForms(ent, M.llp === true);
   if (!okForm.includes(form)) out.push(needs("form", "comp", "The right form", form + " is not the return for this entity (" + ent + (M.llp ? ", LLP" : "") + ").", "Use " + okForm.join(" or ") + ".", [], true));
   if (ent === "F" && M.llp == null) out.push(needs("llp", "comp", "Firm or LLP", "Say whether the client is a partnership firm or an LLP (Client setup has them as one choice).", "Answer on Data.", [], true));
   if (form === "ITR-4") {

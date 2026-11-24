@@ -119,6 +119,78 @@ function salesSetKind(id, k){
     let n = 0, c; do c = cnNumber(b, ++n); while (have.has(c.toUpperCase())); x.cnOf = x.number; x.number = c; }
   delete v.hold; mapInvoice(v); saveSales(); render();
 }
+// next-fix-sales-readsoff (the owner, 23-Nov-2026): FinCom Bridge here may refuse reading entries from Tally (its ReadDays
+// is off by default; /vouchers answers "Reading entries from Tally is off on this computer ..."). That answer, and only
+// that one, sends the duplicate check to FinCom's cloud copy (CloudTally.call, the read used from any other computer); no
+// new Tally request. Nothing is posted (said plainly) when there is no cloud copy or it does not answer. An invoice dated
+// on a day the copy does not hold (with reads off, history comes only from Day Book uploads) is held, not posted: it
+// keeps its status with a red note saying so (v.copyHeld, v.postError); the others are checked and posted as usual (the
+// owner, 23-Nov-2026). When the copy's last read is old, each invoice checked on it keeps the note (v.copyCheck, shown
+// on its row and panel). Returns {note, held}: the old copy's note and "M held: FinCom's copy has no entries for
+// <dates>" for the result ("" each when none). Any other error of the check is thrown as before. Post to Tally and Post
+// one by one both check this way
+const SALES_COPY_OLD = 10 * 60000;
+const SALES_NO_COPY = "Not posted: FinCom could not check Tally for these invoice numbers. Turn on reading entries in FinCom Bridge on this computer, or upload the Day Book. Nothing was sent.";
+const SALES_NO_CHECK = "Not posted: FinCom could not check Tally for these invoice numbers (reading entries from Tally is off on this computer and FinCom's cloud copy is not available). Nothing was sent; try again in a minute.";
+function salesReadsOff(e){ return !!e && /Reading entries from Tally is off/i.test(String(e.message || "")); }
+// the cloud copy's last read from Tally: the latest of the bridge's read, its check of the copy against Tally, the last
+// days read in
+function salesCopyAt(cid){
+  const bk = TCloud.book(cid), st = (bk && bk.state) || {};
+  return [st.readAt, st.seen, bk && bk.daysAt].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || "";
+}
+// the invoices' dates (yyyy-mm-dd) the cloud copy does not hold. A day is held only when FinCom's cloud has a row for it
+// in tally_days (the same read as app/src/lib/payrollPost.js readMonth: a cloud read, not a Tally request) and that row
+// says no short read and no empty read waiting for a second one (reviews of 7df0b8932 and de520c137: neither the book's
+// start-to-end range nor state.doneTo says a day was read: a Day Book file sets doneTo to its upload day, bridge-go
+// keep.go, and with reads off nothing corrects it). The copy never holds a day before the book's start, or a day not
+// read (state.skipped). Returns {miss: [dates], rows: Map(date -> row with n)}; a failed read of tally_days is thrown
+const SALES_DAY_BAD = /short read|confirm by a second empty read/i;
+async function salesCopyMissing(cid, list){
+  const bk = TCloud.book(cid) || {}, st = bk.state || {}, d8 = x => String(x || "").replace(/-/g, "").slice(0, 8);
+  const from = d8(bk.from), skipped = new Set([].concat(st.skipped || []).map(d8));
+  const days = [...new Set(list.map(v => String(v.x.date || "").slice(0, 10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  const never = d => (from && d8(d) < from) || skipped.has(d8(d)), ask = days.filter(d => !never(d)), rows = new Map();
+  for (let i = 0; i < ask.length; i += 100){
+    const got = await Cloud.api("tally_days?select=day,at,n,note&book_id=eq." + encodeURIComponent(bk.book) + "&day=in.(" + ask.slice(i, i + 100).join(",") + ")");
+    [].concat(got || []).forEach(r => { if (r && r.day) rows.set(String(r.day).slice(0, 10), r); });
+  }
+  return {miss: days.filter(d => never(d) || !rows.has(d) || SALES_DAY_BAD.test(String(rows.get(d).note || ""))), rows};
+}
+async function salesCheckSafe(list){
+  const co = CO(SL().cid), none = {note: "", held: ""};
+  // (a hold of an earlier check ends with each check: its red note goes, and it is held again below if still so)
+  list.forEach(v => { if (v.copyHeld){ if (v.postError === v.copyHeld) v.postError = ""; delete v.copyHeld; } });
+  try { await salesCheckTally(list); list.forEach(v => { delete v.copyCheck; }); return none; }
+  catch (e){ if (!salesReadsOff(e) || tallyVia(co) !== "bridge") throw e; }
+  if (!(typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) throw {code: "check_off", message: SALES_NO_COPY};
+  let cm;
+  try { cm = await salesCopyMissing(co.id, list); } catch (e){ throw {code: "check_off", message: SALES_NO_CHECK}; }
+  const miss = new Set(cm.miss), day = v => String(v.x.date || "").slice(0, 10), held = [], some = new Set();
+  // (a short day, by its note or by the count below: the copy has only some of its entries, said so; else none)
+  cm.miss.forEach(d => { if (/short read/i.test(String((cm.rows.get(d) || {}).note || ""))) some.add(d); });
+  const hold = v => { delete v.copyCheck; held.push(v); v.copyHeld = v.postError = "Not posted: FinCom's copy of Tally has " + (some.has(day(v)) ? "only some of the entries" : "no entries") + " for " + fmtDate(day(v)) + ", so this invoice number could not be checked. Upload the Day Book for that date, or turn on reading entries in FinCom Bridge on this computer."; };
+  list.filter(v => miss.has(day(v))).forEach(hold);
+  let go = list.filter(v => !miss.has(day(v)));
+  // (the vouchers the cloud copy answered, each once, counted by day against the day's own count: fewer is a short read)
+  const got = new Map(), call = async (c, u) => { const r = await CloudTally.call(c, u); [].concat((r && r.vouchers) || []).forEach(x => got.set(salesTallyKey(x), x)); return r; };
+  // (an answer of the cloud copy's cap for one day stays its own message; anything else: the copy is not available)
+  try { await salesCheckTally(go, call); }
+  catch (e){ throw e && e.code === "check_cap" ? e : {code: "check_off", message: SALES_NO_CHECK}; }
+  const per = {};
+  got.forEach(x => { const d = String(x.date || "").replace(/-/g, "").slice(0, 8); per[d] = (per[d] || 0) + 1; });
+  const short = d => { const r = cm.rows.get(d); return !!r && num(r.n) > (per[d.replace(/-/g, "")] || 0); };
+  // (a voucher of the invoice found all the same stands: In Tally; any other invoice of a short day is held)
+  go.filter(v => short(day(v)) && v.status !== "intally").forEach(v => { miss.add(day(v)); some.add(day(v)); hold(v); });
+  go = go.filter(v => !v.copyHeld);
+  const hd = [...new Set(held.map(day))].sort(), nil = hd.filter(d => !some.has(d)), part = hd.filter(d => some.has(d));
+  const heldWords = held.length ? held.length + " held: FinCom's copy has " + [nil.length ? "no entries for " + nil.map(fmtDate).join(", ") : "", part.length ? "only some of the entries for " + part.map(fmtDate).join(", ") : ""].filter(Boolean).join("; ") : "";
+  const at = salesCopyAt(co.id);
+  if (!go.length || (at && Date.now() - Date.parse(at) <= SALES_COPY_OLD)){ go.forEach(v => { delete v.copyCheck; }); return {note: "", held: heldWords}; }
+  const note = "Checked against FinCom's copy of Tally, last updated " + (at ? tallyHm(at) : "at a time not known") + ". Invoices entered in Tally after that were not checked.";
+  go.forEach(v => { v.copyCheck = {at, note}; });
+  return {note, held: heldWords};
+}
 // "Post one by one to find the cause": each invoice Tally refused in a batch is sent again on its own, through the same
 // posting path (Bridge.post: the same voucher XML, one voucher a request). Allowed because "created 0" is a definite
 // refusal: Tally made nothing of the request (the bridge forgets such a request, the cloud's id is not live). Each one's
@@ -130,14 +202,17 @@ async function salesPostOneByOne(ids){
   if (!list.length){ toast(ids ? "This invoice is not waiting to be tried again." : "No invoice refused in a batch is waiting."); return; }
   if (!(await ensureTallyCompany(co))) return;
   const tn = tallyCoName(co), out = [];
+  let chk = {note: "", held: ""};
   s.oneByOne = {at: new Date().toISOString(), rows: out};
   try {
     s.busy = "Checking Tally for invoices already booked\u2026"; render();
-    try { await salesCheckTally(list); }
+    try { chk = await salesCheckSafe(list); }
     catch (e){ toast((e && e.message) || "Tally could not be checked, so nothing was posted."); return; }
     list.filter(v => v.status === "intally").forEach(v => { delete v.refused; out.push({id: v.id, number: v.x.number, ok: true, word: "Already in Tally: not posted again"}); });
-    list.filter(v => v.status !== "intally" && salesDupOf(v)).forEach(v => out.push({id: v.id, number: v.x.number, ok: false, word: salesDupWords(salesDupOf(v)) + " Not posted: press “Post duplicate anyway” on it to post it."}));
-    list = list.filter(v => v.status !== "intally" && !salesDupOf(v));
+    list.filter(v => v.status !== "intally" && salesDupOf(v) && !v.copyHeld).forEach(v => out.push({id: v.id, number: v.x.number, ok: false, word: salesDupWords(salesDupOf(v)) + " Not posted: press “Post duplicate anyway” on it to post it."}));
+    // (dated on a day FinCom's copy does not hold: held, its red note said on its row of the result)
+    list.filter(v => v.copyHeld && v.status !== "intally").forEach(v => out.push({id: v.id, number: v.x.number, ok: false, held: true, word: v.copyHeld}));
+    list = list.filter(v => v.status !== "intally" && !salesDupOf(v) && !v.copyHeld);
     for (let i = 0; i < list.length; i++){
       const v = list[i];
       s.busy = "Posting one by one: " + (i + 1) + " of " + list.length + " (" + v.x.number + ")\u2026"; render();
@@ -149,24 +224,26 @@ async function salesPostOneByOne(ids){
         masters.forEach(l => { const m = by.get("led:" + l.name); if (m && m.ok){ l.sent = true; l.sentAt = now; } });
         r = by.get(v.id) || null;
       } catch (e){ r = {ok: false, outcomeUnknown: true, message: (e && e.message) || String(e)}; }
-      const no = salesRefusal(r), said = plainMsg(r && r.message) || "";
+      const no = salesRefusal(r), tallySaid = plainMsg(r && r.message) || "";
       // Tally said why and made nothing (a line error with created 0): its words, the invoice put right and posted again
       const told = r && r.ok === false && !r.outcomeUnknown && !r.held && r.created != null && r.created !== "" && num(r.created) === 0 && !num(r.altered) && [].concat(r.lineError || []).some(x => String(x || "").trim());
       let word;
       delete v.refused; delete v.needsCheck;
       if (postTaken(r)){ v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); learnCustomer(v); word = "Posted"; }
-      else if (r && r.held){ v.status = "ready"; v.postError = said; v.postJob = r.job; word = "Queued: " + said; }
+      else if (r && r.held){ v.status = "ready"; v.postError = tallySaid; v.postJob = r.job; word = "Queued: " + tallySaid; }
       else if (no){ salesMarkRefused(v, r, {n: 1, exceptions: no.exceptions}, true); word = "Refused by Tally on its own, with no reason given: this voucher is one that stops the batch"; }
-      else if (told){ v.postError = said; mapInvoice(v); word = "Not posted: " + said; }
+      else if (told){ v.postError = tallySaid; mapInvoice(v); word = "Not posted: " + tallySaid; }
       // (no answer, a timeout, an answer not read back, anything else: it may be in Tally; held until the check runs again)
-      else { v.needsCheck = true; v.postError = "Not confirmed: check Tally before posting again" + (said ? " [" + said + "]" : ""); mapInvoice(v); word = "Not confirmed: check Tally before posting again"; }
+      else { v.needsCheck = true; v.postError = "Not confirmed: check Tally before posting again" + (tallySaid ? " [" + tallySaid + "]" : ""); mapInvoice(v); word = "Not confirmed: check Tally before posting again"; }
       salesOverrideSpent([v]);   // (a "Post duplicate anyway" is good for this one attempt)
       out.push({id: v.id, number: v.x.number, ok: v.status === "posted", word});
       saveSales();
     }
   } finally { s.busy = ""; saveBank({newLed: true}); saveSales(); render(); }
+  // (checked on an old cloud copy: the note on each row of the result too)
+  if (chk.note) out.forEach(x => { if (!x.held) x.word += " " + chk.note; });
   const okN = out.filter(x => x.ok).length;
-  toast("One by one: " + okN + " of " + out.length + " posted" + (okN < out.length ? "; the rest say why under To review" : "") + ".");
+  toast("One by one: " + okN + " of " + out.length + " posted" + (chk.held ? ", " + chk.held : "") + (okN + out.filter(x => x.held).length < out.length ? "; the rest say why under To review" : "") + "." + (chk.note ? " " + chk.note : ""));
   render();
 }
 // The owner (16-Nov-2026): every ledger FinCom set on an invoice can be changed by a person, on the invoice (a searchable
@@ -258,6 +335,7 @@ async function salesDupOverride(id){
 if (typeof salesDupOverride !== "undefined") globalThis.salesDupOverride = salesDupOverride;
 if (typeof salesSetKind !== "undefined") globalThis.salesSetKind = salesSetKind;
 if (typeof salesPostOneByOne !== "undefined") globalThis.salesPostOneByOne = salesPostOneByOne;
+if (typeof salesCheckSafe !== "undefined") globalThis.salesCheckSafe = salesCheckSafe;
 if (typeof rereadSales !== "undefined") globalThis.rereadSales = rereadSales;
 if (typeof salesWhy !== "undefined") globalThis.salesWhy = salesWhy;
 /* ---------- reading an uploaded sales invoice (was in src/js/25; readSalesFile there loads this file first) ---------- */

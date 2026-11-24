@@ -135,7 +135,8 @@ function bankFocusGo(title, ids, note){ bankFocus(title, [].concat(ids || []), n
 function reconPick(i, on){ if (!S.recon) return; if (on) S.recon.pick.add(i); else S.recon.pick.delete(i); render(); }
 function bankSettingsShow(on){ B().showSettings = on; render(); }
 function bankStdLedger(k, v){ const b = B(), co = CO(); co.bankLedgerNames = co.bankLedgerNames || {}; co.bankLedgerNames[k] = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-function bankOptSet(k, on){ const co = CO(); co[k] = on; Store.saveCompany(co); render(); }
+// bank entries as Optional ticked on purpose: when (bankOptionalAt; src/js/27 clientOptKeep)
+function bankOptSet(k, on){ const co = CO(); co[k] = on; if (k === "bankOptional") co.bankOptionalAt = optStamp(co.bankOptionalAt); Store.saveCompany(co); render(); }
 // a figure typed into GSTR-3B (4(B)(2), 4(D)(1)), from app/src/screens/gst/Returns.jsx: what = "rev2.igst", …; kept for the GSTIN and month
 function gst3bSet(what, val){
   const b = S.books, k = (S.gstReg || "") + "|" + S.gstYm, [grp, hd] = what.split(".");
@@ -987,6 +988,7 @@ Object.assign(Rec, {
   actWords(r){ return this.fromFincom(r) ? "Posted from FinCom" : (this.ACTS[r.event] || String(r.event || "")); },
   actOf(){
     const a = this.act, cid = S.syncClient || "";
+    if (typeof Live === "object" && Live.want){ Live.want("rec"); Live.want("sync"); }    // next-db-load-2: Sync activity is on screen
     if (!a.rows && !("at" in a)) Object.assign(a, {rows: null, at: 0, busy: false, no44: false, err: "", cid: ""});
     if (typeof TCloud === "object" && TCloud.on() && !a.busy && (a.cid !== cid || !a.at || (Date.now() - a.at > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()))){ a.at = Date.now(); a.cid = cid; setTimeout(() => this.actLoad(), 0); }
     return a;

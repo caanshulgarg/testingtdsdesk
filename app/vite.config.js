@@ -134,12 +134,14 @@ function legacy(mode) {
       // the "FinCom did not open" note (public/oldcheck.js) reports the browser on the testing site only
       if (sentryOn(mode)) html = html.replace('<script src="./oldcheck.js"></script>', '<script src="./oldcheck.js" data-report="' + SENTRY_INGEST + '/api/4512221234724864/store/?sentry_version=7&amp;sentry_key=7f2432ad2a6406244d931f4856c30933"></script>');
       if (test) html = html.replace("</head>", fs.readFileSync(new URL("./legacy/test-style.html", import.meta.url), "utf8") + "</head>").replace("<body>", '<body class="is-test">');
-      // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo
-      const banner = test && String(process.env.FINCOM_BANNER || "").replace(/["\\<>]/g, "");
-      if (banner) html = html.replace("</head>", '<style>body.is-test::after{content:"' + banner + ' · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"' + banner + '";color:#C9A8F0}</style>\n</head>');
-      // the trial address (docs/RELEASE-FLOW.md): the same files at staging.fincom.live/next/ say TRIAL (index.html marks
-      // a page served from /next/ with data-trial), so promote-next.sh can copy them to review/ unchanged
-      if (test) html = html.replace("</head>", '<style>html[data-trial] body.is-test::after{content:"TRIAL' + (banner ? " · " + banner : "") + ' · a new build on trial · staging database · not for real client work";background:#B42318}html[data-trial] .is-test .side-brand::after{content:"TRIAL";color:#F97066}html[data-trial] .is-test header.top{box-shadow:inset 0 3px 0 #B42318}</style>\n</head>');
+      // the testing site's words (the owner, 23-Nov-2026: "a long line is written [under FinCom] and below a purple line is
+      // coming.. remove that also"): no bar at the foot and no words under the brand, in either look. The words, with a
+      // named preview's own (publish-preview.sh review "REVIEW BUILD – Phase 1"), are kept for support in a meta tag: the
+      // tooltip on the sidebar's "Synced" line and its ⓘ, and Settings' About line (Side.jsx siteWords). The trial
+      // address (docs/RELEASE-FLOW.md: index.html marks a page served from /next/ with data-trial) keeps its red top edge
+      const banner = test && String(process.env.FINCOM_BANNER || "").replace(/["\\<>&]/g, "");
+      if (test) html = html.replace("</head>", '<meta name="fincom-site" content="' + (banner ? banner + " · " : "") + 'Testing site · staging database · not for real client work · post only to a ZZ TEST company in Tally">\n' +
+        '<style>html[data-trial] .is-test header.top{box-shadow:inset 0 3px 0 #B42318}</style>\n</head>');
       return html;
     },
   };

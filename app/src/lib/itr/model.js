@@ -1,7 +1,7 @@
 // The return model: what the two computations take (tax.js, check.js), put together from the books (books.js), the
 // files brought in (imports.js) and the owner's answers (b.itr "<ay>|state"). Pure. Every figure says where it came
 // from; what is not known stays empty and the checks say so.
-import { FORM_OF, DUE } from "./law.js";
+import { FORM_OF, DUE, resOf } from "./law.js";
 import { pf36va, settle36va, settle43B, settleMsme, adjustments } from "./books.js";
 import { salaryHead, houseHead, capitalGains } from "./heads.js";
 
@@ -28,13 +28,18 @@ export function buildModel(c) {
   const st = c.state || {}, im = c.imports || {}, bk = c.books && c.books.ok ? c.books : null;
   const entity = c.entity, form = st.form || formsFor(entity, c.llp)[0];
   // LLP or firm: asked in the return (Client setup has "Firm or LLP" as one choice); never read from the name
-  const M = { form, entity, llp: entity === "F" ? (st.llp === true || st.llp === false ? st.llp : (c.llp === true || c.llp === false ? c.llp : undefined)) : false, regime: st.regime || (entity === "C" ? "" : entity === "F" ? "firm" : ""), age: N(st.age), resident: st.resident !== false,
+  const M = { form, entity, llp: entity === "F" ? (st.llp === true || st.llp === false ? st.llp : (c.llp === true || c.llp === false ? c.llp : undefined)) : false, regime: st.regime || (entity === "C" ? "" : entity === "F" ? "firm" : ""), age: N(st.age),
+    // the residential status (law.js resOf: the return's own, else the older ITR-3 answer, as the form box reads it): a
+    // non-resident is not a resident; RES and NOR are (section 6); not set as before
+    resident: resOf(st).status !== "NRI", resStatus: resOf(st).status,
     audit: !!st.audit, tp: !!st.tp, filingDate: st.filingDate || "", smallCo: st.smallCo, bookProfitOk: !!st.bookProfitOk, form10iea: st.form10iea || "", deductions: st.deductions || {}, losses: st.losses || {}, matCredit: N(st.matCredit) };
   if (entity === "F") M.regime = "firm";
   // business income
-  if (form === "ITR-4") {
-    const p = st.presumptive || {};
-    M.presumptive = {};
+  // presumptive income (44AD, 44ADA, 44AE): ITR-4's; on ITR-3 / ITR-5 too when there are no books, so a move to them
+  // never drops it (tax.js takes it with use; the review of the ITR follow-ups, B1)
+  const p = st.presumptive || {}, presFigs = !!((p.ad && (+p.ad.digital || +p.ad.other)) || (p.ada && +p.ada.receipts) || (p.ae && (p.ae.vehicles || []).length));
+  if (form === "ITR-4" || (!bk && (form === "ITR-3" || form === "ITR-5") && presFigs && st.presumptiveOpt !== false)) {
+    M.presumptive = form === "ITR-4" ? {} : { use: true };
     if (p.ad) M.presumptive.ad = { digital: N(p.ad.digital), other: N(p.ad.other), declared: p.ad.declared == null || p.ad.declared === "" ? null : N(p.ad.declared) };
     if (p.ada) M.presumptive.ada = { receipts: N(p.ada.receipts), cash: N(p.ada.cash), declared: p.ada.declared == null || p.ada.declared === "" ? null : N(p.ada.declared) };
     if (p.ae && (p.ae.vehicles || []).length) M.presumptive.ae = { vehicles: p.ae.vehicles, declared: p.ae.declared == null || p.ae.declared === "" ? null : N(p.ae.declared) };

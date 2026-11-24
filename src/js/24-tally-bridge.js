@@ -232,7 +232,8 @@ const Bridge = {
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress, onChecked){
     // console phase 1b: a paused firm or a company FinCom switched off posts nothing (src/js/99; the database refuses it too)
-    const hold = (why, r) => ({ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why})).concat(r || [])});
+    // (23-Nov-2026) the cloud not read: an entry already in a posting still going keeps that posting's words (postLiveSay)
+    const hold = (why, r) => ({ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why === LINK_UNREAD && postLiveSay(payload.client || (CO() || {}).id, x.id) || why})).concat(r || [])});
     { const why = typeof FirmGate === "object" ? FirmGate.why(payload.client || (S.view === "company" ? S.coId : "")) : "";
       if (why) return hold(why); }
     const coP = (payload.client && S.companies[payload.client]) || (typeof CO === "function" ? CO() : null);
@@ -295,7 +296,7 @@ const Bridge = {
       outC.results = [].concat(outC.results || []).concat(refused);
       return words(outC);
     }
-    { const again = await linkGuid(coP, payload.company); if (again.guid !== lg.guid) return hold(again.why || LINK_UNREAD, refused); }
+    { const again = await linkGuid(coP, payload.company); if (again.guid !== lg.guid) return hold(again.why || LINK_CHANGED, refused); }
     payload = Object.assign({}, payload, {guid: lg.guid});
     let out = null;
     const after = onChecked || cloudOn ? chk => { words(chk); if (out && cloudOn && typeof PostRecord === "object") PostRecord.save(coP, payload, {recId: out.recId, company: out.company, results: [].concat(chk.results || []).concat(refused)}); if (onChecked) onChecked(chk); } : onChecked;
@@ -1020,7 +1021,11 @@ async function checkBankBalance(opts){
 function bankFocus(title, ids, note){ const b = B(); b.focus = {title, ids: [].concat(ids || []), note: note || ""}; b.sel.clear(); b.limit = 500; }
 
 /* ---------- taking an entry back out of Tally ---------- */
-const LINK_UNREAD = "Nothing was sent to Tally: FinCom could not read this client's Tally link just now. Try again in a moment.";
+const LINK_UNREAD = "Not sent: FinCom's cloud did not answer. Nothing went to Tally; try again in a minute.";
+// the words of an entry in a posting of FinCom's cloud still going (as last read), else ""
+const LINK_CHANGED = "Nothing was sent to Tally: this client's Tally link changed just now. Check it on the Tally page, then try again.";
+// (one held for checking: never "posts by itself")
+function postLiveSay(cid, id){ const j = cid && typeof postJobOf === "function" ? postJobOf(cid, id) : null; return !j || !CloudJobs.live(j) ? "" : j.checking && !["waiting", "taken", "running"].includes(j.status) ? "Held for checking in FinCom: not sent again until it is settled." : (j.status === "waiting" ? "Waiting for Tally" : "Being posted on the Tally computer") + ": it stays queued and posts by itself."; }
 // the linked company's GUID a posting or deletion straight to the bridge names, asked right before it: {guid} or {why}
 // (98's LinkRec.sendTo: the link record read afresh, the bridge's /status says linkGuid)
 async function linkGuid(co, name){ return typeof LinkRec === "object" ? LinkRec.sendTo(co, name) : {guid: "", why: LINK_UNREAD}; }
@@ -1039,7 +1044,7 @@ async function unpostFromTally(what, obj, cid, out){
     body: '<p class="note">Voucher ' + esc(t.vchType || "") + " " + esc(obj.tallyVchNo || t.masterId || "") + " dated " + esc(t.vchDate ? fmtDate(tallyToIso(t.vchDate)) : "") +
       " will be deleted from <b>" + esc(t.company || tname) + "</b>. It then comes back here as waiting to be posted.</p>"});
   if (!ans) return false;
-  { const again = await linkGuid(co, t.company || tname); if (again.guid !== lg.guid){ lg = again.why || LINK_UNREAD; toast(lg); if (out) out.why = lg; return false; } }
+  { const again = await linkGuid(co, t.company || tname); if (again.guid !== lg.guid){ lg = again.why || LINK_CHANGED; toast(lg); if (out) out.why = lg; return false; } }
   try {
     const j = await Bridge.call("/unpost", {company: t.company || tname, companyGuid: lg.guid, guid: t.guid, vchType: t.vchType, vchDate: t.vchDate}, 120000);
     if (!j || j.ok === false){ toast("Tally would not remove it: " + plainMsg((j && (j.message || j.error)) || "")); return false; }
@@ -1264,8 +1269,8 @@ async function postBankToTally(ids){
       // round 17a: Tally's reply (bridge 2.1.8, byReply) is posted, not "not yet read back" (postTaken, src/js/59)
       if (x && x.ok && !postTaken(x) && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
-        r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "In Tally, not yet read back \u2014 look in Tally before posting again"});
+        r.postError = billUnconf() + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "Not confirmed by Tally yet \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
         ok++; bankPosted(b.cid, r, x, tname, now); posted.push(r);
         if (x.optional) optionalN++;
@@ -1449,8 +1454,8 @@ async function postBillsToTally(opts){
         // round 17a: Tally's reply (bridge 2.1.8, byReply) counts as posted, as a read back does (postTaken, src/js/59)
         else if (x && postTaken(x)){ ok++; if (postAltered(x)) altered++; else if (x.verified !== true && x.byReply === true) byReplyN++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
-          e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
-          failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
+          e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "Not confirmed by Tally yet: FinCom checks it in Tally by itself in a moment." : billUnconf() + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
+          failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "Not confirmed by Tally yet", unread: true}); }
         // held by a posting still going on in FinCom's cloud (waiting for Tally, or an earlier posting has it): the bill
         // stays as it is, with those words; that posting's result is marked on it when it comes (postReconcile)
         else if (x && x.held) e.postError = plainMsg(x.message);
@@ -1496,6 +1501,8 @@ function billAlready(cid, e, x, tname, now){
   billPosted(cid, e, Object.assign({}, x, {ok: true, verified: true, vchNumber: x.vchNumber || x.vchNo || "", vchDate: x.vchDate || x.date || ""}), tname, now);
   e.postNote = "Already in Tally"; e.postAlreadyMsg = plainMsg(x.message) || "";
 }
+// a bill or bank line Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
+function billUnconf(){ return "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again."; }
 // the bridge has read back the bills it put in Tally: the ones found count as posted now
 function billsAfterCheck(cid, chk, tname){
   const d = S.data[cid];
@@ -1507,7 +1514,7 @@ function billsAfterCheck(cid, chk, tname){
     if (!e || e.exportedAt || !e.postUnconfirmed) return;
     if (postAlready(x)){ billAlready(cid, e, x, tname, now); n++; }
     else if (postTaken(x)){ billPosted(cid, e, x, tname, now); n++; }
-    else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
+    else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? billUnconf() : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
     Store.saveEntry(cid, e);
   });
   if (S.billPost && S.billPost.done && n){ S.billPost.ok = (S.billPost.ok || 0) + n; S.billPost.unverified = Math.max(0, (S.billPost.unverified || 0) - n); S.billPost.failed = (S.billPost.failed || []).filter(f => !(f.unread && d.entries[f.id] && d.entries[f.id].exportedAt)); }

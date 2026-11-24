@@ -3,6 +3,10 @@
 // browser. verify_jwt off: this handler checks the caller itself.
 //   POST {action: "client", firm_id, client_id}
 //   POST {action: "remind"}   (phase 2) the reminders the owners turned on ("Remind by itself"): see remind() below
+//   POST {action: "payroll_now", client_id, ym}   "Make the journal now" on the Payroll page (the owner, 23-Nov-2026): the
+//     one exception to "never by a browser": a signed-in owner or staff of the client's firm (their own token); the books
+//     read as the night reads them, the month made by the night's own builder (dailyjournals.js payrollNow) and kept as
+//     night_apply keeps it (paynow.js): that finding and entry only, once; no night_runs row, nothing posted
 // It reads the client's books from FinCom's cloud with the service role (gst-run's own loader and engine: the same books
 // the app opens), adds the bank statements, the Inbox, FinCom's bills and what earlier nights found, runs the checks and
 // FinCom's own answers (server/_shared/nightchecks.js), and hands everything to night_apply in one call (idempotent:
@@ -10,9 +14,14 @@
 import { firmGate, viaRest } from "../_shared/firmgate.ts";
 import { load } from "../gst-run/data.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf } from "./nightinput.js";
+import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf, monthEndsIST, daysOfBooks } from "./nightinput.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { journals } from "../_shared/dailyjournals.js";
+import { journals, payrollNow, payrollMonths } from "../_shared/dailyjournals.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { existingNow, applyNow, keepNow, withdrawNow } from "./paynow.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { monYear } from "../_shared/nightchecks.js";
+import { corsFor } from "../_shared/cors.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { message } from "../_shared/asks.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
@@ -22,7 +31,9 @@ import { run } from "../_shared/nightchecks.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { ENGINE } from "../gst-run/engine.js";
 
-export type Deps = { env: (k: string) => string | undefined; fetch: typeof fetch; now?: () => Date; ready?: number; total?: number };
+export type Deps = { env: (k: string) => string | undefined; fetch: typeof fetch; now?: () => Date; ready?: number; total?: number;
+  // (tests) the books of a client for payroll_now, read and made into the month's result; the night's own reading otherwise
+  inputFor?: (firm: string, cid: string, ym: string, req: any) => Promise<{ made?: any; words?: string }> };
 // the run's own work, not the waits for the database (an edge function's CPU limit counts the same): making the books over
 // READY ms keeps the entries made (gst_calc_prep, as gst-run does) and the next tick goes on from them; the whole run over
 // TOTAL ms is stopped and said so
@@ -62,10 +73,11 @@ export function handler(deps: Deps) {
   };
   const top = per(), rpc = top.rpc;
 
-  async function client(firm: string, cid: string, req: { ctx: { spent: number }; rest: any; rpc: any }) {
+  // pay: payroll_now's month: the same reading of the books, then that month only (nothing written to night_runs)
+  async function client(firm: string, cid: string, req: { ctx: { spent: number }; rest: any; rpc: any }, pay?: { ym: string }) {
     const { rest, rpc } = req;
     const night = istDay(now()), ym = night.slice(0, 7).replace("-", "");
-    const fail = (status: string, why: string) => rpc("night_fail", { p_firm: firm, p_client: cid, p_night: night, p_status: status, p_why: why }).catch(() => null);
+    const fail = (status: string, why: string) => pay ? Promise.resolve(null) : rpc("night_fail", { p_firm: firm, p_client: cid, p_night: night, p_status: status, p_why: why }).catch(() => null);
     // the console's switches: when they cannot be read, nothing is checked (closed, not open); the next tick tries again
     // (firmGate itself lets a failed read through, for the pages; here a read that failed for any reason but a column this
     // database does not have stops the night for the client)
@@ -103,6 +115,7 @@ export function handler(deps: Deps) {
       // too much for one run: the entries made are kept, the next tick goes on from them (the run is tried again)
       const put = bver ? await rpc("gst_calc_prep_put", { p_book: book.book_id, p_version: bver, p_engine: ENGINE, p_vouchers: rows.made }).catch(() => false) : false;
       await fail("failed", put === true ? "large books: prepared, goes on next tick" : "large books: could not be prepared");
+      if (pay) return { ok: false, words: "This client's books are large: FinCom is reading them. Try again in a minute." };
       return { ok: true, prepared: put === true };
     }
     const twob = twobOnly(b, rows);
@@ -116,12 +129,35 @@ export function handler(deps: Deps) {
     const jobRows = jobIds.length ? await rest("/rest/v1/tally_post_jobs?select=id,status,results&id=in.(" + jobIds.join(",") + ")").catch(() => []) : [];
     const jobs = Object.fromEntries((Array.isArray(jobRows) ? jobRows : []).map((j: any) => [j.id, j]));
     await rpc("entry_settle", { p_firm: firm, p_client: cid, p_failed: draftsOf(draftRecs, jobs, prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at }))).filter((d: any) => d.state === "failed").map((d: any) => d.dedupe) }).catch(() => null);
-    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    // next-payroll (review B1): the pay heads of Tally's payroll ("Basic", "HRA": tally_ledgers.for_payroll) with Tally's pay
+    // head type, so a payroll voucher entered in Tally counts as salary booked and the employer's contributions never do (a
+    // cloud without migration 74's columns: none, as before)
+    const phRows = await rest("/rest/v1/tally_ledgers?select=name,pay_type&for_payroll=eq.true&merged_into=is.null&deleted_at=is.null&book_id=eq." + enc(String(book.book_id)) + "&limit=2000").catch(() => []);
+    const payHeads = (Array.isArray(phRows) ? phRows : []).filter((l: any) => l && l.name).map((l: any) => ({ name: String(l.name), type: String(l.pay_type || "") }));
+    // (sixth, seventh reviews) when the month-end days of the lookback (in India's time) and the drafts' own days were last
+    // read from Tally (tally_days.at), each from the client's book that holds it (a split year's March in last year's
+    // book): a Tally Payroll part not in the books may be in Tally until its day was read after it was sent
+    const ends = Array.from(new Set(monthEndsIST(now(), 15).concat(draftRecs.map((r: any) => String((((r.data || {}).vouchers || [])[0] || {}).date || "").slice(0, 10)).filter((x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x))))).slice(0, 60);
+    const cBooks = await rest("/rest/v1/tally_books?select=book_id,from_date&firm_id=eq." + enc(firm) + "&client_id=eq." + enc(cid)).catch(() => []);
+    const bIds = (Array.isArray(cBooks) ? cBooks : []).map((x: any) => String(x.book_id)).filter(Boolean);
+    const dayRows = bIds.length ? await rest("/rest/v1/tally_days?select=book_id,day,at&book_id=in.(" + bIds.map(enc).join(",") + ")&day=in.(" + ends.join(",") + ")").catch(() => []) : [];
+    rows.days = daysOfBooks(Array.isArray(cBooks) ? cBooks : [], Array.isArray(dayRows) ? dayRows : []);
+    const inp = nightInput(rows, b, { today, bankRecs, inboxRecs, entryRecs, twob, firmRules, gst, draftRecs, jobs, payHeads, prior: prior.map((p: any) => ({ kind: p.kind, key: p.key, state: p.state, evidence: p.evidence, undone: !!p.undone_at })) });
+    if (pay) return { ok: true, made: payrollNow(pay.ym, inp) };
     const res0 = run(inp), j = journals(inp);
     const res = { findings: res0.findings.concat(j.findings), entries: res0.entries.concat(j.entries) };
     if (spent() > (deps.total || TOTAL) * 3) { await fail("failed", "too large for one run (" + spent() + " ms)"); return { ok: false, error: "too large" }; }
+    // (review B2) the running month's payroll entry made with "Make the journal now": kept (the night does not make that
+    // month, and night_apply withdraws on a complete run what the run did not pass); (re-review 2) and that month's open
+    // findings (Needs you), passed back as they are, so night_apply does not clear them; not read: the night stops for
+    // the client
+    let keep: { entries: any[]; findings: any[] };
+    try { keep = await keepNow(rest, firm, cid, payrollMonths(today), res.findings); } catch { await fail("failed", "the payroll entries made now could not be read"); return { ok: false, error: "keep" }; }
     const version = String(book.book_id) + ":" + (b.vouchers || []).length + ":" + (book.ledgers_at || "");
-    const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings, p_entries: res.entries, p_complete: true, p_why: "" });
+    // (re-review 3) "Make now" (applyNow) writes through PostgREST, one call at a time, so it cannot hold night_apply's lock
+    // (pg_advisory_xact_lock 'night|firm|client'); a press between keepNow's read and night_apply can still be withdrawn
+    // that night. Pressing Make now again makes it again (a withdrawn entry is made in its place)
+    const counts = await rpc("night_apply", { p_firm: firm, p_client: cid, p_night: night, p_version: version, p_findings: res.findings.concat(keep.findings), p_entries: res.entries.concat(keep.entries), p_complete: true, p_why: "" });
     return { ok: true, night, counts };
   }
 
@@ -158,9 +194,73 @@ export function handler(deps: Deps) {
     return { ok: true, reminders: out.length, sent: out.filter((x) => x.ok).length, test: out.every((x) => x.test !== false) };
   }
 
+  // payroll_now: a person of the client's firm (owner or staff there, the two-step sign-in finished), never the timer's key
+  const STAFF = ["owner", "staff"];
+  const SKIPPED: Record<string, string> = { books: "This client's books are not in FinCom's cloud yet. Send them from Tally first.", client: "No such client in your firm." };
+  async function payrollNowFor(jwt: string, body: any) {
+    const one = per(), rest = one.rest, cid = String(body.client_id || ""), ym = String(body.ym || "");
+    const ANON = String(env("SUPABASE_ANON_KEY") || "");
+    if (!jwt || jwt === SERVICE || (ANON && jwt === ANON) || jwt === "anon") return [401, { ok: false, kind: "auth", error: "Sign in to the firm account first." }] as const;
+    const asUser = (path: string, init: RequestInit = {}) => doFetch(URL_ + path, { ...init, headers: { apikey: ANON || SERVICE, Authorization: "Bearer " + jwt, "Content-Type": "application/json" } });
+    let user: any;
+    try { const r = await asUser("/auth/v1/user"); user = r.ok ? await r.json() : null; } catch { user = null; }
+    if (!user?.id) return [401, { ok: false, kind: "auth", error: "Sign in again." }] as const;
+    let mfa = false;
+    try { const r = await asUser("/rest/v1/rpc/mfa_ok", { method: "POST", body: "{}" }); mfa = r.ok && (await r.json()) === true; } catch { mfa = false; }
+    if (!mfa) return [403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." }] as const;
+    if (!/^[\w.:-]{1,80}$/.test(cid) || !/^\d{4}(0[1-9]|1[0-2])$/.test(ym)) return [400, { ok: false, error: "Say the client and the month." }] as const;
+    const mem = ((await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + enc(user.id)).catch(() => [])) || []) as any[];
+    const live = mem.filter((m) => m && m.active && m.firm_id);
+    if (!live.length) return [403, { ok: false, kind: "firm", error: "This account is not part of a firm." }] as const;
+    const writes = live.filter((m) => STAFF.includes(String(m.role || "")));
+    if (!writes.length) return [403, { ok: false, kind: "role", error: "Only the firm's owner or staff make entries." }] as const;
+    // the client in one of the firms this person writes in (a person of two firms: the client's own)
+    const cl = ((await rest("/rest/v1/clients?select=id,firm_id,deleted&firm_id=in.(" + writes.map((m) => enc(String(m.firm_id))).join(",") + ")&id=eq." + enc(cid)).catch(() => [])) || [])[0];
+    if (!cl || cl.deleted) return [404, { ok: false, kind: "client", error: "No such client in your firm." }] as const;
+    const firm = String(cl.firm_id);
+    // made before (by the night or this button): said, never made again, the books not even read; (re-review 1) but the
+    // running month's entry still ready or held is made again from the salary kept now (applyNow: the same entry)
+    const ex = await existingNow(rest, firm, cid, ym), running = ym === istDay(now()).slice(0, 7).replace("-", "");
+    if (ex && !(running && (ex.state === "ready" || ex.state === "held"))) return [200, { ok: true, kind: "already", id: ex.id, state: ex.state }] as const;
+    const got: any = deps.inputFor ? await deps.inputFor(firm, cid, ym, one) : await client(firm, cid, one, { ym });
+    const made = got && got.made;
+    if (!made) {
+      const sk = got && got.skipped ? String(got.skipped) : "";
+      const words = (got && got.words) || (sk ? SKIPPED[sk] || "Daily Check is switched off for this client, so nothing is made now." : "FinCom could not read this client's books in the cloud. Try again in a minute.");
+      return [200, { ok: true, kind: "none", words }] as const;
+    }
+    // (review 3) the running month with nothing to make now (no salary kept, or it is in the books): its entry still ready
+    // or held is taken back, and the page says why
+    const BACK = " The entry made for it earlier is taken back.";
+    if (made.kind !== "made" && made.kind !== "you") {
+      const gone = running && made.kind === "none" && ex ? await withdrawNow(rest, firm, cid, ym, String(user.id), "none") : "";
+      return [200, Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {}, made.nosalary ? { nosalary: true } : {})] as const;
+    }
+    // (review 4) press: a person pressed Make now (their new decision: a month set aside, or undone and asked of no one, is
+    // opened again and made); the update after a save and the second check at Approve send none and keep the choice
+    const a = await applyNow({ rest, firm, cid, night: istDay(now()), by: String(user.id), press: body.press === true }, made);
+    // (review 3) kept (the month set aside or undone on Daily Check): Needs you, never the note of an entry made
+    // (review 5) held by a question asked of the client: waiting for the client's answer (From clients), not Needs you
+    // (review 6) a question not yet sent (a Draft) or closed: its place named, not "waiting for the client"; (review 7)
+    // answered: what to do (close it, then press)
+    const words = a.kind === "kept" ? (a.client ? (a.question === "answered" ? "The client has answered the question for " + monYear(ym) + " on Daily Check › From clients. Close it there, then press Make the journal now." : a.question === "asked" ? "Waiting for the client’s answer for " + monYear(ym) + " on Daily Check › From clients." : "The question for " + monYear(ym) + " is on Daily Check › From clients.") : "Daily Check needs you for " + monYear(ym) + ".") : a.kind === "you" ? String(made.words || "") : made.words || "";
+    return [200, Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a)] as const;
+  }
+
   return async (req: Request) => {
+    const cors = corsFor(req);
+    if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
     if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
     const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""), ck = req.headers.get("x-cron-key") || "";
+    if (!ck && jwt !== SERVICE) {
+      // a browser: only payroll_now
+      let pb: any = {};
+      try { pb = await req.clone().json(); } catch { pb = {}; }
+      if (pb && pb.action === "payroll_now") {
+        try { const [code, out] = await payrollNowFor(jwt, pb); return new Response(JSON.stringify(out), { status: code, headers: { ...cors, "Content-Type": "application/json" } }); }
+        catch (e) { return new Response(JSON.stringify({ ok: false, error: String((e as Error)?.message || e).slice(0, 300) }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } }); }
+      }
+    }
     const inside = (SERVICE && jwt === SERVICE) || (ck && (await rpc("gst_cron_ok", { k: ck }).catch(() => false)) === true);
     if (!inside) return reply(401, { ok: false, error: "Only FinCom's own timer runs the night check." });
     const one = per();

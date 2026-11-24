@@ -112,5 +112,43 @@ console.log("coverage: a schedule with figures FinCom does not fill blocks the J
     const k4 = coverage({ form: "ITR-4", model, comp, profile: {} }, {}).map((x) => x.key);
     ok(k4.includes("cf_itr4"), "ITR-4 with a loss to carry forward: blocked"); }
 }
+console.log("presumptive income on ITR-3 / ITR-5 without books: computed, the JSON held (its no-books lines are not filled yet)");
+{
+  for (const [form, entity, pan] of [["ITR-3", "P", "ZZZPZ9999Z"], ["ITR-5", "F", "ZZZFZ9999Z"]]) {
+    const st = { form, presumptive: { ad: { digital: 3000000, other: 500000 } }, regime: "new", llp: false };
+    const model = buildModel({ entity, client: { entity, pan }, state: st, books: null, imports: importsOf([]) }), comp = compute(model);
+    ok(comp.ti === 220000, form + ", no books, 44AD: the presumptive income is computed (TI " + comp.ti + ")");
+    const keys = coverage({ form, model, comp, profile: {} }, {}).map((x) => x.key);
+    ok(keys.includes("pres_nobooks"), form + ": the JSON is held, said (" + keys.join(",") + ")");
+  }
+  const st4 = { form: "ITR-4", presumptive: { ad: { digital: 3000000, other: 500000 } }, regime: "new" };
+  const m4 = buildModel({ entity: "P", client: { entity: "P", pan: "ZZZPZ9999Z" }, state: st4, books: null, imports: importsOf([]) });
+  ok(!coverage({ form: "ITR-4", model: m4, comp: compute(m4), profile: {} }, {}).some((x) => x.key === "pres_nobooks"), "ITR-4: not held");
+}
+console.log("ITR-4 houses: up to the schema's own limit (the review of 24-Nov-2026 (2))");
+{
+  const LW = await import("../app/src/lib/itr/law.js");
+  const sch = schemaOf("ITR-4"), max = ((((sch.definitions || {}).IncomeDeductions || {}).properties || {}).PropertyDetails || {}).maxItems;
+  ok(max === 2 && LW.itr4Houses && LW.itr4Houses(LW.AY) === max, "ITR-4 AY 2026-27: PropertyDetails maxItems " + max + ", law.js the same (" + (LW.itr4Houses && LW.itr4Houses(LW.AY)) + ")");
+  const D = await demo("ITR-4"), files = Object.entries(D.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v)), imports = importsOf(files);
+  const house = (i) => ({ id: "h" + i, kind: "L", rent: 120000, municipal: 0 });
+  const keys = (n) => { const st = Object.assign({}, D.booksObj.itr["2026|state"], { houses: Array.from({ length: n }, (_, i) => house(i)) }); const model = buildModel({ entity: "P", client: D.client, imports, state: st, books: D.books }); const comp = compute(model);
+    return coverage({ form: "ITR-4", model, comp, profile: {} }, {}).map((x) => x.key); };
+  ok(!keys(2).includes("hp_itr4"), "ITR-4 with two houses: not blocked");
+  ok(keys(3).includes("hp_itr4"), "ITR-4 with three houses: blocked");
+}
+console.log("the residential status chosen on the form box (the review of 24-Nov-2026 (3)): the computation and ITR-3 take it");
+{
+  const D = await demo("ITR-3"), schema = schemaOf("ITR-3");
+  const files = Object.entries(D.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v)), imports = importsOf(files);
+  const mod = (res) => buildModel({ entity: "P", client: D.client, imports, state: Object.assign({}, D.booksObj.itr["2026|state"], { resident: res }), books: D.books });
+  ok(mod("NRI").resident === false && mod("NOR").resident === true && mod("RES").resident === true && mod(undefined).resident === true && mod(false).resident === false,
+    "the computation: a non-resident is not a resident; not ordinarily resident is (section 6); not set as before (" + ["NRI", "NOR", "RES", undefined, false].map((x) => mod(x).resident) + ")");
+  for (const res of ["RES", "NOR"]) {
+    const model = mod(res), comp = compute(model), st = Object.assign({}, D.booksObj.itr["2026|state"], { resident: res });
+    const j = makeJson({ form: "ITR-3", schema, model, comp, sched: D.books.sched, profile: buildProfile({ entity: "P", client: D.client, imports, state: st }), answers: {}, today: "2026-11-22" });
+    ok(!j.asks.some((q) => /ResidentialStatus/.test(q.path)) && at(j.doc, "ITR/ITR3/PartA_GEN1/FilingStatus/ResidentialStatus") === res, "ITR-3 with " + res + " chosen: filled, not asked again (" + at(j.doc, "ITR/ITR3/PartA_GEN1/FilingStatus/ResidentialStatus") + ")");
+  }
+}
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

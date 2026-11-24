@@ -183,8 +183,9 @@ function Head({ name, c, s, via, rz, w, fz, lf }) {
 }
 
 // the foot: the count over the first columns, then each total under its column
-function Foot({ cols, rows, unit, of, note }) {
-  const [one, many] = unit, n = rows.length;
+function Foot({ cols, rows, unit, of, note, counted }) {
+  // counted(row): only such rows are counted (a page's extra rows, e.g. a missing month, are not one of the unit)
+  const [one, many] = unit, n = counted ? rows.filter(counted).length : rows.length;
   // note (t70): a page's own words for the count (how many of how many, the total, Clear filters) in place of the plain count
   const count = note || <><b>{n + " " + (n === 1 ? one : many)}</b>{of != null && of !== n ? " of " + of : ""}</>;
   const cells = [];
@@ -243,7 +244,7 @@ function useGrow(len, name) {
 }
 
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
-  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze, filters = true, selected }) {
+  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, counted, keepHead, resize, freeze, filters = true, selected }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
@@ -305,7 +306,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
           const rowsOut = open ? [tr, <tr key={k + ":open"} className="lt-open"><td colSpan={cs.length} style={{ background: "var(--paper)", padding: 0 }}>{open}</td></tr>] : [tr];
           return head ? [<tr key={k + ":head"} className="lt-grp"><td colSpan={cs.length}>{head}</td></tr>, ...rowsOut] : rowsOut.length === 1 ? tr : rowsOut;
         })}{grow && shown.length < all.length && <tr ref={gref} data-lt-grow={all.length - shown.length} data-lt-n={shown.length} aria-hidden="true"><td colSpan={cs.length} style={{ padding: 0, border: 0 }} /></tr>}{tail}</tbody>
-        {foot && <Foot cols={cs} rows={all} unit={unit} of={of} note={footNote} />}
+        {foot && <Foot cols={cs} rows={all} unit={unit} of={of} note={footNote} counted={counted} />}
       </table>
     </Wrap>
     {limit && all.length > shown.length ? more : null}

@@ -9,7 +9,7 @@ import { loadAll, cloudOn, canWrite, isOwner, nameOf, askable, undo, choose, ask
 import { TRUST_WORDS, LEVEL_WORDS } from "../../../../server/_shared/dailytrust.js";
 import Review from "./Review.jsx";
 import "./daily.css";
-/* global toast, navHome */
+/* global toast, navHome, S */
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const rs = (v) => "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -24,6 +24,7 @@ const MONTH = (ym) => ym && ym.length === 6 ? MON[+ym.slice(4, 6) - 1] + " " + y
 export function entryWords(e) {
   const v = e.voucher || {};
   if (e.source === "gst_setoff") return { type: "Journal", party: "GSTR-3B " + MONTH(v.period), reason: "GST set-off" };
+  if (e.source === "payroll" && v.kind === "tallyPayroll") return { type: "Tally Payroll", party: "Salary sheet " + MONTH(v.period), reason: "Payroll" };
   if (e.source === "payroll") return { type: "Journal", party: "Salary sheet " + MONTH(v.period), reason: "Payroll" };
   if (e.source === "recurring") return { type: "Journal", party: v.party, reason: "Monthly" };
   const sal = (e.evidence || []).find((x) => x.t === "salary" && / · /.test(x.label || ""));
@@ -104,6 +105,15 @@ function NeedsYou({ list, busy, run, entries }) {
   </Group>);
 }
 
+// (review 5) a Tally Payroll month: a payroll voucher (its employees, the net to the payable ledger), not journal lines
+export function PayrollFacts({ v }) {
+  const d = v.ded || {}, ded = [["TDS", d.tds], ["PT", d.pt], ["PF", d.pf], ["ESI", d.esi], ["Other deductions", d.other]].filter((x) => Number(x[1]));
+  return <div className="dc-lines" role="table" aria-label="Tally payroll voucher" data-tp-facts="">
+    <div className="dc-lr" role="row"><span role="cell">{(v.type || "Payroll") + " voucher · " + (Number(v.n) || 0) + " employee" + (Number(v.n) === 1 ? "" : "s")}</span><span role="cell" className="n">{rs(v.gross)}</span><span role="cell" className="n"></span></div>
+    {ded.map(([w, a]) => <div key={w} className="dc-lr" role="row"><span role="cell">{w}</span><span role="cell" className="n"></span><span role="cell" className="n">{rs(a)}</span></div>)}
+    <div className="dc-lr" role="row"><span role="cell">{"Net to " + (v.party || "salary payable (pick it on Payroll)")}</span><span role="cell" className="n"></span><span role="cell" className="n">{rs(v.net)}</span></div>
+  </div>;
+}
 function Lines({ lines }) {
   const t = (k) => lines.reduce((s, l) => s + (Number(l[k]) || 0), 0);
   return <div className="dc-lines" role="table" aria-label="Ledgers">
@@ -131,7 +141,7 @@ function Entries({ list, open, toggle, busy, run, approveMany, suggest }) {
     <Suggest list={suggest || []} busy={busy} run={run} />
     {w && <div className="dc-bar"><label className="chk"><input type="checkbox" checked={tick.size === list.length} onChange={() => setTick(tick.size === list.length ? new Set() : new Set(list.map((e) => e.id)))} /> All</label>
       <button type="button" className="btn small primary" disabled={busy || !picked.length} onClick={() => approveMany(picked).then(() => setTick(new Set()))}>{"Approve " + picked.length}</button></div>}
-    <ul className="dc-rows">{list.map((e) => { const v = e.voucher || {}, amt = (v.lines || []).reduce((s, l) => s + (Number(l.dr) || 0), 0), W = entryWords(e), jv = JOURNAL.has(e.source);
+    <ul className="dc-rows">{list.map((e) => { const v = e.voucher || {}, tpv = v.kind === "tallyPayroll", amt = tpv ? Number(v.net) || 0 : (v.lines || []).reduce((s, l) => s + (Number(l.dr) || 0), 0), W = entryWords(e), jv = JOURNAL.has(e.source);
       return <li key={e.id} className={"dc-row dc-entry" + (open === e.id ? " open" : "")} data-row={e.id}>
         <div className="dc-line">
           {w && <input type="checkbox" className="dc-tick" checked={tick.has(e.id)} onChange={() => flip(e.id)} aria-label={"Tick " + v.type + " " + (v.party || "")} />}
@@ -144,7 +154,7 @@ function Entries({ list, open, toggle, busy, run, approveMany, suggest }) {
             {w && <button type="button" className="dc-icon no" aria-label="Reject" title="Reject" disabled={busy || e.state !== "ready"} onClick={() => run(() => reject(e.id))}><X width={16} height={16} /></button>}</>}
           </div>
         </div>
-        {open === e.id && <div className="dc-more"><div className="dc-sub">{nameOf(e.client_id)}{v.narration ? " · " + v.narration : ""}</div><Lines lines={v.lines || []} /><Evidence items={e.evidence} />
+        {open === e.id && <div className="dc-more"><div className="dc-sub">{nameOf(e.client_id)}{v.narration ? " · " + v.narration : ""}</div>{tpv ? <PayrollFacts v={v} /> : <Lines lines={v.lines || []} />}<Evidence items={e.evidence} />
           {jv && <p className="dc-checks" data-checks="">{(e.checks || []).filter((c) => c.ok).map((c) => <span key={c.k}><Check width={11} height={11} aria-hidden="true" />{CHECKS[c.k] || c.k}</span>)}</p>}
           {w && !jv && <button type="button" className="linkbtn" onClick={() => editEntry(e).catch(oops)}>Edit</button>}</div>}
       </li>; })}</ul>
@@ -162,17 +172,22 @@ function Done({ list, open, toggle, busy, run }) {
 }
 
 export default function DailyCheck() {
-  const [data, setData] = useState(null), [err, setErr] = useState(""), [tab, setTab] = useState(""), [open, setOpen] = useState(""), [send, setSend] = useState(null), [busy, setBusy] = useState(false);
+  // (the Payroll page's "Make the journal now", Open it) the tab and the entry to open first, said once
+  const first0 = (k) => { try { const v = String(S[k] || ""); S[k] = ""; return v; } catch (e) { return ""; } };
+  const [data, setData] = useState(null), [err, setErr] = useState(""), [tab, setTab] = useState(() => first0("dcTab")), [open, setOpen] = useState(() => first0("dcOpen")), [send, setSend] = useState(null), [busy, setBusy] = useState(false);
   const reload = useCallback(() => loadAll().then((d) => { setData(d || false); setErr(""); }, (e) => setErr(String((e && e.message) || e))), []);
   useEffect(() => { reload(); }, [reload]);
   const run = (fn) => { setBusy(true); return Promise.resolve().then(fn).then(reload, oops).finally(() => setBusy(false)); };
   const approveMany = async (list) => {
-    setBusy(true); let ok = 0, jv = 0;
-    try { for (const e of list) { if (await approveEntry(e).catch((x) => { oops(x); return false; })) { ok++; if (JOURNAL.has(e.source)) jv++; } else break; } }
+    setBusy(true); let ok = 0, jv = 0, q = 0;
+    try { for (const e of list) { const r = await approveEntry(e).catch((x) => { oops(x); return false; }); if (r) { ok++; if (JOURNAL.has(e.source)) jv++; if (r === "queued") q++; } else break; } }
     finally { setBusy(false); }
     if (typeof navHome === "function") navHome("daily");
-    // a journal goes to Tally at once (the existing path for a hand-made voucher); a bill or a bank line waits on the Post page
-    if (ok) say(jv === ok ? (ok === 1 ? "Approved and sent to Tally." : ok + " approved and sent to Tally.") : ok === 1 ? "Approved. It is on the Post page." : ok + " approved. Bills and bank lines are on the Post page.");
+    // a journal goes to Tally at once (the existing path for a hand-made voucher), or waits in the cloud's queue for the
+    // Tally computer (said so: review 5); a bill or a bank line waits on the Post page
+    const Q = "queued for the Tally computer (it posts by itself)";
+    if (ok) say(jv === ok ? (!q ? (ok === 1 ? "Approved and sent to Tally." : ok + " approved and sent to Tally.") : q === ok ? (ok === 1 ? "Approved and " + Q + "." : ok + " approved and " + Q + ".")
+      : ok + " approved: " + (ok - q) + " sent to Tally, " + q + " " + Q + ".") : ok === 1 ? "Approved. It is on the Post page." : ok + " approved. Bills and bank lines are on the Post page.");
     reload();
   };
   if (!cloudOn()) return <section className="dc" data-daily=""><p className="dc-none" data-none="cloud">Daily Check runs in the cloud. Sign in to the firm account to see it.</p></section>;

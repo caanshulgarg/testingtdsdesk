@@ -214,11 +214,182 @@ that). A payroll-shaped voucher would therefore already pass the bridge if FinCo
 is the only stop: this branch never sends one (no `Bridge.post` from the Payroll page; Approve is held by
 `payrollHold`). Step 1 of 4.2 closes that, by routing such bodies to their own, narrower id.
 
-### 4.3 What happens after sign-off (app side, small)
+### 4.3 The app side: Approve posts it (built 23-Nov-2026, not published)
 
-- `tallyPayroll.js` vouchers become Daily Check drafts (`dc-tp-<ym>[-n]`).
-- Approve posts each through `postDraft` → `Bridge.post`, one voucher per call, with the same claim, release and
-  approved steps as the journal.
-- `payrollHold` then lets a Tally Payroll company's Approve post the voucher instead of the journal.
+- **Builder** (`app/src/lib/tallyPayroll.js`): exactly the shape `payrollimport.go` accepts. Never a REMOTEID. Free
+  text (narration, category) is cleaned: no-break and other odd spaces become spaces, control and format characters are
+  dropped, trimmed, capped (narration with FinCom's id at most 2,000 characters). A Tally master's name (employee, pay
+  head, salary payable ledger, voucher type, the company) is never changed: one the bridge would refuse (a no-break
+  space, a control character, over 200 characters) is listed, "Rename it in Tally". Also refused in plain words: a net of
+  zero or less, a negative earning, one pay head for an earning and a deduction, more than 50 pay heads, an amount past
+  10 digits of rupees, an employee twice. A month is split into vouchers of at most 100 employees and under the 1 MiB
+  request cap, each its own posting (`dc-tp-<yyyymm>-<n>`).
+- **Approve** (`app/src/lib/payrollPost.js`), from the Payroll page or Daily Check › Entries (data.js
+  `tallyPayrollFor`; the journal is still posted for a month marked "Post as a journal this month"):
+  1. the post gate, and the posting bridge (this computer's, or the one the cloud's queue goes to) 2.5.18 or later, else
+     "Install FinCom Bridge 2.5.18 to post Tally Payroll" with the download (latest.json);
+  2. the second check: `again.js recheck` on the night's payroll entry, the vouchers made again from `b.salary`, every
+     employee and pay head in the payroll FinCom read from Tally (`Payroll.data()`, no new Tally request), the bridge's
+     rules, the night entry's gross and net, and on the Payroll page the very XML shown;
+  3. `entry_claim` on the night's entry (migration 208);
+  4. one voucher a `Bridge.post`, each kept as a draft with the night's dedupe; a part already in Tally is not sent
+     again, one queued is waited for;
+  5. the proof: "Tally created 1 payroll voucher (voucher id …)", or Tally's refusal in plain words; `entry_approved`, or
+     `entry_release` to try again.
+- **Tests**: `node tests/run_payroll_post.mjs` (the builder's output and tampered copies through the bridge's own Go
+  checks, by a `go test -overlay` that adds nothing to the tree; the approve flow with fakes) and section 8 of
+  `tests/run_payroll_flex_ui.py`.
+- **The night prepares every month** (the owner, 23-Nov-2026): for a Tally Payroll company (`co.payrollMethod` tally,
+  not "as a journal this month") `server/_shared/dailyjournals.js` makes a Tally Payroll entry for every month kept with
+  the books (`voucher.kind = "tallyPayroll"`: the voucher type, the salary payable ledger, the employees' count, gross,
+  each deduction and other deductions, net; no journal lines and no journal ledger needed), worked out two ways. Other
+  deductions (an advance, canteen, LWF) go to their own pay heads on Approve. A journal company's month with other
+  deductions is said plainly ("no ledger in the payroll journal").
 
-The bridge side is built (section 4). The app wiring above is the next step.
+### 4.4 The independent review's fixes (23-Nov-2026, not published)
+
+- **B1, never twice**: salary booked counts a payroll voucher entered in Tally by hand: any pay head of Tally's payroll
+  that is an expense (`tally_ledgers.for_payroll`; the night reads them, the page has `S.books.payroll.heads`) and any
+  ledger a Payroll-type voucher debits. Approve also refuses when Tally's payroll read (`Payroll.data().allocs`) or the
+  books hold a payroll entry of the month without `TDSDesk:dc-tp-<yyyymm>-` in its narration, naming it.
+- **B2, a fixed split**: employees go into parts in the order of Tally's employee list (by name, as FinCom reads it), so
+  a re-sorted sheet moves nobody; a part counts as done only when its saved XML is the part built now, else "Part N in
+  Tally differs from the sheet now".
+- **B3, a split month finishes**: the month's own vouchers (`TDSDesk:dc-tp-<yyyymm>-*`) are left out of salary booked,
+  so after part 1 reaches the books the night's entry and the second check stay the same and Approve posts the rest.
+  Each part's draft carries `parts`; the night counts the month done only when every part is in Tally.
+- **The bridge asked** is the cloud queue's (`TCloud.postThrough`) whenever the client's books are in the cloud, as
+  `Bridge.post` routes it. **Salary payable ledger and voucher type** are picked on Payroll (`co.payrollPayable`,
+  `co.payrollVchType`); the night's entry names them and Approve refuses a payable changed since. **Cost categories**:
+  each employee under their own (Tally's employee master); the pin takes one CATEGORYENTRY a voucher, so a category is a
+  part of its own. **Daily Check › Entries** shows the entry as a payroll voucher (employees, deductions, net to the
+  payable) and says "queued for the Tally computer" when only queued. **alreadySent / already in Tally** answers are on
+  their way / in Tally, as on the bank path.
+- **The sheet kept**: a month kept before (for 24Q too) is replaced only after a warning, and each employee's exempt,
+  standard, Chapter VI-A, taxable, regime and PAN are carried over. **AI learning**: the tab's month is left out of the
+  layout's key (old keys still found); full dates (not a pay month), numbers of 9 digits or more are masked and figures
+  rounded to two significant digits, in the page and again in `server/assistant/sheetmap.ts`. **The month** of a sheet
+  read by a saved rule without a month column is picked on the start card (last month at first).
+- **Lows**: a part posted saves the next part again ("waiting") so the cloud's settle, which reads the latest draft,
+  never approves a half-posted month; a net of zero is said tonight; the page says the employer's PF and ESI are booked
+  separately; two Tally employees whose names fold to one are refused unless one is exactly the sheet's name.
+- **Re-review (23-Nov-2026)**: only earnings count as salary booked (Tally's pay head type, read with the pay heads;
+  with none, the name): the employer's contributions, gratuity, reimbursements and deductions never do, and an entry
+  touching only them is skipped (night and Approve). The resend guard's answer with no job is saved as posted without
+  Tally's voucher id, so "Not confirmed in Tally" follows after 24 hours. Approve reads last night's findings itself
+  (the owner's ledger picks), from the Payroll page too. A part in Tally that differs says exactly what changed (payable,
+  voucher type, an employee's pay heads, category, net, no longer on the sheet); when the rest can be built without
+  anyone in that part and the parts add up to the night's entry, the owner may accept it as it is in Tally and post the
+  rest (kept on the part's draft). The saves are ordered so the latest draft is never a posted part while another is to
+  go (the parts' answers saved after the last part is tried). Payroll.into reads each payroll entry's narration and
+  leaves out merged and deleted ledgers; an entry FinCom has no narration for asks to read the books again. Dates are
+  masked in full except in the pay month column; the server masks text cells itself. 24Q's figures carry over by code,
+  then PAN, then name, and the warning names who did not carry over.
+- **Third review (23-Nov-2026)**: the XML actually sent is kept on the part's draft (`sent`), never overwritten until
+  its answer is saved. A part whose earlier send was never answered goes again only as that very XML (else refused,
+  naming what changed); "already in Tally" counts as done only when FinCom's record of the earlier send is the XML
+  being sent. Each part's answer is saved straight after its posting, then the last part still to go is saved
+  "waiting" again (one save's window). A pay head with a Tally type goes by its type alone (night and page); names only
+  without one ("Company PF Share", "Mediclaim (Company)" not salary; arrears always salary). Accepting a part saves the
+  month's new count of parts on every part and a fingerprint of the accepted differences (each employee's amounts by
+  pay head among them): anything else differing is asked again. The night checks the books for a part's FinCom id
+  before saying "Not confirmed in Tally".
+- **Fourth review (23-Nov-2026)**: a send never answered (or Tally holding a part FinCom has no record of sending) is
+  settled from Tally's own copy, read afresh, before anything is refused, and only while no posting of that part runs in
+  the queue: FinCom's id there with the same employees and amounts -> in Tally; other figures -> in Tally as Tally has it
+  (the change named, accepting offered when the rest builds from the remaining employees); not there -> "not posted",
+  sent again (the bridge's check by FinCom's id guards a copy behind Tally). Nothing is sent again while the id is in
+  Tally. "Post as a journal this month": the night no longer waits on a Tally Payroll part a day old and not in the books,
+  and Daily Check's Approve settles each part first (deleted in Tally, or a day old and never seen); a part in Tally holds
+  the journal back. Changed parts name who joined and who is in another part now. With no pay head type, "company"
+  marks an employer's head only with a share, PF, ESI or insurance word.
+- **Fifth review (23-Nov-2026)**: bridge 2.5.18 does not look for FinCom's id in Tally before posting; its only guard is
+  the posting computer's own record (alreadySent). So: a part not in Tally's copy counts as not posted only when the copy
+  was read in at least 5 minutes after the send (`tally_books.days_at`), else Approve waits ("Tally's copy is older than
+  this send"); the same rule holds a journal back (night and Approve), as does any of the month's FinCom Tally Payroll ids
+  in the copy, a draft or not. alreadySent counts as on its way only for the
+  byte-identical XML on record, else the part fails and nothing more is sent. Before claiming, every
+  `TDSDesk:dc-tp-<yyyymm>-<n>` in the copy (one read for the month; else the books and the payroll read here) is in
+  Tally with or without a draft (a draft is made for it); the night counts the month done from those ids and their
+  narration's "part i of n". A resend of an unanswered part goes only through the computer that sent it (the bridge's id, or the computer and
+  Windows user here); a computer FinCom cannot name waits.
+- **Sixth review (23-Nov-2026)**: `tally_books.days_at` moves when any day is read, so it proves nothing about a part.
+  A part not in Tally's copy counts as not posted only when its own day (the voucher date, else the month-end) was read
+  from Tally at least 5 minutes after the send (`tally_days.at`, one more read); the journal (night and Approve) and the
+  night's check of a part use the same per-day signal, with no 24-hour rule. A part settled "not in Tally" keeps its
+  computer unless that per-day check settled it (`dayGone`); then it goes once more released (`released: [{id, by, at,
+  why}]` in the `Bridge.post` payload, which bridge-go's `releaseFor` honours once per release by FinCom's tag; through the
+  cloud's queue the earlier posting's id is released with `tally_post_owner_release` first). A part "sent before" with
+  no Tally id (the posting computer's own record) stays open: its day not read since, it waits; read since and the id not
+  there, Approve refuses "Not confirmed in Tally" and the night raises `sent_check` at once; once the owner says "Not in
+  Tally: offer it again", Approve sends the identical XML released; if the copy later shows the id, it is in Tally. The
+  computer is keyed by the bridge's own id (`go-<install id>`) on both paths. The narration's "part i of n" is one wording
+  (`server/_shared/tpparts.js`) for the builder and the night.
+- **Seventh review (23-Nov-2026)**: through FinCom's cloud queue (the normal way for a client linked there) a release in
+  the `Bridge.post` payload never reaches the bridge: `CloudPost.run` queues only the masters and vouchers, and
+  tally-ingest hands a bridge only the releases of the posting it takes (`tally_post_ids` released by a member). So the
+  posting's id is kept the moment it is queued (`CloudPost.run` tells it first), and found by the part's FinCom id
+  (`tally_post_ids`, the client's company) when an older draft has none; a part found not in Tally is sent again as that
+  posting's own Retry: released (`tally_post_owner_release`) and queued again by its id (`tally_post_enqueue`), the very
+  XML it holds, on the same computer; a posting still waiting, taken or running is on its way. Only the identical XML
+  goes this way (a part whose sheet changed since waits for the owner). The copy is read from the client's book that
+  holds the part's day (a split year's March in last year's book), the night's month-ends in India's time, and a
+  computer FinCom cannot name waits. `tests/run_payroll_cloud_resend.py` runs the route on the queue's SQL with the real
+  tally-ingest handing the posting out with its release.
+- **Eighth review (23-Nov-2026)**: the release and Retry of the seventh review dead-ended (a posting that ended "done"
+  is never queued again; a part whose sheet changed could not go at all). Replaced: a part proven not in Tally (its day
+  read from Tally at least 5 minutes after the send, its id not there, no posting of it running) is RETIRED, never sent
+  under that id again, and its people are posted under fresh part ids (the month's next `dc-tp-<yyyymm>-<n>` neither a
+  part in Tally nor a retired one has used), which neither the posting computer's record nor the cloud's list of ids has
+  seen: nothing to release. The parts are counted again as when parts in Tally are accepted ("part i of n" for the new
+  parts; the parts in Tally keep theirs, their drafts the new count); the old draft keeps `retiredBy` and `replacedBy`,
+  and a never-sent draft not in the new split is removed. The night counts the month done when as many parts as it has
+  are in Tally (retired ones neither missing nor counted). A retired id that shows up in Tally after all stops the month
+  ("Check Tally and delete one of them"). The queue's refusal that comes back as a piece of SQL is said in plain words.
+  `tests/run_payroll_cloud_resend.py` runs the fresh-id route on the queue's SQL with the real tally-ingest.
+- **Ninth review (23-Nov-2026)**: a retired part's old posting stays listed as failed under Post to Tally, and the
+  cloud's Retry would send it to a bridge with no record of the old id. Guards: the Post page refuses "Post again" of any
+  posting holding a Tally Payroll part (`PostOwner.retryChanged`, src/js/59-post-owner.js, the Post page's lazy part: a
+  part goes again only from Daily Check's Approve); and, as Approve retires a part, its earlier posting is withdrawn in
+  the queue (`tally_post_withdraw`, **migration 212, a DRAFT** for its own review: a withdrawn entry's posting is never
+  retried, requeued or handed out again, and its FinCom id is never queued in another posting; tests/run_migration212.py).
+  A posting still being sent: on its way, nothing retired. A cloud without 212: Approve waits (tenth review). The
+  night: a retired id that shows up in Tally is Needs you, never counted toward done. A part numbered after a retired one
+  names its FinCom id beside "part i of n" (in Tally's Day Book: TDSDesk:dc-tp-…).
+- **Migration 212's SQL review and the tenth review (23-Nov-2026)**: 212 is two steps: the file (one transaction,
+  lock_timeout 3 s; its columns made only when absent, so a second run takes no ACCESS EXCLUSIVE lock), then
+  `migration-212-indexes.sql` with `tools/apply_concurrent_indexes.py` (two partial indexes CONCURRENTLY, then
+  `tally_post_withdraw_arm()` makes the two triggers); `tally_post_withdraw` refuses until they are there. It withdraws only
+  a Tally Payroll id, and refuses (busy) a posting waiting, taken, running, held for checking (done + checking), held by
+  its bridge, or owing another entry to send again. The status guard refuses only when a withdrawn entry would be sent
+  (the whole payload, or its resend_only list): a hand-back of another entry goes on. A new posting leaves a withdrawn id
+  out (its result says so; by every spelling), refused only when nothing else is in it. The owner can take a withdrawal
+  back (`tally_post_withdraw_undo`, who and why kept). Approve retires a part only when its old posting was never taken
+  by a bridge or that bridge answered for the part; else it waits ("the Tally computer that took it has not reported;
+  open FinCom Bridge there first"); and a cloud without 212 (or its second step) means wait ("FinCom's cloud is not ready
+  for this yet"), never retire.
+- **Migration 212's re-review (23-Nov-2026)**: a Tally Payroll part's id now carries its client:
+  `dc-tp-<yyyymm>-<client>-p<n>` (see below; `server/_shared/tpparts.js`), so the Tally narration's mark is
+  `TDSDesk:dc-tp-202610-<client>-p1`. The ids were per firm in the cloud (one live FinCom id per firm,
+  the posting register, 184's dupes) and per computer on the bridge (posted-ids.json keys the tag alone): two clients'
+  "part 1 of October" held each other back, or the second was refused as "already sent". bridge-go matches marks by
+  `TDSDesk:[A-Za-z0-9._-]+` and keys them by letters and digits, so the new mark needs no bridge change; the night and
+  Approve read the client's own ids (an older id with no client too: `tpIdRe`). 212: a withdrawn id matched within its
+  client (index on firm, client, FinCom id); the filter only for queued postings (status waiting, not a record of one
+  already made: tally_post_record); a posting with nothing else is queued cancelled, its results saying why (184's dupes
+  answer kept; the note kept by tally-ingest's merge: byItself); a check of Tally is never asked or confirmed for a
+  withdrawn entry, and withdrawing waits for a check that is waiting; the words name who withdrew it and why; plural
+  "were"; spellings as tally_post_id_match; the guards must be there and enabled.
+- **212's approval (23-Nov-2026)**: the id is `dc-tp-<yyyymm>-<client>-p<n>` (the "p" keeps client a1's part 2 apart from
+  client a's part 12). The client: its FinCom id when it is small letters and digits alone (at most 40), else `h.` and a
+  hash of the whole id (never cut, so two ids alike in their first 40 letters, or alike in letters alone, stay apart); an
+  id with no letter or digit is refused in words, never the shared form. A month half-posted across the release: a part
+  in Tally under its older id `dc-tp-<yyyymm>-<n>` with the very people and amounts of part n is that part, in Tally;
+  otherwise the words name the older id and that it is the same part, safe to accept. 212: a posting with nothing to send
+  never waits again (and the Post page offers no Retry for one); a new posting of only withdrawn ids is not queued, in
+  words (an error, never {ok: true}); withdrawing also waits for a check not seen in Tally and not confirmed.
+- **Tests**: `node tests/run_payroll_review.mjs` (the real night builder and `again.js recheck` on made-up books).
+- **Redeploy when published**: migration 212 applied first (a draft: its own review); the app (legacy.js: `CloudPost.run`
+  tells the posting id; the Post page's part, 59-post-owner.js), the `assistant-night` function
+  (dailyjournals.js, tpparts.js, nightinput.js, handler.ts) and
+  `fincom-assistant` (sheetmap.ts). No SQL.

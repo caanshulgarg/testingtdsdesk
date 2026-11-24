@@ -41,6 +41,9 @@ may be built until it passes. Its self-test is `bash bridge-go/release_check_tes
    first: `python3 build.py`, and `cd app && npm ci && npm run legacy && npm run build:test`. CI runs them on every
    push as well.
 
+Also, for every release (bridge or app): `THIRD_PARTY_NOTICES.md` is updated if any ported code changed (FinCom Books' rules
+ported from Independent Books, MIT).
+
 ## Build and pilot
 
 10. **Build** with `bridge-go/build.sh` only after `release-check.sh` passes. Then add the row to the release log

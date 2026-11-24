@@ -29,6 +29,10 @@ function memberName(u){ return {"u-1": "Anshul garg", "u-2": "Priya"}[u] || (u ?
 function plainMsg(m){ return String(m || ""); }
 function auditEvent(what, detail){ audited.push([what, detail]); }
 console.warn = (...a) => logged.push(a.join(" "));
+// (next-post-resume-2) postStatus reads a posting's entries through CloudJobs (src/js/51, a browser part): its by-id lookup here
+const CloudJobs = {list: [], forClient(cid){ return this.list.filter(j => !cid || j.client_id === cid); }, idsOf(j){ return Array.isArray(j.entry_ids) ? j.entry_ids.map(String) : null; },
+  live(j){ return ["waiting", "taken", "running"].includes(j.status) || !!j.checking; },
+  idx(j){ const by = l => { const m = new Map(); [].concat(l || []).forEach(x => { if (x && !m.has(String(x.id))) m.set(String(x.id), x); }); return m; }; return {res: by(j.results), it: by(j.items), ok: null}; }};
 """
 def load(path): return open(os.path.join(SRC, path), encoding="utf-8").read()
 TESTS = r"""
@@ -103,6 +107,9 @@ out.status = {
   "9late": P(postStatus(bill("i2"), job("j9b", "cancelled", null, null, {message: "Cancelled after the Tally computer had started it: part of it may be in Tally. Check Tally first; Mark posted what is there before posting it again.", updated_at: "2026-11-12T16:52:46Z"}), {live: true}, [])),
   10: P(postStatus(bill("k", {status: "deleted", deleted: {at: "2026-10-03T10:00:00Z", reason: "duplicate"}}), job("j10", "done", [{id: "k", ok: true, verified: true, masterId: "26294"}], null), {live: true}, [])),
   "10missing": P(postStatus({id: "emupeho9q2sijk"}, job("j10b", "done", [{id: "emupeho9q2sijk", ok: true, verified: true, masterId: "26294", vchNumber: "FA/ELEC/013"}], null), {live: true}, [], {id: "emupeho9q2sijk", missing: true})),
+  // next-post-resume-2: a posting still taken, paused part-way, with an entry Tally accepted that FinCom has not confirmed
+  "6paused": P(postStatus(bill("pa"), job("j6p", "taken", [{id: "pa", ok: false, accepted: true, lastVchId: "26320", message: "Tally replied CREATED 1 LASTVCHID 26320"}], [{id: "pa", state: "unknown", reason: "Tally accepted it (voucher id 26320); being checked, not sent again", outcomeUnknown: true}],
+    {message: "Waiting for an owner: FinCom's cloud was slow, so FinCom Bridge stopped this posting part-way"}), {live: true, accepted_at: "x", accepted_vch: "26320"}, [])),
   ready: P(postStatus(bill("r"), null, null, [])),
   review: P(postStatus(bill("rv", {status: "draft"}), job("jr", "failed", [{id: "rv", ok: false, message: "Ledger 'X' does not exist"}], []), null, []))
 };
@@ -173,6 +180,10 @@ st("3you", 3, "Posted, marked by you", "posted", ("Marked posted by you",))
 st("4", 4, "Waiting to post", "topost", ("Number 2 in the queue", "TallyPrime is not open"), "cancel")
 st("5", 5, "Posting now", "topost", ("Tally is taking it now",))
 st("6", 6, "Needs review", "errors", ("Tally id 26300", "Day Book"), "settle")
+st("6paused", 6, "Needs review", "errors", ("Tally id 26320",), "settle")
+x6 = S_.get("6paused") or {}
+ok(x6.get("label") == "It is in Tally: mark posted (Tally id)", "C. 6paused: the row offers 'It is in Tally: mark posted (Tally id)' while the posting is taken (%s)" % x6.get("label"))
+print("  (6paused todo: %s)" % x6.get("todo"))
 st("7", 7, "Not posted: Tally refused it", "errors", ("Professional Fees", "Create the ledger"), "postAgain")
 st("7nosafe", 7, "Not posted: Tally refused it", "errors", ("same details already exists",), None)
 st("8", 8, "Not posted: stopped before sending", "errors", ("could not be checked",), "postAgain")

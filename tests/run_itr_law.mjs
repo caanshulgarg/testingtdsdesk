@@ -395,5 +395,122 @@ T("three losses", () => {
   same(r, "liability", 33800, "three losses, a smaller return: 33,800");
 });
 
+console.log("ITR-1 (Sahaj), AY 2026-27: who may not file it (rule 12(1)(a) proviso; the form's instructions), the review of 24-Nov-2026");
+// rule 12: ITR-1 is not for an individual who is a director in a company, who has held unlisted equity shares at any
+// time during the previous year, or whose agricultural income is more than Rs 5,000. A fact FinCom does not have is never
+// guessed: ITR-2 (which fits either way) is recommended and the reason says what is not known.
+let PK = null; try { PK = await import(new URL("pick.js", LIB)); } catch (e) { ok(false, "pick.js loads: " + String(e && e.message).slice(0, 100)); }
+let LW = {}; try { LW = await import(new URL("law.js", LIB)); } catch (e) { /* checked below */ }
+T("ITR-1 rule 12", () => {
+  const R1 = LW.ITR1 || {};
+  ok(R1.agriMax === 5000 && R1.maxIncome === 5000000 && /rule 12/i.test(R1.src || ""), "law.js: ITR-1's limits with their source (agricultural income Rs 5,000, total income Rs 50 lakh): " + JSON.stringify(R1).slice(0, 80));
+  const base = { pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0, resident: "RES" };
+  const rf = (o) => PK.recommendForm(Object.assign({}, base, o));
+  eq(rf({}).form, "ITR-1", "salary 9,00,000, not a director, no unlisted shares, no agricultural income: ITR-1");
+  eq(rf({ agriIncome: 5000 }).form, "ITR-1", "agricultural income of exactly Rs 5,000: ITR-1 still (more than 5,000 is excluded)");
+  let r = rf({ director: true });
+  ok(r.form === "ITR-2" && /director/i.test(r.why), "a director of a company: ITR-2, and the reason says so: " + r.why);
+  r = rf({ unlisted: true });
+  ok(r.form === "ITR-2" && /unlisted/i.test(r.why), "held unlisted equity shares in the year: ITR-2: " + r.why);
+  r = rf({ agriIncome: 5001 });
+  ok(r.form === "ITR-2" && /agricultural/i.test(r.why) && /5,000/.test(r.why), "agricultural income Rs 5,001: ITR-2: " + r.why);
+  r = rf({ agriIncome: undefined, agriOver: true });
+  ok(r.form === "ITR-2" && /agricultural/i.test(r.why), "agricultural income said to be over Rs 5,000 (a Yes, no figure): ITR-2");
+  eq(rf({ agriIncome: undefined, agriOver: false }).form, "ITR-1", "agricultural income said to be Rs 5,000 or less: ITR-1");
+  // not known: never ITR-1 on a guess
+  r = rf({ director: undefined });
+  ok(r.form === "ITR-2" && /director/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), "whether a director is not known: ITR-2, and the reason asks for what is not known: " + r.why);
+  r = rf({ unlisted: undefined, agriIncome: undefined });
+  ok(r.form === "ITR-2" && /unlisted/i.test(r.why) && /agricultural/i.test(r.why) && !/director/i.test(r.why), "two facts not known: both named, the known one not: " + r.why);
+  r = PK.recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 });
+  ok(r.form === "ITR-2" && /ITR-1/.test(r.why), "nothing asked yet: ITR-2, and the reason says what would let ITR-1 fit: " + r.why);
+  // an unlisted share sold in the year: held during the year, so known
+  eq(rf({ unlisted: undefined, unlistedSold: true }).form, "ITR-2", "an unlisted share among the capital gains: held in the year: ITR-2");
+  // the rest of ITR-1's rules stay as they were
+  eq(rf({ ti: 5500000 }).form, "ITR-2", "total income above Rs 50 lakh: ITR-2");
+  eq(rf({ resident: false }).form, "ITR-2", "a non-resident: ITR-2");
+  eq(PK.recommendForm(Object.assign({}, base, { business: true })).form, "ITR-3", "business income (the books): ITR-3, whatever the rest");
+});
+
+console.log("ITR-4 (Sugam), AY 2026-27: who may not file it (rule 12(1)(b) and its proviso; the form's instructions), the review of 24-Nov-2026");
+// rule 12: ITR-4 is for a resident individual, HUF or firm (other than an LLP) with presumptive business income (44AD,
+// 44ADA, 44AE) and total income up to Rs 50 lakh; not for an individual or HUF who is a director in a company or has held
+// unlisted equity shares at any time during the previous year, nor for one with agricultural income above Rs 5,000. A fact
+// FinCom does not have is never guessed for an individual or HUF: ITR-3 (which fits either way) is recommended and the
+// reason says what is not known.
+T("ITR-4 rule 12", () => {
+  const R4 = LW.ITR4 || {};
+  ok(R4.agriMax === 5000 && R4.maxIncome === 5000000 && /rule 12/i.test(R4.src || "") && /director/i.test(R4.src || "") && /unlisted/i.test(R4.src || "") && /agricultural/i.test(R4.src || "") && /LLP/.test(R4.src || ""),
+    "law.js: ITR-4's limits with their source (rule 12; director, unlisted shares, agricultural income Rs 5,000; not an LLP): " + JSON.stringify(R4).slice(0, 80));
+  eq(LW.ITR4_MAX_INCOME, 5000000, "ITR4_MAX_INCOME still Rs 50 lakh");
+  const pres = { business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriIncome: 0, resident: "RES" };
+  const rf = (pan, o) => PK.recommendForm(Object.assign({ pan }, pres, o));
+  for (const [pan, who] of [["ZZZPX1234Z", "an individual"], ["ZZZHX1234Z", "a HUF"]]) {
+    eq(rf(pan, {}).form, "ITR-4", who + ", presumptive, within Rs 50 lakh, not a director, no unlisted shares, no agricultural income: ITR-4");
+    eq(rf(pan, { agriIncome: 5000 }).form, "ITR-4", who + ", agricultural income of exactly Rs 5,000: ITR-4 still");
+    let r = rf(pan, { director: true });
+    if (pan[3] === "H") ok(r.form === "ITR-4" && !/director|karta/i.test(r.why), who + ": a HUF cannot be a director; the director bar is not for it: ITR-4: " + r.why);
+    else ok(r.form === "ITR-3" && /director/i.test(r.why) && /ITR-4/.test(r.why), who + " who is a director in a company: ITR-3, and the reason says so: " + r.why);
+    r = rf(pan, { unlisted: true });
+    ok(r.form === "ITR-3" && /unlisted/i.test(r.why), who + " who held unlisted equity shares in the year: ITR-3: " + r.why);
+    r = rf(pan, { agriIncome: 5001 });
+    ok(r.form === "ITR-3" && /agricultural/i.test(r.why) && /5,000/.test(r.why), who + ", agricultural income Rs 5,001: ITR-3: " + r.why);
+    eq(rf(pan, { agriIncome: undefined, agriOver: true }).form, "ITR-3", who + ", agricultural income said to be over Rs 5,000: ITR-3");
+    eq(rf(pan, { agriIncome: undefined, agriOver: false }).form, "ITR-4", who + ", agricultural income said to be Rs 5,000 or less: ITR-4");
+    eq(rf(pan, { unlisted: undefined, unlistedSold: true }).form, "ITR-3", who + ", an unlisted share among the gains: held in the year: ITR-3");
+    // not known: never the ITR-4 JSON on a guess; the computation stays on ITR-4 (B1)
+    r = rf(pan, { director: undefined });
+    if (pan[3] === "H") ok(r.form === "ITR-4", who + ", director not answered: not asked of a HUF: ITR-4 (" + r.form + ")");
+    else ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /director/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), who + ", whether a director not known: ITR-4 for the computation, its JSON held, and the reason asks for what is not known: " + r.why);
+    r = rf(pan, { unlisted: undefined, agriIncome: undefined });
+    ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /unlisted/i.test(r.why) && /agricultural/i.test(r.why) && !/director/i.test(r.why), who + ", two facts not known (ITR-4, JSON held): both named, the known one not: " + r.why);
+    r = PK.recommendForm({ pan, business: true, presumptive: true, ti: 1800000 });
+    ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /presumptive/i.test(r.why) && /Answer the questions below/.test(r.why), who + ", nothing asked yet: ITR-4 for the presumptive income (its JSON held), and what to answer: " + r.why);
+    // a known bar: ITR-4 does not fit when chosen by hand (no JSON for a form the person may not file)
+    const s = PK.formStatus("ITR-4", rf(pan, { director: true }));
+    if (pan[3] === "H") ok(s.fits && s.json, who + ", director Yes: ITR-4 fits, its JSON is made"); else ok(!s.fits && !s.json && /ITR-4 is not for/.test(s.text) && /director/.test(s.text) && /ITR-3/.test(s.text), who + ", a director, ITR-4 chosen by hand: does not fit, no JSON, said: " + s.text);
+    // the review of 24-Nov-2026 (2): a blank answer blocks the ITR-4 JSON until it is given, said in the info tone
+    const s0 = PK.formStatus("ITR-4", rf(pan, { director: undefined }));
+    if (pan[3] === "H") ok(s0.json, who + ", director not answered: the ITR-4 JSON does not wait for it"); else ok(s0.fits && !s0.json && s0.tone === "info" && /director/.test(s0.text) && /answer the questions below/i.test(s0.text), who + ", whether a director not known, ITR-4 chosen by hand: it may fit, but no JSON until answered: " + s0.text);
+  }
+  // the director bar is for individuals and HUFs; the unlisted-share and agricultural income ones for a firm too (rule
+  // 12(1)(b) proviso; the portal's ITR-4 FAQ: not for a firm that held unlisted equity shares)
+  const F = (o) => PK.recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false }, pres, o));
+  eq(F({}).form, "ITR-4", "a partnership firm, presumptive, within Rs 50 lakh, no unlisted shares, agricultural income nil: ITR-4");
+  eq(F({ director: true }).form, "ITR-4", "a firm: the director bar is for individuals and HUFs only: ITR-4");
+  let rU = F({ unlisted: true });
+  ok(rU.form === "ITR-5" && /unlisted/.test(rU.why), "a firm that held unlisted equity shares: ITR-5: " + rU.why);
+  ok(/firm/i.test(LW.ITR4.src) && /unlisted/i.test(LW.ITR4.src) && !/individual or HUF who is a director in a company or held unlisted/i.test(LW.ITR4.src), "law.js: ITR-4's source has the unlisted-share bar for a firm too: " + LW.ITR4.src);
+  let r = F({ agriIncome: 9000 });
+  ok(r.form === "ITR-5" && /agricultural/i.test(r.why), "a firm with agricultural income Rs 9,000: ITR-5: " + r.why);
+  r = F({ agriIncome: undefined });
+  ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /agricultural/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), "a firm, agricultural income not known: ITR-4, its JSON held, said: " + r.why);
+  eq(F({ llp: true }).form, "ITR-5", "an LLP: ITR-5 whatever the rest");
+  // the rest of ITR-4's rules stay as they were
+  eq(rf("ZZZPX1234Z", { ti: 6000000 }).form, "ITR-3", "total income above Rs 50 lakh: ITR-3");
+  eq(rf("ZZZPX1234Z", { audit: true }).form, "ITR-3", "a tax audit: ITR-3");
+});
+
+console.log("ITR-1 and ITR-4, the review of 24-Nov-2026 (2): the PAN settles the kind; assets abroad, two houses, the other rule 12 bars");
+T("rule 12 more", () => {
+  const pres = { business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriOver: false, resident: "RES" };
+  // section 139A / rule 114: the PAN's fourth letter is the status; Client setup's kind is used only without a PAN
+  let r = PK.recommendForm(Object.assign({ entity: "F", pan: "ZZZCX1234Z", llp: false }, pres));
+  ok(r.form === "ITR-6" && !r.allowed.includes("ITR-4") && !r.allowed.includes("ITR-5") && /follows the PAN/.test(r.why), "Client setup a firm, the PAN a company: ITR-6, never ITR-4 or ITR-5: " + r.why);
+  // ITR-4 has no Schedule FA: assets outside India need ITR-3 (ITR-5 for a firm)
+  ok(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", foreign: true }, pres)).form === "ITR-3", "assets outside India: ITR-3");
+  ok(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", faRows: 1 }, pres)).form === "ITR-3", "rows in Schedule FA: ITR-3");
+  // ITR-4 AY 2026-27: up to two house properties (schema IncomeDeductions/PropertyDetails maxItems 2)
+  eq(LW.itr4Houses && LW.itr4Houses("2026-27"), 2, "law.js: ITR-4 takes two houses for AY 2026-27");
+  eq(LW.itr4Houses && LW.itr4Houses("2025-26"), 1, "law.js: one house for an earlier year");
+  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", houses: 2 }, pres)).form, "ITR-4", "two houses: ITR-4");
+  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", houses: 3 }, pres)).form, "ITR-3", "three houses: ITR-3");
+  // rule 12 proviso: not for a non-resident, TDS under 194N, a loss brought forward
+  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, pres, { resident: false })).form, "ITR-3", "a non-resident: ITR-3");
+  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", tds194N: true }, pres)).form, "ITR-3", "TDS under 194N: ITR-3");
+  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", bfLoss: true }, pres)).form, "ITR-3", "a loss of earlier years brought forward: ITR-3");
+  eq(PK.recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriOver: false, tds194N: true }).form, "ITR-2", "salary with TDS under 194N: ITR-2");
+});
+
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

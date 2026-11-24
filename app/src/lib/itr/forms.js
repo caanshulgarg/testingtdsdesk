@@ -3,6 +3,7 @@
 // from the computation so a new schema version changes only this file. fill.js completes the JSON (zeros for amounts
 // FinCom does not map; questions for anything else), validate.js checks it against the official schema.
 import { put } from "./fill.js";
+import { AY, itr4Houses } from "./law.js";
 import { fit, salarySchedule, tdsSalary, hpSchedule, cgSchedule, siSchedule, tiCapGain, alSchedule, faSchedule, shSchedule, al6Schedule, bsIndAs, ociIndAs } from "./sched.js";
 
 const N = (v) => +v || 0;
@@ -245,7 +246,9 @@ export function coverage(X, map) {
   if (f === "ITR-4" && H.c112A && !M.cg112A) add("ltcg112a", "LTCG under 112A (sale and cost)", "Long-term gains under 112A: give the sales on Schedules.");
   if (f !== "ITR-4" && (H.c111A || H.c112A || H.c112 || H.cOth) && !M.cgHead) add("cg", "Schedule CG and SI (capital gains)", "Capital gains of " + R(H.cg) + " have no sales behind them: give each sale on Schedules.");
   if (f === "ITR-4" && M.cgHead && M.cgHead.rows.some((x) => x.bucket !== "s112A")) add("cg_itr4", "Capital gains in ITR-4", "ITR-4 takes only long-term gains under 112A: the other sales need ITR-3 / ITR-5.");
-  if (f === "ITR-4" && M.hpHead && M.hpHead.props.length > 1) add("hp_itr4", "More than one house in ITR-4", "ITR-4 is for one house property: two or more need ITR-3.");
+  // ITR-4's houses: as many as the year's schema takes (law.js itr4Houses: two for AY 2026-27, one before)
+  const maxHp = itr4Houses(X.ay || AY);
+  if (f === "ITR-4" && M.hpHead && M.hpHead.props.length > maxHp) add("hp_itr4", "More houses than ITR-4 takes", maxHp > 1 ? "ITR-4 takes up to " + (maxHp === 2 ? "two" : maxHp) + " house properties: more need ITR-3." : "ITR-4 is for one house property: two or more need ITR-3.");
   if (M.salaryHead && M.entity !== "P") add("salary_ent", "Salary for this person", "Only an individual has salary income (Schedule S is blank for an HUF, rule 199).");
   ["80C", "80D", "80DD", "80DDB", "80U", "80E", "80EE", "80EEA", "80EEB", "80G", "80GGA", "80GGC"].forEach((k) => { if (claimed(k)) add("via_" + k, "Schedule " + k + " (details)", "Section " + k + " is claimed: the schema's own Schedule " + k + " (each policy, donee or loan) is not filled by FinCom yet."); });
   if ((f === "ITR-5" || f === "ITR-6") && R(S.ded)) add("via_entity", "Schedule VIA and its details (firm / company)", "Deductions under Chapter VI-A of " + R(S.ded) + ": the firm's / company's Schedule VIA and its detail schedules are not filled by FinCom yet.");
@@ -269,6 +272,9 @@ export function coverage(X, map) {
   // the earlier years' rows of Schedule CFL need each year's date of filing (and whether it was in time, section 80)
   const Lx = M.losses || {}, undated = ["business", "hp", "stcl", "ltcl"].filter((k) => (Lx[k] || []).some((x) => N(x.amt) && (!x.filed || (k !== "hp" && x.inTime == null))));
   if (undated.length) add("cfl_prior", "Schedule CFL, earlier years", "Losses of earlier years (" + undated.map((k) => ({ business: "business", hp: "house property", stcl: "short-term capital", ltcl: "long-term capital" })[k]).join(", ") + "): give the date each year's return was filed and whether it was filed by its due date (section 80), on Schedules.");
+  // presumptive income on ITR-3 / ITR-5 without books: computed (model.js), but the P&L's no-books lines (44AD, 44ADA,
+  // 44AE) are not filled by FinCom yet: the JSON is held
+  if ((f === "ITR-3" || f === "ITR-5") && S.presumptive && !M.business) add("pres_nobooks", "Presumptive income without books (" + f + ")", "Income under 44AD / 44ADA / 44AE without books: FinCom fills it in ITR-4; in " + f + " its lines (Part A-P&L, no books of account) are not filled yet.");
   if (f !== "ITR-4" && M.business && N(M.business.itDep) && !((M.business.itBlocks || []).length)) add("dep", "Schedules DPM / DOA (depreciation by block)", "Depreciation under section 32 of " + R(M.business.itDep) + " has no block detail: fill Statements › Fixed assets.");
   if (f !== "ITR-4" && M.business && (M.business.itBlocks || []).length && R((M.business.itBlocks || []).filter((b) => BLOCK_PATH[b.key]).reduce((a, b) => a + N(b.dep), 0)) !== R(M.business.itDep)) add("dep_sum", "Schedules DPM / DOA add up", "The blocks' depreciation does not add up to the depreciation claimed.");
   if (M.audit && f !== "ITR-4" && !(P.auditor && P.auditor.firm && P.auditor.reportDate && P.auditor.ack)) add("audit_info", "Audit report details", "A tax audit applies: give the auditor's firm, PAN, the date of the report and its acknowledgement number on Data.");
@@ -542,6 +548,8 @@ function itr3(X) {
   put(o, "PartA_GEN1/FilingStatus/IncFrmBusOrProf", "Y");
   put(o, "PartA_GEN1/FilingStatus/ItrFilingDueDate", M.tp ? "2026-11-30" : M.audit ? "2026-10-31" : "2026-08-31");
   put(o, "PartA_GEN1/FilingStatus/OptOldRegimeCurrAY", M.regime === "old" ? "Y" : "N");
+  // the residential status chosen on the form box (RES, NOR, NRI); not chosen: asked with the JSON, as before
+  if (M.resStatus) put(o, "PartA_GEN1/FilingStatus/ResidentialStatus", M.resStatus);
   put(o, "PartA_GEN2/AuditInfo/LiableSec44AAflg", "Y");
   put(o, "PartA_GEN2/AuditInfo/LiableSec44ABflg", M.audit ? "Y" : "N");
   put(o, "PartA_GEN2/AuditInfo/LiableSec92Eflg", M.tp ? "Y" : "N");

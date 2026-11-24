@@ -1,0 +1,280 @@
+/* New look, phase 1 (newlook/*.jsx). Every rule is under html.nl (App.jsx sets it while the person's switch is on), and
+   this file comes only with the new look's own files, so with the switch off nothing here applies. FinCom's own tokens
+   (styles/arc-tokens.css): the brand indigo, surfaces, borders; the five status words' tones. */
+html.nl {
+  --nl-slate: #475569; --nl-slate-t: #f1f5f9; --nl-amber: #92400e; --nl-amber-t: #fef3c7; --nl-sky: #075985; --nl-sky-t: #e0f2fe;
+  --nl-emerald: #065f46; --nl-emerald-t: #d1fae5; --nl-rose: #9f1239; --nl-rose-t: #ffe4e6;
+}
+@media (prefers-color-scheme: dark) {
+  html.nl:not([data-theme="light"]) { --nl-slate: #cbd5e1; --nl-slate-t: #1e293b; --nl-amber: #fcd34d; --nl-amber-t: #3b2a07; --nl-sky: #7dd3fc; --nl-sky-t: #0c2b3d;
+    --nl-emerald: #6ee7b7; --nl-emerald-t: #06291f; --nl-rose: #fda4af; --nl-rose-t: #3b0d18; }
+}
+html.nl[data-theme="dark"] { --nl-slate: #cbd5e1; --nl-slate-t: #1e293b; --nl-amber: #fcd34d; --nl-amber-t: #3b2a07; --nl-sky: #7dd3fc; --nl-sky-t: #0c2b3d;
+  --nl-emerald: #6ee7b7; --nl-emerald-t: #06291f; --nl-rose: #fda4af; --nl-rose-t: #3b0d18; }
+
+/* ---- the five status words */
+html.nl .nl-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; line-height: 1;
+  color: var(--nl-slate); background: var(--nl-slate-t); }
+html.nl .nl-pill[data-tone="amber"] { color: var(--nl-amber); background: var(--nl-amber-t); }
+html.nl .nl-pill[data-tone="sky"] { color: var(--nl-sky); background: var(--nl-sky-t); }
+html.nl .nl-pill[data-tone="emerald"] { color: var(--nl-emerald); background: var(--nl-emerald-t); }
+html.nl .nl-pill[data-tone="rose"] { color: var(--nl-rose); background: var(--nl-rose-t); }
+html.nl .tag.nl-ready { color: var(--nl-sky); background: var(--nl-sky-t); border-color: transparent; }
+
+/* ---- the top bar: search and + New */
+html.nl .nl-top { display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; }
+html.nl .nl-search-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 10px; border-radius: 9px; border: 1px solid var(--border, var(--rule));
+  background: var(--surface, var(--sheet)); color: var(--text-secondary, var(--muted)); font: inherit; font-size: 13px; cursor: pointer; min-width: 180px; }
+html.nl .nl-search-btn:hover { border-color: var(--accent); color: var(--foreground); }
+html.nl .nl-search-btn kbd, html.nl .nl-pop kbd, html.nl .nl-palette kbd, html.nl .nle kbd { margin-left: auto; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 3px 5px; border-radius: 5px;
+  border: 1px solid var(--border, var(--rule)); color: var(--text-muted, var(--muted)); background: var(--surface-sunken, transparent); }
+html.nl .nl-new-wrap { position: relative; display: inline-flex; }
+html.nl .nl-new { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; }
+html.nl .nl-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 90; min-width: 230px; padding: 6px; border-radius: 12px; border: 1px solid var(--border, var(--rule));
+  background: var(--surface-raised, var(--surface)); box-shadow: 0 12px 32px rgb(0 0 0 / .16); display: flex; flex-direction: column; }
+html.nl .nl-pop-h { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, var(--muted)); padding: 8px 10px 4px; }
+html.nl .nl-pop-i { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--foreground); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+html.nl .nl-pop-i:hover, html.nl .nl-pop-i:focus-visible { background: color-mix(in oklab, var(--accent) 10%, transparent); outline: none; }
+
+/* ---- search (Ctrl+K) and the entry form: over a dimmed page */
+html.nl .nl-veil { position: fixed; inset: 0; z-index: 120; background: rgb(15 23 42 / .38); display: flex; align-items: flex-start; justify-content: center; padding: 10vh 16px 16px; box-sizing: border-box; }
+html.nl .nl-palette { width: min(640px, 100%); max-height: 70vh; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden;
+  background: var(--surface-raised, var(--surface)); border: 1px solid var(--border, var(--rule)); box-shadow: 0 24px 60px rgb(0 0 0 / .28); }
+html.nl .nl-pal-in { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border, var(--rule)); color: var(--text-muted, var(--muted)); }
+html.nl .nl-pal-in input { flex: 1 1 auto; min-width: 0; height: 52px; border: 0; outline: none; background: none; font: inherit; font-size: 16px; color: var(--foreground); }
+html.nl .nl-pal-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+html.nl .nl-pal-g { padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, var(--muted)); }
+html.nl .nl-pal-r { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+html.nl .nl-pal-r[aria-selected="true"] { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+html.nl .nl-pal-w { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.nl .nl-pal-s { margin-left: auto; font-size: 12px; color: var(--text-muted, var(--muted)); white-space: nowrap; font-variant-numeric: tabular-nums; }
+html.nl .nl-pal-none { padding: 18px 10px; color: var(--text-muted, var(--muted)); }
+html.nl .nl-pal-foot { padding: 8px 14px; border-top: 1px solid var(--border, var(--rule)); font-size: 12px; color: var(--text-muted, var(--muted)); }
+
+/* ---- the row of a menu item's pages, and the pages' own tabs (Bank, Tally) */
+html.nl .nl-tabs { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 0 6px; padding: 0 0 0 2px;
+  border-bottom: 1px solid var(--border, var(--rule)); min-height: 34px; }
+html.nl .nl-tabs::-webkit-scrollbar { display: none; }
+html.nl .nl-tab { flex: none; height: 33px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; font: inherit; font-size: 13.5px;
+  color: var(--text-secondary, var(--muted)); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+html.nl .nl-tab:hover { color: var(--foreground); }
+html.nl .nl-tab[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+html.nl .nl-tab:disabled { opacity: .45; cursor: default; }
+html.nl .nl-tab-n { font-size: 11.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--nl-amber-t); color: var(--nl-amber); }
+
+/* ---- the skeleton in a table's shape */
+html.nl .nl-skel { opacity: 0; transition: opacity .12s; border: 1px solid var(--border, var(--rule)); border-radius: 10px; overflow: hidden; }
+html.nl .nl-skel.on { opacity: 1; }
+html.nl .nl-skel-head, html.nl .nl-skel-row { display: grid; grid-template-columns: 90px 2.4fr 1fr 1fr 1fr 1fr 1.4fr; gap: 14px; align-items: center; padding: 0 12px; height: 32px; }
+html.nl .nl-skel-head { height: 34px; background: var(--surface-sunken, var(--sheet-2, transparent)); }
+html.nl .nl-skel-row { border-top: 1px solid var(--border-subtle, var(--rule)); }
+html.nl .nl-skel .skel { display: block; height: 10px; border-radius: 5px; }
+
+/* ---- cards and the lists of the new pages */
+/* the step to do now: as tall as its words (tallySimple.css gives .tsm-now-text a 300 px basis, for a row) */
+html.nl #app [data-nl-steps] .tsm-step .tsm-now-text { flex: 0 0 auto; }
+html.nl .nl-card { border: 1px solid var(--border, var(--rule)); border-radius: 12px; padding: 12px 14px; margin: 10px 0; background: var(--surface, var(--sheet)); }
+html.nl .nl-h { margin: 4px 0 8px; font-size: 14px; font-weight: 600; }
+html.nl .nl-card .nl-h + .lt-wrap, html.nl .nl-card .bk-table { margin-bottom: 8px; }
+html.nl .nl-why { font-size: 12px; color: var(--nl-rose); margin-top: 2px; white-space: normal; }
+html.nl .nl-ok { color: var(--nl-emerald); font-weight: 700; }
+html.nl .nl-cut { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+html.nl .nl-prog { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+html.nl .nl-prog i { display: inline-block; width: 54px; height: 6px; border-radius: 3px; background: var(--border, var(--rule)); position: relative; overflow: hidden; }
+html.nl .nl-prog i { background: linear-gradient(var(--nl-emerald), var(--nl-emerald)) no-repeat 0 0 / var(--w, 0) 100%, var(--border, var(--rule)); }
+html.nl .nl-prog small { font-size: 12px; color: var(--text-muted, var(--muted)); font-variant-numeric: tabular-nums; }
+html.nl tr.nl-gap > td { border-top: 1px dashed var(--nl-rose) !important; border-bottom: 1px dashed var(--nl-rose) !important; background: color-mix(in oklab, var(--nl-rose-t) 45%, transparent); }
+html.nl .nl-gap-w { color: var(--nl-rose); font-weight: 600; }
+html.nl tr.nl-open > td { background: color-mix(in oklab, var(--accent) 6%, transparent); }
+html.nl .nl-stmts { margin-top: 4px; }
+
+/* ---- the Tally page */
+html.nl .nl-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 10px; font-size: 14.5px; font-weight: 500; }
+html.nl .nl-port { font-weight: 600; white-space: nowrap; }
+html.nl .nl-port.you { color: var(--nl-sky); }
+html.nl .nl-port.other { color: var(--nl-amber); }
+html.nl .nl-port.free { color: var(--nl-emerald); }
+/* the six steps stay shown: no "Hide the steps" */
+html.nl [data-nl-tally] ~ * [data-tsm-hide], html.nl #app [data-tsm-hide] { display: none; }
+html.nl .nl-tally-set > * { margin-top: 10px; }
+
+/* ---- Bank: the Statements and Reconciliation tabs have no row of states (they are the lines' states) */
+html.nl #app:has(nav[data-nl-bank="stmts"]) .sbar-band, html.nl #app:has(nav[data-nl-bank="recon"]) .sbar-band { display: none; }
+
+/* ---- the entry form */
+html.nl .nle-veil { padding-top: 5vh; }
+/* the search opened over the entry window is on top of it; a box asking (askConfirm's #confirmBox, z-index 90 in app.css:
+   "Discard this entry?", "Post into a closed period?") is on top of both, never hidden behind the window */
+html.nl .nl-veil[data-nl-veil] { z-index: 125; }
+html.nl #confirmBox { z-index: 130; }
+html.nl .nle { width: min(1040px, 100%); max-height: 90vh; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden;
+  background: var(--surface-raised, var(--surface)); border: 1px solid var(--border, var(--rule)); box-shadow: 0 24px 60px rgb(0 0 0 / .28); }
+html.nl .nle-head { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--border, var(--rule)); }
+html.nl .nle-head > b { font-size: 15px; }
+html.nl .nle-head .icon { margin-left: auto; }
+html.nl .nle-types { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-sunken, var(--sheet-2, transparent)); }
+html.nl .nle-types button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 13.5px; cursor: pointer; color: var(--text-secondary, var(--muted)); }
+html.nl .nle-types button[aria-selected="true"] { background: var(--surface, #fff); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+html.nl .nle-types kbd { margin-left: 0; }
+html.nl .nle-body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; padding: 14px; overflow-y: auto; }
+html.nl .nle-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+html.nl .nle-row { display: flex; gap: 12px; flex-wrap: wrap; }
+html.nl .nle-f { display: flex; flex-direction: column; gap: 4px; flex: 1 1 180px; min-width: 0; font-size: 12.5px; color: var(--text-secondary, var(--muted)); }
+html.nl .nle-f input, html.nl .nle-f select, html.nl .nle-lines input { height: 34px; box-sizing: border-box; padding: 0 10px; border-radius: 9px; border: 1px solid var(--border, var(--rule));
+  background: var(--surface, #fff); color: var(--foreground); font: inherit; font-size: 14px; width: 100%; }
+html.nl .nle-date { flex: 0 0 170px; }
+html.nl .nle-amt { flex: 0 0 150px; }
+html.nl .nle-amt input, html.nl .nle-lines td.n input { text-align: right; font-variant-numeric: tabular-nums; }
+html.nl .nle-warn { color: var(--nl-amber); font-size: 12px; }
+html.nl .nle-lines { width: 100%; border-collapse: collapse; }
+html.nl .nle-lines th { text-align: left; font-size: 12px; font-weight: 600; color: var(--text-muted, var(--muted)); padding: 0 6px 4px; }
+html.nl .nle-lines th.n { text-align: right; }
+html.nl .nle-lines td { padding: 3px 6px 3px 0; vertical-align: top; }
+html.nl .nle-lines td.n { width: 130px; }
+html.nl .nle-lines td:last-child { width: 30px; }
+html.nl .nle-note { font-size: 12.5px; color: var(--text-secondary, var(--muted)); margin: 0; }
+html.nl .nle-note.bad, html.nl .nle-res.bad, html.nl .nle-bal.bad { color: var(--nl-rose); }
+html.nl .nle-tally { border: 1px solid var(--border, var(--rule)); border-radius: 12px; padding: 12px; background: var(--surface-sunken, var(--sheet-2, transparent)); align-self: start; }
+html.nl .nle-tally-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+html.nl .nle-dc { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+html.nl .nle-dc th, html.nl .nle-dc td { padding: 5px 4px; border-bottom: 1px solid var(--border-subtle, var(--rule)); text-align: left; }
+html.nl .nle-dc .n { text-align: right; }
+html.nl .nle-dc tfoot td { font-weight: 700; border-bottom: 0; }
+html.nl .nle-bal { margin: 8px 0 0; font-weight: 600; font-size: 13px; }
+html.nl .nle-bal.ok, html.nl .nle-res.ok { color: var(--nl-emerald); }
+html.nl .nle-probs { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--nl-amber); }
+html.nl .nle-res { margin: 8px 0 0; font-weight: 600; font-size: 13px; }
+html.nl .nle-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border, var(--rule)); }
+
+/* ---- denser pages (the owner: "page is eating lot of spaces therefore little bank entries is being seen") */
+@media (min-width: 601px) {
+  html.nl header.top .wrap { padding-top: 4px; padding-bottom: 4px; }
+  html.nl header.top .tbar-title h2 { font-size: 18px; }
+  html.nl .tbar-back { display: none; }
+  /* Bank: the tabs, the head line and the row of states and filters as slim as they go; the lines on one line each */
+  html.nl.bk-spacious #app > .react-host > nav.nl-banktabs { order: 0; margin: 0; min-height: 32px; }
+  html.nl.bk-spacious #app .bk-space .bs-head { min-height: 36px; padding: 2px 10px; margin: 2px 0; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-check .bs-more-words { display: none; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-sub { display: none; }
+  html.nl.bk-spacious #app .sbar-band [role="tab"] { height: 26px !important; }
+  html.nl.bk-spacious #app .bk-space table.bk-table.lt.lt:not(.cards) > tbody > tr > td { height: 28px; padding-top: 0; padding-bottom: 0; }
+  html.nl.bk-spacious #app .bk-space table.bk-table:not(.cards) > tbody > tr { contain-intrinsic-size: auto 28px; }
+  html.nl.bk-spacious #app .bk-space .bs-narr .l2 { display: none; }
+  html.nl.bk-spacious #app .bk-space .bs-narr .pn { -webkit-line-clamp: 1; line-clamp: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  html.nl.bk-spacious #app .bk-space .bs-narr .bs-narr-more { display: none; }
+  html.nl.bk-spacious #app .bk-space td.lg .src { display: none; }
+  html.nl.bk-spacious #app .bk-space td.lg .bs-led + .src.bad { display: block; }
+  html.nl.bk-spacious #app .bk-space .bs-led .lgbox, html.nl.bk-spacious #app .bk-space .bs-vt, html.nl.bk-spacious #app .bk-space .bs-led .bs-ok, html.nl.bk-spacious #app .bk-space td.ac .btn { height: 24px; }
+  html.nl.bk-spacious #app .bk-space table.bk-table.lt.lt:not(.cards) > thead th { height: 30px; padding-top: 0; padding-bottom: 0; }
+  /* what needs saying about the statement: one slim line each (all of it on hover) */
+  html.nl.bk-spacious #app .bk-space .bsp-pre .bk-setup { display: flex; align-items: center; gap: 12px; padding: 4px 10px; margin: 2px 0; }
+  html.nl.bk-spacious #app .bk-space .bsp-pre .bk-setup > div { flex: 1 1 auto; min-width: 0; display: flex; gap: 10px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+  html.nl.bk-spacious #app .bk-space .bsp-pre .bk-setup > div .note { overflow: hidden; text-overflow: ellipsis; }
+  html.nl.bk-spacious #app .bk-space .bsp-pre .bk-setup > .row { flex-wrap: nowrap !important; }
+  html.nl.bk-spacious #app .bk-space .bsp-pre .bk-setup select { width: 220px; height: 28px; }
+  html.nl.bk-spacious #app .bk-space .bsp-pre .alert-line { padding-top: 3px; padding-bottom: 3px; margin: 2px 0; min-height: 0; }
+  html.nl.bk-spacious #app .bk-space .bsp-pre .alert-line > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the filters in one line (the rows' density is in Settings › Look) */
+  html.nl.bk-spacious #app .bk-space .bs-bar .bsp-dens { display: none; }
+  html.nl.bk-spacious #app .bk-space .bs-search { width: 130px; }
+  html.nl.bk-spacious #app .bk-space .bs-bar { margin: 0; }
+  /* a ledger suggested by a similar name: beside the box, not under it */
+  html.nl.bk-spacious #app .bk-space td.lg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html.nl.bk-spacious #app .bk-space td.lg .bs-led { display: inline-flex; vertical-align: middle; min-width: 170px; }
+  html.nl.bk-spacious #app .bk-space td.lg .nl-hint { display: inline-block; vertical-align: middle; max-width: 130px; overflow: hidden; text-overflow: ellipsis; margin-left: 6px; font-size: 12px; white-space: nowrap; }
+  /* one line, kept inside its own cells: never over the totals under Withdrawal and Deposit */
+  html.nl.bk-spacious #app .bk-space .bsp-foot { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  html.nl.bk-spacious #app .bk-space table.bk-table.lt > tfoot td { font-size: 12px; white-space: nowrap; }
+}
+
+/* ---- a phone */
+@media (max-width: 600px) {
+  html.nl .nl-search-btn { min-width: 0; padding: 0 8px; }
+  html.nl .nl-search-btn .nl-search-w, html.nl .nl-search-btn kbd { display: none; }
+  html.nl .nl-new span { display: none; }
+  html.nl .nl-new { padding: 0 8px; }
+  html.nl .nl-veil { padding: 0; align-items: stretch; }
+  html.nl .nl-palette, html.nl .nle { width: 100%; max-height: none; height: 100%; border-radius: 0; }
+  html.nl .nle-body { grid-template-columns: minmax(0, 1fr); }
+  html.nl .nle-types { overflow-x: auto; max-width: 62vw; }
+  html.nl .nle-types kbd { display: none; }
+  html.nl .nl-cut { max-width: 140px; }
+}
+
+/* ---- the firm Home's Needs you (HomeNeeds.jsx): the look of Settings' Needs you */
+html.nl .nl-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid color-mix(in oklab, var(--warn) 30%, transparent); border-radius: 10px; background: var(--warn-soft); }
+html.nl .nl-needs > b { color: var(--warn); font-size: 14px; }
+html.nl .nl-needs > .linkbtn { font-size: 14px; text-align: left; min-height: 32px; }
+@media (max-width: 600px) { html.nl .nl-needs { flex-direction: column; align-items: flex-start; } }
+
+/* ---- Bank on a phone: the Bank tabs first, then the row of states, with no empty band above it; the foot bar's words
+   wrap instead of being cut; the missing month's card is dashed around, not each of its fields (the review, 23-Nov-2026) */
+@media (max-width: 600px) {
+  html.nl #app:has(> .react-host > nav.nl-banktabs) { display: flex; flex-direction: column; }
+  html.nl #app > .react-host > nav.nl-banktabs { order: -1; margin-top: 0; }
+  html.nl #app:has(> .react-host > nav.nl-banktabs) .sbar-band { padding-top: 4px; }
+  /* room under the page for what is fixed at its foot (the bottom menu and the bank's foot bar): the last words of the
+     page (a missing month's "… to 31-Mar-2026") scroll clear of them (the re-review) */
+  html.nl #app:has(> .react-host > nav.nl-banktabs) { padding-bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
+  html.nl #app:has(> .react-host > nav[data-nl-bank="stmts"]), html.nl #app:has(> .react-host > nav[data-nl-bank="recon"]) { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  html.nl #app .bk-actionbar.bs-bankbar { flex-wrap: wrap; }
+  html.nl #app .bk-actionbar.bs-bankbar .ab-left, html.nl #app .bk-actionbar.bs-bankbar .bk-stat { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  html.nl table.cards tr.nl-gap > td, html.nl table.lt tr.nl-gap > td { border-top: 0 !important; border-bottom: 0 !important; }
+  html.nl table tr.nl-gap { outline: 1.5px dashed var(--nl-rose); outline-offset: -1px; border-radius: 12px; }
+  /* the missing month's words wrap inside their field, never cut at the side ("… to 31-Mar-") */
+  html.nl #app tr.nl-gap > td:has(.nl-gap-w) { white-space: normal; overflow: visible; height: auto; }
+  html.nl #app tr.nl-gap .nl-gap-w { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; text-align: right; }
+}
+
+/* ---- a phone, signed in: the page's title fits beside the top bar's buttons (wraps to two lines, never cut) */
+@media (max-width: 600px) {
+  html.nl header.top .tbar-title h2 { font-size: 17px; line-height: 1.15; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
+  html.nl header.top .nl-top { gap: 4px; margin-right: 2px; }
+}
+
+/* ---- Bank: the header row's client and statement (the owner's screenshot of 23-Nov-2026, Safari at about 1000 px: the
+   statement's list was cut at the top and the foot). The statement's name is drawn here, one line cut with …, at a
+   control's height; the list (Bank.jsx StmtPick) lies over it unseen and takes the clicks and the keys */
+html.nl #app .bs-head .nl-stmtpick { position: relative; display: inline-flex; align-items: center; box-sizing: border-box; height: 28px; min-width: 0; max-width: 100%;
+  padding: 0 28px 0 10px; border: 1px solid var(--border-strong, var(--rule)); border-radius: var(--radius-control, 8px); background-color: var(--surface, var(--sheet));
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  color: var(--foreground); vertical-align: middle; cursor: pointer; }
+html.nl #app .bs-head .nl-stmtpick:hover { border-color: var(--accent); }
+html.nl #app .bs-head .nl-stmtpick:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 16%, transparent); }
+html.nl #app .bs-head .nl-stmtlbl { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 18px; }
+/* 16 px: a phone does not zoom in when the list opens */
+html.nl #app .bs-head .nl-stmtpick > select.bk-stmtsel { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; max-width: none; margin: 0; padding: 0; border: 0;
+  opacity: 0; font-size: 16px; cursor: pointer; }
+html.nl #app .bs-head .bsp-client { line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 601px) {
+  html.nl #app .bk-smart .bs-head .bk-id, html.nl.bk-spacious #app .bk-space .bs-head .bk-id { align-items: center; flex: 3 1 0; min-width: 220px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-check { min-width: 0; }
+  /* too narrow for all of it on one line (about 1000 px with the menu's words): the buttons go to a second line, at the right */
+  html.nl.bk-spacious #app .bk-space .bs-head { flex-wrap: wrap; row-gap: 4px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-actions { margin-left: auto; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id > .bsp-client { flex: 0 1 auto; min-width: 48px; max-width: 220px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id > .nl-stmtpick { flex: 0 1 auto; min-width: 150px; max-width: 380px; }
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id > .bk-ledline { flex: 0 1000 auto; min-width: 0; overflow: hidden; flex-wrap: nowrap; white-space: nowrap; }
+  /* the period is in the statement's name */
+  html.nl.bk-spacious #app .bk-space .bs-head .bk-id:has(> .nl-stmtpick) > .bsp-period { display: none; }
+}
+@media (max-width: 600px) {
+  html.nl #app .bs-head .bk-id > .nl-stmtpick { display: flex; width: 100%; margin: 4px 0; }
+}
+
+
+/* ---- the top bar at about 1000 px with the menu's words: the page's own button (Upload statement) was squeezed to no
+   width and drawn over the page's name and the client's line. The right side keeps its width; the name's part takes
+   what is left (cut with …); the search box is its icon under 1280 px (its words on hover); and where even that does
+   not fit, the right side goes to a line of its own */
+@media (min-width: 761px) {
+  html.nl header.top .headrow { flex-wrap: wrap; row-gap: 4px; }
+  html.nl header.top .headrow > .tbar { flex: 1 1 0; min-width: 150px; }
+  html.nl header.top .headrow > .topright { flex: 0 0 auto; margin-left: auto; }
+  html.nl header.top .topright > .tb-page { min-width: min-content; }
+}
+@media (min-width: 761px) and (max-width: 1279px) {
+  html.nl .nl-search-btn { min-width: 0; width: 32px; padding: 0; justify-content: center; }
+  html.nl .nl-search-btn > .nl-search-w, html.nl .nl-search-btn kbd { display: none; }
+}

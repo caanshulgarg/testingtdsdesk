@@ -22,7 +22,16 @@ export function seenWords(iso) {
 }
 // (24-Oct-2026, Suvit: names with extra spaces break sync: the spaces are collapsed for comparing; the exact name is kept
 // for the link, as the cloud has it)
-export const coKey = (n) => (typeof ledNm === "function" ? ledNm(String(n || "")) : String(n || "")).replace(/\s+/g, " ").trim().toLowerCase();
+// next-fix-hangs (FINCOM-APP-STAGING-K, -Z): a drawing asks the key of each company row's name for every company it
+// shows; a name's key is the same words every time, so each is worked out once (kept for up to 20,000 names)
+const KEYS = { m: new Map(), f: null };
+export const coKey = (n) => {
+  const s = String(n || ""), f = typeof ledNm === "function" ? ledNm : null;
+  if (KEYS.f !== f) { KEYS.m.clear(); KEYS.f = f; }
+  let k = KEYS.m.get(s);
+  if (k === undefined) { k = (f ? f(s) : s).replace(/\s+/g, " ").trim().toLowerCase(); if (KEYS.m.size >= 20000) KEYS.m.clear(); KEYS.m.set(s, k); }
+  return k;
+};
 export const spacesOdd = (n) => { const s = String(n || ""); return s !== s.replace(/\s+/g, " ").trim(); };
 // the firm's computers, as TLight or the Tally page last read them (the newer beat of each)
 export function tallyDevs() {

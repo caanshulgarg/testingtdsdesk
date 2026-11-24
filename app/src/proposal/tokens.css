@@ -1,0 +1,30 @@
+/* The proposal's tokens. The colours are FinCom's own (src/css/app.css :root, copied here because that file is the whole
+   legacy stylesheet); the rest is NEW and is what the plan proposes adding to arc-tokens.css: one spacing scale, one type
+   scale, one row height, one status set. */
+:root, :root[data-theme="light"] {
+  --brand:#4338CA; --brand-hover:#3730A3; --brand-tint:#EEF2FF; --on-brand:#FFFFFF;
+  --paper:#F8FAFC; --sheet:#FFFFFF; --sheet-2:#F1F5F9; --ink:#0F172A; --muted:#475569; --rule:#E2E8F0; --rule-soft:#F1F5F9; --rule-strong:#CBD5E1;
+  --ok:#15803D; --ok-soft:#DCFCE7; --warn:#B45309; --warn-soft:#FEF3C7; --bad:#B91C1C; --bad-soft:#FEE2E2; --info:#0369A1; --info-soft:#E0F2FE;
+  --shade:15 23 42; --focus:var(--brand);
+  /* chart series (validated: light surface, adjacent CVD ΔE ≥ 10) */
+  --money-in:#0284C7; --money-out:#4F46E5;
+  --sk-a:#EEF2F6; --sk-b:#F8FAFC;
+}
+:root[data-theme="dark"] {
+  --brand:#818CF8; --brand-hover:#A5B4FC; --brand-tint:#1E1B4B; --on-brand:#0B1120;
+  --paper:#0B1120; --sheet:#111827; --sheet-2:#1F2937; --ink:#E5E7EB; --muted:#94A3B8; --rule:#1F2937; --rule-soft:#172033; --rule-strong:#334155;
+  --ok:#4ADE80; --ok-soft:#0F2E1C; --warn:#FBBF24; --warn-soft:#2E2210; --bad:#F87171; --bad-soft:#3A1717; --info:#38BDF8; --info-soft:#0C2A3D;
+  --shade:0 0 0;
+  --money-in:#0891B2; --money-out:#6366F1;
+  --sk-a:#1A2333; --sk-b:#222D40;
+}
+:root {
+  /* spacing: 4-point scale */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  /* type: 6 sizes only */
+  --t-xs:12px; --t-sm:13px; --t-md:14px; --t-lg:16px; --t-xl:20px; --t-2xl:28px;
+  /* shape and density */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --row-h:44px; --ctl-h:36px; --nav-w:236px; --top-h:68px;
+  --lift: 0 1px 2px rgb(var(--shade) / .05), 0 1px 3px rgb(var(--shade) / .04);
+  --float: 0 20px 48px rgb(var(--shade) / .18), 0 4px 12px rgb(var(--shade) / .08);
+}
