@@ -1,11 +1,11 @@
--- migration-218-post-copy-resend.sql (24-Nov-2026, branch next-fix-reupload-posted). Written, NOT run: the owner reads it and
+-- migration-219-post-copy-resend.sql (24-Nov-2026, branch next-fix-reupload-posted). Written, NOT run: the owner reads it and
 -- runs it after its own review.
 -- Why (staging, 24-Nov-2026, a sales invoice posted by FinCom as an Optional voucher on 18-Nov, deleted in Tally, then
 -- posted again): the queue (184's tally_post_enqueue_core) found its FinCom id still live for the posting that sent it,
 -- queued nothing and the page took that posting's old answer for a new one. The owner: "Cloud also deletes the entry the
 -- moment we delete entry in tally ... dont read from tally". So FinCom decides from its own copy of Tally (tally_vouchers),
 -- never by asking Tally, and does what is needed on the Post press itself.
--- What 218 does. One new function, tally_post_copy_resend(p_job, p_id), for a member who may post (can_write()):
+-- What 219 does. One new function, tally_post_copy_resend(p_job, p_id), for a member who may post (can_write()):
 --   * the posting (p_job, of the member's firm) must be settled (done or failed, not checking, not stopped), posting into
 --     its company still allowed (200's tally_post_job_blocked), and hold the entry (p_id, as 36b matches ids);
 --   * the entry's FinCom id must not be live in any OTHER posting (it is never sent twice);
@@ -20,17 +20,19 @@
 -- posting computer of 03-Oct-2026) still gets no duplicate from an ordinary repost. Nothing is asked of Tally here.
 -- Add-only: one function made (no table, column, index, row or policy changed; nothing dropped or deleted); granted to
 -- authenticated (not public, anon). Stops at the start, changing nothing, when the name is taken by another function or a
--- helper it needs is missing. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration218.py
+-- helper it needs is missing. One transaction, lock_timeout 10 s; safe twice. Tested by tests/run_migration219.py
 -- (pg_stand). Runs after 36b, 184 and 200.
 begin;
 set local lock_timeout = '10s';
 
 -- ---------------------------------------------------------------- 0. the name guard
 do $names$
-declare f regprocedure := to_regprocedure('public.tally_post_copy_resend(uuid, text)'); bad text[] := '{}'; h text;
+declare bad text[] := '{}'; h text;
 begin
-  if f is not null and coalesce(obj_description(f, 'pg_proc'), '') <> 'tally post copy resend (migration 218)' then
-    bad := bad || 'a function tally_post_copy_resend(uuid, text) exists that is not 218''s'::text;
+  -- (by the function's name, whatever its arguments: any tally_post_copy_resend that is not this migration's stops it)
+  if exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'tally_post_copy_resend'
+               and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'tally post copy resend (migration 219)') then
+    bad := bad || 'a function named tally_post_copy_resend exists that is not 219''s'::text;
   end if;
   foreach h in array array['public.my_firm()', 'public.can_write()', 'public.tally_fincom_id(jsonb)', 'public.tally_post_id_match(text, text, text)',
                            'public.tally_post_release_core(uuid, uuid, uuid, text, text)', 'public.tally_post_job_blocked(uuid)',
@@ -45,7 +47,7 @@ begin
     bad := bad || 'tally_vouchers.fincom_id or tally_post_jobs.resend_only is missing'::text;
   end if;
   if array_length(bad, 1) > 0 then
-    raise exception 'migration 218: %. Nothing was changed.', array_to_string(bad, '; ');
+    raise exception 'migration 219: %. Nothing was changed.', array_to_string(bad, '; ');
   end if;
 end $names$;
 
@@ -106,7 +108,7 @@ begin
    where id = p_job;
   return jsonb_build_object('ok', true, 'state', st, 'job', p_job, 'id', eid, 'released', true, 'resent', true, 'why', why);
 end $function$;
-comment on function public.tally_post_copy_resend(uuid, text) is 'tally post copy resend (migration 218)';
+comment on function public.tally_post_copy_resend(uuid, text) is 'tally post copy resend (migration 219)';
 revoke all on function public.tally_post_copy_resend(uuid, text) from public, anon;
 grant execute on function public.tally_post_copy_resend(uuid, text) to authenticated;
 

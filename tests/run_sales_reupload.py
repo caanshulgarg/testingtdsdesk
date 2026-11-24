@@ -5,7 +5,7 @@ one and showed "Posted" with today's date, and nothing was sent. The owner's rul
 books never counts as posted; FinCom decides from its own copy of Tally, never by reading Tally; it does what it needs
 on the Post press itself. Made-up data only.
   1. the Post press, the cloud holding the invoice for an earlier, finished posting: FinCom's cloud decides by its copy
-     (tally_post_copy_resend, migration 218): only an Optional voucher there: released and that posting handed back, the
+     (tally_post_copy_resend, migration 219): only an Optional voucher there: released and that posting handed back, the
      invoice queued on it (marked Posted when it answers); a regular voucher: Posted before (that posting's date), In
      Tally, nothing sent; nothing in the copy, or the cloud not ready: Posted before, not sent again, said why
   2. "Not in Tally? Post again" on a posted invoice (row and panel): the posting that holds it found, the same decision
@@ -95,10 +95,10 @@ with sync_playwright() as p:
     vc = press("ZR/0459"); st = A.evaluate(STATE, vc); t = A.evaluate(LAST)
     ok(st["st"] == "posted" and st["at"].startswith("2026-11-18") and st["note"] == "Posted before by FinCom, not sent again", "Posted before, not sent again (%s)" % st)
     ok("cannot tell whether it is in Tally" in t, "the reason said (%s)" % t)
-    print(" d. the cloud cannot decide yet (migration 218 not run): nothing sent, said so")
+    print(" d. the cloud cannot decide yet (migration 219 not run): nothing sent, said so")
     A.evaluate("""() => { window.__copy = () => ({throw: "Could not find the function public.tally_post_copy_resend(p_id, p_job) in the schema cache"}); }""")
     vd = press("ZR/0460"); st = A.evaluate(STATE, vd); t = A.evaluate(LAST)
-    ok(st["note"] == "Posted before by FinCom, not sent again" and "migration 218" in t, "said plainly (%s)" % t)
+    ok(st["note"] == "Posted before by FinCom, not sent again" and "migration 219" in t, "said plainly (%s)" % t)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally (%s)" % A.evaluate("() => window.__bridgeCalls"))
 
     print("2. Not in Tally? Post again on a posted invoice")

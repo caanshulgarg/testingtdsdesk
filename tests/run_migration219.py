@@ -1,6 +1,6 @@
-"""python3 run_migration218.py - server/tally-cloud/migration-218-post-copy-resend.sql (24-Nov-2026, branch
+"""python3 run_migration219.py - server/tally-cloud/migration-219-post-copy-resend.sql (24-Nov-2026, branch
 next-fix-reupload-posted; the owner: decide from FinCom's own copy of Tally, never by reading Tally). On a throwaway
-PostgreSQL (pg_stand, port 31218 unless PG218_PORT, its data under /tmp/reup218 unless TMPDIR, removed after; never a real
+PostgreSQL (pg_stand, port 31219 unless PG219_PORT, its data under /tmp/reup219 unless TMPDIR, removed after; never a real
 database), the posting queue as post_queue_stand builds it (174, then 184, 185, 199-202), made-up firm and entries only.
   0. the file: one transaction, lock_timeout 10 s; add-only (one function made; no drop, delete, truncate, alter, table);
      names no real database; grants (authenticated; not public, anon); runs twice
@@ -11,17 +11,17 @@ database), the posting queue as post_queue_stand builds it (174, then 184, 185, 
   4. no voucher in the copy: 'none', nothing changes
   5. the id live in another posting: refused, nothing changes; a posting still going: refused
   6. a look-only member (readonly) and anon may not run it
-RED_WITHOUT_218=1: the same checks without the file (they fail)."""
+RED_WITHOUT_219=1: the same checks without the file (they fail)."""
 import os, re, sys, json
-os.environ["TMPDIR"] = os.environ.get("PG218_DIR") or "/tmp/reup218"
+os.environ["TMPDIR"] = os.environ.get("PG219_DIR") or "/tmp/reup219"
 os.makedirs(os.environ["TMPDIR"], exist_ok=True); os.chmod(os.environ["TMPDIR"], 0o777)
 os.environ.setdefault("PG_STAND_SOCKDIR", os.environ["TMPDIR"])
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import shutil
 import post_queue_stand as PS
 from post_queue_stand import q, F, CO, OWNER, STAFF, DA, BA, BK
-RED = os.environ.get("RED_WITHOUT_218") == "1"
-M218 = os.path.join(PS.SQLDIR, "migration-218-post-copy-resend.sql")
+RED = os.environ.get("RED_WITHOUT_219") == "1"
+M219 = os.path.join(PS.SQLDIR, "migration-219-post-copy-resend.sql")
 EXTRA = [os.path.join(PS.SQLDIR, f) for f in ("migration-184-post-dupes.sql", "migration-185-post-unrouted.sql", "migration-199-post-match-fast.sql",
                                                "migration-200-post-settle-itself.sql", "migration-201-post-register-async.sql", "migration-202-post-recheck.sql")]
 fails = []
@@ -29,7 +29,7 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
     if not c: fails.append(w)
 
-text = open(M218).read() if os.path.exists(M218) and not RED else ""
+text = open(M219).read() if os.path.exists(M219) and not RED else ""
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
@@ -40,7 +40,7 @@ ok(not re.search(r"supabase\.co|https?://|qbocskai|project[_ ]ref", text.lower()
 ok("revoke all on function public.tally_post_copy_resend(uuid, text) from public, anon;" in text and "grant execute on function public.tally_post_copy_resend(uuid, text) to authenticated;" in text, "grants: authenticated, not public or anon")
 ok("security definer set search_path = public, pg_temp" in text, "security definer, search_path public, pg_temp")
 
-st = PS.Stand(int(os.environ.get("PG218_PORT") or 31218), extra=EXTRA); db = st.db
+st = PS.Stand(int(os.environ.get("PG219_PORT") or 31219), extra=EXTRA); db = st.db
 def bye():
     st.stop(); shutil.rmtree(db.data, ignore_errors=True)
     try: os.rmdir(os.environ["TMPDIR"])
@@ -49,6 +49,10 @@ try:
     if text:
         r = st.psql_text(text); ok(r.returncode == 0, "runs on the stand" + ("" if not r.returncode else ": " + r.stderr[-300:]))
         r = st.psql_text(text); ok(r.returncode == 0, "runs twice")
+        # the name guard: another function of that name (other arguments) stops it, nothing changed
+        db.sql("create function public.tally_post_copy_resend(p_x int) returns int language sql as 'select 1'")
+        r = st.psql_text(text); ok(r.returncode != 0 and "named tally_post_copy_resend exists" in r.stderr, "another function of that name stops it (%s)" % r.stderr.strip()[-120:])
+        db.sql("drop function public.tally_post_copy_resend(int)")
         st.grants()
     db.sql("insert into members values ('77777777-7777-7777-7777-777777777218', %s, 'Look', 'readonly', true) on conflict do nothing" % q(F))
     J = lambda n: "%08d-0000-0000-0000-000000000218" % n

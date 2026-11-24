@@ -6,7 +6,7 @@
 // and nothing was sent.
 //
 // Now an entry an earlier posting holds is decided by FinCom's own copy of Tally (tally_vouchers, by the entry's FinCom
-// id), by the cloud itself (migration 218, tally_post_copy_resend), never by asking Tally:
+// id), by the cloud itself (migration 219, tally_post_copy_resend), never by asking Tally:
 //   only deleted, Optional or cancelled vouchers there: the id released (an owner's release, the copy's state as the
 //     reason) and the earlier posting handed back to send that entry alone; the posting computer's record lets it go once;
 //   a regular voucher there: In Tally (posted before); nothing is sent;
@@ -30,7 +30,7 @@ const NotInTally = {
     try { r = await TCloud.rpc("tally_post_copy_resend", {p_job: job, p_id: String(id)}); }
     catch (e){
       const m = String((e && e.message) || e);
-      if (/tally_post_copy_resend|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m)) return {state: "notready", words: "FinCom's cloud cannot decide this from its copy of Tally yet (migration 218), so nothing was sent."};
+      if (/tally_post_copy_resend|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m)) return {state: "notready", words: "FinCom's cloud cannot decide this from its copy of Tally yet (migration 219), so nothing was sent."};
       return {state: "unable", words: "FinCom's cloud did not answer (" + plainMsg(m) + "), so nothing was sent."};
     }
     r = r || {};
