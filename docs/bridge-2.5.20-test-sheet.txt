@@ -1,9 +1,13 @@
 FINCOM BRIDGE 2.5.20 - TEST SHEET (2.5.19's sheet below, with 2.5.20's changes first)
 
-File:        not built yet (branch next-bridge-2520; the version still says 2.5.19). 2.5.19's release check, its build and
-             the ZZ BIG TEST timings come first. The paper: docs/bridge-2.5.20-notes.md.
+File:        FinComBridge-Setup-2.5.20.exe
+Fingerprint: (filled in when the setup is built)
+             The paper: docs/bridge-2.5.20-notes.md. Branch next-bridge-2520-rel: next-bridge-2520 with
+             next-bridge-fix-alter (fix in place) and staging-next merged.
 
-2.5.20 asks nothing new of Tally: the read back in item 2 is FinComTag, the request the posting check already uses.
+Items 1 to 4 ask nothing new of Tally: the read back in item 2 is FinComTag, the request the posting check already
+uses, and the counter before each part is FinComCompany, the approved company check. Item 5, fix in place, adds the
+two requests the owner approved on 23-Nov-2026, FinComFixVoucher and FinComFixLedger, NOT yet measured.
 The same rules as before: each request stopped at 2 s, one request at a time, postings first, never while someone is
 typing in Tally. Use a test company with made-up entries only.
 
@@ -39,6 +43,10 @@ typing in Tally. Use a test company with made-up entries only.
     Check C: a computer whose settings file has no ReadDays. In FinCom open a ledger's entries for a month the copy does
     not hold. You should see: no Day Book request in the bridge log; FinCom says reading entries from Tally is off. Only
     "ReadDays": true lets FinCom's own reads ask Tally, as before.
+ 5. Fix in place: a voucher's number, place of supply or party GSTIN, or a party ledger's GSTIN or PAN, changed in
+    Tally from FinCom (FinComFixVoucher and FinComFixLedger, the owner's approval of 23-Nov-2026).
+    Check: every step of docs/bridge-fix-in-place-test-sheet.txt on ZZ TEST, and its times on ZZ BIG TEST against the
+    2 s rule. Both requests are NOT yet measured: this build is not handed out to clients until that sheet passes.
 
 -------------------------------------------------------------------------------------------------------------------
 

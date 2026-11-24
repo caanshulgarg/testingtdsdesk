@@ -3,7 +3,7 @@ FinCom Bridge: fix in place, the real-Tally test (phase 0), for the owner
 
 What this checks: the two Tally requests the owner approved on 23-Nov-2026 (findings/fix-in-place-plan.md section 2.3),
 FinComFixVoucher and FinComFixLedger, on a real Tally, before the bridge release that carries them. Branch
-next-bridge-fix-alter (it goes into the release after 2.5.20). Use the ZZ TEST company only (made-up entries), and
+next-bridge-fix-alter (it goes into 2.5.20, merged on next-bridge-2520-rel). Use the ZZ TEST company only (made-up entries), and
 ZZ BIG TEST for the times. Do every step on TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (the tally-versions run can do 1-8
 by itself; the owner's own run on NWS144 is 7.1).
 

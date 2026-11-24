@@ -50,8 +50,8 @@ func allowListRows2518() string {
 		a.purpose = strings.TrimSuffix(a.purpose, add)
 		list[id] = a
 	}
-	st := list[stockID] // the stock row's version word (2.5.19 names itself there)
-	st.purpose = strings.Replace(st.purpose, "unchanged in 2.5.19)", "unchanged in 2.5.18)", 1)
+	st := list[stockID] // the stock row's version word (2.5.19 named itself there; 2.5.20 does now)
+	st.purpose = strings.Replace(st.purpose, "unchanged in 2.5.20)", "unchanged in 2.5.18)", 1)
 	list[stockID] = st
 	return allowListRowsOf(samples, list)
 }

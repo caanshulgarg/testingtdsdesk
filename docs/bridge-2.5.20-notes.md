@@ -1,8 +1,9 @@
-# FinCom Bridge 2.5.20 – notes and test sheet (draft; branch next-bridge-2520, from 2.5.19 at 36e5ca1c3)
+# FinCom Bridge 2.5.20 – notes and test sheet (branch next-bridge-2520-rel: next-bridge-2520, from 2.5.19 at 36e5ca1c3, with next-bridge-fix-alter and staging-next)
 
-The version is not changed and nothing is built: 2.5.19's release check, build and the ZZ BIG TEST timings come first.
-No new request to Tally is built or allow-listed. The same rules as before: a request at most 2 s, one in flight, postings
-first, the typing gate. Use a test company with made-up entries only.
+The version is 2.5.20 (util.go). Items 1 to 5 add no request to Tally. Fix in place (next-bridge-fix-alter,
+docs/bridge-fix-in-place-test-sheet.txt) adds the two requests the owner approved on 23-Nov-2026, FinComFixVoucher and
+FinComFixLedger, NOT yet measured (docs/tally-allowlist.md). The same rules as before: a request at most 2 s, one in
+flight, postings first, the typing gate. Use a test company with made-up entries only.
 
 ## What changes
 
