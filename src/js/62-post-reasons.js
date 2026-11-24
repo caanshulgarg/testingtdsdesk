@@ -618,8 +618,10 @@ function postRowRemoveBlock(x){
   return "";
 }
 // Posted: an entry posted (1; 2, found in Tally: from when it was found; 3, marked posted by a person: from the mark) more
-// than 24 hours ago is in Transactions only (postedOld); never one with an action to take (Correct the Tally id)
-function postRowOld(x){ return x.st.tab === "posted" && x.st.code <= 3 && !x.st.action && postedOld(x.st.since || (x.st.code === 3 && (x.st.markedAt || (x.e && x.e.tally && x.e.tally.byOwnerAt))) || x.st.posted); }
+// than 24 hours ago is in Transactions only (postedOld); never one with an action to take (Correct the Tally id), nor a
+// bill or bank line that still needs the person (billNeedsAction, bankNeedsAction: src/js/03)
+function postRowOld(x){ return x.st.tab === "posted" && x.st.code <= 3 && !x.st.action && postedOld(x.st.since || (x.st.code === 3 && (x.st.markedAt || (x.e && x.e.tally && x.e.tally.byOwnerAt))) || x.st.posted)
+  && !(x.e && (x.kind === "bill" ? billNeedsAction(x.e, x.job && x.job.client_id) : x.kind === "bank" && bankNeedsAction(x.e))); }
 // the rows of a tab as the person sees them: {shown, hidden, removed} (search applied by the page)
 function postTabRows(cid, tab){
   const all = postEntryRows(cid) || [];

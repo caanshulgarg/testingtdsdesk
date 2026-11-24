@@ -129,12 +129,12 @@ function DraftText({ x, label, k, area, ...p }) {
 // tax-accuracy: the e-invoice (IRN) and e-way bill of this invoice, made through the firm's GST API
 function EinvPanel({ v }) {
   // (next-fix-audit-sales-einv) the e-invoice user of the registration the invoice is issued from (EINV.seller), not always the main GSTIN
-  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase(), seller = EINV.seller(v, co) || gstin;
+  // (what it shows and offers: EINV.offers, the rule Sales also reads to keep an invoice listed, salesNeedsAction)
+  const s = SL(), co = CO(s.cid), x = v.x, o = EINV.offers(v, co);
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [t, setT] = useState({ distance: "", vehicleNo: "", transporterId: "", mode: "1" });
-  if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
-  const a = EINV.need(seller), probs = EINV.problems(v, co, s.cfg);
+  if (!o) return null;
+  const { a, active } = o, canCancel = o.cancel, probs = EINV.problems(v, co, s.cfg);
   const go = (label, f) => async () => { setBusy(label); setMsg(""); try { setMsg(await f()); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(""); render(); };
-  const active = x.irn && x.irnStatus !== "cancelled", canCancel = active && x.ackDt && Date.now() - Date.parse(x.ackDt) < 24 * 3600000;
   return <section data-einv={v.id}><h3>E-invoice and e-way bill</h3>
     {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
     {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
@@ -145,7 +145,7 @@ function EinvPanel({ v }) {
         {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
         <button className="btn small primary" disabled={!!busy || probs.length > 0} onClick={go("irn", async () => { const j = await EINV.irn(v); return "IRN made: " + j.irn; })}>{busy === "irn" ? "Making the IRN…" : "Make the IRN"}</button>
       </> : <>
-        {!x.ewayNo && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+        {o.ewb && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
           <input type="number" min="0" placeholder="Distance (km)" aria-label="Distance in km" value={t.distance} style={{ width: 120 }} onChange={(ev) => setT({ ...t, distance: ev.target.value })} />
           <select aria-label="Mode" value={t.mode} style={{ width: "auto" }} onChange={(ev) => setT({ ...t, mode: ev.target.value })}><option value="1">Road</option><option value="2">Rail</option><option value="3">Air</option><option value="4">Ship</option></select>
           <input type="text" placeholder="Vehicle no." aria-label="Vehicle number" value={t.vehicleNo} style={{ width: 130 }} onChange={(ev) => setT({ ...t, vehicleNo: ev.target.value })} />

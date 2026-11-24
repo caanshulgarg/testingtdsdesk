@@ -1213,7 +1213,11 @@ function billRestore(id){
   if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
-  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+  // where it is now, said and shown: a bill in Tally over 24 hours is listed in Transactions only (billOld, src/js/03),
+  // so no bill stays open that the list does not show
+  const old = billOld(e), where = {draft: "To review", approved: billInTally(e) ? "In Tally" : "Post to Tally", duplicate: "Duplicates", rejected: "No entry"}[e.status] || "";
+  if (old) S.selected = null; else { S.filter = e.status; S.selected = e.id; }
+  refreshStats(S.coId); toast(old ? "Restored; it is in Transactions." : "Restored to " + where + "."); render();
 }
 // round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
 // click that puts the cursor there; the first missing one is marked bk-missing when the bill opens

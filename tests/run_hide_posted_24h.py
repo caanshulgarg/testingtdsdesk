@@ -307,6 +307,94 @@ with sync_playwright() as p:
         m = pg.evaluate(H + "[billOld({status: 'approved', exportedAt: h(50), postVerified: true, tally: {at: h(50), byOwner: 'X', byOwnerAt: h(30)}}), billOld({status: 'approved', exportedAt: h(50), postVerified: true, tally: {at: h(50), byOwner: 'X', byOwnerAt: h(3)}})]")
         ok(m == [True, False], look + "Purchase: marked already in Tally by a person: off the page 24 hours after the mark: %s" % m)
         ctx.close()
+    # ---- review 6 (24-Nov-2026): one rule per kind, salesNeedsAction / billNeedsAction / bankNeedsAction (src/js/03):
+    # anything whose page or panel still offers an action or a warning never hides, whatever its age (the review's probe)
+    for nl in (False, True):
+        look = "[review 6%s] " % (", new look" if nl else "")
+        ctx, pg = page(br, nl=nl)
+        H = "const h = (n) => new Date(Date.now() - n * 3600e3).toISOString(); "
+        go(pg, "goClient('sales'); salesTabGo('done');", 1500)
+        ok(pg.evaluate("['salesNeedsAction', 'billNeedsAction', 'bankNeedsAction'].map(n => typeof window[n]).join()") == "function,function,function", look + "the three rules are there")
+        # Sales: s2, posted 25 hours ago, nothing to do: hides; each warning or action the panel shows keeps it
+        CP = H + "const cp = (f) => { const v = JSON.parse(JSON.stringify(SL().list.find(x => x.id === 's2'))); v.x.customerGstin = '09AABCT1234E1Z2'; f(v); return salesOld(v); }; "
+        m = pg.evaluate("() => { " + CP + """return {none: cp(v => {}), irnCancelInTally: cp(v => { v.x.irn = 'X'; v.x.irnStatus = 'cancelled'; v.x.irnCancelInTally = true; }),
+          postJob: cp(v => { v.postJob = 'j1'; }), postError: cp(v => { v.postError = 'Made-up error'; }), refused: cp(v => { v.refused = {hint: 'x'}; }), needsCheck: cp(v => { v.needsCheck = true; }),
+          problems: cp(v => { v.problems = ['Made-up problem']; }), ledgerIssues: cp(v => { v.ledgerIssues = ['Made-up ledger issue']; }), postedOptional: cp(v => { v.postedOptional = true; }),
+          copyCheck: cp(v => { v.copyCheck = {at: h(30), note: 'Checked against a made-up copy'}; })}; }""")
+        ok(m.pop("none") is True and not any(m.values()), look + "Sales: posted 25 hours ago hides; IRN cancelled while in Tally, a posting queued, Tally's error, refused, to check, a problem, a ledger issue, Optional, checked on FinCom's copy each keep it: %s" % m)
+        # the e-invoice part (the firm's GST API on, the client's e-invoice user given: made-up)
+        GON = "window.__gon = window.__gon || GSTAPI.on; GSTAPI.on = () => true; const g = String(CO().gstin).toUpperCase(); EINV.accounts[g] = {user: 'made-up'}; EINV.asked[g] = Date.now(); "
+        m = pg.evaluate("() => { " + CP + GON + """return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: 'E1'}); }),
+          cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''}); }), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: 'E1'}); }),
+          cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); })]; }""")
+        ok(m == [False, False, False, True, False], look + "Sales: no IRN (Make the IRN), IRN of 2 hours (Cancel the IRN), no e-way bill (Make the e-way bill) keep it; IRN of 30 hours with its e-way bill hides; IRN cancelled (Make the IRN again) keeps it: %s" % m)
+        m = pg.evaluate("() => { " + CP + "GSTAPI.on = window.__gon; return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: ''}); })]; }")
+        ok(m == [True, True], look + "Sales: the firm's GST API off (no e-invoice part on the panel): nothing offered, it hides: %s" % m)
+        # ... and on the page: listed while its panel offers the button, gone once nothing is offered
+        def listed_with(js, button):
+            go(pg, H + GON + "const v = SL().list.find(x => x.id === 's2'); v.x.customerGstin = '09AABCT1234E1Z2'; " + js + " SL().openId = null; render();", 900)
+            t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
+            go(pg, "salesOpen('s2');", 900)
+            n = pg.locator("#app [data-einv] button", has_text=button).count() if button else pg.locator("#app [data-einv] button").count()
+            go(pg, "salesAct('salesClose');", 400)
+            return "SI-s2" in t, n
+        m = listed_with("", "Make the IRN")
+        ok(m == (True, 1), look + "Sales: no IRN yet: listed, and its panel offers Make the IRN: %s" % (m,))
+        m = listed_with("Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''});", "Make the e-way bill")
+        ok(m == (True, 1), look + "Sales: an IRN and no e-way bill: listed, and its panel offers Make the e-way bill: %s" % (m,))
+        m = listed_with("Object.assign(v.x, {ackDt: h(2), ewayNo: 'E1'});", "Cancel the IRN")
+        ok(m == (True, 1), look + "Sales: an IRN of 2 hours: listed, and its panel offers Cancel the IRN: %s" % (m,))
+        m = listed_with("Object.assign(v.x, {ackDt: h(30), ewayNo: 'E1'});", "")
+        ok(m == (False, 0), look + "Sales: an IRN of 30 hours with its e-way bill: nothing offered, off the page: %s" % (m,))
+        go(pg, "GSTAPI.on = window.__gon; const v = SL().list.find(x => x.id === 's2'); Object.assign(v.x, {irn: '', irnStatus: '', ackDt: '', ewayNo: '', customerGstin: ''}); render();", 500)
+        # Bills: b6, Tally's reply 30 hours ago, nothing to do: hides; each warning or action keeps it
+        m = pg.evaluate("() => { " + H + """const cp = (f) => { const e = JSON.parse(JSON.stringify(D().entries.b6)); f(e); return billOld(e); };
+          return {none: cp(e => {}), postedOptional: cp(e => { e.postedOptional = true; }), ownerRelease: cp(e => { e.ownerRelease = {ask: true, by: 'Made-up Member', why: 'made-up'}; }),
+            goneFromTally: cp(e => { e.goneFromTally = h(2); }), postError: cp(e => { e.postError = 'Made-up error'; }), postCheckFailed: cp(e => { e.postCheckFailed = {at: h(1), message: 'Could not check Tally'}; }),
+            postUnconfirmed: cp(e => { e.postUnconfirmed = {at: h(1)}; })}; }""")
+        ok(m.pop("none") is True and not any(m.values()), look + "Purchase: posted 30 hours ago hides; Optional, the owner's release, gone from Tally, Tally's error, a failed check, not confirmed each keep it: %s" % m)
+        # ... and what Post to Tally shows for it from FinCom's cloud: a posting queued, a reply to review, a Tally id to correct
+        m = pg.evaluate("() => { " + H + """const cid = window.__cid, keep = CloudJobs.list, e = D().entries.b6;
+          const J = (st, res) => ({id: 'jx', client_id: cid, status: st, created_at: h(30), updated_at: h(30), entry_ids: ['b6'], results: res ? [res] : [], n: 1});
+          const at = (list) => { CloudJobs.list = list; return billOld(e); };
+          const out = [at([J('waiting')]), at([J('done', {id: 'b6', ok: false, needsReview: true, message: 'Made-up reply'})]),
+            at([J('done', {id: 'b6', ok: true, verified: true, byOwner: 'Made-up Owner', vchNumber: 'INV-b6'})]), at([J('done', {id: 'b6', ok: true, verified: true})])];
+          CloudJobs.list = keep; return out; }""")
+        ok(m == [False, False, False, True], look + "Purchase: a posting queued, Tally's reply to review, a suspect Tally id (Correct the Tally id) keep it; posted with nothing to do hides: %s" % m)
+        go(pg, H + "window.__keepJobs = CloudJobs.list; CloudJobs.list = [{id: 'jx', client_id: window.__cid, status: 'done', created_at: h(30), updated_at: h(30), entry_ids: ['b6'], results: [{id: 'b6', ok: true, verified: true, byOwner: 'Made-up Owner', vchNumber: 'INV-b6'}], n: 1}]; S.step = null; S.tab = 'invoices'; S.filter = 'approved'; S.selected = null; render();", 1000)
+        q = pg.evaluate("[...document.querySelectorAll('#app ul.queue > li')].map(li => li.innerText).join('|')")
+        ok("INV-b6" in q, look + "Purchase: the bill whose Tally id is to be corrected stays in the approved bills' list: %r" % q[:200])
+        go(pg, "goState('intally', 'bills');", 1500)
+        ok("INV-b6" in pg.inner_text("#app [data-post-panel='posted']") if pg.locator("#app [data-post-panel='posted']").count() else False, look + "Purchase: and under In Tally, with Correct the Tally id")
+        go(pg, "CloudJobs.list = window.__keepJobs; render();", 500)
+        # Bank: r1, posted 25 hours ago, nothing to do: hides; each warning or action keeps it
+        m = pg.evaluate("() => { " + H + """const cp = (f) => { const r = JSON.parse(JSON.stringify(B().rows.find(x => x.id === 'r1'))); f(r); return bankOld(r); };
+          return {none: cp(r => {}), postedOptional: cp(r => { r.postedOptional = true; }), postJob: cp(r => { r.postJob = 'job-x'; }), postError: cp(r => { r.postError = 'Made-up error'; }),
+            postReview: cp(r => { r.postReview = {job: 'j', created: 0, n: 1}; }), checking: cp(r => { r.checking = true; }), goneFromTally: cp(r => { r.goneFromTally = h(2); })}; }""")
+        ok(m.pop("none") is True and not any(m.values()), look + "Bank: posted 25 hours ago hides; Optional, a posting queued, Tally's error, to review, being checked, gone from Tally each keep it: %s" % m)
+        m = pg.evaluate("() => { " + H + """const keep = CloudJobs.list, r = B().rows.find(x => x.id === 'r1');
+          CloudJobs.list = [{id: 'jb', client_id: window.__cid, status: 'waiting', created_at: h(1), updated_at: h(1), entry_ids: ['r1'], results: [], n: 1}]; const a = bankOld(r); CloudJobs.list = keep; return [a, bankOld(r)]; }""")
+        ok(m == [False, True], look + "Bank: a posting of FinCom's cloud still queued for the line keeps it: %s" % m)
+        go(pg, "B().rows.find(x => x.id === 'r1').postedOptional = true; goClient('bank'); bankTabGo('done');", 1200)
+        ids = pg.evaluate("[...document.querySelectorAll('%s')].map(t => t.dataset.rid).sort()" % BANKROWS)
+        ok("r1" in ids, look + "Bank: the Optional line posted 25 hours ago is under Posted: %s" % ids)
+        go(pg, "B().rows.find(x => x.id === 'r1').postedOptional = false; render();", 500)
+        # Transactions: the words
+        m = pg.evaluate("[txnRowsSales().find(x => x.id === 's3').label, txnRowsSales().find(x => x.id === 's6').label, txnRowsBank().find(x => x.id === 'r3').label, txnRowsBank().find(x => x.id === 'r7').label]")
+        ok(m == ["In Tally", "In Tally", "Not found in Tally", "Gone from Tally"], look + "Transactions: invoices found in Tally say In Tally; a bank line in a Tally file not found says Not found in Tally; one gone, Gone from Tally: %s" % m)
+        m = pg.evaluate("(() => { const e = D().entries.b1; e.goneFromTally = new Date().toISOString(); const l = txnRowsBills().find(x => x.id === 'b1').label; delete e.goneFromTally; return l; })()")
+        ok(m == "Gone from Tally", look + "Transactions: a bill gone from Tally says Gone from Tally: %s" % m)
+        # Restore of a deleted bill posted more than 24 hours ago: the message says it is in Transactions, and no bill is left open
+        go(pg, "window.__t = []; const t0 = window.toast; window.toast = (m, ...a) => { window.__t.push(String(m)); return t0(m, ...a); }; goClient('bills'); softDeleteEntry(D().entries.b2, 'Made-up reason'); goState('deleted', 'bills'); S.selected = 'b2'; render();", 1500)
+        go(pg, "billRestore('b2');", 1200)
+        m = pg.evaluate("[D().entries.b2.status, S.selected, window.__t.slice(-1)[0] || '', (document.querySelector('#app .detail') || {innerText: ''}).innerText.includes('INV-b2')]")
+        ok(m[0] == "approved" and m[1] != "b2" and "Transactions" in m[2] and not m[3], look + "Purchase: a posted bill of 25 hours restored: its message says it is in Transactions, and it is not left open: %s" % m)
+        go(pg, "softDeleteEntry(D().entries.b1, 'Made-up reason'); goState('deleted', 'bills'); S.selected = 'b1'; render();", 1200)
+        go(pg, "billRestore('b1');", 1200)
+        q = pg.evaluate("[...document.querySelectorAll('#app ul.queue > li')].map(li => li.innerText).join('|')")
+        m = pg.evaluate("[D().entries.b1.status, S.selected, window.__t.slice(-1)[0] || '']")
+        ok(m[1] == "b1" and m[2] == "Restored to In Tally." and "INV-b1" in q, look + "Purchase: a posted bill of 2 hours restored: listed and open where its message says: %s" % m)
+        ctx.close()
     # ---- the phone
     for nl in (False, True):
         look = "[phone%s] " % (", new look" if nl else "")

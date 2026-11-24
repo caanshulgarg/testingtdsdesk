@@ -73,6 +73,17 @@ const EINV = {
       ValDtls: {AssVal: ass, CgstVal: cg, SgstVal: sg, IgstVal: ig, CesVal: ces, RndOffAmt: Math.abs(round) < 10 ? round : 0, TotInvVal: Math.abs(round) < 10 ? total : tot}
     };
   },
+  // what the invoice's e-invoice part (app/src/screens/Sales.jsx EinvPanel) shows and offers, or null when it is not shown
+  // (the firm's GST API off, or a GSTIN not given): a, the e-invoice user (none: "Give the client's e-invoice API user");
+  // irn: Make the IRN (none made, or it was cancelled); ewb: Make the e-way bill (an IRN and no e-way bill); cancel:
+  // Cancel the IRN (within 24 hours of it). Sales hides an invoice posted over 24 hours ago only when none is offered
+  // (salesNeedsAction, src/js/03)
+  offers(v, co){
+    co = co || CO(SL().cid); const x = v.x || {}, gstin = String(co.gstin || "").toUpperCase();
+    if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
+    const a = this.need(this.seller(v, co) || gstin), active = !!x.irn && x.irnStatus !== "cancelled", on = !!a && active;
+    return {a, active, irn: !!a && !active, ewb: on && !x.ewayNo, cancel: on && !!x.ackDt && Date.now() - Date.parse(x.ackDt) < 864e5};
+  },
   accounts: {}, asked: {},
   // the client's e-invoice user, asked of the server once a session (and after a sign-in); never the password
   need(gstin){ if (!this.asked[gstin]){ this.asked[gstin] = Date.now(); this.status(gstin).then(() => render(), () => {}); } return this.accounts[gstin]; },
