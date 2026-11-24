@@ -11,14 +11,16 @@
 //      as a journal this month"
 //   5. Make the journal now (the owner, 23-Nov-2026): a month kept is made at once by the night's own builder, in the cloud
 //      (assistant-night payroll_now: the books as the night reads them); made once (one made already, by the night or here,
-//      is said and opened); the running month too, with a plain note; it goes to Tally only when approved
+//      is said and opened); the running month too, with a plain note; it goes to Tally only when approved. (review 3) The
+//      running month's salary kept or replaced while its entry is still ready or held: the entry is made again by itself
+//      (no button to press), and said
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Check, AlertTriangle, Sparkles, ScrollText, Upload, PencilLine } from "lucide-react";
 import * as PS from "../../lib/payrollSheet.js";
 import * as TP from "../../lib/tallyPayroll.js";
 import * as TPost from "../../lib/payrollPost.js";
 import { payrollOne } from "../../../../server/_shared/dailyjournals.js";
-import { inputOf } from "../daily/again.js";
+import { inputOf, payrollNowCall, UPDATED } from "../daily/again.js";
 import "./payroll.css";
 /* global S, CO, Store, saveBooks, openBooks, toast, Payroll, whoAmI, Cloud, navHome */
 
@@ -208,7 +210,7 @@ function Proof({ res }) {
     {(res.problems || []).length > 1 && <ul className="pr-list">{res.problems.map((w, i) => <li key={i}>{w}.</li>)}</ul>}
   </div>;
 }
-function TallyPreview({ co, rows, ledgers, onJournal, kept, tick }) {
+function TallyPreview({ co, rows, ledgers, onJournal, kept, tick, onUpdated }) {
   const pd = payData(), heads = pd.heads || {}, [, kick] = useState(0);
   const ym = (rows[0] || {}).month || "";
   const [ent, setEnt] = useState(undefined), [busy, setBusy] = useState(""), [res, setRes] = useState(null), [setup, setSetup] = useState(undefined), [past, setPast] = useState([]);
@@ -231,6 +233,8 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept, tick }) {
     try { r = await TPost.approveTallyPayroll(ent, { co, accept: accept === true, seen: accept === true ? undefined : p.vouchers.map(TP.payrollVoucherXml), progress: (v, pj) => setBusy((v.parts > 1 ? "Part " + v.part + " of " + v.parts + ": " : "") + ((pj && pj.message) || "Posting…")) }); }
     catch (x) { r = { ok: false, why: String((x && x.message) || x) }; }
     setBusy(""); setRes(r); say(r.ok ? r.words : r.why);
+    // (review 3) the running month's entry made again from the salary kept now: the sheet shown is the one kept
+    if (!r.ok && r.why === UPDATED && onUpdated) onUpdated(ym);
   };
   const net = p.vouchers.reduce((s, v) => s + v.net, 0), done = (ent && ent.state === "approved") || (res && res.ok);
   return <section className="pr-card" data-preview="tally">
@@ -251,7 +255,7 @@ function TallyPreview({ co, rows, ledgers, onJournal, kept, tick }) {
         <p className="note">One payroll voucher, Create only, in a posting of its own. FinCom creates no employee or pay head.</p></More>
     </div>)}
     <p className="pr-line note" data-employer-note="">The employer’s PF and ESI are not in this voucher: book them in Tally separately, as now.</p>
-    {res && <Proof res={res} />}
+    {res && (!res.ok && res.why === UPDATED ? <p className="pr-line" data-updated=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> {res.why}</p> : <Proof res={res} />)}
     {res && res.stuck && res.canAccept && canWrite() && <div className="pr-acts"><button type="button" className="btn small" disabled={!!busy} onClick={() => approve(true)} data-accept-part="">Accept what is in Tally and post the rest</button></div>}
     {!res && past.length > 0 && <Proof res={{ ok: true, proof: past }} />}
     {!done && p.vouchers.length > 0 && (!brOk ? <p className="pr-line pr-install" data-install=""><AlertTriangle width={14} height={14} aria-hidden="true" /> {TPost.OLD_BRIDGE}{br.version ? " (" + (br.where || "the posting computer") + " has " + br.version + ")" : ""}.{" "}
@@ -273,30 +277,39 @@ async function madeOf(cid, ym) {
   catch (e) { return undefined; }
 }
 const openDaily = (tab, id) => { try { S.dcTab = tab; S.dcOpen = id || ""; if (typeof navHome === "function") navHome("daily"); } catch (e) { /* stays here */ } };
-function MakeNow({ co, ym, tally, onState }) {
-  const [ex, setEx] = useState(undefined), [busy, setBusy] = useState(false), [said, setSaid] = useState(null);
+function MakeNow({ co, ym, tally, onState, saved }) {
+  const [ex, setEx] = useState(undefined), [busy, setBusy] = useState(false), [said, setSaid] = useState(null), [auto, setAuto] = useState(false);
   const what = tally ? "Tally Payroll entry" : "journal", label = PS.monLabel(ym), running = ym === nowYm();
-  useEffect(() => { let on = true; setEx(undefined); setSaid(null); onState(false); madeOf(co.id, ym).then((x) => { if (on) { setEx(x); onState(!!x); } }); return () => { on = false; }; }, [co.id, ym, tally]);
+  const make = async (by) => {
+    setBusy(true); setAuto(by === true);
+    const r = Object.assign({}, await payrollNowCall(co.id, ym), by === true ? { auto: true } : {});
+    setBusy(false); setAuto(false); setSaid(r);
+    if (r.kind === "made" || r.kind === "updated" || r.kind === "already") { setEx({ id: r.id, state: r.state }); onState(true, r.kind !== "already"); }
+    // (re-review 1, review 3) the running month's entry taken back (its new figures need a person, the month was set aside
+    // on Daily Check, or there is nothing to make now)
+    else if (r.kind === "you" || r.kind === "kept" || r.withdrawn) { setEx(null); onState(false, !!r.withdrawn); }
+  };
+  // (review 3) the running month's salary just kept (or replaced) and its entry still ready or held: made again by itself
+  useEffect(() => { let on = true; setEx(undefined); setSaid(null); onState(false);
+    madeOf(co.id, ym).then((x) => { if (!on) return; setEx(x); onState(!!x);
+      if (saved && running && x && (x.state === "ready" || x.state === "held") && canWrite()) make(true); });
+    return () => { on = false; }; }, [co.id, ym, tally, saved]);
   if (ym > nowYm() || ex === undefined) return null;
   const where = tally ? "Approve it on this page." : "Approve it on Daily Check › Entries.";
-  const make = async () => {
-    setBusy(true); let r;
-    try { r = await Cloud.fn("assistant-night", { action: "payroll_now", client_id: co.id, ym }); } catch (e) { r = { kind: "error", words: String((e && e.message) || e) }; }
-    setBusy(false); setSaid(r);
-    if (r.kind === "made" || r.kind === "updated" || r.kind === "already") { setEx({ id: r.id, state: r.state }); onState(true, r.kind !== "already"); }
-    // (re-review 1) the running month's entry taken back (its new figures need a person)
-    if (r.kind === "you") setEx(null);
-  };
   const open = (id) => !tally && <button type="button" className="linkbtn" onClick={() => openDaily("entries", id)} data-now-open="">Open it</button>;
   const k = said ? said.kind : ex ? "already" : "";
   const state = (said && said.state) || (ex && ex.state) || "";
   const done = { approved: " and approved", approving: " and is being approved", rejected: ", and rejected on Daily Check" }[state] || "";
   // (re-review 1) the running month, still ready or held: made again from the salary kept now (the same entry, new figures)
   const again = running && (state === "ready" || state === "held") && canWrite() && <> <button type="button" className="linkbtn" disabled={busy} onClick={make} data-make-again="">{busy ? "Making…" : "Make the " + what + " now again"}</button></>;
+  const youLink = <button type="button" className="linkbtn" onClick={() => openDaily("you")} data-now-you="">Open Needs you</button>;
   return <section className="pr-card" data-make-now-card="">
-    {k === "made" || k === "updated" ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>{k === "updated" ? "Made again from the salary kept now." : "Made."}</b> {where} It goes to Tally only when you approve it.{said.running ? " " + said.words : ""} {open(said.id)}{again}</p>
+    {auto ? <p className="pr-line note" data-now-busy="">Updating the {what} for {label} with the new figures…</p>
+      : (k === "updated" || k === "made") && said.auto ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>The {what} for {label} is updated with the new figures.</b> {where} {open(said.id)}</p>
+      : k === "made" || k === "updated" ? <p className="pr-line" data-now-said=""><Check width={14} height={14} aria-hidden="true" className="pr-ok" /> <b>{k === "updated" ? "Made again from the salary kept now." : "Made."}</b> {where} It goes to Tally only when you approve it.{said.running ? " " + said.words : ""} {open(said.id)}{again}</p>
       : k === "already" ? <p className="pr-line" data-now-said="">The {what} for {label} is already made{done}. {done ? "" : where} {open((said && said.id) || ex.id)}{again}</p>
       : k === "you" ? <p className="pr-line" data-now-said="">{said.words} It is on Daily Check › Needs you. <button type="button" className="linkbtn" onClick={() => openDaily("you")} data-now-you="">Open Daily Check</button></p>
+      : k === "kept" ? <p className="pr-line" data-now-said="">{said.words || "Daily Check needs you for " + label + "."} {youLink}</p>
       : <>
         <div className="pr-acts"><button type="button" className="btn small primary" disabled={busy || !canWrite()} onClick={make} data-make-now="">{busy ? "Making…" : "Make the " + what + " now"}</button>
           <span className="note">{running ? label + " isn’t over yet. The " + what + " is made from the salary kept now." : "Daily Check would make it tonight. Make it now to approve it today."}</span></div>
@@ -309,7 +322,7 @@ function MakeNow({ co, ym, tally, onState }) {
 function madeWords(x, what, ym) {
   const m = PS.monLabel(ym);
   if (x.state === "approved" || x.state === "approving") return " The " + what + " for " + m + " is already approved; replacing the salary does not change the entry already sent to Tally.";
-  return " A " + what + " is already made for " + m + "; it is updated " + (ym === nowYm() ? "when you press Make the " + what + " now again." : "with the new figures tonight.");
+  return " A " + what + " is already made for " + m + "; " + (ym === nowYm() ? "replacing updates it with the new figures." : "it is updated with the new figures tonight.");
 }
 
 // ---------------------------------------------------------------- the months kept with the books (b.salary)
@@ -333,7 +346,7 @@ function KeptMonths({ list, onOpen, onEdit }) {
 
 // ---------------------------------------------------------------- the page
 export default function PayrollPage() {
-  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [drafts, setDrafts] = useState({}), [sureMade, setSureMade] = useState(null), [, kick] = useState(0), [made, setMade] = useState(false), [tick, setTick] = useState(0);
+  const co = CO(), [st, setSt] = useState(null), [manual, setManual] = useState(false), [ym, setYm] = useState(curYm()), [ledgers, setLedgers] = useState([]), [kept, setKept] = useState(false), [sure, setSure] = useState(false), [drafts, setDrafts] = useState({}), [sureMade, setSureMade] = useState(null), [, kick] = useState(0), [made, setMade] = useState(false), [tick, setTick] = useState(0), [saved, setSaved] = useState(0);
   useEffect(() => { let on = true; import("../../lib/asstEntries.js").then((A) => A.clientLedgers(co)).then((l) => { if (on && l) setLedgers(l.map((x) => x.name)); }).catch(() => {}); return () => { on = false; }; }, [co && co.id]);
   useEffect(() => { if (co && !(S.books && S.books.cid === co.id) && typeof openBooks === "function") Promise.resolve(openBooks(co.id)).then(() => kick((x) => x + 1), () => {}); }, [co && co.id]);
   if (!co) return null;
@@ -342,7 +355,7 @@ export default function PayrollPage() {
   const led = ledgers.length ? ledgers : Object.keys(books().under || {});
   const take = async (f) => {
     if (!f) return;
-    setManual(false); setKept(false);
+    setManual(false); setKept(false); setSaved(0);
     try {
       const { grid, sheet } = await PS.readGrid(f), hi = PS.headRow(grid), head = (grid[hi] || []).map((h) => String(h == null ? "" : h));
       const base = { file: String(f.name || "Salary sheet").replace(/\.[a-z]+$/i, ""), grid, sheet, hi, head };
@@ -364,7 +377,7 @@ export default function PayrollPage() {
       if (cloudOn()) madeOf(co.id, month).then((x) => setSureMade(x && x.state !== "rejected" ? x : null), () => setSureMade(null));
       return;
     }
-    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); if (st && st.how === "manual") putDraft(month, null); say(rows.length + " employee" + (rows.length === 1 ? "" : "s") + " kept for " + PS.monLabel(month) + ".");
+    const b = books(); b.salary = PS.mergeSalary(b.salary, rows); try { await saveBooks(); } catch (e) { /* kept here */ } setKept(true); setSure(false); setSaved(Date.now()); if (st && st.how === "manual") putDraft(month, null); say(rows.length + " employee" + (rows.length === 1 ? "" : "s") + " kept for " + PS.monLabel(month) + ".");
   };
   // by hand: a draft per month (review B1), so nothing typed is lost and nothing is asked: the month's own draft typed so
   // far, else the rows given (Change by hand on a month kept, from a sheet too), else the month's rows typed in and kept
@@ -376,7 +389,7 @@ export default function PayrollPage() {
   const openManual = (m, rows0) => {
     const k = m || ym;
     if (!typed(drafts[k])) putDraft(k, keptDraft(k, rows0));
-    setYm(k); setSt(null); setKept(false); setSure(false); setManual(true);
+    setYm(k); setSt(null); setKept(false); setSaved(0); setSure(false); setManual(true);
   };
   // the month changed while typing: the rows typed go with it, unless that month has rows of its own (then they are shown,
   // and these stay with their month)
@@ -387,7 +400,7 @@ export default function PayrollPage() {
     else if (!typed(drafts[m])) putDraft(m, keptDraft(m) || (cur ? { heads: cur.heads, t: [{}] } : null));
     setYm(m);
   };
-  const openKept = (m, r) => { setManual(false); setYm(m); setSure(false); setSt({ step: "read", rows: r, skipped: [], how: "kept", rule: null }); setKept(true); };
+  const openKept = (m, r) => { setManual(false); setYm(m); setSure(false); setSaved(0); setSt({ step: "read", rows: r, skipped: [], how: "kept", rule: null }); setKept(true); };
   const kept0 = keptMonths(books().salary);
   // (review 9) the month of a sheet with no month column: picked on the start card (last month at first); a sheet read by
   // its saved rule is read again for the month picked
@@ -410,9 +423,9 @@ export default function PayrollPage() {
     {manual && <Manual ym={ym} setYm={manualMonth} draft={draft} setDraft={(d) => putDraft(ym, d)} onCancel={() => setManual(false)}
       onDone={(r) => { setManual(false); setSt({ step: "read", rows: r, skipped: [], how: "manual", rule: null }); }} />}
     {rows && <Summary rows={rows} chk={chk} how={st.how} rule={st.rule} onKeep={keep} kept={kept} method={method} made={made} />}
-    {rows && kept && chk.ok && method && month && cloudOn() && canWrite() && <MakeNow co={co} ym={month} tally={method === "tally" && !once} onState={(m, fresh) => { setMade(m); if (fresh) setTick((x) => x + 1); }} />}
+    {rows && kept && chk.ok && method && month && cloudOn() && canWrite() && <MakeNow co={co} ym={month} tally={method === "tally" && !once} saved={saved} onState={(m, fresh) => { setMade(m); if (fresh) setTick((x) => x + 1); }} />}
     {rows && sure && was.n > 0 && <p className="pr-line pr-warn" data-replace-warn="">{PS.monLabel(was.months[0] || month)} already has {was.n} employee{was.n === 1 ? "" : "s"} kept with the books{was.tax ? ", " + was.tax + " of them with 24Q’s figures" : ""}. Keeping this sheet replaces them.{sureMade ? madeWords(sureMade, method === "tally" && !once ? "Tally Payroll entry" : "journal", month) : ""}{was.tax ? " " + was.carried.length + " employee" + (was.carried.length === 1 ? "" : "s") + " carry over their exemptions, deductions, regime and PAN (matched by code, PAN or name)" + (was.missed.length ? "; not carried over, as this sheet has no one of the same code, PAN or name: " + was.missed.slice(0, 8).join(", ") + (was.missed.length > 8 ? " and " + (was.missed.length - 8) + " more" : "") : "") + "." : ""} <button type="button" className="btn small" disabled={sureMade === undefined} onClick={keep} data-keep-sure="">Replace them</button> <button type="button" className="linkbtn" onClick={() => setSure(false)}>Cancel</button></p>}
-    {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} tick={tick} />
+    {rows && chk.ok && (method === "tally" && !once ? <TallyPreview co={co} rows={rows} ledgers={led} onJournal={toggleOnce} kept={kept} tick={tick} onUpdated={(m) => { const x = keptMonths(books().salary).find((k) => k.ym === m); if (x) openKept(m, x.rows); }} />
       : <JournalPreview co={co} rows={rows} ledgers={led} asOnce={method === "tally" && !!once} />)}
     {rows && chk.ok && method === "tally" && once && owner() && <p className="pr-line"><button type="button" className="linkbtn" onClick={toggleOnce}>Post as Tally Payroll instead</button></p>}
     {rows && chk.ok && !method && <p className="pr-line note">Set how this company books salary to see the entry.</p>}

@@ -3,11 +3,40 @@
 // computer has them now (opened from the cloud: S.books), with the app's own GSTR / GSTF for the set-off. Anything not
 // the same as last night (a line, an amount, the date, a check) refuses: "Changed since last night". Loaded only when a
 // journal is approved (a lazy part of the Daily Check chunk).
-/* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud */
+/* global S, CO, Books, ledGroupPath, GSTR, GSTF, GSTSet, TCloud, Cloud, BookItems, BookSync */
 import { journals, payrollNow, gstMonths, picksOf, excludedOf, draftState, retriedOf, LOOKBACK, payrollSettings } from "../../../../server/_shared/dailyjournals.js";
 import { voucherId } from "../../../../server/_shared/dailytrust.js";
 
 export const CHANGED = "Changed since last night. Run again.";
+// (review 3) the running month's payroll entry made again in the cloud, at Approve, from the salary kept now
+export const UPDATED = "Updated to the salary kept now; check and approve.";
+// the salary kept here sent to FinCom's cloud first (the cloud reads the books there), at most 8 s
+export async function sendBooksNow(cid) {
+  const go = async () => {
+    if (typeof BookItems === "object" && BookItems.on()) { await BookItems.flush(); return; }
+    const s = typeof BookSync === "object" && BookSync.on() ? (BookSync.st || {})[cid] : null;
+    if (s && s.timer) { clearTimeout(s.timer); s.timer = null; await BookSync.push(cid); }
+  };
+  try { await Promise.race([go(), new Promise((r) => setTimeout(r, 8000))]); } catch (e) { /* the cloud reads what it has */ }
+}
+// "Make the journal now" (assistant-night payroll_now) for a client's month, the books here sent first
+export async function payrollNowCall(cid, ym) {
+  await sendBooksNow(cid);
+  try { return await Cloud.fn("assistant-night", { action: "payroll_now", client_id: cid, ym }); }
+  catch (e) { return { kind: "error", words: String((e && e.message) || e) }; }
+}
+// the running month's entry no longer what the salary kept makes: made again in the cloud (nothing posted in this press)
+async function remade(e, ym, o) {
+  const r = (await (o.payrollNow || payrollNowCall)(e.client_id, ym)) || {};
+  if (r.kind === "updated" || r.kind === "made") return UPDATED;
+  if (r.kind === "already") {
+    if (r.state === "approved" || r.state === "approving") return "It is already approved.";
+    let v = null;
+    try { v = o.entryOf ? await o.entryOf(r.id) : ((await Cloud.api("night_entries?select=voucher&id=eq." + encodeURIComponent(r.id || e.id))) || [])[0]; } catch (x) { v = null; }
+    return v && !sameJournal(v.voucher, e.voucher) ? UPDATED : "The salary kept on this computer is not in FinCom’s cloud yet. Try again in a minute.";
+  }
+  return String(r.words || "") || "FinCom could not make it again just now. Try again in a minute.";
+}
 const d8 = (v) => { const t = String(v || "").trim(); const m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[1] + m[2] + m[3] : /^\d{8}$/.test(t) ? t : ""; };
 const P = (x) => Math.round((Number(x) || 0) * 100);
 const key = (ls) => (ls || []).map((l) => l.ledger + "|" + (P(l.dr) ? "D" + P(l.dr) : "C" + P(l.cr))).sort().join(";");
@@ -76,7 +105,8 @@ export async function recheck(e, o = {}) {
   // (re-review) the running month's payroll entry ("Make the journal now"): the night makes only the months that have
   // ended, so it is made again here the way the button made it (payrollNow: the same builder, that month only)
   const run = /^payroll:(\d{6})$/.exec(String(e.dedupe || "")), cur = String(inp.today || "").slice(0, 6);
-  const now = run && run[1] === cur ? (payrollNow(cur, inp) || {}).entry : journals(inp).entries.find((x) => x.dedupe === e.dedupe);
-  if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return CHANGED;
+  const running = !!run && run[1] === cur;
+  const now = running ? (payrollNow(cur, inp) || {}).entry : journals(inp).entries.find((x) => x.dedupe === e.dedupe);
+  if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return running ? remade(e, cur, o) : CHANGED;
   return "";
 }

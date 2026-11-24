@@ -11,13 +11,18 @@
 //      the night's own to keep or withdraw). night_apply itself on a real PostgreSQL: tests/run_payroll_now_night.py
 //   5. (re-review blocker) the running month's entry made now can be approved today: the second check at Approve
 //      (again.js recheck) makes the running month the way payrollNow does, so the same entry passes (Journal and Tally
-//      Payroll); the salary changed since it was made: refused
+//      Payroll); the salary changed since it was made: refused, made again in the cloud (review 3)
 //   6. (re-review 1) Make now again on the running month, after its salary was replaced: the ready or held entry takes the
 //      new figures (the same row, by its dedupe, never a second one); an approved one never changes; a month that has
 //      ended is the night's to update tonight; new figures that need a person: the old entry is taken back
 //   7. (re-review 2) tonight's run also leaves the running month's open finding (Needs you) alone: keepNow passes it back
 //      as it is, with the ledger picks it waits on; never one a person decided, the night's own months, or one the night
 //      passes itself
+//   8. (review 3) Make now with the month set aside or undone on Daily Check: kept, the running month's open entry taken
+//      back (withdrawn); nothing to make for the running month: withdrawNow takes its open entry back (never an approved
+//      one); Approve on a stale running-month entry: payroll_now called for that month, "Updated to the salary kept now;
+//      check and approve." (nothing posted), the server's own words for none and Needs you; never "Changed since last
+//      night"; a month that has ended: as before
 import { booksOf, gstOf, nightInput } from "../server/assistant-night/nightinput.js";
 import * as J from "../server/_shared/dailyjournals.js";
 import { sheetMonth } from "../server/_shared/nightchecks.js";
@@ -143,10 +148,10 @@ const E3 = await import("../server/_shared/gst3b.js");
 const { recheck, CHANGED } = await import("../app/src/screens/daily/again.js");
 const NOV = (o = {}) => sheet.map((r, i) => Object.assign({}, r, { month: "202611", date: "2026-11-30" }, i === 0 ? o : {}));
 // the browser at Approve: the same rows opened as books (S.books), the app's own GSTR / GSTF
-async function atApprove(rows, e, today) {
+async function atApprove(rows, e, today, x = {}) {
   const b = booksOf(JSON.parse(JSON.stringify(Object.assign({}, rows, { made: undefined }))));
   Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E3.GSTR, GSTF: E3.GSTF, GSTSet: E3.GSTSet, Books: E3.Books, ledGroupPath: E3.ledGroupPath });
-  try { return await recheck(Object.assign({ client_id: "c1" }, e), { today, ledgers: rows.ledgers.map((l) => l.name), drafts: [], prior: [], bookId: "b1", jobs: {} }); }
+  try { return await recheck(Object.assign({ client_id: "c1" }, e), Object.assign({ today, ledgers: rows.ledgers.map((l) => l.name), drafts: [], prior: [], bookId: "b1", jobs: {} }, x)); }
   finally { ["S", "CO", "GSTR", "GSTF", "GSTSet", "Books", "ledGroupPath"].forEach((k) => delete globalThis[k]); }
 }
 for (const [kind, co] of [["Journal", null], ["Tally Payroll", { payrollMethod: { value: "tally" } }]]) {
@@ -155,7 +160,9 @@ for (const [kind, co] of [["Journal", null], ["Tally Payroll", { payrollMethod: 
   const e = Object.assign({ id: "e1", state: "ready" }, now.entry);
   ok(await atApprove(pay(Object.assign({ sheet: NOV() }, co ? { co } : {})), e, T) === "", kind + ": Approve today: the second check makes the running month as payrollNow does: the same entry, goes on");
   const stale = pay(Object.assign({ sheet: NOV({ gross: 51000, net: 48300 }) }, co ? { co } : {}));
-  ok(await atApprove(stale, e, T) === CHANGED, kind + ": the kept salary changed after it was made: refused (" + CHANGED + ")");
+  // (review 3) refused, nothing posted, but never "Changed since last night": made again in the cloud from the salary kept now
+  const made = []; const said = await atApprove(stale, e, T, { payrollNow: async (cid, ym) => { made.push(ym); return { ok: true, kind: "updated", id: "e1", state: "ready" }; } });
+  ok(said === "Updated to the salary kept now; check and approve." && same(made, ["202611"]), kind + ": the kept salary changed after it was made: refused, made again from the salary kept now (" + said + ")");
   const oct = J.payrollNow("202610", input(pay(co ? { co } : {}), T));
   ok(await atApprove(pay(co ? { co } : {}), Object.assign({ id: "e2", state: "ready" }, oct.entry), T) === "", kind + ": a month that has ended: as before (the night's own builder), goes on");
 }
@@ -207,6 +214,54 @@ console.log("7. tonight's run leaves the running month's open finding alone (kee
   const bad = async (p) => { if (/night_findings/.test(p)) throw new Error("HTTP 500"); return []; };
   let threw = false; try { await PN.keepNow(bad, F, "c1", months); } catch (e) { threw = true; }
   ok(threw, "the findings not read: said (the night stops for the client, never clears them unseen)");
+}
+
+console.log("8. (review 3) the running month kept again: the entry follows the salary by itself; Approve on a stale one makes it again");
+{
+  const T = "20261124", ctx = (c) => ({ rest: c.rest, firm: F, cid: "c1", night: "2026-11-24", by: "u1" });
+  // B2: Make now with the month's finding set aside (dismissed) or undone on Daily Check: kept, the open entry taken back
+  const first = J.payrollNow("202611", input(pay({ sheet: NOV() }), T)), again = J.payrollNow("202611", input(pay({ sheet: NOV({ gross: 51000, net: 48300 }) }), T));
+  const c = cloud(); await applyNow(ctx(c), first);
+  const fd = c.db.night_findings.find((f) => f.kind === "payroll_due"); fd.state = "dismissed"; fd.decided_by = "u2";
+  const k = await applyNow(ctx(c), again);
+  ok(k.kind === "kept" && k.withdrawn === c.db.night_entries[0].id && c.db.night_entries[0].state === "withdrawn", "set aside on Daily Check, Make now again: kept, the running month's open entry taken back and said (withdrawn: " + k.withdrawn + ")");
+  const u = cloud(); await applyNow(ctx(u), first);
+  const fu = u.db.night_findings.find((f) => f.kind === "payroll_due"); fu.undone_at = "2026-11-24T05:00:00Z"; fu.state = "you";
+  const ku = await applyNow(ctx(u), again);
+  ok(ku.kind === "kept" && ku.withdrawn === u.db.night_entries[0].id && u.db.night_entries[0].state === "withdrawn", "undone on Daily Check: kept, the open entry taken back (" + JSON.stringify(ku) + ")");
+  const o1 = J.payrollNow("202610", input(pay(), T)), od = cloud({ findings: [{ id: "f8", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "dismissed", decided_by: "u2", evidence: [] }] });
+  const ko = await applyNow(ctx(od), o1);
+  ok(ko.kind === "kept" && !ko.withdrawn && od.db.night_entries.length === 0, "a month that has ended, set aside: kept, nothing made, nothing taken back");
+  // none: the running month's open entry taken back (the handler, by withdrawNow)
+  ok(typeof PN.withdrawNow === "function", "withdrawNow is there for the handler");
+  if (typeof PN.withdrawNow === "function") {
+    const w = cloud(); await applyNow(ctx(w), first);
+    const id = await PN.withdrawNow(w.rest, F, "c1", "202611", "u1", "none");
+    ok(id === w.db.night_entries[0].id && w.db.night_entries[0].state === "withdrawn" && w.db.daily_log.some((l) => l.evidence && l.evidence.withdrawn === id), "nothing to make for the running month: its open entry taken back, logged");
+    w.db.night_entries[0].state = "approved";
+    ok((await PN.withdrawNow(w.rest, F, "c1", "202611", "u1", "none")) === "" && w.db.night_entries[0].state === "approved", "an approved one is never taken back");
+  }
+  // Approve on a stale running-month entry: made again in the cloud (payroll_now), said; never "Changed since last night"
+  const e = Object.assign({ id: "e1", state: "ready" }, first.entry), stale = pay({ sheet: NOV({ gross: 51000, net: 48300 }) });
+  const calls = [], srv = (r) => async (cid, ym) => { calls.push([cid, ym]); return r; };
+  const atA = async (rows, ent, o) => { const b = booksOf(JSON.parse(JSON.stringify(Object.assign({}, rows, { made: undefined }))));
+    Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E3.GSTR, GSTF: E3.GSTF, GSTSet: E3.GSTSet, Books: E3.Books, ledGroupPath: E3.ledGroupPath });
+    try { return await recheck(Object.assign({ client_id: "c1" }, ent), Object.assign({ today: T, ledgers: rows.ledgers.map((l) => l.name), drafts: [], prior: [], bookId: "b1", jobs: {} }, o)); }
+    finally { ["S", "CO", "GSTR", "GSTF", "GSTSet", "Books", "ledGroupPath"].forEach((x) => delete globalThis[x]); } };
+  const r1 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "updated", id: "e1", state: "ready" }) });
+  ok(r1 === "Updated to the salary kept now; check and approve." && same(calls, [["c1", "202611"]]), "stale at Approve: payroll_now called for Nov 2026, said: " + r1);
+  const r2 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "none", words: "No salary is kept with the books for Nov 2026. The entry made for it earlier is taken back." }) });
+  ok(r2 === "No salary is kept with the books for Nov 2026. The entry made for it earlier is taken back.", "nothing to make now: the server's plain words: " + r2);
+  const r3 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "kept", words: "Daily Check needs you for Nov 2026. The entry made for it earlier is taken back." }) });
+  ok(/Daily Check needs you for Nov 2026/.test(r3) && r3 !== CHANGED, "Needs you: said: " + r3);
+  const r4 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "already", id: "e1", state: "ready" }), entryOf: async () => ({ voucher: again.entry.voucher }) });
+  ok(r4 === "Updated to the salary kept now; check and approve.", "already updated in the cloud (the entry here is older): said the same: " + r4);
+  const r5 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "already", id: "e1", state: "ready" }), entryOf: async () => ({ voucher: e.voucher }) });
+  ok(r5 && r5 !== CHANGED && !/Updated/.test(r5), "the cloud has not the salary here yet: said, nothing updated: " + r5);
+  calls.length = 0;
+  ok(await atA(pay({ sheet: NOV() }), e, { payrollNow: srv({ kind: "updated" }) }) === "" && calls.length === 0, "not stale: goes on, the server not called");
+  const oct = J.payrollNow("202610", input(pay(), T));
+  ok(await atA(pay({ sheet: sheet.map((r, i) => i ? r : Object.assign({}, r, { gross: 51000, net: 48300 })) }), Object.assign({ id: "e2", state: "ready" }, oct.entry), { payrollNow: srv({ kind: "updated" }) }) === CHANGED && calls.length === 0, "a month that has ended: as before (" + CHANGED + "), the night makes it again");
 }
 
 console.log(fails ? "\n" + fails + " of " + n + " FAILED" : "\nall " + n + " passed");

@@ -18,7 +18,9 @@ import { booksOf, twobOnly, nightInput, gstOf, draftsOf, jobOf, monthEndsIST, da
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { journals, payrollNow, payrollMonths } from "../_shared/dailyjournals.js";
 // @ts-ignore plain JavaScript, shared with the Node tests
-import { existingNow, applyNow, keepNow } from "./paynow.js";
+import { existingNow, applyNow, keepNow, withdrawNow } from "./paynow.js";
+// @ts-ignore plain JavaScript, shared with the Node tests
+import { monYear } from "../_shared/nightchecks.js";
 import { corsFor } from "../_shared/cors.ts";
 // @ts-ignore plain JavaScript, shared with the Node tests
 import { message } from "../_shared/asks.js";
@@ -227,9 +229,17 @@ export function handler(deps: Deps) {
       const words = (got && got.words) || (sk ? SKIPPED[sk] || "Daily Check is switched off for this client, so nothing is made now." : "FinCom could not read this client's books in the cloud. Try again in a minute.");
       return [200, { ok: true, kind: "none", words }] as const;
     }
-    if (made.kind !== "made" && made.kind !== "you") return [200, { ok: true, kind: made.kind, words: made.words }] as const;
+    // (review 3) the running month with nothing to make now (no salary kept, or it is in the books): its entry still ready
+    // or held is taken back, and the page says why
+    const BACK = " The entry made for it earlier is taken back.";
+    if (made.kind !== "made" && made.kind !== "you") {
+      const gone = running && made.kind === "none" && ex ? await withdrawNow(rest, firm, cid, ym, String(user.id), "none") : "";
+      return [200, Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {})] as const;
+    }
     const a = await applyNow({ rest, firm, cid, night: istDay(now()), by: String(user.id) }, made);
-    return [200, Object.assign({ ok: true, words: made.words || "" }, made.running ? { running: true } : {}, a)] as const;
+    // (review 3) kept (the month set aside or undone on Daily Check): Needs you, never the note of an entry made
+    const words = a.kind === "kept" ? "Daily Check needs you for " + monYear(ym) + "." : a.kind === "you" ? String(made.words || "") : made.words || "";
+    return [200, Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a)] as const;
   }
 
   return async (req: Request) => {

@@ -4,7 +4,9 @@
 // dedupe, so never a second one). Plain JavaScript, shared with the Node tests; rest(path, token, init) is the handler's
 // service-role PostgREST call.
 //   existingNow(rest, firm, cid, ym)  the month's entry already made (by the night or this button), or null
-//   applyNow({rest, firm, cid, night, by}, res)  -> {kind: made | updated | already | you | kept | none, id?, state?}
+//   applyNow({rest, firm, cid, night, by}, res)  -> {kind: made | updated | already | you | kept | none, id?, state?,
+//     withdrawn?: the running month's open entry taken back (you, kept)}
+//   withdrawNow(rest, firm, cid, ym, by, why)  (review 3) the running month's open entry taken back: its id, or ""
 //   keepNow(rest, firm, cid, months, seen)  (review B2, re-review 2) for tonight's run: the entries made now for a month the
 //     night does not make itself (the running month), as dedupes for night_apply to keep, and that month's open findings
 //     (Needs you), as they are, for night_apply to leave alone: {entries, findings}
@@ -43,6 +45,21 @@ async function liveRow(rest, firm, cid, ym) {
 }
 const sameVoucher = (a, b) => JSON.stringify(a || {}) === JSON.stringify(b || {});
 
+// an entry still ready or held, nobody's decision on it, taken back (withdrawn); its id, or "" when it was claimed meanwhile
+async function takeBack(rest, id) {
+  const done = await rest("/rest/v1/night_entries?id=eq." + enc(id) + "&state=in.(ready,held)&decided_by=is.null", "", { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ state: "withdrawn", updated_at: new Date().toISOString() }) });
+  return Array.isArray(done) && done.length ? id : "";
+}
+// (review 3) the running month with nothing to make now (no salary kept for it, or its salary is in the books): its entry
+// still ready or held is taken back, so it is never approved with figures no longer kept. Its id, or ""
+export async function withdrawNow(rest, firm, cid, ym, by, why) {
+  const cur = await liveRow(rest, firm, cid, ym);
+  if (!cur || !(cur.state === "ready" || cur.state === "held") || cur.decided_by) return "";
+  const gone = await takeBack(rest, cur.id);
+  if (gone) await rest("/rest/v1/daily_log", "", { method: "POST", body: JSON.stringify({ firm_id: firm, client_id: cid, what: "payroll_now", ref: gone, evidence: { ym, by, kind: why || "none", withdrawn: gone } }) }).catch(() => null);
+  return gone;
+}
+
 export async function applyNow(ctx, res) {
   const { rest, firm, cid, night, by } = ctx;
   if (!res || (res.kind !== "made" && res.kind !== "you")) return { kind: "none" };
@@ -58,10 +75,11 @@ export async function applyNow(ctx, res) {
   for (const p of res.picks || []) await putFinding(rest, firm, cid, night, p);
   const f = await putFinding(rest, firm, cid, night, res.finding);
   if (res.kind === "you" || f.state !== "resolved" || f.undone) {
-    // the new figures need a person: the running month's entry made from the old ones is taken back (never approved so)
-    if (open) await rest("/rest/v1/night_entries?id=eq." + enc(cur.id) + "&state=in.(ready,held)&decided_by=is.null", "", { method: "PATCH", body: JSON.stringify({ state: "withdrawn", updated_at: new Date().toISOString() }) });
-    await log("payroll_now", res.finding.key, Object.assign({ ym, by, kind: f.state === "resolved" ? "kept" : f.state }, open ? { withdrawn: cur.id } : {}));
-    return { kind: res.kind === "you" ? "you" : "kept", state: f.state };
+    // the new figures need a person (or a person set the month aside, or undid it, on Daily Check): the running month's
+    // entry made from the old ones is taken back (never approved so), and said (withdrawn: its id)
+    const gone = open ? await takeBack(rest, cur.id) : "";
+    await log("payroll_now", res.finding.key, Object.assign({ ym, by, kind: res.kind === "you" ? "you" : "kept", state: f.state }, gone ? { withdrawn: gone } : {}));
+    return Object.assign({ kind: res.kind === "you" ? "you" : "kept", state: f.state }, gone ? { withdrawn: gone } : {});
   }
   const e = res.entry;
   const row = { firm_id: firm, client_id: cid, finding_id: f.id, source: e.source, dedupe: e.dedupe, work_ref: e.work_ref || "", voucher: e.voucher || {}, reason: e.reason || "", why: e.why || "",

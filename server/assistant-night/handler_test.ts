@@ -186,3 +186,31 @@ Deno.test("payroll now: the month not over, Needs you, nothing to make: said in 
   const you = await payNow(mk(s, { kind: "you", picks: [], words: "Payroll Oct 2026: salary booked ₹90,000, the sheet says ₹80,000.", finding: { kind: "payroll_due", key: "payroll:202610", state: "you", facts: { ym: "202610" }, evidence: [], candidates: [] } }), { client_id: "c1", ym: "202610" });
   eq([you.j.kind, s.db.night_entries.length, s.db.night_findings.length], ["you", 0, 1], "Needs you: the finding kept, no entry");
 });
+// (review 3) the running month: nothing to make now (no salary kept, or it is in the books): its open entry taken back, said
+Deno.test("payroll now: the running month with nothing to make: its open entry taken back, said why", async () => {
+  const open = () => ({ id: "e8", firm_id: F, client_id: "c1", dedupe: "payroll:202611", state: "ready", decided_by: null, voucher: { type: "Journal", kind: "payroll", date: "20261130", lines: [] } });
+  const s = payStand({ entries: [open()] });
+  const r = await payNow(mk(s, { kind: "none", words: "No salary is kept with the books for Nov 2026." }), { client_id: "c1", ym: "202611" });
+  eq([r.j.kind, r.j.withdrawn, s.db.night_entries[0].state], ["none", "e8", "withdrawn"], "no salary kept: the entry taken back");
+  eq(r.j.words, "No salary is kept with the books for Nov 2026. The entry made for it earlier is taken back.", "said why, plainly");
+  const b = payStand({ entries: [open()] });
+  const rb = await payNow(mk(b, { kind: "none", words: "Nov 2026’s salary is already in the books, or its entry is on its way to Tally." }), { client_id: "c1", ym: "202611" });
+  eq([rb.j.kind, b.db.night_entries[0].state, /already in the books/.test(rb.j.words), /taken back/.test(rb.j.words)], ["none", "withdrawn", true, true], "already in the books: taken back, said: " + rb.j.words);
+  const o = payStand({});
+  const ro = await payNow(mk(o, { kind: "none", words: "No salary is kept with the books for Oct 2026." }), { client_id: "c1", ym: "202610" });
+  eq([ro.j.kind, ro.j.withdrawn, ro.j.words], ["none", undefined, "No salary is kept with the books for Oct 2026."], "a month that has ended, nothing made: said as before");
+});
+// (review 3) kept (the month's finding set aside or undone on Daily Check): Needs you, never the "made" note
+Deno.test("payroll now: kept (set aside or undone on Daily Check): Daily Check needs you, no made note", async () => {
+  const nov = Object.assign({}, ready, { running: true, words: "Nov 2026 isn’t over yet. This is made from the salary kept now.",
+    finding: { kind: "payroll_due", key: "payroll:202611", state: "resolved", facts: { ym: "202611" }, evidence: [], candidates: [] },
+    entry: Object.assign({}, ready.entry, { dedupe: "payroll:202611", voucher: { type: "Journal", kind: "payroll", date: "20261130", lines: [{ ledger: "Salary", dr: 1 }] } }) });
+  const s = payStand({ entries: [{ id: "e9", firm_id: F, client_id: "c1", dedupe: "payroll:202611", state: "ready", decided_by: null, voucher: { type: "Journal", kind: "payroll", date: "20261130", lines: [] } }],
+    findings: [{ id: "f1", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202611", state: "dismissed", decided_by: ME, evidence: [] }] });
+  const r = await payNow(mk(s, nov), { client_id: "c1", ym: "202611" });
+  eq([r.j.kind, r.j.withdrawn, s.db.night_entries[0].state], ["kept", "e9", "withdrawn"], "kept, the open entry taken back");
+  eq(r.j.words, "Daily Check needs you for Nov 2026. The entry made for it earlier is taken back.", "said plainly, no made note");
+  const o = payStand({ findings: [{ id: "f2", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "dismissed", decided_by: ME, evidence: [] }] });
+  const ro = await payNow(mk(o), { client_id: "c1", ym: "202610" });
+  eq([ro.j.kind, ro.j.words, o.db.night_entries.length], ["kept", "Daily Check needs you for Oct 2026.", 0], "a month that has ended: Needs you, nothing made");
+});
