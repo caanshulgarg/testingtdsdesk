@@ -259,7 +259,7 @@ async function salesCheckTally(list, call){
   const all = got.filter(v => !/^yes$/i.test(v.cancelled || ""));
   const own = list.filter(v => !v.x.noteKind).map(v => salesVt(v.x)).concat(cfg.voucherType || [], "Sales");
   const isInv = salesTypeClasses(own), noteTypes = new Set(notes.concat(list.filter(v => v.x.noteKind).map(v => salesVt(v.x))).map(lc));
-  const vs = all.filter(x => !x.type || isInv(x.type) || noteTypes.has(lc(x.type)));
+  const vs = all.filter(x => !x.type || isInv(x.type) || noteTypes.has(lc(x.type)) || own.some(t => lc(t) === lc(x.type)));
   const by = new Map();
   vs.forEach(x => [normInvNo(x.number), normInvNo(x.reference)].filter(Boolean).forEach(k => { if (!by.has(k)) by.set(k, []); if (!by.get(k).includes(x)) by.get(k).push(x); }));
   let n = 0;
@@ -270,7 +270,7 @@ async function salesCheckTally(list, call){
     // (one already marked In Tally, by FinCom's own posting first: salesCheckSafe; its match kept)
     if (v.status === "intally") return;
     // (a note is matched to a voucher of its own type only, an invoice to a Sales-class voucher, or one of no type said)
-    const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type));
+    const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type) || lc(x.type) === lc(salesVt(v.x)));
     const any = no ? (by.get(no) || []).filter(kind) : [], same = !not.includes("num:" + no) ? any.filter(x => !not.includes(salesTallyKey(x))) : [];
     // (a hold of the old rule, 16-Nov-2026, kept on an invoice saved before: it ends here)
     const had = !!v.dupBlock; delete v.dupBlock;
@@ -281,7 +281,7 @@ async function salesCheckTally(list, call){
     // invoice: nothing holds it, it is posted. Nor the Tally entry of a FinCom invoice a person said is not this one
     const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
     const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
-    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party}; return salesSameEntry(me, e, isInv) && !gone.some(g => salesSameEntry(g, e, isInv)); });
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""}; return salesSameEntry(me, e, isInv) && !gone.some(g => salesSameEntry(g, e, isInv)); });
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
     else if (had) mapInvoice(v);
   });
@@ -306,10 +306,11 @@ async function salesVouchersIn(co, from, to, call){
 }
 // whether a voucher type of Tally's answer is of the Sales class, for an invoice: the client's own sales type (Sales
 // settings, the invoices' own), Tally's "Sales", or a type with "sales" in its name; never a Journal, Receipt, Payment,
-// Contra, a note, a return or an order, whatever its entries
+// Contra, a note, a return or an order, whatever its entries; nor a type with any of those words in its name ("Sales CN",
+// "Sales Journal", "Sales Advance Receipt": never a sale, review of 03ffa5eed)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  const never = /^(journal|receipt|payment|contra|credit\s*note|debit\s*note)$|return|order|quotation|delivery|memo/i;
+  const never = /\b(?:journal|receipts?|payments?|contra|notes?|cn|dn|credit|debit|returns?)\b|return|order|quotation|delivery|memo/i;
   return t => { const n = lc(t); if (!n || never.test(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }

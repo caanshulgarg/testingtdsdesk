@@ -49,12 +49,12 @@ last = lambda A: A.evaluate("() => window.__toasts.slice(-1)[0] || ''")
 
 # ---- sales
 GST = """() => { const mk = (b) => { for (const c of '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (gstinValid(b + c)) return b + c; };
-  return {up: mk('09AAACZ1234Q1Z'), k: mk('27AAACK5678P1Z'), m: mk('27AAACM9012R1Z')}; }"""
+  return {up: mk('09AAACZ1234Q1Z'), k: mk('27AAACK5678P1Z'), m: mk('27AAACM9012R1Z'), up2: mk('27AAACZ1234Q1Z')}; }"""
 LED = [["Kappa Retail", "Sundry Debtors", "k"], ["Sales Account", "Sales Accounts"], ["Round Off", "Indirect Expenses"], ["Output IGST", "Duties & Taxes"]]
 SETL = """([leds, g]) => { const cid = SL() ? SL().cid : CO().id, list = leds.map(([name, group, gk]) => ({name, group, gstin: gk ? g[gk] : ""}));
   Ledgers.st[cid] = {list, parents: {}, at: new Date().toISOString(), srcAt: new Date().toISOString(), src: "cloud", file: "", book: "", cloudAt: ""};
   if (S.bank && S.bank.cid === cid) S.bank.ledgers = {list, importedAt: new Date().toISOString(), live: true}; Ledgers.ver++; }"""
-ADD = """([n, d, cg, tot]) => { const s = SL(), t = tot || 1180; const v = newInvoice({number: n, date: d, customerName: "Kappa Retail", customerGstin: cg, pos: "27", taxable: r2(t / 1.18),
+ADD = """([n, d, cg, tot]) => { const s = SL(), t = tot || 1180; const v = newInvoice({number: n, date: d, sellerGstin: CO().gstin, customerName: "Kappa Retail", customerGstin: cg, pos: "27", taxable: r2(t / 1.18),
   cgst: 0, sgst: 0, igst: r2(t - r2(t / 1.18)), cess: 0, total: t, items: []}, "upload"); s.list.push(v); mapInvoice(v); return v.id; }"""
 NEWCO = """(g) => { const c = newCompany({name: "ZZ Test Dup Traders", gstin: g.up}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
   return openCompany(c.id).then(() => loadBank(c.id)).then(() => { S.tab = "sales"; S.step = null; return loadSales(c.id); }).then(() => c.id); }"""
@@ -64,8 +64,8 @@ DUPW = ["Post duplicate anyway", "Post again anyway?"]
 NODUP = lambda t: not any(w in t for w in DUPW)
 QUIET = lambda t: NOTE not in t and "Looks already" not in t and "Post anyway" not in t and NODUP(t) and "Checked against" not in t
 PAGE = "() => document.querySelector('#app').innerText + ' | ' + window.__toasts.join(' | ') + ' | ' + JSON.stringify(SL().list.map(v => [v.problems || [], v.postError || ''])) + ' | ' + JSON.stringify((SL().oneByOne || {}).rows || [])"
-def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail", gstin=""):
-    return "{guid: 'g-%s', masterId: '%s', date: '%s', %s%snumber: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", ("partyGstin: '%s', " % gstin) if gstin else "", n, party, party, amt)
+def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail", gstin="", cmp=""):
+    return "{guid: 'g-%s', masterId: '%s', date: '%s', %s%s%snumber: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", ("partyGstin: '%s', " % gstin) if gstin else "", ("cmpGstin: '%s', " % cmp) if cmp else "", n, party, party, amt)
 def sfresh(A, *nos, d="2026-11-02"):
     A.evaluate("() => { SL().list = []; SL().dupSkipped = []; SL().oneByOne = null; }"); A.evaluate(RESET)
     return [A.evaluate(ADD, [n, d, G["k"], 0]) for n in nos]
@@ -323,6 +323,37 @@ with sync_playwright() as p:
     a, st, sent = own("ZS/94", G["k"], mine="Credit Note", note=True)
     ok(st == "posted" and sent == [[a]], "FinCom's own: a credit note of that number, the same GSTIN: posted (%s)" % st)
     A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+
+    print("SALES 14. never a note, a return, a Journal or a receipt by any word of its type; several registrations: the exact type")
+    for i, t in enumerate(["Sales CN", "Sales DN", "Sales Journal", "Sales Advance Receipt", "Sales Credit Note", "Debit Sales", "Sales Returns", "Payment Sales"]):
+        a, st, sent = one("ZS/10%d" % i, G["k"], sv("ZS/10%d" % i, typ=t))
+        ok(st == "posted" and sent == [[a]], "cloud copy: '%s', the same GSTIN: never the sale, posted (%s)" % (t, st))
+    a, st, sent = one("ZS/110", G["k"], sv("ZS/110", typ="Sales UP", cmp=G["up"]))
+    ok(st == "intally Sales UP", "cloud copy: 'Sales UP' issued from the client's own GSTIN, one registration: In Tally (%s)" % st)
+    def one_s(n, cp, seller=None):
+        sfresh(A); a = A.evaluate(ADD, [n, "2026-11-02", G["k"], 0])
+        if seller: A.evaluate("([id, g]) => { const v = SL().list.find(v => v.id === id); v.x.sellerGstin = g; mapInvoice(v); }", [a, seller])
+        A.evaluate("() => { window.__cloud.vouchers = [" + cp + "]; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        return a, A.evaluate(SST1, a), A.evaluate("() => window.__sent")
+    a, st, sent = one_s("ZS/111", sv("ZS/111", typ="Sales UP", cmp=G["up2"]), seller=G["up"])
+    ok(st == "posted" and sent == [[a]], "cloud copy: 'Sales UP' issued from another GSTIN than the invoice's: the exact type, posted (%s)" % st)
+    a, st, sent = one_s("ZS/112", sv("ZS/112", typ="Sales", cmp=G["up2"]), seller=G["up"])
+    ok(st == "intally Sales", "cloud copy: the exact type stays the same entry, whatever the GSTIN it was issued from (%s)" % st)
+    A.evaluate("(g) => { CO().otherGstins = g; }", G["up2"])
+    a, st, sent = one("ZS/113", G["k"], sv("ZS/113", typ="Sales UP"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: the client with two registrations, 'Sales UP' against 'Sales': the exact type, posted (%s)" % st)
+    a, st, sent = one("ZS/114", G["k"], sv("ZS/114", typ="Sales"))
+    ok(st == "intally Sales", "cloud copy: two registrations, the exact type: In Tally (%s)" % st)
+    a, st, sent = own("ZS/115", G["k"])
+    ok(st == "posted" and sent == [[a]], "FinCom's own: two registrations, 'Sales UP' In Tally against 'Sales': posted (%s)" % st)
+    A.evaluate("() => { CO().otherGstins = ''; }")
+    ids = sfresh(A, "ZS/116")
+    A.evaluate("([id, g]) => { const p = SL().list.find(v => v.id === id); p.status = 'intally'; p.x.sellerGstin = g; p.tallyMatch = {key: 'k-' + id, number: p.x.number, type: 'Sales UP', date: '20261102'}; }", [ids[0], G["up2"]])
+    a = A.evaluate(ADD, ["ZS/116", "2026-11-02", G["k"], 0])
+    A.evaluate("([id, g]) => { const v = SL().list.find(v => v.id === id); v.x.sellerGstin = g; mapInvoice(v); window.__cloud.vouchers = []; }", [a, G["up"]])
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "posted", "FinCom's own: another seller GSTIN, 'Sales UP' against 'Sales': posted (%s)" % A.evaluate(SST1, a))
 
     print("SALES 11. the duplicate check's line on the invoice: the info tone, not amber")
     sfresh(A, "ZS/50")
