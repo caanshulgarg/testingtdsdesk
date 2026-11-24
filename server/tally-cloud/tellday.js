@@ -62,12 +62,15 @@ export function unstartedOf(body, now = Date.now()) {
   }
   const cos = (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200);
   const sendsAlt = cos.some((c) => plain(c) && ("altvchid" in c || "altmstid" in c));
+  // (review of fbaad9811: two open copies of one name, migration 203: left out only when NO open copy has the numbers)
+  const hasNums = new Set();
+  for (const c of cos) if (plain(c) && c.open === true && (altOf(c.altvchid) !== null || altOf(c.altmstid) !== null)) hasNums.add(coName(coTrim(c.name)));
   for (const c of cos) {
     if (!plain(c) || c.open !== true) continue;
     const name = coTrim(c.name), k = coName(name);
     if (!name || out.has(k)) continue;
     if (noStart.has(k)) out.set(k, { name, why: "noStart" });
-    else if (sendsAlt && altOf(c.altvchid) === null && altOf(c.altmstid) === null && !sp.has(k)) out.set(k, { name, why: "noNumbers" });
+    else if (sendsAlt && !hasNums.has(k) && !sp.has(k)) out.set(k, { name, why: "noNumbers" });
   }
   return out;
 }
@@ -100,8 +103,9 @@ export function autoDaysFor(version) {
 
 // the sources of tally_check_days a person asked for (Upload, Check for changes, Bring missing days); any other (held,
 // delete, gap, future, or not known) is FinCom's own
-export const AUTO_SOURCES = new Set(["held", "delete", "gap", "future"]);
-const PERSON_SOURCES = new Set(["upload", "check", "fill"]);
+// (review of fbaad9811: only 222's NEW sources are gated; 196's held days and 160's gap days stay as older bridges read them)
+export const AUTO_SOURCES = new Set(["delete", "future"]);
+const PERSON_SOURCES = new Set(["upload", "check", "fill", "held", "gap"]);
 // whether a check day may go to this bridge in this answer. autoOn: the cloud has migration 222 (else as before);
 // newBridge: autoDaysFor; claimed: it came by tally_days_claim (the bridge serves the book)
 export function autoKept(source, { autoOn, newBridge, claimed }) {
@@ -122,6 +126,9 @@ export function due(memo, key, now = Date.now(), every = AUTO_EVERY_MS) {
 export const BRING_WORDS = "FinCom brings this day from Tally by itself.";
 // words with any ask for an upload taken out: a sentence that asks is dropped, or cut at its colon when what comes
 // before says what happened; FinCom's own words (tail) then end it. Words that ask nothing: as they are
+// 222's words for a day given up (tally_period_days.upload_words): no promise to read it again
+export const GIVEN_UP_WORDS = "FinCom could not read this day from Tally by itself.";
+// tail "": the ask only taken out, nothing promised (GIVEN_UP_WORDS when nothing is left)
 export function noUploadAsk(words, tail = BRING_WORDS) {
   const w = typeof words === "string" ? words.trim() : "";
   if (!w || !/upload/i.test(w)) return w;
@@ -132,6 +139,7 @@ export function noUploadAsk(words, tail = BRING_WORDS) {
     const head = s.slice(0, s.lastIndexOf(":", i) + 1 || 0).replace(/[\s:;,]+$/, "");
     if (s.lastIndexOf(":", i) >= 0 && head) kept.push(head + ".");
   }
+  if (!tail) return kept.length ? kept.join(" ") : GIVEN_UP_WORDS;
   return kept.length ? kept.join(" ") + " " + tail : tail;
 }
 
@@ -198,8 +206,11 @@ export function bandsWhole(bands, heads) {
 // for the held deletes and the period's count; bands: the cleaned ranges for 222's 5-argument tally_check_heads, or null
 // (then the 4-argument call with via). A bands list with its ranges: whole only end to end with no hole; one without
 // them (bridges 2.5.19-2.5.21): today's mapping, a whole day; "split": partial; anything else: a whole day
-export function headsVia(via, bands, heads) {
+// (review of fbaad9811: ranges SENT but not readable - [], too many, malformed - are partial, never a whole day; sent: the
+// body has the key with a value other than null)
+export function headsVia(via, bands, heads, sent = bands !== undefined && bands !== null) {
   const b = via === "bands" ? cleanBands(bands) : null;
   if (b) return { via: bandsWhole(b, heads) ? "day" : "split", bands: b };
+  if (via === "bands" && sent && bands !== null && bands !== undefined) return { via: "split", bands: null };
   return { via: via === "split" ? "split" : "day", bands: null };
 }

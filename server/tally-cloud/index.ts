@@ -1402,7 +1402,7 @@ function cleanRenumberAlerts(x: any) {
   if (!Array.isArray(x)) return null;
   const t = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
   const out = x.filter((a: any) => a && typeof a === "object" && !Array.isArray(a) && t(a.company, 200).trim() && t(a.words, 300).trim()).slice(0, 20).map((a: any) => ({
-    company: t(a.company, 200), words: noUploadAsk(t(a.words, 300), "FinCom reads these days from Tally again by itself."), n: Math.max(0, Math.min(1e6, Math.floor(Number(a.n)) || 0)), more: a.more === true,
+    company: t(a.company, 200), words: noUploadAsk(t(a.words, 300), ""), n: Math.max(0, Math.min(1e6, Math.floor(Number(a.n)) || 0)), more: a.more === true,
     from: /^[0-9]{8}$/.test(String(a.from ?? "")) ? String(a.from) : "", type: t(a.type, 60), at: t(a.at, 30) }));
   return out.length ? out : null;
 }
@@ -2421,8 +2421,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       if (!guid) continue;     // the bridge asks only for the company it holds under that GUID
       await autodayQueue(book);
       // migration 222: whether this answer may carry the days FinCom queued by itself (a cloud without it: always)
-      const autoOn = autodayOn(), serves = !!claim && claim.shared.has(company);
-      const ownDays = !autoOn || (newBridge && serves);
+      const autoOn = autodayOn();
       // bridge 2.5.16 (migration 197): the days held for their 24 hours are never handed out; the lists are asked for that
       // many more days so the held ones never fill the answer
       const held = await dayRetryHeld(book), more = held.size, skipped = new Set<string>();
@@ -2440,7 +2439,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // next-fast-delete (migration 158): a day with a held delete this bridge sent (no entry GUID on the line) goes FIRST,
       // before the period's days (which fill a 3-day answer), once per day per 3 minutes (tally_held_front): its whole-day
       // list applies the delete at once (tally_held_delete_by_heads). A cloud without 158: as before (asked again in 10 min)
-      if (claim && ownDays && Date.now() - heldFrontMissing >= 600000 && out.length < max) {
+      if (claim && Date.now() - heldFrontMissing >= 600000 && out.length < max) {
         const { data: hf, error: he } = await db.rpc("tally_held_front", { p_book: book, p_device: claim.dev.id, p_bridge: claim.bridge, p_max: max - out.length });
         if (he) { if (missingFn(String(he.message || ""))) heldFrontMissing = Date.now(); else fail("held_front", he); }
         for (const d of Array.isArray(hf) ? hf as any[] : []) {
@@ -2459,7 +2458,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // next-fix-gap-after-post (migration 182): whether nobody would feel a read now (p_idle, lightIdle): the light reads
       // (a posting's read back, a gap's older days, the recount, the retry after a 2 s stop) go only then, one at a time,
       // paced by the cloud; a cloud without 182: 160's call (asked again in 10 minutes)
-      if (ownDays && Date.now() - gapFrontMissing >= 600000 && out.length < max) {
+      if (Date.now() - gapFrontMissing >= 600000 && out.length < max) {
         const idle182 = Date.now() - gapIdleMissing >= 600000;
         let { data: gf, error: ge } = await db.rpc("tally_gap_front", idle182 ? { p_book: book, p_max: max - out.length, p_idle: idle } : { p_book: book, p_max: max - out.length });
         if (idle182 && ge && missingFn(String(ge.message || ""))) {
@@ -2493,11 +2492,11 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
           const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length + more) };
           let got: any = null, claimed = false;
           if (byClaim && Date.now() - daysClaimMissing >= 600000) {
-            got = await db.rpc("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false });
+            got = await rpcAuto("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false }, newBridge);
             if (got.error && missingFn(String(got.error.message || ""))) { daysClaimMissing = Date.now(); got = null; } else claimed = true;
           }
           if (!got && Date.now() - openMissing >= 600000) {
-            got = await db.rpc("tally_check_next_open", cArgs);
+            got = await rpcAuto("tally_check_next_open", cArgs, newBridge);
             if (got.error && missingFn(String(got.error.message || ""))) { if (!openMissing) console.log("tally-ingest beat: the check's days by 133's rule: migration 135 is not applied"); openMissing = Date.now(); got = null; }
           }
           if (!got) got = await db.rpc("tally_check_next", cArgs);
@@ -2524,6 +2523,7 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         }
       };
       if (autoOn) await checkDays();
+      if (out.length >= max) { await unstamp(); continue; }     // (review of fbaad9811: no room left: the period's days not claimed)
       const pMax = Math.min(30, max - out.length + more);
       let { data, error } = byClaim ? await db.rpc("tally_days_claim", { ...dArgs, p_kind: "period", p_max: pMax, p_night: night })
         : await db.rpc("tally_period_next_paced", { p_book: book, p_max: pMax, p_night: night });
@@ -2579,17 +2579,20 @@ async function checkSourcesOf(book: string, days: string[]): Promise<Map<string,
 // (stuck lines' days, possible deletes, future-dated lines on their day, the period started, the days of an unlinked book
 // parked). Once a book per 10 minutes from the beat (the sweep every 15 minutes does the rest); never fails the beat. A
 // cloud without 222: not asked (again after 10 minutes), and the days are handed out as before
-let autodayMissing = 0;
+// (review of fbaad9811: three states. "unknown" until a call answers: the hand-out as before; "on" only after one
+// tally_autoday_queue answered; "off" when the cloud has no 222, for 10 minutes, then unknown again)
+let autodayState: "unknown" | "on" | "off" = "unknown", autodayOffAt = 0;
 const autodayMemo = new Map<string, number>();
-const autodayOn = () => Date.now() - autodayMissing >= 600000;
+const autodayOn = () => autodayState === "on";
 async function autodayQueue(book: string) {
-  if (!autodayOn() || !due(autodayMemo, book)) return;
+  if (autodayState === "off" && Date.now() - autodayOffAt >= 600000) autodayState = "unknown";
+  if (autodayState === "off" || !due(autodayMemo, book)) return;
   try {
     const { error } = await db.rpc("tally_autoday_queue", { p_book: book });
     if (error) {
-      if (missingFn(String(error.message || ""))) { if (!autodayMissing) console.log("tally-ingest beat: the days are not queued by themselves: migration 222 is not applied"); autodayMissing = Date.now(); }
+      if (missingFn(String(error.message || ""))) { console.log("tally-ingest beat: the days are not queued by themselves: migration 222 is not applied"); autodayState = "off"; autodayOffAt = Date.now(); }
       else fail("autoday_queue", error);
-    }
+    } else autodayState = "on";
   } catch (e) { fail("autoday_queue", e); }
 }
 // migration 222: tally_autoday_pickup(p_book, p_day, p_code) for each pick-up word (pickupsToSay); never fails the beat. A
@@ -2603,6 +2606,18 @@ async function autodayPickups(list: { book: string; day: string; code: string }[
       if (error) { if (missingFn(String(error.message || ""))) pickupMissing = Date.now(); else fail("autoday_pickup", error); }
     } catch (e) { fail("autoday_pickup", e); }
   }));
+}
+// review of fbaad9811 (HIGH): an older bridge never CLAIMS FinCom's own days (it would hold them 5 minutes and drop them):
+// 222's tally_days_claim and tally_check_next_open take p_auto (false: none of FinCom's own days listed). A cloud whose
+// functions do not take it yet: the call without it (asked again after 10 minutes), the days then left out here (autoKept)
+let pAutoMissing = 0;
+async function rpcAuto(name: string, args: Record<string, unknown>, auto: boolean): Promise<any> {
+  if (autodayOn() && Date.now() - pAutoMissing >= 600000) {
+    const r = await db.rpc(name, { ...args, p_auto: auto });
+    if (!(r.error && missingFn(String(r.error.message || "")))) return r;
+    pAutoMissing = Date.now();
+  }
+  return await db.rpc(name, args);
 }
 // the version of the bridge this beat is from (its own beat's, else its record's)
 function bridgeVersionOf(dev: any, bridge: string, body: any): string {
@@ -2712,7 +2727,7 @@ async function periodHeads(book: string, body: any, device = "", bridge = "") {
   if (body?.upload === true) {
     const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
     const why = ["over2s", "dates", "shape", "toomany", "entries", "payroll"].includes(String(body.why)) ? String(body.why) : "other";
-    const { data, error } = await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: why, p_type: s(body.type, 100), p_words: noUploadAsk(s(body.words, 300)).slice(0, 300) });
+    const { data, error } = await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: why, p_type: s(body.type, 100), p_words: noUploadAsk(s(body.words, 300), "").slice(0, 300) });     // (a day given up: 222's words promise nothing)
     if (error) return periodError(error);
     return reply(200, { ok: !!(data as any)?.ok, ...((data as any)?.ok ? {} : { error: String((data as any)?.error || "not kept") }) });
   }
@@ -2816,9 +2831,9 @@ async function periodDayStop(book: string, body: any) {
 // (parse.js), never a salary payment's bank details, each dated the day (another date: refused whole, nothing stored), each
 // whose ledger lines total zero (else not stored, and the day is to be uploaded by hand), then tally_period_entries
 const MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-// 24-Nov-2026: a day of a month locked in FinCom is not read again by itself: the words say what to press, never "upload"
-const LOCKED_TAIL = "Unlock the month, then press Bring missing days on the Tally page.";
-const PERIOD_ENTRY_WORDS = (d: string) => "FinCom could not read " + d.slice(6, 8) + "-" + MONS[Number(d.slice(4, 6)) - 1] + "-" + d.slice(0, 4) + " from Tally yet. FinCom tries again by itself.";
+// 24-Nov-2026: a day of a month locked in FinCom: 222 reads it again once the month is unlocked; never "upload"
+const LOCKED_TAIL = "Unlock the month; FinCom then reads this day by itself.";     // (222's words: it reads the day again once unlocked)
+const PERIOD_ENTRY_WORDS = (d: string) => "FinCom could not read " + d.slice(6, 8) + "-" + MONS[Number(d.slice(4, 6)) - 1] + "-" + d.slice(0, 4) + " from Tally by itself.";     // (222's words for a day given up)
 // migration 133: 98's tally_period_entries with each entry it brings in logged ("Today from Tally"); a cloud without 133: 98's
 async function periodEntriesRpc(args: Record<string, unknown>) {
   const r = await db.rpc("tally_period_entries_logged", args);
@@ -2847,7 +2862,7 @@ async function periodHold(book: string, day: string, held: Record<string, unknow
   if (!error) return (data || {}) as any;
   if (!missingFn(String(error.message || ""))) { fail("period_hold", error); return { ok: false }; }
   if (!held.length) return { ok: true, held: 0 };
-  const words = (held.length === 1 ? "1 entry" : held.length + " entries") + " on " + day.slice(6, 8) + "-" + MONS[Number(day.slice(4, 6)) - 1] + " could not be read yet. FinCom tries again by itself.";
+  const words = (held.length === 1 ? "1 entry" : held.length + " entries") + " on " + day.slice(6, 8) + "-" + MONS[Number(day.slice(4, 6)) - 1] + " could not be read from Tally by itself.";     // (given up: 222's words)
   await db.rpc("tally_period_upload", { p_book: book, p_day: iso(day), p_why: "held", p_type: "", p_words: words });
   return { ok: true, held: held.length, manual: true, words, upload: words };
 }
@@ -3041,7 +3056,7 @@ function periodPullOf(b: any, speed: { book: string; perMin: number }[] = []) {
   const p = b?.periodPull;
   if (!p || typeof p !== "object") return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-  const up = (Array.isArray(p.uploadDays) ? p.uploadDays : []).slice(0, 50).map((x: any) => ({ company: s(x?.company, 200), day: s(x?.day, 8), words: noUploadAsk(s(x?.words, 300)) }));
+  const up = (Array.isArray(p.uploadDays) ? p.uploadDays : []).slice(0, 50).map((x: any) => ({ company: s(x?.company, 200), day: s(x?.day, 8), words: noUploadAsk(s(x?.words, 300), "") }));     // (days given up: no promise, as 222)
   // next-fast-entries: a fast bridge's own speed per book (speedBooksFor: matched by the book's company GUID), for the
   // page's "about N min left" while this beat is fresh; nothing from a bridge with the switch off
   return { periodPull: { uploadDays: up, ...(speed.length ? { speed } : {}) } };

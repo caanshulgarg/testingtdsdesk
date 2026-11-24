@@ -11,7 +11,7 @@
 //   8. cleanBands / bandsWhole: a day read in MasterID bands is whole only end to end with no hole (222's rule, mirrored)
 //   6. beforeStartWhy: a line dated before the book's first day never says FinCom reads that day by itself (the owner, 24-Nov:
 //      an earlier year is never added or read by itself; the page offers "Add 2025-26")
-import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS, pickupsToSay, cleanBands, bandsWhole, headsVia } from "./tellday.js";
+import { cleanTell, unstartedOf, autoDaysFor, autoKept, AUTO_SOURCES, due, noUploadAsk, AUTO_EVERY_MS, BRING_WORDS, beforeStartWhy, BEFORE_START_WORDS, pickupsToSay, cleanBands, bandsWhole, headsVia, GIVEN_UP_WORDS } from "./tellday.js";
 
 function assert(c: unknown, w: string) { if (!c) throw new Error(w); }
 const T0 = Date.parse("2026-11-24T06:00:00Z");
@@ -63,6 +63,9 @@ Deno.test("unstartedOf: open, the bridge sends numbers for others, none for it, 
   assert([...u.keys()].join() === "made up co" && u.get("made up co")!.name === "MADE UP CO" && u.get("made up co")!.why === "noNumbers", "no numbers: " + JSON.stringify([...u]));
   assert(unstartedOf({ companies: [{ name: "MADE UP CO", open: true }, { name: "ACME", open: true }] }, T0).size === 0, "an older bridge sending no numbers for any: none");
   assert(unstartedOf({ companies: cos, startPoint: { "MADE UP CO": { altvchid: 3 } } }, T0).size === 0, "its startPoint: started");
+  const two = [{ name: "MADE UP CO", open: true, guid: "g1" }, { name: "MADE UP CO", open: true, guid: "g9", altvchid: 7, altmstid: 2 }];
+  assert(unstartedOf({ companies: two }, T0).size === 0 && unstartedOf({ companies: [...two].reverse() }, T0).size === 0, "two open copies of one name, one with numbers: not left out (either order)");
+  assert(unstartedOf({ companies: [{ name: "MADE UP CO", open: true }, { name: "MADE UP CO", open: false, altvchid: 5 }, { name: "ACME", open: true, altvchid: 1 }] }, T0).size === 1, "numbers only on a copy that is not open: left out");
   const pk = [{ state: "refused", code: "noStart", company: "ACME", at: iso(T0 - 60000) }, { state: "refused", code: "noStart", company: "OLD", at: iso(T0 - 700000) }];
   const u2 = unstartedOf({ companies: [{ name: "ACME", open: true, altvchid: 9 }, { name: "OLD", open: true, altvchid: 9 }], pickups: pk }, T0);
   assert([...u2.keys()].join() === "acme" && u2.get("acme")!.why === "noStart", "noStart within 10 minutes only: " + JSON.stringify([...u2]));
@@ -84,15 +87,18 @@ Deno.test("autoDaysFor: 2.5.16 or later only", () => {
   for (const v of ["2.5.15", "2.5.1", "2.4.9", "1.15.0", "", null, "2.5", "v2.5.16", "2.5.16-beta"]) assert(!autoDaysFor(v), String(v));
 });
 
-Deno.test("autoKept: a day FinCom queued by itself only by claim to a 2.5.16 bridge; a person's day as before", () => {
-  for (const s of ["held", "delete", "gap", "future"]) {
+Deno.test("autoKept: a day of 222's new sources only by claim to a 2.5.16 bridge; the rest as before", () => {
+  for (const s of ["delete", "future"]) {
     assert(AUTO_SOURCES.has(s), s + " is FinCom's own");
     assert(autoKept(s, { autoOn: true, newBridge: true, claimed: true }), s + ": claimed, new bridge");
     assert(!autoKept(s, { autoOn: true, newBridge: false, claimed: true }), s + ": an older bridge");
     assert(!autoKept(s, { autoOn: true, newBridge: true, claimed: false }), s + ": not claimed (no serving check)");
     assert(autoKept(s, { autoOn: false, newBridge: false, claimed: false }), s + ": a cloud without 222: as before");
   }
-  for (const s of ["upload", "check", "fill"]) assert(autoKept(s, { autoOn: true, newBridge: false, claimed: false }), s + ": a person's day as before");
+  for (const s of ["upload", "check", "fill", "held", "gap"]) {
+    assert(!AUTO_SOURCES.has(s), s + " is not one of 222's new sources");
+    assert(autoKept(s, { autoOn: true, newBridge: false, claimed: false }), s + ": as before (a person's day, or 196's held / 160's gap day an older bridge already read)");
+  }
   assert(!autoKept(undefined, { autoOn: true, newBridge: false, claimed: true }) && autoKept(undefined, { autoOn: true, newBridge: true, claimed: true }), "source unknown: as FinCom's own");
 });
 
@@ -118,6 +124,9 @@ Deno.test("noUploadAsk: the ask for an upload taken out, FinCom's own words in i
   assert(noUploadAsk("Tally is not open on this computer") === "Tally is not open on this computer", "other words as they are");
   assert(noUploadAsk("") === "" && noUploadAsk(null) === "" && noUploadAsk(undefined, "X") === "", "none: none");
   assert(noUploadAsk("Please upload that day's Day Book.", "FinCom tries again by itself.") === "FinCom tries again by itself.", "the words given in its place");
+  assert(noUploadAsk("Tally took too long to give 30-Aug-2025. Please upload that day's Day Book.", "") === "Tally took too long to give 30-Aug-2025.", "no words in its place: the ask only taken out (no promise)");
+  assert(noUploadAsk("Please upload that day's Day Book.", "") === GIVEN_UP_WORDS, "nothing left: FinCom's plain words, 222's");
+  assert(GIVEN_UP_WORDS === "FinCom could not read this day from Tally by itself." && !/again|upload/i.test(GIVEN_UP_WORDS), "no promise, no upload");
 });
 
 Deno.test("beforeStartWhy: a day before the book's first day: no promise to read it", () => {
@@ -170,6 +179,9 @@ Deno.test("headsVia: bands with their ranges judged; without them as today (a wh
   assert(JSON.stringify(headsVia("bands", [[1, 100], [101, null]], H)) === JSON.stringify({ via: "day", bands: [[1, 100], [101, null]] }), "whole bands");
   assert(JSON.stringify(headsVia("bands", [[1, 100], [150, null]], H)) === JSON.stringify({ via: "split", bands: [[1, 100], [150, null]] }), "a hole: partial, with its bands for 222");
   assert(JSON.stringify(headsVia("bands", undefined, H)) === JSON.stringify({ via: "day", bands: null }), "2.5.19-2.5.21 (no ranges): a whole day, the 4-argument call");
-  assert(JSON.stringify(headsVia("bands", "junk", H)) === JSON.stringify({ via: "day", bands: null }), "ranges not readable: as today");
+  for (const bad of [[], "junk", [[0, 5]], [[1, 2], "x"], Array.from({ length: 2001 }, (_, i) => [i + 1, i + 1])]) {
+    assert(JSON.stringify(headsVia("bands", bad, H, true)) === JSON.stringify({ via: "split", bands: null }), "ranges sent but not readable: partial (no delete): " + JSON.stringify(bad).slice(0, 40));
+  }
+  assert(JSON.stringify(headsVia("bands", undefined, H, false)) === JSON.stringify({ via: "day", bands: null }) && JSON.stringify(headsVia("bands", null, H, true)) === JSON.stringify({ via: "day", bands: null }), "no ranges key (or null): as today");
   assert(headsVia("split", [[1, null]], H).via === "split" && headsVia("day", null, H).via === "day" && headsVia(undefined, null, H).via === "day", "the other kinds as today");
 });

@@ -120,7 +120,7 @@ try:
     last_job = span(lambda m, p: m == "GET" and "/tally_post_jobs?" in p and "order=updated_at.desc" in p and "limit=1" in p)
     together(last_job, span(lambda m, p: "/rpc/tally_recorder_gap_check" in p or "/rpc/tally_start_point" in p or "/rpc/tally_link_place_check" in p), "the last posting's time and the recorder's check")
     together(span(lambda m, p: m == "GET" and "/tally_bridge_prefs?" in p), span(lambda m, p: "/rpc/tally_book_for" in p), "the changes-only switch and the pickups' book")
-    held = span(lambda m, p: m == "GET" and "/tally_recorder_lines?" in p and "state=eq.held" in p)
+    held = span(lambda m, p: m == "GET" and "/tally_recorder_lines?" in p and ("state=eq.held" in p or "state=in.(held,fetching)" in p or "state=in.%28held%2Cfetching%29" in p))     # (196: held and fetching lines read together)
     together(span(lambda m, p: "/rpc/tally_fetch_on" in p), held, "the older-entries switch and the held lines")
     ok(len(held) >= 3 and any(a1 < b2 and a2 < b1 for i, (a1, b1) in enumerate(held) for (a2, b2) in held[i + 1:]), "4. asked at the same time: the ledgers wanted and the held lines (%d requests)" % len(held))
     n_book = len([a for a in FS.ARGS.get("tally_book_for", []) if a.get("p_company") == "MADEUP CO"])
