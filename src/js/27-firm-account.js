@@ -419,22 +419,26 @@ function clientOptKeep(data, mine, theirs, base){
       : m > t ? mine : t > m ? theirs : !t && data[k] === true && theirs[k] !== true ? {} : null;
     if (!take || (data[k] === !!take[k] && (data[at] || "") === (take[at] || ""))) return;
     data = Object.assign({}, data, {[k]: !!take[k]});
-    if (take[at]) data[at] = take[at]; else delete data[at];
+    // (re-upload polish 4) a setting turned off with neither side stamped is stamped now: when it changed is known from
+    // here on (sentOptionalAt); one left on unstamped stays as it was
+    if (take[at]) data[at] = take[at]; else if (!take[k]) data[at] = optStamp(data[at]); else delete data[at];
   });
   return data;
 }
-// when an Optional tick was made: now, or 1 ms after the stamp of the copy it was made on when this clock is behind it
 // (re-upload polish 3, F1) whether FinCom sent an entry as an Optional voucher, for a posting marked when its answer
 // comes (perhaps long after it was queued): cautiously yes when the client's setting is on now, or was changed after
 // the posting was queued (since: the posting's queued time, else its send time), as it may have been on then.
-// kind "bank": bankOptional (bank lines); else createOptional (bills and invoices)
-function sentOptionalAt(co, kind, since){
+// kind "bank": bankOptional (bank lines); else createOptional (bills and invoices). posted: Tally's answer called it
+// Optional; with no stamp (when the setting last changed is not known) that counts, as it may have been on then
+function sentOptionalAt(co, kind, since, posted){
   if (!co) return false;
   const k = kind === "bank" ? "bankOptional" : "createOptional";
   if (co[k]) return true;
+  if (!co[k + "At"]) return !!posted;
   const at = Date.parse(co[k + "At"] || ""), t = Date.parse(since || "");
   return !!(at && t && at > t);
 }
+// when an Optional tick was made: now, or 1 ms after the stamp of the copy it was made on when this clock is behind it
 function optStamp(prev){ const n = Date.now(), p = Date.parse(prev || ""); return new Date(p >= n ? p + 1 : n).toISOString(); }
 const ClientBase = {
   async get(id){ try { const v = await BankDB.get("cbase:" + id); return v === undefined || v === null ? NOBASE : v; } catch (e){ return NOBASE; } },
