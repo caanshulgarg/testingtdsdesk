@@ -192,7 +192,8 @@ type kentry struct {
 // (applyCloudSettings never does). 2.5.20 (the owner, 23-Nov-2026: reading from Tally ON by default on every computer
 // where Tally is connected): on when the file has no ReadDays (or null); any value a person wrote is read as before (false,
 // 0 or "" off: kept off). The standard settings never write it, so "not set" (on) and "off" stay apart. The typing gate,
-// postings first, the 2 s stop and one request in flight are as before
+// postings first, the 2 s stop and one request in flight are as before. Review A1: this is the background Day Book
+// rounds only (TC.dayRound, under the 2 s stop); FinCom's direct reads go only with ReadDays true (directReadsOn)
 func readDaysOn() bool {
 	cfgMu.Lock()
 	has, v := Cfg.Has("ReadDays"), Cfg.Get("ReadDays")
@@ -203,12 +204,24 @@ func readDaysOn() bool {
 	return truthy(v)
 }
 
+// 2.5.20 review A1: FinCom's direct reads (/vouchers, /daybook, /ledgerlines, /tags, /keepcheck, /readtest, the
+// measuring tool's dated items) run up to TallyMaxSec and a month at a time, so the default does NOT turn them on: they go
+// only when the settings file says ReadDays true (literally), exactly as before 2.5.20. The default (no ReadDays, or null)
+// turns on only the background Day Book rounds (readDaysOn), each request under the 2 s stop (TC.dayRound)
+func directReadsOn() bool {
+	cfgMu.Lock()
+	v := Cfg.Get("ReadDays")
+	cfgMu.Unlock()
+	b, ok := v.(bool)
+	return ok && b
+}
+
 // round 18 (the owner's decision of 04-Oct-2026): FinCom's direct reads of entries (/daybook, /vouchers, /keepcheck)
-// are refused with these words while ReadDays is off; nothing is sent to Tally
+// are refused with these words unless ReadDays is true (2.5.20 review A1: the default leaves them off); nothing is sent
 const readsOffWords = "Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."
 
 func readsOffErr() error {
-	if readDaysOn() {
+	if directReadsOn() {
 		return nil
 	}
 	return &httpErr{409, M{"ok": false, "error": readsOffWords, "readDays": false}}
@@ -1014,7 +1027,8 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			t = td
 		}
 		t1 := time.Now()
-		dtc := k.checkTC() // third review T5: an Update now reading on (or a run nobody pressed): each day-book request under the 2 s stop
+		dtc := k.checkTC()  // third review T5: an Update now reading on (or a run nobody pressed): each day-book request under the 2 s stop
+		dtc.dayRound = true // 2.5.20 review A1: the round's own requests, the only dated ones the default turns on
 		x, err := getDayBookXML(dtc, company, f, t, port)
 		// round 10 (03-Oct-2026): a day counts as read only when its answer came in full. An answer that is not a whole
 		// Tally envelope (the connection dropped, the decoder stopped), or one taken while the self-watch stopped reading,

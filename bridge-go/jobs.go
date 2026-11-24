@@ -991,8 +991,19 @@ func jobWorker(dir string) {
 		// owner's decision: "Then go ahead"), counted, and said with the report when FinCom answers again
 		offline := false
 		if fromCloud {
-			why, unheard := checkCloudBeforeSend(jobID, i+1, K)
+			why, unheard, waited := checkCloudBeforeSend(jobID, i+1, K, func() bool { return jobCancelled(dir) || stopping() })
 			offline = unheard
+			if why == "" && waited {
+				// 2.5.20 review: after the wait for FinCom's answer (about 30 s) a cancel or the bridge stopping is looked at
+				// again, and the company's lease (taken again when it ran low), before the part goes
+				if cancelled() || stopping() {
+					return
+				}
+				if !waitLease(asked, setStatus, pause) {
+					cancelled()
+					return
+				}
+			}
 			if why != "" {
 				p["stoppedBy"] = why
 				finish("stopped", "Stopped by FinCom before part "+fmt.Sprint(i+1)+" of "+fmt.Sprint(K)+" was sent: "+why)
@@ -1333,9 +1344,11 @@ var postOKOffline sync.Map // job id -> time.Time of the last check with no answ
 
 // "" to send part i of n now; else why FinCom said stop. unheard: no answer from FinCom (the part, once it reaches
 // Tally, is counted in the job: offlineSends, reported with posts_update, so FinCom knows once it answers again)
-func checkCloudBeforeSend(jobID string, i, n int) (stop string, unheard bool) {
+// waited: FinCom was asked again after "could not confirm in time" (the caller looks again at a cancel, the bridge
+// stopping and the lease before sending); halt (a cancel or the bridge stopping) ends the asking again at once
+func checkCloudBeforeSend(jobID string, i, n int, halt func() bool) (stop string, unheard, waited bool) {
 	if v, ok := postOKOffline.Load(jobID); ok && time.Since(v.(time.Time)) < postOKOfflineGap {
-		return "", true
+		return "", true, false
 	}
 	stop, reached := postOKFn(jobID)
 	// 2.5.20 P1 (the owner's decision of 23-Nov-2026): FinCom could not confirm in time (its database slow): asked again
@@ -1345,25 +1358,34 @@ func checkCloudBeforeSend(jobID string, i, n int) (stop string, unheard bool) {
 		if try == 1 {
 			writeLog(fmt.Sprintf("Posting job %s: FinCom could not confirm in time before part %d of %d; asked again (up to %d times, %s apart), nothing sent meanwhile", jobID, i, n, postOKUnsureTries, postOKUnsureWait))
 		}
-		time.Sleep(postOKUnsureWait)
+		waited = true
+		for end := time.Now().Add(postOKUnsureWait); time.Now().Before(end); {
+			if halt != nil && halt() {
+				return "", false, true // the caller sees the cancel or the stop
+			}
+			time.Sleep(minDur(100*time.Millisecond, time.Until(end)))
+		}
+		if halt != nil && halt() {
+			return "", false, true
+		}
 		stop, reached = postOKFn(jobID)
 	}
 	if stop != "" {
 		postOKOffline.Delete(jobID)
 		writeLog(fmt.Sprintf("Posting job %s: FinCom said to stop before part %d of %d: %s; nothing more is sent to Tally", jobID, i, n, stop))
-		return stop, false
+		return stop, false, waited
 	}
 	if !reached {
 		if _, was := postOKOffline.Load(jobID); !was {
 			writeLog(fmt.Sprintf("Posting job %s: FinCom's cloud could not be reached before part %d of %d; what is on this computer is posted (the owner's decision), and FinCom is told when it answers again", jobID, i, n))
 		}
 		postOKOffline.Store(jobID, time.Now())
-		return "", true
+		return "", true, waited
 	}
 	if _, was := postOKOffline.LoadAndDelete(jobID); was {
 		writeLog(fmt.Sprintf("Posting job %s: FinCom's cloud answers again (before part %d of %d)", jobID, i, n))
 	}
-	return "", false
+	return "", false, waited
 }
 
 // the posting is one taken from FinCom's queue (the list of them on this computer: an older payload has no mark)

@@ -12,6 +12,8 @@ package main
 //   R.  ReadDays on by default: a settings file without ReadDays reads days; ReadDays false (a person's) stays off.
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -300,4 +302,192 @@ func TestR2520ReadDaysDefaultOn(t *testing.T) {
 	if defaultSettings().Has("ReadDays") {
 		t.Fatal("ReadDays written into the standard settings")
 	}
+}
+
+// A1 (review of 2.5.20): the default (no ReadDays, or null) turns on only the background day rounds, under the 2 s stop.
+// FinCom's direct reads (/vouchers, /daybook, /ledgerlines, /tags, /keepcheck, /readtest) and every other dated request
+// stay refused exactly as before 2.5.20 unless ReadDays is literally true
+func TestR2520DirectReadsOnlyWhenReadDaysTrue(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	f.add(td, fgParty, "DR-1", "sale", "-1.00")
+	standBridge(t, f, `,"Key":"tray-test-key"`)
+	_ = findCompanyPortQuiet(zz)
+	co := strings.ReplaceAll(zz, " ", "%20")
+	routes := []string{
+		"/vouchers?company=" + co + "&from=" + td + "&to=" + td,
+		"/daybook?company=" + co + "&from=" + td + "&to=" + td,
+		"/tags?company=" + co + "&from=" + td + "&to=" + td,
+		"/keepcheck?company=" + co + "&ym=" + td[:6],
+		"/readtest?company=" + co,
+	}
+	round := ledgerTC(&TC{copier: true})
+	round.dayRound = true
+	for _, c := range []struct {
+		name         string
+		set          func()
+		rounds, read bool
+	}{
+		{"none", func() { cfgMu.Lock(); Cfg.Delete("ReadDays"); cfgMu.Unlock() }, true, false},
+		{"null", func() { setCfg("ReadDays", nil) }, true, false},
+		{"true", func() { setCfg("ReadDays", true) }, true, true},
+		{"false", func() { setCfg("ReadDays", false) }, false, false},
+	} {
+		c.set()
+		if readDaysOn() != c.rounds {
+			t.Errorf("ReadDays %s: day rounds on %v, want %v", c.name, readDaysOn(), c.rounds)
+		}
+		if got := readsOffErr() == nil; got != c.read {
+			t.Errorf("ReadDays %s: direct reads allowed %v, want %v", c.name, got, c.read)
+		}
+		for _, p := range routes {
+			n0 := r19Count(f)
+			code, res := callLocal(t, "GET", p, "", "")
+			refused := code == 409 && str(res["error"]) == readsOffWords
+			if !c.read && (!refused || r19Count(f) != n0) {
+				t.Errorf("ReadDays %s: %s not refused as before (%d %v, %d sent)", c.name, p, code, res, r19Count(f)-n0)
+			}
+			if c.read && refused {
+				t.Errorf("ReadDays %s: %s refused", c.name, p)
+			}
+		}
+		// /ledgerlines: from the copy only, never Tally, unless literally true
+		n0 := r19Count(f)
+		_, res := callLocal(t, "GET", "/ledgerlines?company="+co+"&ledger=X%20Ledger&from="+td+"&to="+td, "", "")
+		if !c.read && (res["readDays"] != false || r19Count(f) != n0) {
+			t.Errorf("ReadDays %s: /ledgerlines asked Tally (%v, %d sent)", c.name, res, r19Count(f)-n0)
+		}
+		// a dated request with no 2 s stop (a direct read's TC) is refused unless literally true
+		if _, err := invokeTally(fin, f.port, dayBookRequest(zz, td, td), 10); (err == nil) != c.read {
+			t.Errorf("ReadDays %s: Day Book without the 2 s stop: %v", c.name, err)
+		}
+		// the measuring tool's dated items as before (only with ReadDays true or --old-days)
+		if (measureDatedTC(measureOpts{}) != nil) != c.read {
+			t.Errorf("ReadDays %s: the measuring tool's dated items", c.name)
+		}
+		// the background day round's own request, under the 2 s stop: goes unless ReadDays is off
+		if _, err := invokeTally(round, f.port, dayBookRequest(zz, td, td), 10); (err == nil) != c.rounds {
+			t.Errorf("ReadDays %s: the day round's Day Book: %v", c.name, err)
+		}
+		// the day round's mark without its 2 s stop is not a day round
+		loose := *round
+		loose.limitMs = 0
+		if _, err := invokeTally(&loose, f.port, dayBookRequest(zz, td, td), 10); (err == nil) != c.read {
+			t.Errorf("ReadDays %s: a day-round request without the 2 s stop: %v", c.name, err)
+		}
+	}
+	setCfg("ReadDays", false)
+}
+
+// A2 (review of 2.5.20): the read back after a reply Tally made partly skips cancelled and optional entries, in the
+// matching and in the count, as the look before a re-sent entry does (resentLookFirst): a cancelled (or optional) earlier
+// copy carrying the mark of the entry Tally refused never makes it "posted"; that entry is refused by Tally and goes again
+func TestR2520ReadBackSkipsCancelledAndOptional(t *testing.T) {
+	for _, c := range []struct{ prefix, how string }{{"cx", "cancelled"}, {"ox", "optional"}} {
+		t.Run(c.how, func(t *testing.T) {
+			td := today()
+			f := newStandTally(t)
+			old := f.add(td, fgParty, "OLD-2", "Electricity | TDSDesk:"+c.prefix+"2", "2.00")
+			old.cancelled, old.optional = c.how == "cancelled", c.how == "optional"
+			f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:"+c.prefix+"2") }
+			standBridge(t, f, `,"PostPaceOff":true`)
+			p := r15Job(t, "job-r2520-"+c.prefix, r15Bills(c.prefix, td, 2))
+			rs := r15Results(p)
+			if r := rs[c.prefix+"1"]; r["ok"] != true || r["verified"] != true {
+				t.Fatalf("%s1 made by Tally: %v", c.prefix, r)
+			}
+			r := rs[c.prefix+"2"]
+			if r["ok"] != false || r["refusedByTally"] != true || r["needsReview"] == true || str(r["guid"]) == old.guid {
+				t.Fatalf("%s2, refused by Tally, a %s earlier copy holds its mark: %v", c.prefix, c.how, r)
+			}
+			if acceptedInfo(c.prefix+"2") != nil {
+				t.Fatalf("%s2 stays on the record (it could never go again)", c.prefix)
+			}
+			f.mu.Lock()
+			f.importSkip = nil
+			f.mu.Unlock()
+			p = r15Job(t, "job-r2520-"+c.prefix+"-2", r15Bills(c.prefix, td, 2))
+			if r := r15Results(p)[c.prefix+"2"]; r["ok"] != true || f.n("Import") != 2 {
+				t.Fatalf("the retry: %s2 %v, %d imports", c.prefix, r, f.n("Import"))
+			}
+		})
+	}
+}
+
+// P1 (review of 2.5.20): after the wait for FinCom's answer (about 30 s), the job looks again at a cancel or the bridge
+// stopping, and at the company's lease (taken again when it ran low), before the part goes
+func TestR2520UnsureWaitThenLooksAgain(t *testing.T) {
+	t.Run("cancelled", func(t *testing.T) {
+		f, c := r2515QueueBridge(t)
+		r2520Fast(t)
+		n := 0
+		c.mu.Lock()
+		c.other = func(k string, b M) (int, M) {
+			if k != "post_ok" {
+				return 200, M{"ok": true}
+			}
+			n++
+			if n == 1 {
+				dir, _ := jobDir("job-r2520-uc")
+				_ = os.WriteFile(filepath.Join(dir, "cancel"), []byte("x"), 0o644) // cancelled in FinCom while it waits
+				return 200, M{"ok": true, "post": false, "stop": "checking", "error": r2520Unsure}
+			}
+			return 200, M{"ok": true, "post": true}
+		}
+		c.mu.Unlock()
+		r2515Take(t, c, "job-r2520-uc", 1)
+		p := r2515JobEnd(t, "job-r2520-uc")
+		if str(p["status"]) != "cancelled" || f.n("Import") != 0 {
+			t.Fatalf("cancelled during the wait: %s %q, %d imports", p["status"], p["message"], f.n("Import"))
+		}
+	})
+	t.Run("lease", func(t *testing.T) {
+		f, c := r2515QueueBridge(t)
+		r2520Fast(t)
+		n := 0
+		var atImport []string
+		f.mu.Lock()
+		f.slow = func(id, body string) time.Duration {
+			if id == "Import" && atImport == nil {
+				c.mu.Lock()
+				atImport = append([]string{}, c.kinds...)
+				c.mu.Unlock()
+			}
+			return 0
+		}
+		f.mu.Unlock()
+		c.mu.Lock()
+		c.other = func(k string, b M) (int, M) {
+			if k != "post_ok" {
+				return 200, M{"ok": true}
+			}
+			n++
+			if n == 1 {
+				leaseMu.Lock()
+				leases[zz] = time.Now() // the lease ran out while FinCom was slow
+				leaseMu.Unlock()
+				return 200, M{"ok": true, "post": false, "stop": "checking", "error": r2520Unsure}
+			}
+			return 200, M{"ok": true, "post": true}
+		}
+		c.mu.Unlock()
+		r2515Take(t, c, "job-r2520-ul", 1)
+		p := r2515JobEnd(t, "job-r2520-ul")
+		if str(p["status"]) != "done" || f.n("Import") != 1 {
+			t.Fatalf("after the wait: %s %q, %d imports", p["status"], p["message"], f.n("Import"))
+		}
+		last := -1
+		for i, k := range atImport {
+			if k == "post_ok" {
+				last = i
+			}
+		}
+		taken := false
+		for _, k := range atImport[last+1:] {
+			taken = taken || k == "lease_take"
+		}
+		if last < 0 || !taken {
+			t.Fatalf("the lease not taken again after the wait, before the part went: %v", atImport)
+		}
+	})
 }

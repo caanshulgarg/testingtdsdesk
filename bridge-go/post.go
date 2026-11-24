@@ -413,7 +413,7 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 // 2.5.20 P2: the part's entries found by their FinCom tag: resentLook (resent2519.go, 2.5.19's look before a re-sent
 // entry), FinComTag as built for one date at a time, under the 2 s stop with the posting's priority, whatever ReadDays
 // says, its answer taken only when whole and of that date. Any look that fails: nil (no answer), so nothing is called
-// "not in Tally" on a guess
+// "not in Tally" on a guess. Cancelled and optional entries are skipped (review A2)
 func readBackTags(port int, company string, items []M) map[string]M {
 	var heads []M
 	var dates []string
@@ -428,6 +428,11 @@ func readBackTags(port int, company string, items []M) map[string]M {
 			return nil
 		}
 		for _, k := range ks {
+			// 2.5.20 review A2: a cancelled or optional entry carrying the mark is not the entry sent (as resentLookFirst):
+			// left out of the matching and so of the count, never "posted" by it
+			if k.cancelled || k.optional {
+				continue
+			}
 			heads = append(heads, headOfKey(k))
 		}
 	}

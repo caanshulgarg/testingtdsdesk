@@ -49,6 +49,18 @@ first, the typing gate. Use a test company with made-up entries only.
    - Every existing test stand now says ReadDays false, the default it was written for (events_test.go bridgeFor).
      r2520_test.go tests the new default.
    (keep.go readDaysOn.)
+   - Review of 2.5.20 (A1): the default turns on only the background Day Book rounds, each request under the 2 s stop
+     (TC.dayRound). FinCom's direct reads (/vouchers, /daybook, /ledgerlines, /tags, /keepcheck, /readtest and the
+     measuring tool's dated items), which can hold Tally up to TallyMaxSec (20 s) for a month at a time, stay refused
+     exactly as before unless the settings file says ReadDays true (the JSON value true). (keep.go directReadsOn,
+     tally.go datedRefused.)
+
+5. **Review of 2.5.20.**
+   - A2: the read back after a reply Tally made partly skips cancelled and optional entries, in the matching and in the
+     count, as the look before a re-sent entry does. A cancelled earlier copy carrying the mark of an entry Tally refused
+     no longer makes that entry "posted": it is refused by Tally and may go again. (post.go readBackTags.)
+   - After P1's wait (about 30 s), the job looks again at a cancel, the bridge stopping and the company's lease (taken
+     again when it ran low) before the part goes; a cancel during the wait ends the asking at once. (jobs.go.)
 
 ## Tests (bridge-go)
 
@@ -63,6 +75,9 @@ r2520_test.go:
 - TestR2520WholeReplyNoReadBack
 - TestR2520WaitingReportedAgain
 - TestR2520ReadDaysDefaultOn
+- TestR2520DirectReadsOnlyWhenReadDaysTrue (no ReadDays, null, true, false)
+- TestR2520ReadBackSkipsCancelledAndOptional
+- TestR2520UnsureWaitThenLooksAgain
 
 The 2.5.19 tests whose rule this release changes are updated: TestPostNeedsReviewOnLineError (a part Tally made partly
 is now read back). TestNeedsReviewJobEndsDone, TestPartialBatchNeedsReview and TestPartialBatchNotedOnDisk test what stays

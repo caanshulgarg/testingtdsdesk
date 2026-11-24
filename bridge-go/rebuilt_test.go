@@ -29,6 +29,7 @@ type tVch struct {
 	alter                                    int64
 	lines                                    [][2]string
 	cancelled                                bool   // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
+	optional                                 bool   // 2.5.20 review A2: this Tally answers ISOPTIONAL Yes for it
 	extra                                    string // 2.3.4 review: more of the voucher as Tally holds it (fields outside the approved list, other lists)
 	bank                                     string // next-bankdate: the bank date set in Bank Reconciliation (BANKALLOCATIONS.BANKERSDATE on its "Bank" line)
 }
@@ -39,6 +40,14 @@ func (v *tVch) bankAlloc(name string) string {
 		return ""
 	}
 	return "<BANKALLOCATIONS.LIST>" + standField("DATE", "Date", v.date) + standField("TRANSACTIONTYPE", "String", "Cheque") + standField("BANKERSDATE", "Date", v.bank) + "</BANKALLOCATIONS.LIST>"
+}
+
+// 2.5.20 review A2: ISOPTIONAL as this stand Tally gives it
+func (v *tVch) isOptional() string {
+	if v.optional {
+		return "Yes"
+	}
+	return "No"
 }
 
 // review H1 (2.3.0): ISCANCELLED as this stand Tally gives it
@@ -229,8 +238,8 @@ func (v *tVch) xml() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"><DATE>%s</DATE><GUID>%s</GUID><MASTERID>%s</MASTERID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME>`+
-		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>%s</ISCANCELLED>`,
-		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr), v.isCancelled())
+		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>%s</ISOPTIONAL><ISCANCELLED>%s</ISCANCELLED>`,
+		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr), v.isOptional(), v.isCancelled())
 	for _, l := range v.lines {
 		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT>%s</ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1], v.bankAlloc(l[0]))
 	}
@@ -245,7 +254,7 @@ func (v *tVch) xmlTyped() string {
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4d8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View">`, v.guid, v.guid, v.typ)
 	for _, f := range []string{standField("DATE", "Date", v.date), "<GUID>" + v.guid + "</GUID>", standField("NARRATION", "String", esc(v.narr)), "<REQUESTORRULE/>",
 		"<VOUCHERTYPENAME>" + v.typ + "</VOUCHERTYPENAME>", standField("PARTYLEDGERNAME", "String", esc(v.party)), "<VOUCHERNUMBER>" + v.no + "</VOUCHERNUMBER>",
-		standField("ISOPTIONAL", "Logical", "No"), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", v.isCancelled()),
+		standField("ISOPTIONAL", "Logical", v.isOptional()), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", v.isCancelled()),
 		standField("ALTERID", "Number", fmt.Sprint(v.alter)), standField("MASTERID", "Number", v.master), standField("VOUCHERKEY", "Number", "198839805935624")} {
 		b.WriteString(nl + f)
 	}

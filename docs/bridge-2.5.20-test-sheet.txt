@@ -36,6 +36,9 @@ typing in Tally. Use a test company with made-up entries only.
     Check A: a computer whose settings file has no ReadDays. You should see: after the update, background reading
     reads the days FinCom asks for, and waits while you type in Tally.
     Check B: a computer with "ReadDays": false. You should see: nothing changes; no old day is read.
+    Check C: a computer whose settings file has no ReadDays. In FinCom open a ledger's entries for a month the copy does
+    not hold. You should see: no Day Book request in the bridge log; FinCom says reading entries from Tally is off. Only
+    "ReadDays": true lets FinCom's own reads ask Tally, as before.
 
 -------------------------------------------------------------------------------------------------------------------
 
