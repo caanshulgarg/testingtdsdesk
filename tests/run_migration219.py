@@ -17,6 +17,8 @@ database), the posting queue as post_queue_stand builds it (174, then 184, 185, 
      'busy'
   6. the name guard: another function of that name, or one marked 219's with other arguments, stops the file
   7. a look-only member (readonly) and anon may not run it
+  8. (the re-review) only applied recorder lines count, and never while a line of this voucher (its GUID or its day) is
+     still held or fetching, also when the Day Book read made the copy fresh
 RED_WITHOUT_219=1: the same checks without the file (they fail)."""
 import os, re, sys, json
 os.environ["TMPDIR"] = os.environ.get("PG219_DIR") or "/tmp/reup219"
@@ -64,11 +66,12 @@ try:
     LOOK = "77777777-7777-7777-7777-777777777219"
     db.sql("insert into members values (%s, %s, 'Look', 'readonly', true) on conflict do nothing" % (q(LOOK), q(F)))
     J = lambda n: "%08d-0000-0000-0000-000000000219" % n
-    def job(n, vids, status="done", live=True, accepted=False):
+    def job(n, vids, status="done", live=True, accepted=False, sent_now=False):
         vids = [vids] if isinstance(vids, str) else vids
         vs = [{"id": v, "xml": '<VOUCHER VCHTYPE="Sales" ACTION="Create"><DATE>20261114</DATE><VOUCHERNUMBER>ZR/%s</VOUCHERNUMBER><NARRATION>TDSDesk:%s | Made-up sale</NARRATION></VOUCHER>' % (v, v)} for v in vids]
-        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, taken_at, first_taken_at, attempts, seq, results) values (%s, %s, 'c1', %s, %s, %s, %d, %s, %s, %s, now() - interval '3 hours', now() - interval '3 hours', 1, 1, %s)"
+        db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge, taken_by, taken_at, first_taken_at, attempts, seq, results) values (%s, %s, 'c1', %s, %s, %s, %d, %s, %s, %s, %s, %s, 1, 1, %s)"
                % (q(J(n)), q(F), q(CO), q(DA), q(json.dumps({"masters": [], "vouchers": vs, "ledger": ""})), len(vs), q(status), q(BA), q(BA),
+                  *(["now()"] * 2 if sent_now else ["now() - interval '3 hours'"] * 2),
                   q(json.dumps([{"id": v, "ok": True, "byReply": True, "verified": False, "kind": "voucher", "state": "posted"} for v in vids]))))
         for v in vids:
             db.sql("insert into tally_post_ids (firm_id, client_id, fincom_id, entry_id, job_id, live, accepted_at) values (%s, 'c1', %s, %s, %s, %s, %s) on conflict (job_id, fincom_id) do update set live = excluded.live, accepted_at = excluded.accepted_at"
@@ -79,6 +82,9 @@ try:
     def fresh():   # a recorder line of the book received now (after every posting's send above)
         db.sql("insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, line_id, event, received_at, state) values (%s, 'c1', %s, %s, %s, 'altered', now(), 'applied')"
                % (q(F), q(BK), q(DA), q("line-%d" % len(db.one("select count(*)::text from tally_recorder_lines") or "0"))))
+    def line(state, guid=None, day=None):   # a recorder line of the book received now, in that state
+        db.sql("insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, line_id, event, received_at, state, object_guid, vch_date) values (%s, 'c1', %s, %s, %s, 'deleted', now(), %s, %s, %s)"
+               % (q(F), q(BK), q(DA), q("line-%s" % db.one("select (count(*) + 1)::text from tally_recorder_lines")), q(state), q(guid) if guid else "null", q(day) if day else "null"))
     run = lambda uid, n, vid, role="authenticated": st.rpc(uid, "select tally_post_copy_resend(%s, %s)::text" % (q(J(n)), q(vid)), role)
     jrow = lambda n: json.loads(db.one("select row_to_json(t)::text from (select status, resend_only, message from tally_post_jobs where id = %s) t" % q(J(n))))
     idrow = lambda n, vid=None: json.loads(db.one("select row_to_json(t)::text from (select live, released_by, released_why from tally_post_ids where job_id = %s%s) t" % (q(J(n)), "" if vid is None else " and fincom_id = " + q(vid))))
@@ -160,6 +166,28 @@ try:
     ok("_error" in r and idrow(16)["live"] is True, "a look-only member is refused (%s)" % str(r)[:120])
     r = run(STAFF, 16, "zr8", role="anon")
     ok("_error" in r and idrow(16)["live"] is True, "anon may not run it (%s)" % str(r)[:120])
+    print("== 8. the re-review of 24-Nov-2026: only APPLIED recorder lines make the copy fresh, and none of this voucher still held")
+    # (the stand's recorder table as staging has it now: 'fetching' among its states)
+    db.sql("alter table tally_recorder_lines drop constraint if exists tally_recorder_lines_state_check; alter table tally_recorder_lines add constraint tally_recorder_lines_state_check check (state = any (array['received', 'applied', 'duplicate', 'stale', 'held', 'failed', 'replaced', 'fetching']))")
+    # (a) the only line since the send is held (not applied): the copy is behind
+    job(30, "ha", sent_now=True); copy("ha", "g-ha", optional=True); line("held", guid="g-ha")
+    r = run(STAFF, 30, "ha")
+    ok(r.get("state") == "unsure" and untouched(30) and idrow(30)["live"] is True, "(a) only a held line since the send: unsure (%s)" % r.get("state"))
+    # (b) an applied line of another entry since the send, this voucher's own line still held (or fetching)
+    for n, vid, st_ in [(31, "hb", "held"), (34, "hf", "fetching")]:
+        job(n, vid, sent_now=True); copy(vid, "g-" + vid, optional=True); line("applied"); line(st_, guid="g-" + vid)
+        r = run(STAFF, n, vid)
+        ok(r.get("state") == "unsure" and untouched(n), "(b) an applied line, this voucher's own line %s: unsure (%s)" % (st_, r.get("state")))
+    # (c) an applied line since the send, a held line of ANOTHER voucher only: fresh, released and handed back
+    job(32, "hc", sent_now=True); copy("hc", "g-hc", optional=True); line("applied"); line("held", guid="g-not-this-one")
+    r = run(STAFF, 32, "hc")
+    ok(r.get("resent") is True and jrow(32)["resend_only"] == ["hc"], "(c) a held line of another voucher does not hold this one (%s)" % r.get("state"))
+    # (d) fresh by a Day Book read of its day, a line of that day still held: unsure (the pending check stands apart)
+    job(33, "hd", sent_now=True); copy("hd", "g-hd", optional=True)
+    db.sql("insert into tally_days (book_id, firm_id, day, n, at) values (%s, %s, '2026-11-14', 9, now()) on conflict (book_id, day) do update set at = now()" % (q(BK), q(F)))
+    line("held", day="2026-11-14")
+    r = run(STAFF, 33, "hd")
+    ok(r.get("state") == "unsure" and untouched(33), "(d) a Day Book read of its day, a line of that day held: unsure (%s)" % r.get("state"))
 finally:
     bye()
 print("\n" + ("all passed" if not fails else "%d FAILED" % len(fails))); raise SystemExit(1 if fails else 0)

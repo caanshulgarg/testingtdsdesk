@@ -18,8 +18,9 @@
 --       the linked book (tally_links) has no voucher of it, or the company has no linked book: 'none', nothing changes;
 --       only deleted, Optional or cancelled vouchers: released and handed back ONLY when all of these hold, else 'unsure'
 --         and nothing changes (the reviews of 24-Nov-2026: never on a copy that may be stale):
---           - the copy is fresh for that book: a recorder line of the book, or a Day Book read of the voucher's day,
---             received after the posting's last send of the entry (its acceptance, its own sentAt, the posting's taking);
+--           - the copy is fresh for that book: a recorder line of the book APPLIED to the copy, or a Day Book read of the
+--             voucher's day, after the posting's last send of the entry (its acceptance, its own sentAt, the posting's
+--             taking); and no recorder line of this voucher (its GUID or its day) still held or fetching;
 --           - Tally's acceptance of this entry (its id row's accepted_at), when there is one, is older than the copy's
 --             deletion of it (an Optional-only or cancelled-only copy carries no time: refused when accepted);
 --           - no earlier release of this entry in this posting (tally_post_marks 'released') newer than the copy's last
@@ -145,9 +146,14 @@ begin
     return jsonb_build_object('ok', false, 'state', 'unsure', 'copy', st, 'job', p_job, 'id', eid, 'error', unsure);
   end if;
   -- (4) the copy fresh for that book since the last send: a recorder line, or a Day Book read of the voucher's day
+  -- (the re-review: a recorder line counts only once applied to the copy; and never while a line of this voucher, by its
+  -- GUID or its day, is still held or fetching, whichever read made the copy fresh)
   fresh := last_send is not null and (
-             exists (select 1 from tally_recorder_lines rl where rl.book_id = bk and rl.received_at > last_send)
-          or exists (select 1 from tally_days d where d.book_id = bk and d.at > last_send and d.day in (select vv.day from tally_vouchers vv where vv.book_id = bk and vv.fincom_id = fid)));
+             exists (select 1 from tally_recorder_lines rl where rl.book_id = bk and rl.state = 'applied' and coalesce(rl.applied_at, rl.received_at) > last_send)
+          or exists (select 1 from tally_days d where d.book_id = bk and d.at > last_send and d.day in (select vv.day from tally_vouchers vv where vv.book_id = bk and vv.fincom_id = fid)))
+       and not exists (select 1 from tally_recorder_lines h where h.book_id = bk and h.state in ('held', 'fetching')
+                         and (h.object_guid in (select vv.guid from tally_vouchers vv where vv.book_id = bk and vv.fincom_id = fid)
+                              or h.vch_date in (select vv.day from tally_vouchers vv where vv.book_id = bk and vv.fincom_id = fid)));
   if not fresh then
     return jsonb_build_object('ok', false, 'state', 'unsure', 'copy', st, 'job', p_job, 'id', eid, 'error', unsure);
   end if;
