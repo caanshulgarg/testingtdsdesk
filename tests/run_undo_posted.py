@@ -265,9 +265,9 @@ with sync_playwright() as p:
     E("""async () => { const s = SL(), o = s.list.find(x => x.id === 'n2'); const v = JSON.parse(JSON.stringify(o)); v.id = 'n2b'; delete v.notTally; s.list.push(v);
       await salesCheckTally([v]); }""")
     ok(E(SV, "n2b") == "review", "sales: the invoice uploaded again keeps its excluded voucher")
-    E("""async () => { window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701', amount: SL().list.find(v => v.id === 'n2').x.total}, {guid: 'sv-2', number: 'S/n2', date: '20260702', amount: SL().list.find(v => v.id === 'n2').x.total}]});
+    E("""async () => { window.tallyCall = async () => ({vouchers: [{guid: 'sv-1', number: 'S/n2', date: '20260701', amount: SL().list.find(v => v.id === 'n2').x.total}, {guid: 'sv-2', number: 'S/n2', date: '20260702', type: salesVt(SL().list.find(v => v.id === 'n2').x), party: SL().list.find(v => v.id === 'n2').customerLedger, amount: SL().list.find(v => v.id === 'n2').x.total}]});
       await salesCheckTally(SL().list.filter(v => v.id === 'n2')); }""")
-    ok(E(SV, "n2") == "intally" and E("SL().list.find(v => v.id === 'n2').tallyMatch.key") == "sv-2", "sales: another voucher of that number is matched")
+    ok(E(SV, "n2") == "intally" and E("SL().list.find(v => v.id === 'n2').tallyMatch.key") == "sv-2", "sales: another voucher of that number (its type and customer: the same entry) is matched")
     E("() => { const v = SL().list.find(x => x.id === 'm3'); delete v.tallyMatch; salesRowAct('nottally', 'm3'); }"); W(400)
     ok("every Tally voucher numbered S/m3" in box(), "sales matched before FinCom kept the voucher: the box says every voucher of that number is excluded (%r)" % box()[:260])
     pg.click('#confirmBox [data-cbx="no"]'); W(300)

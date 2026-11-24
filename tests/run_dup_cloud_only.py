@@ -64,7 +64,8 @@ DUPW = ["Post duplicate anyway", "Post again anyway?"]
 NODUP = lambda t: not any(w in t for w in DUPW)
 QUIET = lambda t: NOTE not in t and "Looks already" not in t and "Post anyway" not in t and NODUP(t) and "Checked against" not in t
 PAGE = "() => document.querySelector('#app').innerText + ' | ' + window.__toasts.join(' | ') + ' | ' + JSON.stringify(SL().list.map(v => [v.problems || [], v.postError || ''])) + ' | ' + JSON.stringify((SL().oneByOne || {}).rows || [])"
-def sv(n, d="20261102", amt="1180.00"): return "{guid: 'g-%s', masterId: '%s', date: '%s', type: 'Sales', number: '%s', party: 'Kappa Retail', cancelled: 'No', entries: [{ledger: 'Kappa Retail', amount: '-%s'}]}" % (n, n, d, n, amt)
+def sv(n, d="20261102", amt="1180.00", typ="Sales", party="Kappa Retail"):
+    return "{guid: 'g-%s', masterId: '%s', date: '%s', %snumber: '%s', party: '%s', cancelled: 'No', entries: [{ledger: '%s', amount: '-%s'}]}" % (n, n, d, ("type: '%s', " % typ) if typ else "", n, party, party, amt)
 def sfresh(A, *nos, d="2026-11-02"):
     A.evaluate("() => { SL().list = []; SL().dupSkipped = []; SL().oneByOne = null; }"); A.evaluate(RESET)
     return [A.evaluate(ADD, [n, d, G["k"], 0]) for n in nos]
@@ -228,6 +229,76 @@ with sync_playwright() as p:
     st = A.evaluate("(ids) => ids.map(id => SL().list.find(v => v.id === id).status)", [a, b])
     ok(st == ["intally", "posted"] and A.evaluate("() => window.__sent") == [[b]] and NODUP(A.evaluate(PAGE)), "ZS/25 (₹1,180 as posted) In Tally, ZS/26 (₹999 against ₹1,180) posted (%s, sent %s)" % (st, A.evaluate("() => window.__sent")))
     A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+
+    print("SALES 9. Not that entry on a match with FinCom's own posted invoice: Post then posts it")
+    box = lambda: A.inner_text("#confirmBox").replace("\n", " ") if A.locator("#confirmBox .cbx").count() else ""
+    ID = "(id) => SL().list.find(v => v.id === id)"
+    for label, copy in [("the copy empty", ""), ("the copy holding FinCom's own posting", "ZS/30")]:
+        ids = sfresh(A, "ZS/30")
+        A.evaluate("(ids) => ids.forEach(id => { SL().list.find(v => v.id === id).status = 'posted'; })", ids)
+        a = A.evaluate(ADD, ["ZS/30", "2026-11-02", G["k"], 0])
+        A.evaluate("() => { window.__cloud.vouchers = [" + (sv(copy) if copy else "") + "]; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "intally" and A.evaluate("() => window.__sent") == [], label + ": the same entry first In Tally (%s)" % A.evaluate(SST))
+        A.evaluate("(id) => salesRowAct('nottally', id)", a); A.wait_for_timeout(500)
+        for i in range(2):
+            if A.locator('#confirmBox [data-cbx="yes"]').count(): A.click('#confirmBox [data-cbx="yes"]'); A.wait_for_timeout(400)
+        ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "review", label + ": Not that entry: back to To review (%s)" % A.evaluate(SST))
+        A.evaluate("(id) => salesRowAct('confirm', id)", a); A.wait_for_timeout(200)
+        A.evaluate(RESET); A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "posted" and A.evaluate("() => window.__sent") == [[a]], label + ": confirmed and posted, actually sent (%s, sent %s, %s)" % (A.evaluate(SST), A.evaluate("() => window.__sent"), last(A)))
+        A.evaluate("() => { SL().cfg.notTally = {}; }")
+    A.evaluate("() => { window.__cloud.vouchers = []; }")
+
+    print("SALES 10. the same entry is also the exact voucher type and the same customer")
+    for label, v in [("another Sales series (Sales B2C)", sv("ZS/40", typ="Sales B2C")), ("another customer", sv("ZS/40", party="Omega Stores")),
+                     ("no type in the copy", sv("ZS/40", typ="")), ("a Credit Note of that number", sv("ZS/40", typ="Credit Note"))]:
+        ids = sfresh(A, "ZS/40")
+        A.evaluate("() => { window.__cloud.vouchers = [" + v + "]; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        ok(A.evaluate(SST)[0]["st"] == "posted" and A.evaluate("() => window.__sent") == [ids], label + ": posted (%s)" % A.evaluate(SST))
+    print("   FinCom's own: another customer, or another type of the same number, posts")
+    ids = sfresh(A, "ZS/41", "ZS/42")
+    A.evaluate("(ids) => { const [p, q] = ids.map(id => SL().list.find(v => v.id === id)); p.status = 'posted'; p.customerLedger = 'Omega Stores'; p.x.customerGstin = ''; q.status = 'posted'; q.x.noteKind = 'credit'; }", ids)
+    a = A.evaluate(ADD, ["ZS/41", "2026-11-02", G["k"], 0]); b = A.evaluate(ADD, ["ZS/42", "2026-11-02", G["k"], 0])
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    st = A.evaluate("(ids) => ids.map(id => SL().list.find(v => v.id === id).status)", [a, b])
+    ok(st == ["posted", "posted"] and A.evaluate("() => window.__sent") == [[a, b]], "ZS/41 (posted to another customer) and ZS/42 (a credit note of that number posted) both posted (%s)" % st)
+    print("   the GSTIN when both have one: the same GSTIN under another ledger name is the same customer")
+    ids = sfresh(A, "ZS/43")
+    A.evaluate("(ids) => { const p = SL().list.find(v => v.id === ids[0]); p.status = 'posted'; p.customerLedger = 'Kappa Retail (Mumbai)'; }", ids)
+    a = A.evaluate(ADD, ["ZS/43", "2026-11-02", G["k"], 0])
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "intally" and A.evaluate("() => window.__sent") == [], "the same GSTIN: In Tally (%s)" % A.evaluate(SST))
+
+    print("SALES 11. the duplicate check's line on the invoice: the info tone, not amber")
+    sfresh(A, "ZS/50")
+    A.evaluate("() => { window.__cloud = {has: true, fail: true, at: new Date().toISOString(), vouchers: []}; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    A.evaluate("() => { SL().filter = 'done'; SL().openId = SL().list[0].id; render(); }"); A.wait_for_timeout(500)
+    tone = A.evaluate("""() => { const n = document.querySelector('[data-sales-copy-note]'), p = document.createElement('div'); p.className = 'bk-alert'; n.parentElement.appendChild(p);
+      const w = getComputedStyle(p).backgroundColor; p.remove(); const i = document.createElement('span'); i.style.color = 'var(--info-soft)'; document.body.appendChild(i); const want = getComputedStyle(i).color; i.remove();
+      return {bg: getComputedStyle(n).backgroundColor, amber: w, want}; }""")
+    ok(tone["bg"] != tone["amber"] and tone["bg"] == tone["want"], "the line's fill is the info tone, not the amber notice (%s)" % tone)
+    if SHOTS: A.screenshot(path=os.path.join(SHOTS, "sales-copy-note-info.png"))
+    A.evaluate("() => { SL().openId = null; render(); window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+
+    print("SALES 12. an In Tally row: Open and Not this Tally entry fit, at desk and phone width")
+    sfresh(A, "ZS/60", "ZS/61")
+    A.evaluate("() => { window.__cloud.vouchers = [" + sv("ZS/60") + "]; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    for w in (1440, 390):
+        A.set_viewport_size({"width": w, "height": 900})
+        A.evaluate("() => { SL().filter = 'done'; SL().openId = null; render(); }"); A.wait_for_timeout(700)
+        fit = A.evaluate("""() => { const tr = Array.from(document.querySelectorAll('#app table.bk-table tbody tr')).find(r => /ZS\\/60/.test(r.innerText)); if (!tr) return {none: true};
+          const wrap = tr.closest('.bk-tablewrap').getBoundingClientRect(), vw = document.documentElement.clientWidth;
+          const bs = Array.from(tr.querySelectorAll('button')).filter(b => /^(Open|Not this Tally entry)$/.test(b.innerText.trim()));
+          return {words: bs.map(b => b.innerText.trim()), out: bs.filter(b => { const r = b.getBoundingClientRect(); return r.right > Math.min(wrap.right, vw) + 0.5 || r.left < wrap.left - 0.5 || b.scrollWidth > b.clientWidth + 1; }).map(b => b.innerText.trim()),
+            scroll: document.documentElement.scrollWidth > vw}; }""")
+        ok(fit.get("words") and sorted(fit["words"]) == ["Not this Tally entry", "Open"] and not fit["out"] and not fit["scroll"], "width %d: both buttons whole, inside the table (%s)" % (w, fit))
+        if SHOTS: A.screenshot(path=os.path.join(SHOTS, "sales-intally-row-%d.png" % w), full_page=True)
+    A.set_viewport_size({"width": 1440, "height": 900})
+    A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; SL().filter = 'all'; render(); }")
 
     print("BANK 1. the copy has no data for those days: posted, Tally never read")
     A.evaluate(BANK); A.wait_for_timeout(800); A.evaluate(STUB)

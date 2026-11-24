@@ -682,3 +682,5 @@ run_fbooks_rules.mjs                  120
 run_fbooks_ui.py                      600  TDSDESK_SITE=../app/dist-test
 run_dup_cloud_only.py                 240  TDSDESK_SITE=../app/dist-test
 run_sales_reads_off.py                240  TDSDESK_SITE=../app/dist-test
+run_sales_post_reply.py               600  TDSDESK_SITE=../app/dist-test
+run_legacy_room.py                    600  TDSDESK_SITE=../app/dist-test

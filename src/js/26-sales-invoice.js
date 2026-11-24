@@ -121,7 +121,7 @@ function salesSetKind(id, k){
 }
 // next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow"; was next-fix-sales-readsoff): FinCom never reads Tally
 // before posting. The duplicate check reads FinCom's cloud copy only (dupCopy: CloudTally.call, tally_vouchers_in, as
-// from any other computer; no new Tally request). The same invoice (number and amount) there: In Tally, quietly, with
+// from any other computer; no new Tally request). The same entry there (number, type, year, amount, customer: salesSameEntry): In Tally, quietly, with
 // Tally's number (salesCheckTally), not posted; everything else goes. No data for the day, the copy not there or not
 // answering (any error of the check): posted, no note and no warning in the result; only the invoice's own panel keeps
 // one small line (v.copyCheck: DUP_NOT_CHECKED, or the old copy's time). Post to Tally and Post one by one both check so
@@ -184,7 +184,6 @@ async function salesPostOneByOne(ids){
       else if (told){ v.postError = tallySaid; mapInvoice(v); word = "Not posted: " + tallySaid; }
       // (no answer, a timeout, an answer not read back, anything else: it may be in Tally; held until the check runs again)
       else { v.needsCheck = true; v.postError = "Not confirmed: check Tally before posting again" + (tallySaid ? " [" + tallySaid + "]" : ""); mapInvoice(v); word = "Not confirmed: check Tally before posting again"; }
-      salesOverrideSpent([v]);   // (a "Post duplicate anyway" is good for this one attempt)
       out.push({id: v.id, number: v.x.number, ok: v.status === "posted", word});
       saveSales();
     }

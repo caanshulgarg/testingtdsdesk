@@ -565,14 +565,24 @@ function invoiceProblems(v){
   if (x.number && dup) p.push("invoice " + x.number + " already exists");
   return p;
 }
-// the same entry posted from FinCom: another invoice of the number, its type, its financial year AND its amount (to ₹1),
-// posted or found in Tally: {src, type, number, date, amount, party, id}, or null. Never a hold (the owner, 23-Nov-2026):
-// salesCheckSafe marks it In Tally quietly; the number alone is another entry, and is posted
+// the same entry (the owner, 23-Nov-2026: "it should flow"; 24-Nov-2026): the number, the exact voucher type, the
+// financial year, the amount (to ₹1) and the customer (the GSTIN when both have one, else the party ledger). a, b:
+// {no (normInvNo), type, date (yyyy-mm-dd), amount, gstin, party}. Anything less is another entry, and is posted
+function salesSameEntry(a, b){
+  const lc = s => String(s || "").trim().toLowerCase(), up = s => String(s || "").trim().toUpperCase();
+  if (!a.no || a.no !== b.no || !lc(a.type) || lc(a.type) !== lc(b.type) || !a.date || !b.date || fyLabel(a.date) !== fyLabel(b.date) || Math.abs(r2(a.amount) - r2(b.amount)) > 1) return false;
+  return up(a.gstin) && up(b.gstin) ? up(a.gstin) === up(b.gstin) : !!lc(a.party) && lc(a.party) === lc(b.party);
+}
+function salesEntryOf(v){ return {no: normInvNo(v.x.number), type: salesVt(v.x), date: v.x.date, amount: Math.abs(num(v.x.total)), gstin: v.x.customerGstin, party: v.customerLedger}; }
+// the entries a person said are not this invoice's (Not this Tally entry): on it, and kept for its number (cfg.notTally)
+function salesNotOf(v){ return (v.notTally || []).concat(((SL().cfg || {}).notTally || {})[normInvNo(v.x.number)] || []); }
+// the same entry posted from FinCom (salesSameEntry), posted or found in Tally: {src, type, number, date, amount, party,
+// id}, or null; never one a person said is not it ("fincom:" + its id). Never a hold: salesCheckSafe marks it In Tally quietly
 function salesDupOf(v){
   if (!v || !["review", "ready"].includes(v.status)) return null;
-  const no = normInvNo(v.x.number); if (!no || !v.x.date) return null;
-  const vt = String(salesVt(v.x)).toLowerCase(), amt = r2(Math.abs(num(v.x.total)));
-  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && fyLabel(o.x.date) === fyLabel(v.x.date) && Math.abs(r2(Math.abs(num(o.x.total))) - amt) <= 1);
+  const e = salesEntryOf(v); if (!e.no || !e.date) return null;
+  const not = salesNotOf(v);
+  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id) && !(o.tallyMatch && o.tallyMatch.key && not.includes(o.tallyMatch.key)) && salesSameEntry(e, salesEntryOf(o)));
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), party: o.customerLedger || o.x.customerName || "", id: o.id} : null;
 }
 // next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already

@@ -330,8 +330,8 @@ with sync_playwright() as p:
     # the already-booked check: the same types asked of Tally; a note is matched to a note, an invoice never to a note
     chk = E("""async () => { const tv = window.tallyVia, tc = window.tallyCall; let url = "";
       const cn = SL().list.find(v => /^CN\//.test(v.x.number)), inv = SL().list.find(v => v.x.number === "UP/26-27/0011"), dn = SL().list.find(v => /^DN\//.test(v.x.number));
-      window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [{number: cn.x.number, type: "Credit Note", date: "20261013", amount: 590, guid: "g1"},
-        {number: inv.x.number, type: "Credit Note", date: "20261012", amount: 1180, guid: "g2"}, {number: dn.x.number, type: "Sales", date: "20261016", amount: 354, guid: "g3"}]}; };
+      window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [{number: cn.x.number, type: "Credit Note", date: "20261013", amount: 590, guid: "g1", party: cn.customerLedger},
+        {number: inv.x.number, type: "Credit Note", date: "20261012", amount: 1180, guid: "g2", party: inv.customerLedger}, {number: dn.x.number, type: "Sales", date: "20261016", amount: 354, guid: "g3", party: dn.customerLedger}]}; };
       try { await salesCheckTally(SL().list.filter(v => v.status === "ready")); } finally { window.tallyVia = tv; window.tallyCall = tc; }
       const r = {url, cn: cn.status, inv: inv.status, dn: dn.status}; [cn, inv, dn].forEach(v => { if (v.status === "intally"){ v.status = "ready"; delete v.tallyMatch; } }); return r; }""")
     # (next-fix-sales-upload, item 2: every voucher of the period is asked for, and the Sales-class types kept here)
@@ -671,12 +671,12 @@ with sync_playwright() as p:
     ok("not valid" not in p3[0], "a “not valid” label kept from before on a blank GSTIN is gone when the page opens (%s)" % p3)
     E("(id) => { SL().openId = id; salesSetField('customerGstin', '%s'); SL().openId = null; }" % G["delhi"], a.get("id"))
 
-    print("15. the already-booked check: every Sales-class type; Not this Tally entry side by side, asked twice")
+    print("15. the already-booked check: the same entry (its exact type); Not this Tally entry side by side, asked twice")
     box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
     chk = E("""async (G) => { const tv = window.tallyVia, tc = window.tallyCall; let url = "";
       const a = SL().list.find(v => v.x.number === "ZZ/1"), m = SL().list.find(v => v.x.number === "MX/1");
       window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [
-        {number: "ZZ/1", type: "Sales UP", date: "20261020", party: "ZZ Delhi Buyers", guid: "zz1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1000.00"}, {ledger: "Output IGST", amount: "180.00"}]},
+        {number: "ZZ/1", type: "Sales", date: "20261020", party: "ZZ Delhi Buyers", guid: "zz1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1000.00"}, {ledger: "Output IGST", amount: "180.00"}]},
         {number: "MX/1", type: "GST Sales", date: "20261022", party: "ZZ Delhi Buyers", guid: "mx1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-3410.00"}, {ledger: "Consulting Income (A)", amount: "2000.00"}]},
         {number: "ZZ/3", type: "Journal", date: "20261021", party: "ZZ Far Buyers", guid: "jv", entries: [{ledger: "ZZ Far Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1180.00"}]},
         {number: "ZZ/4", type: "Tax Invoice", date: "20261021", party: "ZZ Nowhere Buyers", guid: "ti", entries: [{ledger: "ZZ Nowhere Buyers", amount: "-590.00"}, {ledger: "Consulting Income (A)", amount: "500.00"}]},
@@ -685,9 +685,10 @@ with sync_playwright() as p:
       const g = n => SL().list.find(v => v.x.number === n);
       return {url, a: a.status, am: a.tallyMatch || null, m: m.status, c: g("ZZ/3").status, d: g("ZZ/4").status, b: g("ZZ/2").status, bn: g("ZZ/2").dupBlock || null, bp: (g("ZZ/2").problems || []).join(" | ")}; }""", G)
     ok("types=" not in chk["url"] and "from=20261019" in chk["url"] and "to=20261023" in chk["url"], "the invoices' own dates only (20 to 22 Oct, a day either side), every type (%s)" % chk["url"][-80:])
-    ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales UP" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
-       "the client's own “Sales UP” voucher of that number and amount is found, with its real amount 1,180 and its party (%s)" % chk["am"])
-    ok(chk["m"] == "intally" and chk["c"] != "intally" and chk["d"] != "intally", "a type named sales (“GST Sales”) is found; a Journal of that number crediting Sales Accounts is not, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
+    ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
+       "the same entry (number, type, year, amount, customer) is found, with its real amount 1,180 and its party (%s)" % chk["am"])
+    # (the owner, 24-Nov-2026: the same entry is also the exact voucher type: another sales series is another entry, posted)
+    ok(chk["m"] != "intally" and chk["c"] != "intally" and chk["d"] != "intally", "another sales series (“GST Sales”) is not taken for it, nor a Journal of that number crediting Sales Accounts, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
     # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow", superseding 16-Nov-2026's "Post duplicate anyway"):
     # the same number of another amount is another entry: nothing holds it
     ok(not chk["bn"] and "Already in Tally" not in chk["bp"] and "Post again anyway?" not in chk["bp"],
@@ -710,7 +711,7 @@ with sync_playwright() as p:
     bx = box()
     ok("Same number and type already in Tally. Posting it again will create a duplicate." in bx and pg.locator("#confirmBox [data-nottally-compare]").count() == 1, "the box: the plain words (%r)" % bx[:160])
     cmp_ = pg.inner_text("#confirmBox [data-nottally-compare]") if pg.locator("#confirmBox [data-nottally-compare]").count() else ""
-    ok("In FinCom" in cmp_ and "In Tally" in cmp_ and cmp_.count("1,180") == 2 and "Sales UP" in cmp_ and cmp_.count("ZZ Delhi Buyers") == 2 and cmp_.count(E("fmtDate('2026-10-20')")) == 2,
+    ok("In FinCom" in cmp_ and "In Tally" in cmp_ and cmp_.count("1,180") == 2 and cmp_.count("Sales") >= 2 and cmp_.count("ZZ Delhi Buyers") == 2 and cmp_.count(E("fmtDate('2026-10-20')")) == 2,
        "FinCom's and Tally's date, number and type, amount and party side by side (%r)" % cmp_)
     if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(pg.locator("#confirmBox [data-nottally-again]").count() == 1 and E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "intally", "a second confirmation is asked; nothing changes until it is answered")
