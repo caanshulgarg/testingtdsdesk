@@ -9,6 +9,9 @@ from the bar, then the 22 removals come back as Realtime sends them (Live.rec, 4
 measured: the page never shows its loading skeleton, the bar never goes, Undo stays; from 500 ms after the last removal
 nothing moves (the page's height, its scroll, the bar's height, the number of elements) and nothing is drawn again.
 A colleague's removal of an invoice still on the page takes it off, quietly (no skeleton, the ticks and Undo kept).
+The review of a85572b8b: Undo clicked while the removals are still coming back puts all of them back; a colleague's
+change to an invoice this computer's Undo covers takes Undo away; a removal arriving while Sales is opening stays
+removed; a reload keeps work under way (an invoice posted, one mid-upload).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sales_delete_settle.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -98,6 +101,53 @@ with sync_playwright() as p:
     ok(E("SL().list.length") == 21 and not E("SL().list.some(v => v.id === '%s')" % other), "the colleague's removal comes in: 21 invoices (%d)" % E("SL().list.length"))
     ok(not [r for r in f if r[5]], "no loading skeleton for it")
     ok(E("SL().sel.has('%s') && SL().sel.size === 2" % keep) and E("SL().filter") == "ready", "the ticks and the tab are kept")
+    # a row from a colleague, as Realtime hands it over (updated_by someone else)
+    THEIRS = """([id, data]) => { const cid = SL().cid; return Live.rec("records", {kind: "sales", id: cid + ":" + id, client_id: cid, data: data, deleted: !data, updated_by: "u-colleague", updated_at: new Date().toISOString()}); }"""
+    def fresh22():
+        E("() => { const s = SL(); s.list.splice(0); s.undo = null; s.sel.clear(); s.sticky.clear(); s.filter = 'ready'; saveSales(); }"); E(ADD); W(900)
+
+    print("4. Undo clicked while the 18 removals are still coming back: all 22 back, and sent again as they are")
+    fresh22()
+    E("() => { const s = SL(); s.sel.clear(); salesVisible().slice(0, 18).forEach(v => s.sel.add(v.id)); salesLightRefresh(); }"); W(400)
+    gone = E("[...SL().sel]")
+    E(WATCH); pg.click('#app .actionbar button:has-text("Delete")'); E(ECHO, gone)
+    W(420); n0 = E("window.__echoDone")
+    pg.locator('#app .actionbar .bk-snack button:has-text("Undo")').first.click()
+    W(1600)
+    ok(E("window.__echoDone") == 18 and E("SL().list.length") == 22, "Undo after %d of the 18 removals came back: %d invoices once all are in (want 22)" % (n0, E("SL().list.length")))
+    sent = E("(ids) => { const cid = SL().cid, ch = cloudChanges().changes; return ids.filter(id => ch.some(r => r.kind === 'sales' && r.id === cid + ':' + id && !r.deleted)).length; }", gone)
+    ok(sent == 18, "the 18 put back are sent to the cloud again as invoices, not left as removed (%d of 18)" % sent)
+
+    print("5. a colleague removes an invoice that this computer's Undo covers: Undo is taken away, nothing comes back")
+    fresh22()
+    E("() => { const s = SL(); s.list.forEach(v => v.status = 'review'); s.filter = 'review'; s.undo = null; saveSales(); render(); }"); W(700)
+    E("() => { const s = SL(); s.sel.clear(); salesVisible().slice(0, 2).forEach(v => s.sel.add(v.id)); salesLightRefresh(); }"); W(300)
+    two = E("[...SL().sel]")
+    E("() => salesBulk('confirm')"); W(700)
+    had = E("!!SL().undo")
+    E(THEIRS, [two[0], None]); W(900)
+    ok(had and not E("SL().list.some(v => v.id === '%s')" % two[0]), "the colleague's removal comes in (Undo was offered before: %s)" % had)
+    ok(not E("!!SL().undo"), "Undo of the two confirmed is no longer offered")
+    E("() => salesUndo()"); W(400)
+    ok(not E("SL().list.some(v => v.id === '%s')" % two[0]), "an Undo anyway does not bring the colleague's removed invoice back")
+
+    print("6. a colleague's removal arriving while Sales is opening: it stays removed")
+    fresh22()
+    x = E("SL().list[3].id")
+    E("""([x, cid]) => { const p = loadSales(cid); const q = Live.rec("records", {kind: "sales", id: cid + ":" + x, client_id: cid, data: null, deleted: true, updated_by: "u-colleague", updated_at: new Date().toISOString()}); return Promise.all([p, q]); }""", [x, E("SL().cid")]); W(1500)
+    ok(not E("SL().list.some(v => v.id === '%s')" % x) and E("SL().list.length") == 21, "the invoice removed while the list was being read is gone (%d invoices)" % E("SL().list.length"))
+    ok(not E("(x) => cloudChanges().changes.some(r => r.kind === 'sales' && r.id.endsWith(':' + x) && !r.deleted)", x), "and it is not sent back to the cloud as an invoice")
+
+    print("7. a reload while work is under way keeps that work: posted kept, an invoice mid-upload kept")
+    fresh22()
+    E("""() => { const s = SL(); window.__held = s.list[0]; window.__s0 = s;
+      const v = newInvoice({number: "UP-1", date: "2026-10-30", customerName: "Dev Packaging", taxable: 100, cgst: 9, sgst: 9, igst: 0, cess: 0, total: 118, items: []}, "upload"); v.id = "upmid"; s.list.push(v); }""")
+    other = E("JSON.parse(JSON.stringify(Object.assign({}, SL().list[5], {x: Object.assign({}, SL().list[5].x, {customerName: 'Chitra Foods (Lucknow)'})})))")
+    E(THEIRS, [other["id"], other]); W(900)
+    E("() => { window.__held.status = 'posted'; window.__held.postedAt = new Date().toISOString(); }")
+    ok(E("SL().list.find(v => v.id === window.__held.id).status") == "posted", "an invoice Tally took while the list was read again is Posted (not lost on an object no longer shown)")
+    ok(E("SL().list.some(v => v.id === 'upmid')"), "an invoice read mid-upload, not saved yet, stays")
+    ok(E("SL() === window.__s0") and E("SL().list.find(v => v.id === '%s').x.customerName" % other["id"]) == "Chitra Foods (Lucknow)", "the colleague's change comes in, on the same list")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     ctx.close(); br.close()
 srv.shutdown()

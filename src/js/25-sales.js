@@ -47,15 +47,32 @@ const SALES_CFG_DEFAULT = {voucherType: "Sales", series: "INV/{FY}/", next: 1, p
   terms: "Goods once sold will not be taken back. Interest at 18% p.a. will be charged on payments made after the due date. Subject to local jurisdiction.", signatory: "", ledgers: {}, auto: true, items: {}};
 // (old: the list open on screen, read again after a change from the cloud, next-fix-sales-delete-shake: the owner,
 // 24-Nov-2026 "the window was shaking". It stays as it is drawn while the copy is read, with its tab, search, ticks,
-// open invoice, Undo and bar: never the loading page in between)
+// open invoice, Undo and bar: never the loading page in between. The copy read is laid into the same list and the same
+// invoice objects, so work under way on them (a posting, an upload) keeps what it sets; an invoice here and not in the
+// copy, never removed here or by the cloud, stays: one just uploaded, not saved yet. The review of a85572b8b)
 async function loadSales(cid, old){
   old = old && old === S.sales && old.cid === cid && !old.loading ? old : null;
-  if (!old){ S.sales = {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}}; render(); }
+  const st = old || {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
+  if (!old){ S.sales = st; render(); }
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
-  const [list, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
-  if (!S.sales || S.sales.cid !== cid || (old && S.sales !== old)) return;
-  if (old) [...old.sel].forEach(id => { if (!(list || []).some(v => v.id === id)) old.sel.delete(id); });
-  SALES_REV++; Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
+  const [list0, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
+  // (another read started since, a removal arriving while this one was reading: that one is drawn)
+  if (S.sales !== st) return;
+  let list = list0 || [];
+  if (old){
+    const got = new Map(list.map(v => [v.id, v])), marks = Cloud.marks(), dels = Cloud.dels(), had = new Set();
+    const gone = v => { const k = "sales|" + cid + "|" + cid + ":" + v.id; return marks[k] === "gone" || k in dels; };
+    const kept = old.list.filter(v => { const n = got.get(v.id); if (!n) return !gone(v); had.add(v.id);
+      Object.keys(v).forEach(k => { if (!(k in n)) delete v[k]; }); Object.assign(v, n); return true; });
+    old.list.splice(0, old.list.length, ...kept, ...list.filter(v => !had.has(v.id)));
+    list = old.list;
+    const ids = new Set(list.map(v => v.id));
+    [...old.sel].forEach(id => { if (!ids.has(id)) old.sel.delete(id); });
+    if (old.openId && !ids.has(old.openId)) old.openId = null;
+    if (old.dupSkipped) old.dupSkipped = old.dupSkipped.filter(id => ids.has(id));
+    old.remapKey = null;   // the invoices read again are mapped again on this computer (salesRemapWaiting)
+  }
+  SALES_REV++; Object.assign(S.sales, {list, cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
   salesCfgTook(S.sales);
   // next-fix-sales-sync: with the ledger list here, every invoice waiting is mapped again on this computer
   const remapped = typeof salesRemapWaiting === "function" && salesRemapWaiting();

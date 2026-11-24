@@ -21,7 +21,10 @@ const Cloud = {
   // deleted, and blanked all three clients of a firm). Only what is on this list is ever sent as deleted.
   dels(){ let m = {}; try { m = JSON.parse(lsGet("tdsdesk:clouddels") || "{}"); } catch (e){} return m; },
   setDels(m){ lsSet("tdsdesk:clouddels", JSON.stringify(m)); },
-  delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
+  // (own: what was removed on this page since it was opened, until it is sent again as a record (Undo): its removal
+  // coming back from the cloud is this page's own, next-fix-sales-delete-shake)
+  own: new Set(),
+  delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const k = kind + "|" + (cid || "") + "|" + id, d = this.dels(); d[k] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); this.own.add(k); },
   setMarks(m){ lsSet("tdsdesk:cloudmarks", JSON.stringify(m)); },
   // reliability (11-Nov-2026; the cloud held requests for minutes and every poll's "busy" stayed set, the page silently
   // stale): no request to FinCom's cloud waits for ever. timed(ms, f, idle): f(signal, alive) is given up when its answer
@@ -321,7 +324,7 @@ async function cloudPush(pre){
     const del = part.filter(r => r.deleted), up = part.filter(r => !r.deleted);
     if (up.length) await sendBatch("records", up.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: false})));
     for (const r of del) await cloudMarkDeleted("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), r.why);
-    part.forEach(r => { marks[cloudKey(r)] = r.hash; if (!r.deleted && r.json) cloudBaseSet(cloudKey(r), r.json); });
+    part.forEach(r => { marks[cloudKey(r)] = r.hash; if (!r.deleted && r.json) cloudBaseSet(cloudKey(r), r.json); if (!r.deleted && Cloud.own) Cloud.own.delete(cloudKey(r)); });
     Cloud.setMarks(marks); cloudDelsSent(part);
   }
   return changes.length;
@@ -542,7 +545,7 @@ function cloudApply(rows){
   return run;
 }
 async function cloudApplyNow(rows){
-  const marks = Cloud.marks();
+  const marks = Cloud.marks(), dels0 = typeof Cloud.dels === "function" ? Cloud.dels() : {};
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
   const touchedBank = new Set(), touchedSales = new Set();
@@ -558,6 +561,11 @@ async function cloudApplyNow(rows){
   let sendAfter = false, took = 0;
   for (let r of rows){
     const k = cloudKey(r);
+    // this computer's own removal of an invoice coming back (Realtime hands each to the browser that made it, one row at
+    // a time): removed on this page and not sent again since (Cloud.own), or known removed here (sent or waiting) and not
+    // in the list. Nothing is done: the list is not read again (next-fix-sales-delete-shake: 22 invoices deleted read it
+    // 22 times, the page shaking), and one put back by Undo meanwhile stays, to be sent again as it is
+    if (r.deleted && r.kind === "sales" && ((Cloud.own && Cloud.own.has(k)) || ((marks[k] === "gone" || k in dels0) && !mine.has(k)))) continue;
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
       // next-db-load: the mark of the copy HERE (the server's comes in its own key order: marked by it, the record was
       // sent again at every sync)
@@ -628,10 +636,13 @@ async function cloudApplyNow(rows){
     else if (r.kind === "inbox"){ if (r.deleted) delete S.docq[r.id]; else S.docq[r.id] = Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}); }
     else if (r.kind === "bank_meta"){ await cloudApplyBankMeta(cid, r); touchedBank.add(cid); }
     else if (r.kind === "bank_stmt" || r.kind === "bank_rows"){ await cloudApplyBankPart(r); touchedBank.add(cid); }
-    // (a removal of an invoice no longer here, this computer's own delete coming back from Realtime one row at a time,
-    // changes nothing on screen: the list is not read again for it. next-fix-sales-delete-shake: 22 invoices deleted
-    // read the list again 22 times, the page shaking)
-    else if (r.kind === "sales" || r.kind === "sales_cfg"){ await cloudApplySales(r); if (!(r.deleted && !mine.has(k))) touchedSales.add(cid); }
+    else if (r.kind === "sales" || r.kind === "sales_cfg"){
+      // a colleague's change to an invoice this computer's Undo covers: that Undo is taken away (it would bring back
+      // their removed invoice, or write over their change: the review of a85572b8b)
+      const u = S.sales && S.sales.cid === cid && S.sales.undo, vid = String(r.id).split(":").slice(1).join(":");
+      if (u && r.kind === "sales" && (u.before || []).some(o => o.id === vid)) S.sales.undo = null;
+      await cloudApplySales(r); touchedSales.add(cid);
+    }
   }
   keepMark.forEach((was, k) => { marks[k] = was; });
   Cloud.setMarks(marks);
