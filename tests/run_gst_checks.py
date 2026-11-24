@@ -63,6 +63,41 @@ try:
         ok(c and c[0] == "bad" and "Errors 1" in c[1], "the grid: Apr-2025 GSTR-1 shows Errors 1 (red), not Ready (%s)" % c)
         pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07AAJFQ3158R1ZH'; }", "LFE/25-26/001")
 
+        # next-fix-false-errors (the owner, 23-Nov-2026): a government office registered only to deduct GST TDS (section 51)
+        # has a GSTIN built on its TAN (4 letters, 5 digits, a letter), "D" as its 14th character; the portal takes it as a
+        # B2B buyer. Made-up TAN-form GSTINs: a right check digit is valid; a wrong one, or no "D", is not
+        ok(pg.evaluate("gstinValid('07DELZ99999Z1DG') && gstinValid('29blrz88888z1dy')"), "a government buyer's GSTIN built on its TAN, right check digit: valid")
+        ok(not pg.evaluate("gstinValid('07DELZ99999Z1DH') || gstinValid('07DELZ99999Z1ZG') || gstinValid('07DEL299999Z1DG')"), "(guard) its check digit wrong, no D, or not a TAN's form: not valid")
+        pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07DELZ99999Z1DG'; }", "LFE/25-26/001")
+        ch = pg.evaluate(CHECKS, ["202504", "07"])
+        ok("Buyer GSTINs that are not valid" not in ch, "a sale to a government buyer with a TAN-based GSTIN: not flagged (%s)" % [k for k in ch if "GSTIN" in k])
+        pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07DELZ99999Z1DH'; }", "LFE/25-26/001")
+        ch = pg.evaluate(CHECKS, ["202504", "07"])
+        ok(ch.get("Buyer GSTINs that are not valid", {}).get("eg") == ["07DELZ99999Z1DH"], "(guard) the same with a wrong check digit: flagged (%s)" % ch.get("Buyer GSTINs that are not valid"))
+        pg.evaluate("(a) => { (" + SALE + ")(a).gstin = '07AAJFQ3158R1ZH'; }", "LFE/25-26/001")
+        # the review of 23-Nov-2026: the TAN form's 13th character is 1-9 or A-Z (the registration's number in the state),
+        # as on the PAN form; a TAN-based GSTIN has no PAN in it: none prefilled for a new ledger, none taken as a supplier's
+        # PAN from a register; the registers' own GSTIN check is gstinValid (a TAN-based one is a good GSTIN there too)
+        ok(not pg.evaluate("(() => { const g = '07DELZ99999Z0D'; return gstinValid(g + gstinCheckChar(g)); })()"), "(guard) the TAN form with 0 as its 13th character: not valid")
+        ok(pg.evaluate("(() => { const g = '07DELZ99999ZAD'; return gstinValid(g + gstinCheckChar(g)); })()"), "the TAN form with a letter as its 13th character: valid")
+        def new_ledger_pan(gstin):
+            pg.evaluate("(g) => { window.__bank0 = S.bank; S.bank = S.bank || {ledgers: {groups: []}, rows: []}; openCreateLedger('ZZ Made-up Office', null, null, {gstin: g}); }", gstin); pg.wait_for_timeout(300)
+            v = pg.evaluate("() => (document.getElementById('nlPan') || {}).value")
+            pg.evaluate("() => { const b = document.querySelector('#confirmBox [data-cbx=\"no\"]'); if (b) b.click(); S.bank = window.__bank0; }"); pg.wait_for_timeout(150)
+            return v
+        v = new_ledger_pan("07DELZ99999Z1DG")
+        ok(v == "", "a new ledger with a TAN-based GSTIN: no PAN prefilled (%r)" % v)
+        v = new_ledger_pan("07AAJFQ3158R1ZH")
+        ok(v == "AAJFQ3158R", "(guard) a new ledger with a PAN-based GSTIN: its PAN prefilled (%r)" % v)
+        pg.evaluate("() => registersLoad()"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("SheetPost.goodGstin('07DELZ99999Z1DG') && !SheetPost.goodGstin('07DELZ99999Z1DH') && SheetPost.goodGstin('07AAJFQ3158R1ZH')"), "registers: goodGstin is gstinValid (a TAN-based GSTIN good, a wrong check digit not)")
+        ok(pg.evaluate("SheetPost.sameParty('07DELZ99999Z1DG', 'A', '07DELZ99999Z1DG', 'B') && !SheetPost.sameParty('07DELZ99999Z1DG', 'A', '07AAJFQ3158R1ZH', 'A')"), "registers: the same TAN-based GSTIN is the same party; another GSTIN is not")
+        pans = pg.evaluate("""() => { const cid = S.coId || Object.keys(S.companies || {})[0]; const had = !!S.data[cid]; if (!had) S.data[cid] = {parties: {}, entries: {}, loaded: true}; const d0 = {party: 'ZZ Made-up Office', no: 'MU-1', date: '2025-05-10', taxable: 100, cgst: 9, sgst: 9, igst: 0, cess: 0, total: 118, rows: [1], check: {ok: true}};
+            const r1 = SheetPost.toBills([Object.assign({}, d0, {gstin: '07DELZ99999Z1DG'})], cid, 'made-up.xlsx'), r2 = SheetPost.toBills([Object.assign({}, d0, {no: 'MU-2', gstin: '07AAJFQ3158R1ZH'})], cid, 'made-up.xlsx');
+            const pan = (r) => { const e = D(cid).entries[r.ids[0]]; return e ? e.x.vendorPan : 'none'; }; const out = [pan(r1), pan(r2)];
+            r1.ids.concat(r2.ids).forEach(id => { delete D(cid).entries[id]; }); if (!had) delete S.data[cid]; return out; }""")
+        ok(pans == ["", "AAJFQ3158R"], "a register's bill from a supplier with a TAN-based GSTIN: no PAN taken from it; a PAN-based one: its PAN (%s)" % pans)
+
         # G-A1: a supplier's GSTIN
         pg.evaluate("() => { const v = S.books.vouchers.find(v => GSTR.inward('202505', '07').some(r => r.id === v.id && r.gstin)); window.__sup = [v, v.gstin]; v.gstin = String(GSTR.inward('202505', '07').find(r => r.id === v.id).gstin).slice(0, 14) + '0'; }")
         ch = pg.evaluate(CHECKS, ["202505", "07"])

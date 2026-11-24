@@ -23,6 +23,9 @@ const dshow = (iso) => { const s = String(iso || ""); return s.length >= 10 ? s.
 const dtshow = (ts) => { if (!ts) return ""; const d = new Date(ts); return d.getDate() + "-" + MON[d.getMonth()] + ", " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
 const today = () => new Date().toISOString().slice(0, 10);
 const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+// while a book is being built, its entries so far (the readers ask again as it fills in, and once more when it is built)
+const rev = (b) => (b.state === "setting_up" ? "b" + ((b.build && b.build.done) || 0) : b.state);
+const COUNT = new Intl.NumberFormat("en-IN");
 const srcName = (s) => (s === "zoho" ? "Zoho Books" : s === "own" ? "FinCom" : "Tally");
 
 function rpc(fn, args) {
@@ -40,7 +43,8 @@ function useAsk(fn, args, deps) {
     let live = true;
     if (!args) { setSt({ loading: false, data: null }); return undefined; }
     setSt((s) => ({ loading: true, data: s.data }));
-    rpc(fn, args).then((data) => live && setSt({ loading: false, data }), (e) => live && setSt({ loading: false, error: plain(e) }));
+    // a failed ask keeps what was there before (data), so a look-again that fails once does not blank the page
+    rpc(fn, args).then((data) => live && setSt({ loading: false, data }), (e) => live && setSt((s) => ({ loading: false, error: plain(e), data: s.data })));
     return () => { live = false; };
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
   return st;
@@ -56,6 +60,19 @@ export default function FinComBooks() {
   const go = (t) => { setTab(t); try { localStorage.setItem("fincom:fbTab", t); } catch (e) { /* only a convenience */ } };
   const books = (status.data && status.data.books) || [];
   const book = books.find((b) => b.book === bookPick) || books[0] || null;
+  // a book being built (Set up only enrols it; the catch-up builds it every 3 minutes): look again every 30 seconds until it
+  // is built, only while the tab is shown (a hidden tab looks again at once when it is shown). A look-again that fails
+  // keeps the last figures on the page and the next one is tried as usual
+  const building = books.some((b) => b.state === "setting_up");
+  useEffect(() => {
+    if (!building) return undefined;
+    let t = null;
+    const shown = () => document.visibilityState !== "hidden";
+    if (shown()) t = setTimeout(() => setTick((x) => x + 1), 30000);
+    const seen = () => { clearTimeout(t); t = null; if (shown()) setTick((x) => x + 1); };
+    document.addEventListener("visibilitychange", seen);
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", seen); };
+  }, [building, tick]);
 
   return <div className="fbk" data-fbooks="">
     <header className="fbk-head">
@@ -68,7 +85,7 @@ export default function FinComBooks() {
         <select value={book ? book.book : ""} onChange={(e) => setBookPick(e.target.value)} data-fb-book="">{books.map((b) => <option key={b.book} value={b.book}>{b.company + " (from " + dshow(b.from) + ")"}</option>)}</select></label>}
     </header>
     {status.loading && !status.data ? <p className="fbk-note" data-fb-loading="">Opening FinCom Books…</p>
-      : status.error ? <p className="fbk-banner" data-tone="bad" role="alert" data-fb-error="">{status.error}</p>
+      : status.error && !status.data ? <p className="fbk-banner" data-tone="bad" role="alert" data-fb-error="">{status.error}</p>
       : !book ? <NotSetUp canSetUp={!!(status.data && status.data.can_set_up)} cid={cid} onDone={() => setTick((x) => x + 1)} />
       : <>
         <StepBanner book={book} onChecked={() => setTick((x) => x + 1)} />
@@ -102,7 +119,17 @@ function StepBanner({ book, onChecked }) {
   const check = () => { setBusy(true); setMsg(""); rpc("fb_tieout_ask", { p_book: book.book }).then((r) => { setBusy(false); if (r && r.updating) setMsg(r.words); onChecked(); }, (e) => { setBusy(false); setMsg(plain(e)); }); };
   let tone, head, text;
   if (book.state === "read_only") { tone = "bad"; head = "Read-only."; text = "FinCom Books’ own check found a problem: " + book.read_only_why; }
-  else if (book.state === "setting_up") { tone = "info"; head = "Being built."; text = "FinCom is copying this client’s entries from " + src + ". This page fills in as it goes."; }
+  else if (book.state === "setting_up") {
+    const b = book.build || {}, of = +b.of || 0, done = Math.min(+b.done || 0, of), stuck = +b.stuck || 0;
+    const sofar = of && done ? " So far " + COUNT.format(done) + " of " + COUNT.format(of) + " entries are in." : "";
+    tone = "info";
+    // the catch-up's last run for this book failed: plain words, no alarm and never the error itself (it stays in
+    // fb_status build.failed.why for staff); the catch-up tries again every 3 minutes
+    if (b.failed) { head = "Building paused."; text = "FinCom carries on by itself in a few minutes; nothing for you to do." + sofar; }
+    else if (stuck && of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = COUNT.format(stuck) + (stuck === 1 ? " entry" : " entries") + " could not be copied yet; FinCom is trying again. This page fills in by itself."; }
+    else if (of && done) { head = "Building: " + COUNT.format(done) + " of " + COUNT.format(of) + " entries."; text = "FinCom is copying this client’s books from " + src + ", a few thousand entries every 3 minutes. This page fills in by itself."; }
+    else { head = "Being built."; text = "FinCom starts copying this client’s books from " + src + (of ? " (" + COUNT.format(of) + " entries)" : "") + " within 3 minutes. This page fills in by itself."; }
+  }
   // FinCom Books follows the copy within 10 minutes (owner decision 23-Nov-2026): "Updating" inside that window, "Not in
   // step" once a book is more than 10 minutes behind
   else if (book.late) { tone = "warn"; head = "Not in step with " + src + " since " + dtshow(book.behind_since) + ":"; text = "FinCom Books is " + (book.behind_minutes || 10) + " minutes behind " + src + (book.mirrored_at ? " (last updated " + dtshow(book.mirrored_at) + ")" : "") + ". FinCom is bringing it up to date."; }
@@ -111,7 +138,7 @@ function StepBanner({ book, onChecked }) {
   else if (book.in_step === true) { tone = "ok"; head = "In step with " + src + "."; text = "Checked " + dtshow(book.checked_at) + ": every ledger and every entry match " + src + "’s copy to the paisa" + (t && !t.source_read ? "." : ", and " + src + "’s own trial balance."); }
   else { tone = "info"; head = "Not checked yet."; text = "The first check runs tonight."; }
   const diffs = (t && t.differences) || [];
-  return <section className="fbk-banner" data-tone={tone} data-fb-step={tone === "warn" ? "out" : head === "Updating…" ? "updating" : book.in_step === true ? "in" : "unknown"} role={tone === "warn" || tone === "bad" ? "alert" : "status"}>
+  return <section className="fbk-banner" data-tone={tone} data-fb-building={book.state === "setting_up" ? "1" : undefined} data-fb-step={tone === "warn" ? "out" : head === "Updating…" ? "updating" : book.in_step === true ? "in" : "unknown"} role={tone === "warn" || tone === "bad" ? "alert" : "status"}>
     <div className="fbk-banner-row">
       <p><b>{head}</b> {text}</p>
       <div className="fbk-actions">
@@ -144,7 +171,7 @@ function Trial({ book, openLedger }) {
   const last = (book.counts && book.counts.last) || today();
   const [on, setOn] = useState(last > today() ? today() : last);
   const [shut, setShut] = useState({});
-  const st = useAsk("fb_tb", on >= book.from ? { p_book: book.book, p_on: on } : null, [book.book, on]);
+  const st = useAsk("fb_tb", on >= book.from ? { p_book: book.book, p_on: on } : null, [book.book, on, rev(book)]);
   const tb = st.data;
   const groups = useMemo(() => {
     if (!tb) return [];
@@ -160,7 +187,7 @@ function Trial({ book, openLedger }) {
   return <section className="fbk-card" data-fb-tb="">
     <div className="fbk-card-head">
       <label className="fbk-field">As on<input type="date" value={on} min={book.from} onChange={(e) => e.target.value && setOn(e.target.value)} data-fb-on="" /></label>
-      {tb && <span className="fbk-chip" data-tone={tb.ties ? "ok" : "warn"} data-fb-ties={tb.ties ? "1" : "0"}>{tb.ties ? "Debit = Credit" : "Debit and Credit differ by " + rs(Math.abs(tb.dr - tb.cr))}</span>}
+      {tb && book.state !== "setting_up" && <span className="fbk-chip" data-tone={tb.ties ? "ok" : "warn"} data-fb-ties={tb.ties ? "1" : "0"}>{tb.ties ? "Debit = Credit" : "Debit and Credit differ by " + rs(Math.abs(tb.dr - tb.cr))}</span>}
     </div>
     {st.error ? <p className="fbk-banner" data-tone="bad">{st.error}</p> : !tb ? <p className="fbk-note">Working out the trial balance…</p> : <>
       <p className="fbk-note">{"Worked out just now from " + INRF.format(tb.entries).replace(".00", "") + " posted entries and the openings at " + dshow(tb.from) + "."}</p>
@@ -185,12 +212,12 @@ function Trial({ book, openLedger }) {
 
 // one ledger between two dates; a party's pending bills (the ported bill-wise rules over its references)
 function Ledger({ book, id, setId }) {
-  const list = useAsk("fb_ledgers", { p_book: book.book }, [book.book]);
+  const list = useAsk("fb_ledgers", { p_book: book.book }, [book.book, rev(book)]);
   const last = (book.counts && book.counts.last) || today();
   const [from, setFrom] = useState(book.from > addDays(last, -180) ? book.from : addDays(last, -180)), [to, setTo] = useState(last > today() ? today() : last);
   const [q, setQ] = useState("");
   const leds = (list.data || []).filter((l) => !q || l.name.toLowerCase().includes(q.toLowerCase()));
-  const st = useAsk("fb_ledger", id ? { p_book: book.book, p_ledger: id, p_from: from, p_to: to } : null, [book.book, id, from, to]);
+  const st = useAsk("fb_ledger", id ? { p_book: book.book, p_ledger: id, p_from: from, p_to: to } : null, [book.book, id, from, to, rev(book)]);
   const L = st.data;
   const bills = useMemo(() => {
     if (!L || !L.bills.length || L.ledger.kind !== "party") return null;
@@ -245,7 +272,7 @@ function Ledger({ book, id, setId }) {
 function DayBook({ book }) {
   const last = (book.counts && book.counts.last) || today();
   const [to, setTo] = useState(last > today() ? today() : last), [from, setFrom] = useState(addDays(last > today() ? today() : last, -6));
-  const st = useAsk("fb_daybook", { p_book: book.book, p_from: from < book.from ? book.from : from, p_to: to }, [book.book, from, to]);
+  const st = useAsk("fb_daybook", { p_book: book.book, p_from: from < book.from ? book.from : from, p_to: to }, [book.book, from, to, rev(book)]);
   const d = st.data;
   const STATUS = { posted: ["Posted", "ok"], held: ["Held", "warn"], cancelled: ["Cancelled", ""], sent: ["Sent, not back yet", "info"], pending: ["Pending approval", "info"], draft: ["Draft", ""], refused: ["Refused", "bad"] };
   return <section className="fbk-card" data-fb-day="">
