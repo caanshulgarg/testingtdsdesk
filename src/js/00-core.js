@@ -66,7 +66,9 @@ function gstinCheckChar(g){
   return GST_CHARS[(36 - sum % 36) % 36];
 }
 // a government office registered only to deduct GST TDS (section 51): its GSTIN is built on its TAN, D as the 14th character
-function gstinValid(g){ g = String(g || "").toUpperCase(); return (GSTIN_RE.test(g) || /^\d\d[A-Z]{4}\d{5}[A-Z][0-9A-Z]D[0-9A-Z]$/.test(g)) && gstinCheckChar(g) === g[14]; }
+// (no PAN in it: gstinOnTan)
+function gstinValid(g){ g = String(g || "").toUpperCase(); return (GSTIN_RE.test(g) || /^\d\d[A-Z]{4}\d{5}[A-Z][1-9A-Z]D[0-9A-Z]$/.test(g)) && gstinCheckChar(g) === g[14]; }
+function gstinOnTan(g){ return /^[A-Z]{4}\d{5}[A-Z]$/.test(String(g || "").toUpperCase().slice(2, 12)); }
 // Handwritten GSTINs: try swapping look-alike characters until the check digit agrees.
 const LOOKALIKE = {S:"5", "5":"S", O:"0", "0":"O", D:"0", I:"1", "1":"I", L:"1", B:"8", "8":"B", Z:"2", "2":"Z", G:"6", "6":"G", Q:"0", T:"7", "7":"T", U:"V", V:"U", A:"4", "4":"A"};
 function fixGstin(raw){

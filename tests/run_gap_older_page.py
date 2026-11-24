@@ -103,7 +103,9 @@ with sync_playwright() as p:
     E("() => { S.tab = 'dash'; S.dbFrom = ''; render(); }")
     g = bell(G(checking=True, checkUntil=iso(NOW + datetime.timedelta(minutes=30)), older=OLDER))
     ok(g["text"] == "ZZ Gap Client: Checking with Tally\u2026 (no action needed)" and not g["act"] and g["sev"] != "bad", "3. the bell: Checking with Tally, no button (%s | %s | %s)" % (g["sev"], g["text"], g["act"]))
-    ok(g["fix"].startswith("FinCom is reading Tally's Day Book for 01-Apr to ") and "Upload" not in g["fix"], "3. it reads from the first older day by itself (%s)" % g["fix"])
+    # (the review of 23-Nov-2026: FinCom reads only some of those days - the ones not counted again, the ones asked - so
+    # the bell names no range of dates)
+    ok(g["fix"] == "FinCom is reading the older days from Tally by itself; nothing to do.", "3. it says plainly FinCom reads the older days, no false range of dates (%s)" % g["fix"])
     shut()
     E("() => { S.tab = 'books'; S.booksTab = 'tds'; render(); }"); pg.wait_for_timeout(800)
     ok(pg.locator("#app [data-alert-line] [data-alert-act]").count() == 0, "3. no Upload Day Book button on the page")

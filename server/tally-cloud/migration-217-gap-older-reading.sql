@@ -11,10 +11,14 @@
 -- What 217 does. tally_gap_state(book, gap, gap_at) only: 182's text with one change (marked 217). When the gap's own days
 -- match (older), and the check can still read and a computer reads older entries for the company (182's can and reader),
 -- and FinCom still has older days to read by itself: (a) the period 'going' with a day of its year not counted since
--- Tally's number now was first seen (and not marked to upload), or (b) a 'fill' light day not read whole since then; the
--- gap says checking (with checkUntil, an hour on, as 182) and keeps older with reading: true. The page shows "Checking with
--- Tally… (no action needed)"; once nothing is left to read (or an hour with no write of the gap: the computer away), the
--- upload is asked as before. Nothing new is asked of Tally; the bridge's rules stay (each request at most 2 s, one at a
+-- Tally's number now was first seen (and not marked to upload), or (b) a 'fill' light day that tally_gap_front (214, as
+-- live on staging) still hands out (not handed yet, or handed with its check not done) and not read whole since that
+-- number or since it was asked; the gap says checking and keeps older with reading: true. The page shows "Checking with
+-- Tally… (no action needed)". Only while it is really read (the review of 23-Nov-2026: the state could stay on for ever):
+-- a computer that reads older entries for the company is online (its switch on, not revoked, seen in the last 10 minutes),
+-- a day of the book was read (checked or counted) since Tally's number was seen, checkUntil an hour after that last read
+-- (not an hour after each beat), and never more than 6 hours after Tally's number was first seen. Otherwise, or once
+-- nothing is left to read, the upload is asked as before (182's words; no new words). Nothing new is asked of Tally; the bridge's rules stay (each request at most 2 s, one at a
 -- time, postings first, the typing gate); the reads keep 182's idle pace.
 -- Add-only: one function replaced with the same arguments and result; grants restated (service_role only, as 182); a
 -- comment marks it as 217's. Stops at the start, changing nothing, when tally_gap_state is not 182's text or 217's, or
@@ -52,7 +56,7 @@ create or replace function public.tally_gap_state(p_book uuid, p_gap jsonb, p_ga
 language plpgsql stable security definer set search_path = public, pg_temp as $function$
 declare a date; z date := (now() at time zone 'Asia/Kolkata')::date; since_ timestamptz; r tally_check_runs%rowtype; p tally_period_pulls%rowtype; t tally_gap_retries%rowtype;
   bk tally_books%rowtype; n tally_gap_numbers%rowtype; can boolean; reader boolean; own boolean; own_left boolean; post_left boolean; chk boolean; fy date; pd date;
-  fy_to date; reading boolean := false; o jsonb;
+  fy_to date; reading boolean := false; o jsonb; fa timestamptz; online boolean; read_at timestamptz; until_ timestamptz;
 begin
   if p_book is null or p_gap is null or jsonb_typeof(p_gap) <> 'object' or coalesce(p_gap->>'since', '') !~ '^\d{4}-\d\d-\d\d' then
     return jsonb_build_object('checking', false);
@@ -90,22 +94,37 @@ begin
   fy := least(fy, coalesce(pd, fy));
   o := jsonb_build_object('from', to_char(fy, 'YYYY-MM-DD'), 'say', 'Changes were made in Tally on older dates.',
                           'fix', 'Upload the Day Book from ' || to_char(fy, 'DD-Mon-YYYY') || ' to today.');
-  -- 217: FinCom still reads older days by itself (the check can read, a computer reads older entries): (a) 182's recount,
-  -- the period going with a day of its year not counted since Tally's number now was first seen (nor marked to upload);
-  -- (b) From Tally's older days ('fill' light days) not read whole since then. Checking (an hour on, as above), older kept
-  if coalesce(can, false) and reader and n.book_id is not null then
+  -- 217: FinCom still reads older days by itself: (a) 182's recount (tally_period_next_paced), the period going with a day
+  -- of its year not counted since Tally's number now was first seen (nor marked to upload); (b) From Tally's older days
+  -- ('fill' light days) that tally_gap_front (214) still hands out: not handed yet, or handed with its check not done,
+  -- and not read whole since Tally's number was seen (or since it was asked). Only while the check can read, a computer
+  -- that reads older entries for the company is online (its switch on, not revoked, seen in the last 10 minutes, as 137),
+  -- a day of the book was read (checked or counted) since that number in the last hour, and at most 6 hours after that
+  -- number was first seen. Checking until an hour after the last read (at most the 6 hours), older kept with reading
+  fa := case when n.book_id is not null and n.altvchid::text = p_gap->>'tally_altvchid' then n.first_at end;
+  online := exists (select 1 from tally_companies tc join tally_devices d on d.id = tc.device_id
+                     where tc.firm_id = bk.firm_id and tc.company = bk.company and coalesce(d.period_fetch, false) and not coalesce(d.revoked, false)
+                       and d.last_seen > now() - interval '10 minutes');
+  if coalesce(can, false) and reader and online and fa is not null and fa > now() - interval '6 hours' then
+    read_at := greatest((select max(k.listed_at) from tally_check_days k where k.book_id = p_book and k.listed_at >= fa),
+                        (select max(x.counted_at) from tally_period_days x where x.book_id = p_book and x.counted_at >= fa));
+    until_ := least(read_at + interval '1 hour', fa + interval '6 hours');
+  end if;
+  if until_ > now() then
     if p.book_id is not null and p.state = 'going' then
       fy_to := (p.fy_start + interval '1 year' - interval '1 day')::date;
       reading := exists (select 1 from generate_series(p.fy_start, least(fy_to, z), interval '1 day') g
                           where not exists (select 1 from tally_period_days x where x.book_id = p_book and x.day = g::date
-                                              and (x.upload_at is not null or (x.tally_n is not null and x.counted_at >= n.first_at))));
+                                              and (x.upload_at is not null or (x.tally_n is not null and x.counted_at >= fa))));
     end if;
     reading := reading or exists (select 1 from tally_light_days l where l.book_id = p_book and l.why = 'fill' and l.day <= z
-                                    and not tally_day_read_for(p_book, l.day, n.first_at)
+                                    and (l.handed_at is null or exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = l.day
+                                                                          and k.done_at is null and k.upload_at is null))
+                                    and not tally_day_read_for(p_book, l.day, greatest(fa, l.queued_at))
                                     and not exists (select 1 from tally_check_days k where k.book_id = p_book and k.day = l.day and k.upload_at is not null));
   end if;
   if reading then
-    return jsonb_build_object('checking', true, 'checkUntil', now() + interval '1 hour', 'older', o || jsonb_build_object('reading', true));
+    return jsonb_build_object('checking', true, 'checkUntil', until_, 'older', o || jsonb_build_object('reading', true));
   end if;
   return jsonb_build_object('checking', false, 'older', o);
 end $function$;

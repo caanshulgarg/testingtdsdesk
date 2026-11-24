@@ -3,7 +3,8 @@
 while FinCom was reading those older days from Tally by itself (182's recount of the year's days counted before Tally's
 number now was seen, and From Tally's older days as light days), its computer's switch for older entries on.
 On a throwaway PostgreSQL (pg_stand, port 31217 unless PG217_PORT; data under TMPDIR; never a real database), built as
-run_migration182.py builds it, then 182, then 217 (twice). Made-up books only. Written before the file.
+run_migration182.py builds it, then 182, 214 (its tally_gap_front as live on staging) and 216 (on 146's claims), then 217
+(twice). Made-up books only. Written before the file.
 Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only, names no real database; one function, 182's arguments; its
      grant (service_role only); runs twice; refuses (changing nothing) a tally_gap_state that is not 182's or 217's.
@@ -14,6 +15,12 @@ Checks:
   4. From Tally's older days (fill) not read since that number: checking; once read whole: as 182. A day marked to
      upload (a locked month) is not read by itself.
   5. (guard) no period, no fill days: 182's words exactly.
+  6. (review, 23-Nov-2026) From Tally's older days read whole, then Tally's number moves: tally_gap_front does not hand
+     them out again, so the gap does not say it reads them (as 182); a day asked after it and not handed yet: reading.
+  7. the reader away (not seen for 10 minutes) while a second computer, its switch off, keeps beating: as 182; the reader
+     online but nothing read (checked or counted) for an hour, beats only: as 182; checkUntil an hour after the last read.
+  8. the hard cap: 6 hours after Tally's number was first seen, as 182 whatever is still read; before it, checkUntil at
+     most the 6 hours.
 RED_WITHOUT_217=1: the same checks without the file (1 and 4 fail; the guards pass)."""
 import os, re, sys, json, hashlib, subprocess, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -30,6 +37,10 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
 AFTER = [os.path.join(SQLDIR, f) for f in ("migration-135-check-changes.sql", "migration-136-held-settle.sql", "migration-137-held-status-online.sql", "migration-150-gap-closed-by-days.sql",
                                            "migration-158-held-delete-fast.sql", "migration-160-gap-read-close.sql")]
 M = os.path.join(SQLDIR, "migration-182-gap-after-post.sql")
+# as live on staging (24-Nov-2026): 214's tally_gap_front (next-fix-light-days; its text the same as staging's, md5 below) and
+# 216's beat (tally_held_light, tally_work_claim; on migration 146's claims), after 182
+M214 = os.path.join(HERE, "fixtures", "migration-214-as-run-on-staging.sql")
+M216 = os.path.join(SQLDIR, "migration-216-beat-light.sql")
 M217 = os.environ.get("M217_FILE") or os.path.join(SQLDIR, "migration-217-gap-older-reading.sql")
 RED = os.environ.get("RED_WITHOUT_217") == "1"
 fails = []
@@ -87,8 +98,8 @@ def H(guid, mid, alter, typ="Payment"): return [guid, mid, alter, typ]
 def cday(book, n): return (db.rows("select source, (done_at is not null) as done, (upload_at is not null) as up, lists from tally_check_days where book_id = %s and day = %s" % (q(book), q(D(n)))) or [{}])[0]
 HEADS = lambda book, n, hs: j("select tally_check_heads(%s, %s, %s, 'day')::text" % (q(book), q(D(n)), js(hs)))
 ENTRIES = lambda book, n, vs: j("select tally_check_entries(%s, %s, %s, %s, '{}'::jsonb)::text" % (q(book), q(D(n)), js(vs), js(LNS(vs))))
-def gap(book, alt):
-    r = j("select tally_recorder_gap_check(%s, %s, %d, now())::text" % (q(book), q(DV), alt))
+def gap(book, alt, dev=None):
+    r = j("select tally_recorder_gap_check(%s, %s, %d, now())::text" % (q(book), q(dev or DV), alt))
     c = db.rows("select gap is null as closed, match_alter, gap::text as gap from tally_sync_cursor where book_id = %s" % q(book))[0]
     c["g"] = json.loads(c["gap"]) if c.get("gap") else {}
     return r, c
@@ -151,6 +162,20 @@ try:
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
     r = psql_text(text)
     if r.returncode: ok(False, "182 runs: %s" % r.stderr[-300:]); raise SystemExit("cannot go on")
+    r = psql_text(open(M214).read())
+    ok(r.returncode == 0, "214 runs after 182: %s" % r.stderr[-300:])
+    ok(db.one("select md5(prosrc) from pg_proc where oid = 'public.tally_gap_front(uuid, integer, boolean)'::regprocedure") == "1f0653e721d3f0683d6c09dbe28056c1", "(step) tally_gap_front is 214's, as live on staging")
+    s146 = open(os.path.join(SQLDIR, "migration-146-reads-follow-company.sql")).read()
+    i = s146.index("create table if not exists public.tally_work_claims"); k = s146.index(";", s146.index("create index if not exists tally_work_claims_live")) + 1
+    i2 = s146.index("create or replace function public.tally_work_claim("); k2 = s146.index("end $function$;", i2) + len("end $function$;")
+    db.sql("""create table if not exists tally_links (firm_id uuid, book_id uuid, state text);
+      create table if not exists tally_bridge_ids (firm_id uuid, bridge_id text, device_id uuid);
+      do $$ begin if to_regprocedure('public.tally_bridge_device(uuid, text)') is null then
+        create function tally_bridge_device(p_firm uuid, p_bridge text) returns uuid language sql stable as $b$ select device_id from tally_bridge_ids where firm_id = p_firm and bridge_id = p_bridge $b$;
+      end if; end $$;""")
+    db.sql(s146[i:k]); db.sql(s146[i2:k2])
+    r = psql_text(open(M216).read())
+    ok(r.returncode == 0, "216 runs after 182 and 214: %s" % r.stderr[-300:])
     if m217:
         # the guard's md5 is 182's text as built here, and as on staging (read 23-Nov-2026, after 214 and 216: unchanged)
         h182 = db.one("select md5(prosrc) from pg_proc where oid = 'public.tally_gap_state(uuid, jsonb, timestamptz)'::regprocedure")
@@ -241,6 +266,86 @@ try:
     book, cg = gapbook(5)
     r, c = gap(book, 42873)
     ok(c["g"].get("checking") is True and "older" not in c["g"], "5. the gap's own day not read yet: checking, no older (182) (%s)" % c["g"].get("checking"))
+
+    # the review of 23-Nov-2026: the state could stay on for ever (the fill days read before Tally's number moved counted as
+    # unread; every beat wrote checkUntil an hour on; a reader away). 217 now says reading only for what tally_gap_front
+    # (214) still hands out, until an hour after the last real read, a reader online, at most 6 hours from Tally's number
+    first_at = lambda book: db.one("select first_at::text from tally_gap_numbers where book_id = %s" % q(book))
+    def back(book, minutes):
+        """Tally's number seen `minutes` ago (the gap opened a minute before it), and every read since then that long ago
+        and a minute (so 182's own days stay read after it)"""
+        db.sql("""update tally_sync_cursor set gap_at = now() - interval '%(m)d minutes' - interval '1 minute' where book_id = %(B)s;
+                  update tally_gap_numbers set first_at = now() - interval '%(m)d minutes' where book_id = %(B)s;
+                  update tally_check_days set listed_at = now() - interval '%(m)d minutes' + interval '1 minute' where book_id = %(B)s and listed_at is not null;
+                  update tally_period_days set counted_at = now() - interval '%(m)d minutes' + interval '1 minute' where book_id = %(B)s and counted_at > now() - interval '1 day'""" % {"m": minutes, "B": q(book)})
+
+    print("== 6. From Tally's older days read, then Tally's number moves (someone types): not read again, the upload asked")
+    book, g = own_matched(6)
+    FILL6 = lambda days: j("select tally_fill_request('c6', array[%s]::date[])::text" % ", ".join(q(d) for d in days), OWNER, "authenticated")
+    FILL6([D(40), D(41)])
+    def read_whole(book, ns):
+        for n_ in ns:
+            db.sql("""insert into tally_check_days (book_id, firm_id, day, source, queued_at, lists, tally_n, heads, via, listed_at, same, done_at)
+                      values (%(B)s, %(F)s, %(d)s, 'fill', now(), 1, 0, '[]'::jsonb, 'day', now(), true, now())
+                      on conflict (book_id, day) do update set via = 'day', listed_at = now(), done_at = now(), upload_at = null""" % {"B": q(book), "F": q(F), "d": q(D(n_))})
+        db.sql("update tally_light_days set handed_at = now() - interval '1 hour' where book_id = %s and day = any (array[%s]::date[])" % (q(book), ", ".join(q(D(n_)) for n_ in ns)))
+    read_whole(book, (40, 41))
+    r, c = gap(book, 42873)
+    ok(o182(c["g"], FY), "6. (step) both read whole: 182's words (%s)" % c["g"].get("checking"))
+    f0 = first_at(book)
+    r, c = gap(book, 42874); age_gap(book, 3); unask(book); FRONT(book, 3, False)
+    h = HEADS(book, 0, [])
+    r, c = gap(book, 42874)
+    ok(first_at(book) != f0 and h.get("done") is True, "6. (step) Tally's number moved (first seen anew), the gap's own day read again (%s)" % h)
+    handed = []
+    for i in range(3):
+        repace(book); db.sql("update tally_light_pace set idle_at = now() where book_id = %s" % q(book))
+        handed += days_of(FRONT(book, 3, True))
+    ok(not set(handed) & {D8(40), D8(41)}, "6. (step) tally_gap_front (214) does not hand the days read out again (%s)" % handed)
+    r, c = gap(book, 42874)
+    ok(o182(c["g"], FY), "6. so the gap does not say it reads them: the upload asked, as 182 (%s, %s)" % (c["g"].get("checking"), c["g"].get("older")))
+    FILL6([D(42)])
+    r, c = gap(book, 42874)
+    ok(c["g"].get("checking") is True and (c["g"].get("older") or {}).get("reading") is True, "6. (guard) an older day asked after it, not handed yet: reading (%s)" % c["g"].get("checking"))
+    read_whole(book, (42,))
+    r, c = gap(book, 42874)
+    ok(o182(c["g"], FY), "6. (guard) and read whole: the upload asked (%s)" % c["g"].get("checking"))
+
+    print("== 7. the reader away while a second computer (its switch off) keeps beating; nothing read for an hour")
+    DV2 = "dddddddd-0000-4000-8000-000000000217"
+    db.sql("insert into tally_devices (id, firm_id, name, key_hash, info, period_fetch, last_seen) values (%s, %s, 'MADEUP-PC2', 'kh217', '{}'::jsonb, false, now()) on conflict do nothing" % (q(DV2), q(F)))
+    book, g = own_matched(7, FY, "6 days")
+    ok(g.get("checking") is True and (g.get("older") or {}).get("reading") is True, "7. (step) the recount to come, the reader online: reading (%s)" % g.get("checking"))
+    db.sql("update tally_devices set last_seen = now() - interval '30 minutes' where id = %s" % q(DV))
+    for i in range(3):
+        db.sql("update tally_devices set last_seen = now() where id = %s" % q(DV2))
+        r, c = gap(book, 42873, DV2)
+    ok(o182(c["g"], FY), "7. the reader not seen for 30 minutes, the other computer beating: the upload asked (%s, %s)" % (c["g"].get("checking"), c["g"].get("checkUntil")))
+    db.sql("update tally_devices set last_seen = now() where id = %s" % q(DV))
+    r, c = gap(book, 42873)
+    ok(c["g"].get("checking") is True and soon(c["g"]), "7. (guard) the reader back: reading again (%s)" % c["g"].get("checking"))
+    back(book, 120)
+    r, c = gap(book, 42873)
+    ok(o182(c["g"], FY), "7. the reader online but nothing read for over an hour (beats only): the upload asked (%s, %s)" % (c["g"].get("checking"), c["g"].get("checkUntil")))
+    db.sql("update tally_period_days set counted_at = now() - interval '10 minutes' where book_id = %s and day = %s" % (q(book), q(D(40))))
+    r, c = gap(book, 42873)
+    cu = c["g"].get("checkUntil")
+    ok(c["g"].get("checking") is True and cu and db.one("select (%s::timestamptz between now() + interval '49 minutes' and now() + interval '51 minutes')::text" % q(cu)) == "true",
+       "7. (guard) a day counted 10 minutes ago: reading, until an hour after that read (%s)" % cu)
+
+    print("== 8. the hard cap: at most 6 hours after Tally's number was first seen")
+    book, g = own_matched(8, FY, "6 days")
+    ok(g.get("checking") is True, "8. (step) reading (%s)" % g.get("checking"))
+    back(book, 5 * 60 + 30)
+    db.sql("update tally_period_days set counted_at = now() where book_id = %s and day = %s" % (q(book), q(D(40))))
+    r, c = gap(book, 42873)
+    cu = c["g"].get("checkUntil")
+    ok(c["g"].get("checking") is True and cu and db.one("select (%s::timestamptz between now() + interval '29 minutes' and now() + interval '31 minutes')::text" % q(cu)) == "true",
+       "8. (guard) 5 h 30 min on: reading, until the 6 hours (%s)" % cu)
+    back(book, 7 * 60)
+    db.sql("update tally_period_days set counted_at = now() where book_id = %s and day = %s" % (q(book), q(D(40))))
+    r, c = gap(book, 42873)
+    ok(o182(c["g"], FY), "8. 7 hours on, still reading a day a minute: the normal state, the upload asked (%s, %s)" % (c["g"].get("checking"), c["g"].get("older")))
 
     print("== 0. grants and the name guard")
     sig = "public.tally_gap_state(uuid, jsonb, timestamptz)"
