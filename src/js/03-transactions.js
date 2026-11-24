@@ -26,12 +26,13 @@ function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true
 // marked; one found already in Tally, when FinCom found it (matchedAt, 23-Nov-2026: older matches have none)
 // (POSTED_KEEP_MS: 24 hours; the tests of older made-up postings, whose lists are what they check, widen it)
 // Only the posted list: a bill deleted, held or marked no entry is always listed. One still needing the person (a
-// warning, an action, a posting queued) never leaves
+// warning, an action, a posting queued) never leaves; nor does a sales invoice in Tally as an Optional voucher (it must
+// be made regular in Tally): once Tally reads it back as regular, it leaves 24 hours on
 let POSTED_KEEP_MS = 864e5;
 function postedOld(at){ return !(Date.parse(at || "") > Date.now() - POSTED_KEEP_MS); }
 function billOld(e){ const t = e.tally || {}; return e.status === "approved" && billInTally(e) && postedOld((t.byOwner && t.byOwnerAt) || t.at || e.exportedAt); }
 function bankOld(r){ return bankMatched(r) && postedOld(r.state === "intally" ? r.matchedAt : (r.tally && r.tally.at) || r.sentAt); }
-function salesOld(v){ return (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && !(v.x && v.x.irnCancelInTally) && !v.postJob && !v.postError && !v.refused && !v.needsCheck
+function salesOld(v){ return (v.status === "intally" || (v.status === "posted" && v.postedVia !== "file")) && !(v.x && v.x.irnCancelInTally) && !v.postJob && !v.postError && !v.refused && !v.needsCheck && !v.postedOptional
   && !(v.problems || []).length && !(v.ledgerIssues || []).length && postedOld(v.status === "intally" ? v.matchedAt : v.postedAt); }
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];

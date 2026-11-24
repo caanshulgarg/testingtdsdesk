@@ -229,10 +229,19 @@ with sync_playwright() as p:
         go(pg, H + "SL().list.find(v => v.id === 's6').matchedAt = h(30); render();", 900)
         sel = pg.evaluate("[...SL().sel].sort().join()")
         ok(sel == "s1" and "2 selected" not in pg.inner_text("#app"), look + "Sales: a ticked invoice that is now older than 24 hours is no longer ticked: %s" % sel)
-        # 6. an Optional voucher in Tally leaves the page after 24 hours like any other
+        # 6. an Optional voucher in Tally still needs the person (make it regular in Tally): it stays, whatever its age
+        # (review 5, 24-Nov-2026: anything still needing the person's action never hides)
         go(pg, H + "SL().sel.clear(); const v = SL().list.find(x => x.id === 's1'); v.postedOptional = true; v.postedAt = h(30); render();", 900)
         t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
-        ok("SI-s1" not in t and pg.evaluate("salesOld(SL().list.find(x => x.id === 's1'))"), look + "Sales: an Optional voucher posted 30 hours ago is off the page too")
+        ok("SI-s1" in t and pg.evaluate("salesOld(SL().list.find(x => x.id === 's1'))") is False, look + "Sales: an Optional voucher posted 30 hours ago stays on the page (it must be made regular in Tally)")
+        m = pg.evaluate(H + "[{status: 'intally', matchedAt: h(30), postedOptional: true, x: {}}, {status: 'posted', postedAt: h(30), postedOptional: true, x: {}}].map(salesOld)")
+        ok(m == [False, False], look + "Sales: an Optional voucher found in Tally or posted, 30 hours ago: neither hides: %s" % m)
+        # 7. once it is regular in Tally (Tally's read-back says not optional), it leaves 24 hours on like any other
+        go(pg, "SL().list.find(x => x.id === 's1').postedOptional = false; render();", 900)
+        t = pg.inner_text("#app table.bk-table tbody") if pg.locator("#app table.bk-table tbody").count() else ""
+        ok("SI-s1" not in t and pg.evaluate("salesOld(SL().list.find(x => x.id === 's1'))") is True, look + "Sales: made regular in Tally (not optional any more), posted 30 hours ago: off the page")
+        m = pg.evaluate(H + "[{status: 'intally', matchedAt: h(30), postedOptional: false, x: {}}, {status: 'intally', matchedAt: h(3), postedOptional: false, x: {}}].map(salesOld)")
+        ok(m == [True, False], look + "Sales: found in Tally as a regular voucher: 30 hours ago hides, 3 hours ago stays: %s" % m)
         ctx.close()
     # ---- review 4 (24-Nov-2026): only the posted list hides; nothing that still needs the person's action hides
     QUEUE = "[...document.querySelectorAll('#app ul.queue > li')].map(li => li.innerText).join('|')"
