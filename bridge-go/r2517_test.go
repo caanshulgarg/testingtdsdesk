@@ -17,7 +17,7 @@ import (
 )
 
 func TestR2517Version(t *testing.T) {
-	if BridgeVersion != "2.5.19" || !newerVersion("2.5.17", "2.5.16") || newerVersion("2.5.16", "2.5.17") { // 2.5.18 (r2518_test.go)
+	if BridgeVersion != "2.5.20" || !newerVersion("2.5.17", "2.5.16") || newerVersion("2.5.16", "2.5.17") { // 2.5.18 (r2518_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.17-test-sheet.txt"); err != nil {

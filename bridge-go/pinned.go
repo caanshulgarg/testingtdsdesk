@@ -184,6 +184,8 @@ var requestRebuild = map[string]func(x string) []string{
 		return importRebuild(x)
 	},
 	payrollImportID: payrollImportRebuild,
+	fixVoucherID:    fixVoucherRebuild,
+	fixLedgerID:     fixLedgerRebuild,
 	"FinComMeasureB": pinOne(func(x string) string {
 		a, z := pinDates(x)
 		return measureReqB(pinCo(x), a, z, pinNum(x, `\$AlterID &gt; (\d+)`))

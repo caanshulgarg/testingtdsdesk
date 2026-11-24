@@ -1,0 +1,97 @@
+FinCom Bridge: fix in place, the real-Tally test (phase 0), for the owner
+==========================================================================
+
+What this checks: the two Tally requests the owner approved on 23-Nov-2026 (findings/fix-in-place-plan.md section 2.3),
+FinComFixVoucher and FinComFixLedger, on a real Tally, before the bridge release that carries them. Branch
+next-bridge-fix-alter (it goes into 2.5.20, merged on next-bridge-2520-rel). Use the ZZ TEST company only (made-up entries), and
+ZZ BIG TEST for the times. Do every step on TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (the tally-versions run can do 1-8
+by itself; the owner's own run on NWS144 is 7.1).
+
+Before you start
+  - ZZ TEST open in Tally, FinCom Bridge (test build of next-bridge-fix-alter) running, FinCom open on staging with
+    ZZ TEST's client linked to the company.
+  - In ZZ TEST make three sales vouchers (accounting invoice, item invoice, one with bill-wise details and an IRN typed
+    in), each with a number longer than 16 characters, e.g. ZZ/2026-27/000001, and one party ledger "ZZ Buyer" with no
+    GSTIN. Note each voucher's lines, bill-wise details, narration and IRN (take a screenshot of each in Tally).
+
+1. Invoice number (FinComFixVoucher)
+   FinCom > GST > the month > What to fix > Invoice number too long > Open the entry. Type ZZ/26-27/0001. Save in Tally.
+   Expect: "Saved in Tally and FinCom Books." in under 2 s; the row leaves the list.
+   In Tally: the voucher's number is ZZ/26-27/0001; EVERY ledger line, item line (quantity, rate, godown, batch), the
+   bill-wise details, the narration and the IRN are exactly as in your screenshot. Do this for all three vouchers.
+   If any line or detail is lost on any Tally version: stop, note the version, do not release (the plan's A2 round trip
+   is then needed instead, a new approval).
+
+2. A voucher type numbered automatically
+   Set the Sales voucher type's numbering to Automatic, then repeat step 1 on a fourth voucher.
+   Expect either "Saved in Tally ..." or "Tally kept its own value. This is how the entry is now." Note which, per
+   version.
+
+3. Place of supply (FinComFixVoucher)
+   A sale with no place of supply (Party details > Place of supply blank) > Open the entry > choose Maharashtra > Save.
+   Expect: Saved; in Tally the voucher's Party details > Place of Supply is Maharashtra; nothing else changed.
+
+4. Party GSTIN on the ledger (FinComFixLedger)
+   An invoice to ZZ Buyer in "Buyer GSTIN missing" > Open the entry > type the made-up GSTIN 27AAPFU0939F1ZV > Save.
+   Expect: Saved. In Tally: Alter > Ledger > ZZ Buyer > GST registration details: GSTIN 27AAPFU0939F1ZV, registration
+   type as it was before (Regular only if the ledger had none), state Maharashtra, the date it applies from unchanged (or the books' first day if there was none);
+   the ledger's name, group, opening balance and bank details unchanged.
+   Then (the owner's decision of 24-Nov-2026: the ledger AND its invoices) FinCom lists ZZ Buyer's invoices of that
+   month with another GSTIN or none, all ticked > Save. Expect: each invoice in Tally shows GSTIN 27AAPFU0939F1ZV in
+   Party details; its lines, bill-wise details, narration and IRN unchanged (screenshots against step 1's); each sent on
+   its own (FinComFixVoucher with PARTYGSTIN only), each row leaving What to fix once its own invoice is done.
+   Also: a ledger FinCom has no change number for (books read before the ledger list was read): Save reads that one
+   ledger first (FinComLedgerByName), then saves, in the same press. Time each read and each Alter against 2 s.
+
+5. PAN on the ledger (FinComFixLedger)
+   Not yet on a screen: skip until the TDS screens offer it.
+
+6. Changed in Tally first (the AlterID check)
+   Open an entry's window in FinCom. Without saving, alter the same voucher in Tally (change its narration) and save it
+   there. Now press Save in Tally in FinCom.
+   Expect: "Changed in Tally since it was opened here. This is how it is now." Nothing changed in Tally (your narration
+   change stays; the number is NOT changed). The window shows the entry as Tally has it now.
+
+7. Tally refuses
+   Type a number that another voucher of the same type already has (with Prevent duplicates on) > Save.
+   Expect: "Tally did not change it: <Tally's own words>." Nothing changed in Tally or FinCom.
+
+8. Tally closed, and typing
+   a) Close Tally. In FinCom make a change and Save. Expect "Waiting for Tally."; Changes made here says Waiting for
+      Tally. Open Tally (ZZ TEST). Within a minute of FinCom's GST page being open, the change is made: Saved.
+   b) Start typing a voucher in Tally (leave the screen open), then Save in FinCom. Expect "Waiting for Tally."; it goes
+      once you leave the voucher screen.
+   c) While FinCom posts a batch of entries, Save a change. Expect it waits and goes right after the posting.
+
+9. Undo
+   a) After step 1, look at Changes made here for the number change. Expect: NO Undo on it. The earlier number has 17
+      characters, and the approved form takes at most 16, so the bridge refuses to send it back ("Not sent: the number
+      takes 1 to 16 letters, digits, / and -"), and the app hides Undo for such a change. (A place of supply that was
+      blank before is not offered an Undo either: the approved form cannot blank a field. Check that Changes made here
+      shows no Undo for the step 3 change.)
+   b) Make a sale numbered ZZ/0001 and a second one with the same number (Prevent duplicates off), so "Invoice numbers
+      used twice" lists them. Open the second, type ZZ/0002, Save. Then Changes made here > Undo on it. Expect: Saved;
+      Tally has ZZ/0001 again on that voucher, its lines as before.
+   c) Change it to ZZ/0002 once more. Alter that voucher in Tally (its narration), then press Undo in FinCom. Expect
+      "Changed in Tally since it was opened here" and nothing changed (Undo has the same AlterID check).
+
+9a. Not asked, still changed
+   If on any version Tally changes something the fix did not ask (the date, the voucher type, the narration, a line),
+   the window says "Saved in Tally. Tally also changed the ... of this entry, which was not asked. Check it in Tally."
+   Note the version and what changed; with step 1's check this should never appear.
+
+10. Only the approved forms
+    In the bridge's log (sync\bridge.log) every fix shows as FinComFixVoucher or FinComFixLedger. A posting made the
+    usual way still goes (Post one sale). An Alter sent through the old posting path is refused (the automated test
+    TestPlainImportRefusesAlter covers this; nothing to do by hand).
+
+11. Times (ZZ BIG TEST, 100,000 entries, 20,000 ledgers)
+    Steps 1, 3 and 4 on ZZ BIG TEST: note the time of each Tally request in the bridge's log (the Alter, and the two
+    reads around it). Every one must be under 2 s, Tally's window held under 2 s. Put the worst times and the date in
+    allowlist.go (FinComFixVoucher, FinComFixLedger) and docs/tally-allowlist.md before the release.
+
+12. FinCom Books and the cloud copy
+    After step 1, on another computer (no Tally) open the same client: the voucher shows the new number within a
+    minute (the cloud copy got the altered entry).
+
+Results: per version, per step: pass / fail, with the time for step 11 and a screenshot for any failure.

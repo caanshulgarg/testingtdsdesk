@@ -1686,6 +1686,22 @@ func cancelledNotSent(v M, dir string) M {
 }
 
 // postings taken from the queue are followed and reported every few seconds while they run, and at once when they change
+// 2.5.20 P3: a posting from FinCom's queue still waiting here for Tally is reported again this often with nothing changed
+var postStillEvery = 20 * time.Minute
+
+// when each posting of FinCom's queue was last reported (under cpMu)
+var cloudPostToldAt = map[string]time.Time{}
+
+// 2.5.20 P3: a posting waiting here for Tally is told to FinCom as taken with the bridge's own "Waiting for Tally: ..."
+// words (the link's wait, "Open <company> in Tally to post ...", is said after them); any other line as it is
+func cloudPostWords(st string, v M) string {
+	m := str(v["message"])
+	if st == "taken" && str(v["status"]) == "waiting" && m != "" && !strings.HasPrefix(m, "Waiting for ") {
+		return "Waiting for Tally: " + m
+	}
+	return m
+}
+
 func syncCloudPosts() {
 	cpMu.Lock()
 	defer cpMu.Unlock()
@@ -1695,6 +1711,11 @@ func syncCloudPosts() {
 		return
 	}
 	cloudPostAt = time.Now()
+	for id := range cloudPostToldAt { // (2.5.20 P3: only the postings still on this computer's list)
+		if _, ok := cp[id]; !ok {
+			delete(cloudPostToldAt, id)
+		}
+	}
 	for id, last := range cp {
 		dir, err := jobDir(id)
 		if err != nil {
@@ -1735,7 +1756,10 @@ func syncCloudPosts() {
 			st = cancelledEnd(v)
 		}
 		sig := fmt.Sprint(st, "|", v["done"], "|", v["message"], "|", v["checking"], "|", jsonText(v["items"]))
-		if sig == last {
+		// 2.5.20 P3: still waiting here for Tally (Tally closed, the company not open) with nothing changed: told again every
+		// postStillEvery, so FinCom never puts it back as "no word for 2 hours" and shows this bridge's own words
+		again := sig == last && st == "taken" && str(v["status"]) == "waiting" && jobAlive(id) && time.Since(cloudPostToldAt[id]) >= postStillEvery
+		if sig == last && !again {
 			continue
 		}
 		res := []any{}
@@ -1775,7 +1799,7 @@ func syncCloudPosts() {
 		// items: every entry's state (waiting, sending, sent, in_tally, failed with its reason), for FinCom to show live
 		// round 7 (F4): seq (per job, from progress.json, growing with every change) and updatedAt: the cloud ignores an
 		// update whose seq is lower than the one it holds
-		up := M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": str(v["message"]), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
+		up := M{"kind": "posts_update", "id": id, "status": st, "done": toInt(v["done"]), "message": cloudPostWords(st, v), "results": res, "items": arr(v["items"]), "checking": v["checking"] == true,
 			"seq": toInt(v["seq"]), "updatedAt": str(v["updatedAt"]),
 			// round 15: every request's timing ({n, seconds, created, altered, exceptions, ignored, lastVchId}) and the total
 			"reqs": arr(v["reqs"]), "secondsTotal": num(v["secondsTotal"]),
@@ -1834,6 +1858,7 @@ func syncCloudPosts() {
 		}
 		if r.code == 200 {
 			cp[id] = sig
+			cloudPostToldAt[id] = time.Now()
 			if (st == "done" || st == "failed") && v["checking"] != true {
 				delete(cp, id)
 				offlineTold.Delete(id) // review L7

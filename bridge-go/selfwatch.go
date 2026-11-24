@@ -193,7 +193,7 @@ func trayResumeReading() (M, error) {
 // the requests that go on while reading is stopped: what a posting needs
 func readStopExempt(id string) bool {
 	switch id {
-	case "Import", payrollImportID, dupCheckID, tagCheckID, "FinComCompany", "FinComFree", "TDSDeskCompanies", "TDSDeskCompanyInfo":
+	case "Import", payrollImportID, fixVoucherID, fixLedgerID, dupCheckID, tagCheckID, "FinComCompany", "FinComFree", "TDSDeskCompanies", "TDSDeskCompanyInfo":
 		return true
 	}
 	return false

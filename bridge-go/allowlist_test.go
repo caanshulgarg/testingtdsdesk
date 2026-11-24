@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -168,7 +169,54 @@ func driveEveryRequest(t *testing.T) *standTally {
 	_, err = invokeTally(fin, f.port, companiesRequest(), 0)
 	must("free probe", err)
 	nowFn = time.Now
+	// fix in place (fixalter.go): one voucher's number and one ledger's GSTIN, through runFix as FinCom's Save asks
+	driveFixes(t, f, td)
 	return f
+}
+
+// the two fix requests, sent by the fix itself against the stand-in Tally (its Alter answered ALTERED, the entry and the
+// ledger changed as Tally would)
+func driveFixes(t *testing.T, f *standTally, td string) {
+	t.Helper()
+	v := f.add(td, fgParty, "FX/0001'", "made up", "5.00")
+	old := f.behave
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if !strings.Contains(body, `ACTION="Alter"`) || (!strings.Contains(body, "<VOUCHER ") && !strings.Contains(body, "<LEDGER ")) {
+			return old != nil && old(w, r, id, body)
+		}
+		f.mu.Lock()
+		f.alter++
+		if strings.Contains(body, "<VOUCHER ") {
+			v.no, v.alter = group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, body, 1), f.alter
+		} else {
+			for _, l := range f.led {
+				if l.name == "Ledger A" {
+					l.gstin, l.alter = group(`<GSTIN>([^<]*)</GSTIN>`, body, 1), f.alter
+				}
+			}
+		}
+		f.mu.Unlock()
+		_, _ = w.Write([]byte("<RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><ERRORS>0</ERRORS></RESPONSE>"))
+		return true
+	}
+	defer func() { f.behave = old }()
+	r := runFix(M{"company": zz, "companyGuid": f.guid, "target": "voucher", "guid": v.guid, "masterId": v.master, "alterId": fmt.Sprint(v.alter),
+		"vchType": v.typ, "vchDate": v.date, "fields": M{"number": "FX/0001"}})
+	if r["ok"] != true {
+		t.Fatalf("voucher fix: %v", r)
+	}
+	la := ""
+	f.mu.Lock()
+	for _, l := range f.led {
+		if l.name == "Ledger A" {
+			la = fmt.Sprint(l.alter)
+		}
+	}
+	f.mu.Unlock()
+	r = runFix(M{"company": zz, "companyGuid": f.guid, "target": "ledger", "ledger": "Ledger A", "alterId": la, "was": M{"gstin": ""}, "fields": M{"gstin": "27AAPFU0939F1ZV"}})
+	if r["ok"] != true {
+		t.Fatalf("ledger fix: %v", r)
+	}
 }
 
 func TestEveryRequestOnList(t *testing.T) {

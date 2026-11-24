@@ -123,7 +123,9 @@ func prTextOK(raw string, max int) bool {
 }
 
 // a request id that is a posting: the plain Import or the payroll import
-func isImportID(id string) bool { return id == "Import" || id == payrollImportID }
+func isImportID(id string) bool {
+	return id == "Import" || id == payrollImportID || id == fixVoucherID || id == fixLedgerID
+}
 
 // paise of an amount the spec allows (two decimals)
 func prPaise(s string) int64 {

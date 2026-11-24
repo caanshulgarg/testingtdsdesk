@@ -131,6 +131,15 @@ func isBankItem(it M) bool {
 // why an entry cannot be sent at all ("" when it can): no valid date, or not a VOUCHER, LEDGER or GROUP (a voucher type
 // may only have its numbering changed: no other field, and only an Alter)
 func cannotSend(x string) string {
+	// fix in place (decision 7 of 23-Nov-2026): an existing voucher, ledger or group is never altered by a posting; the
+	// two approved fix forms (fixalter.go) are the only way
+	if reFixMark.MatchString(re(`^\s*<[^>]*>`).FindString(x)) {
+		return "An existing voucher, ledger or group is changed only by FinCom's fix in place, never by a posting."
+	}
+	// review of 595554fbe: an ACTION written with a character reference (Tally reads "&#65;lter" as Alter) is never sent
+	if reActionAmp.MatchString(x) {
+		return "An entry's ACTION is written as FinCom writes it (Create or Delete), never with & in it."
+	}
 	vtOnly := false
 	if re(`^\s*<VOUCHERTYPE\b`).MatchString(x) {
 		inner := re(`(?s)^\s*<VOUCHERTYPE[^>]*>|</VOUCHERTYPE>\s*$`).ReplaceAllString(x, "")
@@ -331,6 +340,12 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 		writeLog("Posting: posted-ids.json could not be saved to the disk (" + err.Error() + "); nothing was sent to Tally")
 		return importOutcome{err: errRecordNotFlushed}
 	}
+	// 2.5.20 review (P2): Tally's voucher counter right before this request: an entry this request made or altered has
+	// an AlterID above it; an older one carrying the same mark does not. Final review of ee9ab40d3: read again for each
+	// part (FinComCompany, the approved company check, under the 2 s stop with the posting's priority), so an entry a
+	// person altered since the job's own check is older than the part too; no answer or no numbers: not known (the
+	// part, if Tally makes it only partly, then needs review whole); the send itself never waits on it
+	preAlt, preKnown := partCounter(port, company, r.kind)
 	t0 := time.Now()
 	sentAt := t0.Format(time.RFC3339)
 	raw, err := invokeTally(fin, port, r.envelope(company), importTimeoutSec(len(r.items)))
@@ -388,6 +403,11 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 		}
 		out = append(out, b)
 	}
+	// 2.5.20 P2 (the owner's decision of 23-Nov-2026): Tally made the request only partly: that part alone is read back
+	var forget []string
+	if r.kind == "voucher" && !trusted && !refused {
+		forget = readBackPart(port, company, job, r, out, created+altered, (errs > 0 || len(lineErr) > 0) && exc == 0 && ign == 0, preAlt, preKnown)
+	}
 	if r.kind == "voucher" {
 		if !refused {
 			vchID := ""
@@ -395,11 +415,153 @@ func sendImport(port int, company, job string, r importReq) importOutcome {
 				vchID = lv
 			}
 			_ = noteSentMany(keys, company, job, lv, s, lv, vchID) // one write for the request
+			if len(forget) > 0 {
+				acceptedForgetMany(forget) // read back: not in Tally, with Tally's error: may go again
+			}
 		} else {
 			acceptedForgetMany(keys) // Tally made nothing of the request: not on the record, may go again
 		}
 	}
 	return importOutcome{results: out, note: note, seconds: secs}
+}
+
+// 2.5.20 P2: the part's entries found by their FinCom tag: resentLook (resent2519.go, 2.5.19's look before a re-sent
+// entry), FinComTag as built for one date at a time, under the 2 s stop with the posting's priority, whatever ReadDays
+// says, its answer taken only when whole and of that date. Any look that fails: nil (no answer), so nothing is called
+// "not in Tally" on a guess. Cancelled and optional entries are skipped (review A2). Review of 383aef7c9: only an
+// entry whose AlterID is above pre (Tally's voucher counter before the request) is one this request made or altered
+// (found); an entry carrying the mark with an AlterID at or below it, or none, is an older one (old), never taken for
+// the entry sent
+func readBackTags(port int, company string, items []M, pre int64) (found, old map[string]M) {
+	var heads []M
+	var dates []string
+	for _, it := range items {
+		if d := tagDate(str(it["xml"]), "DATE"); d != "" {
+			dates = append(dates, d)
+		}
+	}
+	for _, d := range uniqSorted(dates) {
+		ks, err := resentLook(port, company, d)
+		if err != nil {
+			return nil, nil
+		}
+		for _, k := range ks {
+			// 2.5.20 review A2: a cancelled or optional entry carrying the mark is not the entry sent (as resentLookFirst):
+			// left out of the matching and so of the count, never "posted" by it
+			if k.cancelled || k.optional {
+				continue
+			}
+			heads = append(heads, headOfKey(k))
+		}
+	}
+	found, old = map[string]M{}, map[string]M{}
+	for _, it := range items {
+		if tag := reTag.FindString(str(it["xml"])); tag != "" {
+			id := str(it["id"])
+			for _, h := range heads {
+				if !hasTag(str(h["narration"]), tag) {
+					continue
+				}
+				if a := re(`\D`).ReplaceAllString(str(h["alter"]), ""); a != "" && toI64(a) > pre {
+					found[id] = h
+					delete(old, id)
+					break
+				}
+				if _, had := old[id]; !had {
+					old[id] = h
+				}
+			}
+		}
+	}
+	return found, old
+}
+
+// final review of ee9ab40d3: Tally's voucher counter read right before a part of vouchers goes (one FinComCompany
+// request, at most 2 s); known only when this very check gave the numbers
+func partCounter(port int, company, kind string) (int64, bool) {
+	if kind != "voucher" {
+		return 0, false
+	}
+	tc := *fin
+	tc.limitMs, tc.resentLook = resentLimitMs(), true
+	_, given, err := companyCheckNumbers(&tc, company, port)
+	if err != nil || !given {
+		writeLog("Posting: Tally's voucher counter could not be read before the part (" + or(errText(err), "no numbers") + "); a part Tally makes only partly needs review whole")
+		return 0, false
+	}
+	return companyAlterKnown(company)
+}
+
+// 2.5.20 P2: the most dates of one part read back (one FinComTag request a date; a part over it stays for review)
+var readBackMaxDays = 10
+
+// 2.5.20 P2 (the owner's decision of 23-Nov-2026): after a reply Tally made only partly (some created, altered or excepted,
+// with errors, exceptions or line errors), the part's own entries are looked for by their FinCom tag: FinComTag, the
+// request the posting check already uses, as built (no new request XML), once for each date the part carries, under the
+// same rules (the 2 s stop, one request in flight, inside the posting's own turn at Tally: readBackTags). Found: posted, in Tally (its
+// GUID and number). Not found, when Tally's reply gave errors or line errors and no exception or ignored entry (errs), and
+// every entry Tally says it made (made: CREATED + ALTERED) was found: refused by Tally, taken off this computer's record
+// so it may go again (the keys returned). Anything else (an exception or an ignored entry, fewer found than Tally made,
+// an entry without a mark or a date, a part over readBackMaxDays dates, the read not answered): as before for those not
+// found (needs review, on the record, never sent again by itself).
+// Review of 383aef7c9: "found" counts only entries newer than Tally's voucher counter before the request (preAlt, the
+// company check's ALTVCHID): an older entry carrying the same mark is neither posted by this request nor counted as
+// one Tally made, so it never hides an entry Tally made without its mark; that item needs review. The counter not
+// known (preKnown false): nothing is judged (every entry of the part needs review, as before)
+func readBackPart(port int, company, job string, r importReq, out []M, made int, errs bool, preAlt int64, preKnown bool) []string {
+	var dates []string
+	for _, it := range r.items {
+		if d := tagDate(str(it["xml"]), "DATE"); d != "" {
+			dates = append(dates, d)
+		}
+	}
+	if n := len(uniqSorted(dates)); n == 0 || n > readBackMaxDays {
+		writeLog(fmt.Sprintf("Posting job %s: a reply Tally made only partly; not read back (%d dates in the part, at most %d): every entry of it needs review", job, n, readBackMaxDays))
+		return nil
+	}
+	if !preKnown {
+		writeLog(fmt.Sprintf("Posting job %s: a reply Tally made only partly; not read back (Tally's voucher counter before the request is not known): every entry of it needs review", job))
+		return nil
+	}
+	found, old := readBackTags(port, company, r.items, preAlt)
+	if found == nil {
+		writeLog(fmt.Sprintf("Posting job %s: a reply Tally made only partly; Tally did not answer the read back: every entry of it needs review", job))
+		return nil
+	}
+	var forget []string
+	nf, nn := 0, 0
+	for _, it := range r.items {
+		if _, ok := found[str(it["id"])]; ok {
+			nf++
+		}
+	}
+	errs = errs && nf == made // every entry Tally made is accounted for: the others were not made
+	nf = 0
+	for i, it := range r.items {
+		b, x := out[i], str(it["xml"])
+		if _, ok := old[str(it["id"])]; ok {
+			continue // only an older entry carries its mark: not this request's; needs review, on the record
+		}
+		if h, ok := found[str(it["id"])]; ok {
+			delete(b, "needsReview")
+			b["ok"], b["verified"], b["accepted"], b["readBack"], b["message"] = true, true, true, true, ""
+			b["guid"], b["masterId"], b["vchNumber"] = str(h["guid"]), str(h["masterId"]), str(h["number"])
+			nf++
+			continue
+		}
+		if !errs || reTag.FindString(x) == "" || tagDate(x, "DATE") == "" {
+			continue
+		}
+		delete(b, "needsReview")
+		b["ok"], b["accepted"], b["refusedByTally"], b["readBack"] = false, false, true, true
+		forget = append(forget, acceptedKey(str(it["id"]), x))
+		nn++
+	}
+	if no := len(old); no > 0 {
+		writeLog(fmt.Sprintf("Posting job %s: read back: %d entr(ies) of the part carry the mark of an older entry in Tally (AlterID not above %d): not counted, they need review", job, no, preAlt))
+	}
+	writeLog(fmt.Sprintf("Posting job %s: read back by FinComTag after a reply Tally made only partly: %d found, %d not found (refused by Tally, may go again), %d still need review", job, nf, nn, len(r.items)-nf-nn))
+	return forget
 }
 
 // Tally took the request and did not answer: the outcome of every entry is unknown. Each is recorded as sent (never
