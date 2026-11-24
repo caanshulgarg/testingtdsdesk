@@ -296,7 +296,7 @@ func TestR2512Version(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	if BridgeVersion != "2.5.20" { // 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
+	if BridgeVersion != "2.5.21" { // 2.5.21 (r2521version_test.go); 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	if _, err := os.Stat("../docs/bridge-2.5.12-test-sheet.txt"); err != nil {

@@ -14,7 +14,7 @@ import (
 )
 
 func TestR2520Version(t *testing.T) {
-	if BridgeVersion != "2.5.20" || !newerVersion("2.5.20", "2.5.19") || newerVersion("2.5.19", "2.5.20") {
+	if BridgeVersion != "2.5.21" || !newerVersion("2.5.20", "2.5.19") || newerVersion("2.5.19", "2.5.20") { // 2.5.21 (r2521version_test.go)
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	for _, f := range []string{"../docs/bridge-2.5.20-test-sheet.txt", "../docs/bridge-2.5.20-notes.md"} {
@@ -24,12 +24,12 @@ func TestR2520Version(t *testing.T) {
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.20 by the owner's decision of 2026-11-23", "FinComFixVoucher", "FinComFixLedger", "as for 2.5.19 by the owner's decision of 2026-11-23"} {
+	for _, w := range []string{"as for 2.5.20 by the owner's decision of 2026-11-23" /* 2.5.21 names the line (r2521version_test.go) */, "FinComFixVoucher", "FinComFixLedger", "as for 2.5.19 by the owner's decision of 2026-11-23"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !regexp.MustCompile(`\(re-measured on 2026-11-24 for 2\.5\.20: [^\n]*FinComFixVoucher and FinComFixLedger[^\n]*NOT yet measured[^\n]*allowed for 2\.5\.20 by the owner's decision of 2026-11-23\)`).MatchString(al) {
+	if !regexp.MustCompile(`\(re-measured on 2026-11-24 for 2\.5\.20: [^\n]*FinComFixVoucher and FinComFixLedger[^\n]*NOT yet measured[^\n]*as allowed in 2\.5\.20 by the owner's decision of 2026-11-23\)`).MatchString(al) {
 		t.Error("no dated line for 2.5.20")
 	}
 	if strings.Contains(line, "allowed for 2.5.19 by") || strings.Contains(al, "for the release after 2.5.20") {

@@ -1,0 +1,28 @@
+FINCOM BRIDGE 2.5.21 - TEST SHEET (2.5.20's sheet, docs/bridge-2.5.20-test-sheet.txt, still applies; 2.5.21's changes here)
+
+File:        FinComBridge-Setup-2.5.21.exe
+Fingerprint: SHA-256 22cf6355a7ced575de8c6c8a9510a7406fca813036865a6fb9eb57696cd2bc75 (FinComBridge-Setup-2.5.21.exe, built 24-Nov-2026 19:25 UTC at a3b92296d, POSTONLY=any, staging site; compare with the .sha256 file next to the setup); program FinComBridge-2.5.21.exe SHA-256 6d6fad804c6c49c426eb22977ff35ad1a38994a7d5bc1ced942cbc4859e15f63. A staging download only: its update list is NOT signed, so no bridge updates itself to it; not to be handed out to clients until the ZZ TEST checks below are done
+             The paper: docs/bridge-2.5.21-notes.md. Branch next-bridge-2521-rel (next-bridge-reupload).
+
+2.5.21 makes no new request of Tally: the look below is FinComTag, the request a posting already uses before an entry
+is sent again. The same rules as before: each request stopped at 2 s, one request at a time, postings first, never
+while someone is typing in Tally. Use the test company ZZ TEST with made-up entries only.
+
+ 1. An entry deleted in Tally: sent again once FinCom's copy shows it deleted.
+    Check: in ZZ TEST, Client setup with the Optional tick OFF. Post a made-up sales invoice from FinCom; in Tally delete
+    that voucher. Wait until FinCom's copy of Tally shows it deleted (the copy brings in the deletion; until then FinCom
+    says it cannot tell and sends nothing). Then press "Not in Tally? Post again" on the invoice. You should see: the
+    bridge's log shows the look first (FinComTag, nothing found) and one import; Tally has one new regular voucher; the
+    invoice is Posted. Press it once more: FinCom's copy now has the regular voucher, "In Tally ... nothing was sent".
+ 2. An entry Tally accepted whose voucher is now only Optional (Ctrl+L) or cancelled in Tally: never sent by itself.
+    Check: post a made-up invoice; in Tally mark that voucher Optional (Ctrl+L) and save (another: cancel it). Press
+    "Not in Tally? Post again". You should see: FinCom says it cannot tell whether the entry is still in Tally and sends
+    nothing (migration 219: an Optional-only or cancelled-only copy of an entry Tally accepted is "unsure"); no import in
+    the bridge's log. (The bridge's own rule for such a voucher, sent again unless the entry is itself Optional, is
+    covered by reupload_test.go: with migration 219 the cloud does not hand such an entry back.)
+ 3. A client posting Optional vouchers by its setting: never sent twice.
+    Check: Client setup with the Optional tick ON. Post a made-up invoice (Tally makes it Optional). Upload the same
+    invoice again and press Post. You should see: "1 invoice was posted before by FinCom and not sent again"; no
+    "Not in Tally? Post again" on it; no import in the bridge's log; no second voucher in Tally.
+ 4. An ordinary repost of an entry this computer sent before (no release): refused on this computer's record, as before
+    ("already sent from this computer on ..."); nothing is asked of Tally.

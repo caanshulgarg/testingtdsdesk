@@ -51,7 +51,7 @@ func allowListRows2518() string {
 		list[id] = a
 	}
 	st := list[stockID] // the stock row's version word (2.5.19 named itself there; 2.5.20 does now)
-	st.purpose = strings.Replace(st.purpose, "unchanged in 2.5.20)", "unchanged in 2.5.18)", 1)
+	st.purpose = strings.Replace(st.purpose, "unchanged in 2.5.21)", "unchanged in 2.5.18)", 1)
 	list[stockID] = st
 	return allowListRowsOf(samples, list)
 }
