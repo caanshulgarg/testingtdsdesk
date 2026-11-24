@@ -108,7 +108,7 @@ function txnRowsSales(){
     const cls = v.status === "posted" || v.status === "intally" ? "ok" : v.status === "ready" ? "warn" : "no";
     const label = v.status === "posted" || v.status === "intally" ? "In Tally" : v.status === "ready" ? "Post to Tally" : v.status === "ignored" ? "Set aside" : "To review";
     return {id: v.id, kind: "sale", date: x.date || "", up: (v.addedAt || "").slice(0, 10), vch: salesVt(x),
-      no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + v.id))), v};
+      no: x.number || "", party: x.customerName || "", taxable: num(x.taxable), gst, total: num(x.total), cls, label, file: v.fileName || "", docPath: v.docPath || "", hasFile: !!(S.files["sv:" + v.id] || v.docPath || (S.fileIndex && S.fileIndex.has("sv:" + (v.docOf || v.id)))), v};
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 function txnRowsBank(){

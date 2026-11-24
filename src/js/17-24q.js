@@ -28,11 +28,11 @@ const TDS24Q = {
     return -1;
   },
   async fromFile(file){
-    let grid;
+    let grid, sheet = "", ai = null;
     if (/\.(xlsx|xls)$/i.test(file.name)){
       await ensureXlsx();
       const wb = xlsxBook(await file.arrayBuffer(), {cellDates: true});
-      grid = xlsxRows(wb.Sheets[wb.SheetNames[0]]);
+      grid = xlsxRows(wb.Sheets[sheet = wb.SheetNames[0]]);
     } else {
       // (quoted cells, "Sharma, Ravi" and "1,00,000", kept whole: TDSCH.csv)
       const t = await file.text();
@@ -42,15 +42,18 @@ const TDS24Q = {
     for (let i = 0; i < Math.min(10, grid.length); i++){
       if (this.pick(grid[i], this.cols.name) >= 0 && this.pick(grid[i], this.cols.tds) >= 0){ hi = i; break; }
     }
+    // no name and TDS column by name: FinCom's AI reads the columns, once for this client and layout (app/src/lib/aiColumns.js)
+    if (hi < 0){ ai = await registersLoad().then(() => AiCols.salary(grid, sheet)).catch(() => null); if (ai) hi = ai.hi; }
     if (hi < 0) return {error: "That sheet needs at least an employee name column and a TDS column."};
-    const head = grid[hi], idx = {}, body = grid.slice(hi + 1), H = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
-    Object.keys(this.cols).forEach(k => { idx[k] = this.pick(head, this.cols[k]); });
+    const head = grid[hi], idx = ai ? ai.idx : {}, body = grid.slice(hi + 1), H = head.map(x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+    // (the AI's columns: the fields it did not name are found by their names, a column never used twice)
+    Object.keys(this.cols).forEach(k => { if (ai && idx[k] >= 0) return; const j = this.pick(head, this.cols[k]); idx[k] = ai && Object.values(idx).includes(j) ? -1 : j; });
     // the PAN: the column whose values are PANs (most of them; PANNOTAVBL, PANAPPLIED, PANINVALID count, as 24Q writes
     // them); the named one kept unless another column passes (review of e7bf15906: it became -1, every PAN "")
     const pans = i => { const v = body.map(r => String(r[i] || "").trim()).filter(Boolean); return v.length && v.filter(x => /^([A-Z]{5}\d{4}[A-Z]|PAN(NOTAVBL|APPLIED|INVALID))$/i.test(x)).length * 2 >= v.length; };
     if (idx.pan < 0 || !pans(idx.pan)){ const j = head.findIndex((x, i) => pans(i)); if (j >= 0) idx.pan = j; }
     // a date only by its own name when there is a month column ("Date of Joining" is no payment date)
-    if (idx.month >= 0 && idx.date >= 0 && !this.cols.date.includes(H[idx.date])) idx.date = -1;
+    if (idx.date >= 0 && (/birth|join|leav|dob|doj/.test(H[idx.date]) || (!ai && idx.month >= 0 && !this.cols.date.includes(H[idx.date])))) idx.date = -1;
     const get = (r, k) => idx[k] >= 0 ? r[idx[k]] : "";
     const rows = [];
     let undated = 0;
@@ -66,7 +69,7 @@ const TDS24Q = {
         tds, surcharge: num(get(r, "surcharge")), cess: num(get(r, "cess")),
         regime: /new/i.test(String(get(r, "regime") || "")) ? "N" : /old/i.test(String(get(r, "regime") || "")) ? "O" : ""});
     });
-    return {rows: rows.filter(r => r.tds || r.gross), undated};
+    return {rows: rows.filter(r => r.tds || r.gross), undated, cols: ai && ai.cols};
   },
   // a month as its last day: Apr-2026, April 26, 04/2026, 2026-04; a month with no year is no date ("")
   monthDate(v){

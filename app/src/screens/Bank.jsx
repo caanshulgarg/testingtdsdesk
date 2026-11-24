@@ -43,6 +43,8 @@ import "../../../src/js/98-post-register.js";
 // an upload that overlapped the statements already here: what it left out, held or marked, and the join (next-bank-overlap)
 import "../../../src/js/96-bank-overlap.js";
 import { DupWords, OverlapPanel, RepMark } from "../parts/bank/Overlap.jsx";
+// a sheet read by the columns FinCom's AI gave for its layout: "Columns read as …", Change (parts/bank/ColsRead.jsx)
+import { ColsLine, ColsChoose } from "../parts/bank/ColsRead.jsx";
 // a new Tally ledger suggested for a line with none, made from a review (next-bank-newled: src/js/96-bank-newled.js)
 import "../../../src/js/96-bank-newled.js";
 import { NewLedHint, NewLedBulk, NewLedReview } from "../parts/bank/NewLedgers.jsx";
@@ -320,6 +322,7 @@ function LastFail({ f }) {
         <button className="linkbtn" onClick={() => bankAct("bankCopyReport")}>Copy details for support</button>
         <button className="linkbtn" onClick={() => bankAct("bankDismissFail")}>Dismiss</button>
       </div>
+      <ColsChoose f={f} />
       {/* read by "Copy details for support" */}
       <textarea id="bankReport" readOnly hidden value={f.report || ""} />
     </div>
@@ -526,6 +529,7 @@ export function BankPage() {
         {!accSure && <BankLedger co={CO()} acc={accFull} />}
         {top}
         <OverlapPanel st={st} />
+        <ColsLine key={st.id} st={st} />
         <Gone /><DupFind /><BankFocus />
         {tab === "done" && !b.focus && live() && tc.done + tc.old > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
         {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
@@ -551,11 +555,14 @@ export function BankBar() {
   // the table's box ends where this bar starts (spacious layout): measured again whenever the bar is drawn or changes size
   const barRef = useRef(null);
   useLayoutEffect(() => { fill(); });
+  // the message at the bottom (the toast) stays above this bar: its height as --toast-lift (styles/arc-look.css)
   useEffect(() => {
-    const el = barRef.current;
-    if (!el || typeof ResizeObserver !== "function") return undefined;
-    const o = new ResizeObserver(fillSoon); o.observe(el);   // the next frame (fillSoon: FINCOM-APP-STAGING-E)
-    return () => o.disconnect();
+    const el = barRef.current, h = document.documentElement;
+    const lift = () => { if (el && el.offsetHeight) h.style.setProperty("--toast-lift", el.offsetHeight + "px"); else h.style.removeProperty("--toast-lift"); };
+    lift();
+    if (!el || typeof ResizeObserver !== "function") return () => h.style.removeProperty("--toast-lift");
+    const o = new ResizeObserver(() => { fillSoon(); lift(); }); o.observe(el);   // the next frame (fillSoon: FINCOM-APP-STAGING-E)
+    return () => { o.disconnect(); h.style.removeProperty("--toast-lift"); };
   });
   if (!b || b.loading || !curStmt()) return null;
   bankSelected();

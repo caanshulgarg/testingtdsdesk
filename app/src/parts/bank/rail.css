@@ -33,3 +33,9 @@
 }
 @media (max-width: 600px) { .bkr-menuhead, .bkr-unpin { display: none; } }
 @media (min-width: 601px) and (max-width: 900px) { html.bk-rail .shell > .mainwrap { margin-left: 72px; } }
+/* the message at the bottom beside the rail (from 901px wide it sits in the sidebar's corner, styles/arc-look.css; the
+   sidebar is hidden while the rail shows, so it went under the 72px rail, cut off): right of the rail, by the variable
+   arc-look.css reads (no selector of its own) */
+@media (min-width: 901px) {
+  html.bk-rail { --toast-left: 84px; }
+}
