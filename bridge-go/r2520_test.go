@@ -491,3 +491,56 @@ func TestR2520UnsureWaitThenLooksAgain(t *testing.T) {
 		}
 	})
 }
+
+// P2 (review of 383aef7c9): an older entry in Tally carrying one item's mark is not counted as found: Tally made 2
+// (dp1, and dp2 whose mark it did not keep) and refused dp3, whose mark an older entry carries. Counting that older
+// entry would make found equal made, take dp2 off the record (it would go twice) and call dp3 posted
+func TestR2520OldMarkNotCountedAsMade(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	old := f.add(td, fgParty, "DP-3", "earlier | TDSDesk:dp3", "3.00")
+	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:dp3") }
+	f.storeNarr = func(n string) string { return strings.ReplaceAll(n, "TDSDesk:dp2", "changed") }
+	standBridge(t, f, `,"PostPaceOff":true`)
+	p := r15Job(t, "job-r2520-oldmark", r15Bills("dp", td, 3))
+	rs := r15Results(p)
+	if r := rs["dp1"]; r["ok"] != true || r["verified"] != true || str(r["guid"]) == old.guid {
+		t.Fatalf("dp1, made by this request and found: %v", r)
+	}
+	for _, id := range []string{"dp2", "dp3"} {
+		r := rs[id]
+		if r["ok"] == true || r["needsReview"] != true || r["accepted"] != true || r["refusedByTally"] == true || acceptedInfo(id) == nil {
+			t.Fatalf("%s (2 made, 1 found new, an older entry with dp3's mark): %v", id, r)
+		}
+	}
+	if str(rs["dp3"]["guid"]) == old.guid {
+		t.Fatal("dp3 is given the older entry's GUID")
+	}
+	if logLines("carry the mark of an older entry in Tally") != 1 {
+		t.Fatal("the older entry is not logged")
+	}
+}
+
+// P2 (review of 383aef7c9): the found GUID is an older one: an item Tally refused now, whose mark an older entry
+// carries, is never called posted by it (needs review, on the record, never sent again by itself); an item Tally made
+// now, whose mark an older entry also carries, is given its new entry, not the older one
+func TestR2520FoundGUIDOld(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	old1 := f.add(td, fgParty, "OG-1", "earlier | TDSDesk:og1", "1.00")
+	old2 := f.add(td, fgParty, "OG-2", "earlier | TDSDesk:og2", "2.00")
+	f.importSkip = func(x string) bool { return strings.Contains(x, "TDSDesk:og2") }
+	standBridge(t, f, `,"PostPaceOff":true`)
+	p := r15Job(t, "job-r2520-oldguid", r15Bills("og", td, 2))
+	rs := r15Results(p)
+	if r := rs["og1"]; r["ok"] != true || r["verified"] != true || str(r["guid"]) == "" || str(r["guid"]) == old1.guid {
+		t.Fatalf("og1, made now (an older entry carries its mark too): %v", r)
+	}
+	r := rs["og2"]
+	if r["ok"] == true || r["verified"] == true || str(r["guid"]) == old2.guid {
+		t.Fatalf("og2, refused now, is called posted from the older entry: %v", r)
+	}
+	if r["needsReview"] != true || r["accepted"] != true || r["refusedByTally"] == true || acceptedInfo("og2") == nil {
+		t.Fatalf("og2 (only an older entry carries its mark): %v", r)
+	}
+}

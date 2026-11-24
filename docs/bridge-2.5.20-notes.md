@@ -20,13 +20,18 @@ first, the typing gate. Use a test company with made-up entries only.
    for each date in the part (at most 10 dates). These are the same looks 2.5.19 makes before an entry is posted again
    (resentLook: 2 s stop, posting priority, whatever ReadDays says, the answer taken only when it is whole and for that
    date).
-   - An entry that is found is posted and confirmed in Tally (its Tally id is kept).
+   - An entry that is found is posted and confirmed in Tally (its Tally id is kept). Found means made or altered by
+     this request: its AlterID is above Tally's voucher counter (ALTVCHID) from the company check before the request.
+     An older entry that carries the same mark is not counted as found and never makes an entry "posted" (review of
+     383aef7c9: counted, it could hide an entry Tally made without its mark, which would then go twice).
    - An entry that is not found is "refused by Tally" only when all of these hold: Tally's reply gave errors or line
      errors, no exception and no ignored entry, and every entry Tally says it made (CREATED + ALTERED) was found. It is
      then taken off this computer's record of sent entries, so Retry in FinCom sends it again.
    - Everything else is needs review, as before, and stays on the record:
      - an entry not found when Tally reported an exception or an ignored entry;
      - an entry not found when fewer were found than Tally says it made;
+     - an entry whose mark only an older entry in Tally carries;
+     - every entry when the voucher counter before the request is not known;
      - an entry without a mark or a date;
      - every entry of a part with more than 10 dates;
      - every entry when a look fails or is not answered.

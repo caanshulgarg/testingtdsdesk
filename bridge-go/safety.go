@@ -117,7 +117,18 @@ var (
 	altMu        sync.Mutex
 	companyAlts  = map[string]int64{}
 	companyAltsM = map[string]int64{}
+	// 2.5.20 review (P2 read back): ALTVCHID was a number in the company's last check (an empty tag is not a 0)
+	companyAltsV = map[string]bool{}
 )
+
+// 2.5.20 review (P2 read back): the company's ALTVCHID as its last check gave it, and whether that check gave it as a
+// number at all (false: not known; 0 with true: a company with no entry yet)
+func companyAlterKnown(company string) (int64, bool) {
+	altMu.Lock()
+	defer altMu.Unlock()
+	k := companyKey(company)
+	return companyAlts[k], companyAltsV[k]
+}
 
 func companyAlter(company string) int64 {
 	altMu.Lock()
@@ -257,12 +268,14 @@ func cnFormMiss(company string, heads []string) {
 // the change numbers of a COMPANY element: noted; true when they are numbers above 0. Never 0 or empty as a starting
 // point (the owner's finding: the real Tally answered empty tags)
 func setCompanyAlts(company string, c *Node) bool {
-	v, m := toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
+	vd := re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")
+	v, m := toI64(vd), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
 	if v <= 0 && m <= 0 {
 		return false
 	}
 	altMu.Lock()
 	companyAlts[companyKey(company)] = v
+	companyAltsV[companyKey(company)] = vd != ""
 	companyAltsM[companyKey(company)] = m
 	altMu.Unlock()
 	// round 18: the company's starting point (once, never at 0), and its latest numbers for the heartbeat (startpoint.go)
