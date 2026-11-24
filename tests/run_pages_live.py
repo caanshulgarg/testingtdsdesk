@@ -37,7 +37,9 @@ SOCKS = []           # [ws, set(topics joined)]
 def hit(tok, what): CALLS[(tok, what)] = CALLS.get((tok, what), 0) + 1
 def calls(tok, what): return CALLS.get((tok, what), 0)
 def send_change(table, rec, kind="UPDATE"):
-    topic = "realtime:fincom-copy-" + FIRM
+    # next-db-load-2: the gap, the month locks and the tie-outs on a channel of their own, joined while Sync activity or
+    # the tie-out is drawn (Live.joinSync)
+    topic = ("realtime:fincom-sync-" if table in ("tally_sync_cursor", "tally_month_locks", "tally_tieouts") else "realtime:fincom-copy-") + FIRM
     msg = json.dumps({"topic": topic, "event": "postgres_changes", "ref": None,
                       "payload": {"ids": [1], "data": {"schema": "public", "table": table, "type": kind, "commit_timestamp": now(), "errors": None, "record": rec}}})
     for s in list(SOCKS):
@@ -133,6 +135,9 @@ with sync_playwright() as p:
     ok(A.evaluate("window.__mark") == "same page", "2. no page reload")
     # ---------- 3. two computers: A locks a month; B's tie-out and Sync activity follow
     B.evaluate("async (cid) => { await Rec.tieLoad(cid); await Rec.gapsLoad(); }", CID)
+    ok(not B.evaluate("!!Live.syncLive") and not A.evaluate("!!Live.recorderLive"), "3. before the tie-out is drawn: the gap/locks/tie-outs and the recorder's lines not joined (next-db-load-2)")
+    B.evaluate("(cid) => { Rec.tieOf(cid); }", CID)    # B's tie-out drawn
+    ok(wait_for(B, "Live.syncLive === true", 6) is not None, "3. B's tie-out drawn: the gap/locks/tie-outs joined")
     ok(B.evaluate("Object.keys(Rec.tie['%s'].locks).length" % CID) == 0, "before: no month locked on B")
     A.evaluate("async (cid) => { await Rec.lockCall(cid, '2026-05-01', 'tally_month_lock', {p_client: cid, p_month: '2026-05-01', p_note: 'audited'}); }", CID)
     t = wait_for(B, "!!Rec.tie['%s'].locks['2026-05-01']" % CID, 6)
