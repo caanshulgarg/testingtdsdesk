@@ -174,6 +174,8 @@ Deno.test("a register's format: the prompt carries the header and 10 rows only; 
 Deno.test("a register's format: the sales (or purchase) ledger and the voucher type are fields of their own, and the prompt says which is which", () => {
   const head = ["Date", "Customer Name", "Voucher Type", "Vch No.", "Sales Ledger", "Invoice Amount"];
   assert(SHEET_FIELDS.includes("sledger") && !SHEET_FIELDS.includes("vchtype") && SHEET_FIELDS.includes("ledger") && SHEET_FIELDS.includes("doctype"), "the fields offered");
+  // next-fix-zoho-sales-sheet: the status column (Draft and Void invoices are left out by the page)
+  assert(SHEET_FIELDS.includes("status") && parseSheetMap('{"map": {"status": "Invoice Status"}}', ["Invoice Status"]).map.status === "Invoice Status", "the status field offered and read");
   assert(/sledger \(the sales, income, purchase or expense ledger/.test(SHEET_SYSTEM) && /never an income, expense or tax ledger/.test(SHEET_SYSTEM) && !/vchtype/.test(SHEET_SYSTEM), "the prompt tells the party's ledger from the sales ledger; the voucher type is not asked for (the screen's is used)");
   const r = parseSheetMap('{"map": {"date": "Date", "party": "Customer Name", "vchtype": "Voucher Type", "doctype": "Voucher Type", "no": "Vch No.", "sledger": "Sales Ledger", "total": "Invoice Amount"}}', head);
   eq(Object.keys(r.map).sort(), ["date", "doctype", "no", "party", "sledger", "total"], "an answer with the sales ledger is kept; a voucher-type field is not one of FinCom's");

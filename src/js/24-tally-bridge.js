@@ -888,7 +888,8 @@ function bankPosted(cid, r, x, tname, now, o){
   const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
   r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; delete r.postJobNew; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
   r.postByReply = x.verified !== true && x.byReply === true;
-  if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now; }
+  // (an Optional voucher is not in the books: its tag "optional:", never a reason to call the line In Tally again)
+  if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = (x.optional ? "optional:" : "") + now; }
   if (!o.quiet) logPosting({what: "bank", id: r.id, action: "posted", co: cid, ref: String(r.narr || "").slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: who});
   r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: tname};
   // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
@@ -1102,12 +1103,13 @@ async function postBankToTally(ids){
   // posting uses the confirmed ledger only (src/js/60): not chosen, guessed, or gone from Tally → nothing is posted
   if (!acc || !bankLedgerReady(co, acc)){ b.busy = ""; toast(bankLedgerWhy(co, acc) || "Choose the Tally ledger for this bank account first (the set-up line at the top)."); render(); return; }
   acc.ledger = bankLedgerReady(co, acc);
-  // guard 1: this computer's own record of lines already posted, whatever happened to the statement since
+  // guard 1: this computer's own record of lines already posted, whatever happened to the statement since (never one
+  // posted as an Optional voucher: not in the books, next-posting-followups)
   b.postedTags = b.postedTags || {};
   b.rows.forEach(r => {
     if (r.state !== "ready" || (ids && !ids.includes(r.id))) return;
     const tag = fpHash(r.fp || r.id);
-    if (b.postedTags[tag]){ r.prevState = r.state; r.state = "intally"; r.matchedAt = new Date().toISOString(); r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
+    if (b.postedTags[tag] && !/^optional:/.test(b.postedTags[tag])){ r.prevState = r.state; r.state = "intally"; r.matchedAt = new Date().toISOString(); r.tallyHow = "posted by FinCom on " + fmtDate(String(b.postedTags[tag]).slice(0, 10)); }
   });
   // guard 2 (next-dup-cloud-only, the owner, 23-Nov-2026, "it should flow"): never a read of Tally before posting. This
   // bank ledger is looked at in FinCom's cloud copy only (dupCopy), around the dates being posted: a line the copy already
@@ -1126,7 +1128,7 @@ async function postBankToTally(ids){
     // before posting never marks a posted line as gone from Tally: the copy may simply not hold that day)
     if (pre && !copyNotCovered(pre) && [].concat(pre.vouchers || []).length) try {
       await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
-      toCheck.forEach(r => { if (r.state === "intally") b.postedTags[fpHash(r.fp || r.id)] = b.postedTags[fpHash(r.fp || r.id)] || "tally:" + new Date().toISOString(); });
+      toCheck.forEach(r => { const k = fpHash(r.fp || r.id); if (r.state === "intally" && (!b.postedTags[k] || /^optional:/.test(b.postedTags[k]))) b.postedTags[k] = "tally:" + new Date().toISOString(); });
       saveBank({posted: true});
     } catch (e){ /* posted all the same */ }
   }

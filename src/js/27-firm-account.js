@@ -916,7 +916,7 @@ function switcherList(){
   return list;
 }
 // the client switcher is drawn by React (app/src/Switcher.jsx), with its own keys
-function renderSwitcher(){ if (window.FinComReact) FinComReact.redraw(); }
+function renderSwitcher(){ if (window.FinComReact) FinComReact.sw(); }
 function openSwitcher(){ if (!Object.keys(S.companies).length){ goHome(); S.addingCo = true; render(); return; } S.switcher = {q:"", idx:0}; renderSwitcher(); }
 // next-fix-hang-home (FINCOM-APP-STAGING-H, staging 12-Nov-2026 06:18 UTC: 2,124 ms in a timer, a click on the sidebar's
 // Clients from a large client's books): every page change (navHome, goHome, goSettings, goTallyPage, openCompany) closed

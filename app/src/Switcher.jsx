@@ -1,6 +1,7 @@
 // Select company (F3 or Ctrl+K): type to find a client, ↑↓ to move, Enter to open, Esc to close.
 // Was renderSwitcher and its keys in src/js/27-firm-account.js; the list order is switcherList() there.
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { subscribeSw, swSnapshot } from "./store.js";
 import { createPortal } from "react-dom";
 import Button from "./parts/Button.jsx";
 import { useDismiss } from "./parts/dismiss.js";
@@ -11,6 +12,8 @@ const askOn = () => !!(S.switcher && S.switcher.q) && typeof ASST === "object" &
 function askFromSwitcher() { const q = S.switcher && S.switcher.q; closeSwitcher(); if (q && typeof ASST === "object") { ASST.open(q); ASST.ask(q); } }
 
 export default function Switcher() {
+  // drawn by itself when only the switcher changed (renderSwitcher: FinComReact.sw, store.js), with the page otherwise
+  useSyncExternalStore(subscribeSw, swSnapshot);
   const modal = document.getElementById("modal"), sw = S.switcher;
   const input = useRef(null), selected = useRef(null), box = useRef(null);
   // a click on the dark area, Esc and (a phone) Back close it (parts/dismiss.js)
@@ -24,7 +27,10 @@ export default function Switcher() {
     modal.addEventListener("click", out);
     return () => modal.removeEventListener("click", out);
   }, [modal]);
-  useEffect(() => { if (selected.current && selected.current.scrollIntoView) selected.current.scrollIntoView({ block: "nearest" }); });
+  // the line chosen kept in view when the choice moves (↑↓, or back to the first on typing); not at every letter: each
+  // scrollIntoView laid out the whole page under the box (35 ms a letter on a large client's Sales)
+  const was = useRef(0), idx = sw ? sw.idx : 0;
+  useEffect(() => { if (idx !== was.current && selected.current && selected.current.scrollIntoView) selected.current.scrollIntoView({ block: "nearest" }); was.current = idx; });
   // the keys belong to the switcher while it is open (before the rest of the page sees them)
   useEffect(() => {
     if (!open) return;
