@@ -4,7 +4,7 @@ the React build, offline, a made-up statement, the AI stubbed (SheetAI.map answe
      once through the AI's mapping (no button), the statement says "Columns read as: ...", the mapping kept for the client
   2. Change: the person puts two columns right, Save and read again: the statement is read again with them, not charged
      twice, the line says "as you set them"
-  3. the AI not available: the file is said as not read, "Choose the columns" lets the person choose, and it is read
+  3. a file not read (the AI not available): said, "Choose the columns" lets the person choose, and it is read
   4. the 24Q page: "Columns read as: ..." of a salary sheet read by the AI, with Change
 Screenshots (deviceScaleFactor 2, 1440 and 390 wide) into SHOTS (default scratchpad/shots-ai-columns). UI_PORT (8493)."""
 import os, threading, functools, http.server
@@ -27,8 +27,7 @@ CSV = "\n".join(["ZZ Sample Bank - account statement", "Account 000011112222", "
   '02/09/2026,UPI to ZZ Grocer,,250.00,,"9,750.00"',
   '05/09/2026,NEFT from ZZ Buyer,UTR0001,,"1,250.50","11,000.50"',
   '07/09/2026,Cheque paid,000123,"1,000.50",,"10,000.00"'])
-# the same with no balance column: the reader without headings cannot read it either
-NOBAL = "\n".join(",".join(__import__("csv").reader([l]).__next__()[:5]) if l.count(",") else l for l in CSV.split("\n")).replace("10,000.00", "10000.00").replace("1,250.50", "1250.50").replace("1,000.50", "1000.50")
+OTHER = CSV.replace("000011112222", "000033334444")   # another account (the same one is filed under its own client)
 SETUP = """async (name) => {
   const c = newCompany({name}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank"; Store.saveCompany(c); render();
   await registersLoad();
@@ -78,13 +77,16 @@ def run(br, w, tag):
     shot(pg, "%s-3-as-set" % tag)
     print("3. (%s) the AI not available: Choose the columns" % tag)
     pg.evaluate("() => { window.__aiOn = false; }")
-    pg.evaluate(SETUP, "ZZ Other Client"); pg.wait_for_timeout(800)
-    pg.evaluate(UPLOAD, NOBAL); pg.wait_for_timeout(900)
-    if not pg.locator("#app [data-cols-choose]").count(): print("       (", pg.evaluate("() => JSON.stringify({rows: B().rows.length, cid: B().cid, co: S.coId, fail: B().lastFail && {msg: B().lastFail.msg, head: B().lastFail.head}, ai: window.__ai.length, on: window.__aiOn})"), ")")
+    pg.evaluate(SETUP, "ZZ Other Client"); pg.wait_for_timeout(2500)
+    # (a file no reader could read, as readStatement leaves it: the header kept in diag.head, run_ai_columns.mjs 2; here
+    # the page's part: the file not read, said, with Choose the columns)
+    pg.evaluate("""(csv) => { const b = B(); b.lastFile = new File([csv], "zz-statement-oct.csv", {type: "text/csv"});
+      b.lastFail = {file: "zz-statement-oct.csv", msg: bankErr({code: "bank_unreadable"}), report: "", at: new Date().toISOString(), head: ["Txn On", "Remarks", "Chq", "Money Out", "Money In", "Running Total"]}; render(); }""", OTHER)
+    pg.wait_for_timeout(500)
     ok(pg.locator("#app [data-cols-choose]").count() == 1 and "was not read" in pg.inner_text("#app .bk-alert.bad"), "not read, said, with Choose the columns")
     if not pg.locator("#app [data-cols-open]").count(): ctx.close(); return
     pg.click("#app [data-cols-open]"); pg.wait_for_timeout(300)
-    for f, h in [("date", "Txn On"), ("narr", "Remarks"), ("debit", "Money Out"), ("credit", "Money In")]:
+    for f, h in [("date", "Txn On"), ("narr", "Remarks"), ("debit", "Money Out"), ("credit", "Money In"), ("balance", "Running Total")]:
         pg.select_option('#app [data-cols-pick] select[data-cols-field="%s"]' % f, h)
     shot(pg, "%s-4-choose" % tag)
     pg.click("#app [data-cols-save]"); pg.wait_for_timeout(1500)
