@@ -146,6 +146,8 @@ async function readStatement(file, progress, force){
     let grids = [];
     try { grids = await gridsFromSheet(file); } catch (e){ note("Excel/CSV", null, e); }
     try { consider("Excel/CSV with headings", await parseSheetStatement(file)); } catch (e){ note("Excel/CSV with headings", null, e); }
+    // headings not known by name: FinCom's AI reads the columns, once for this client and layout (app/src/lib/aiColumns.js)
+    if (!best && grids.length) try { consider("Excel/CSV, columns read once by FinCom's AI", await registersLoad().then(() => AiCols.bank(grids))); } catch (e){ note("Excel/CSV, columns by AI", null, e); if (e && e.head) diag.head = e.head; }
     grids.forEach((g, i) => { try { consider("Excel/CSV without headings (sheet " + (i + 1) + ")", parseByLines(sheetAsPages(g))); } catch (e){ note("Excel/CSV without headings", null, e); } });
     diag.sample = grids[0] ? grids[0].slice(0, 12).map(r => r.map(cellText).filter(Boolean).join(" | ")) : [];
   } else if (isPdf(file) || isImg){

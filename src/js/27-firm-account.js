@@ -2204,7 +2204,8 @@ document.addEventListener("change", ev => {
     TDS24Q.fromFile(f).then(async r => {
       b.busy = "";
       if (r.error){ toast(r.error); render(); return; }
-      b.salary = r.rows; await saveBooks();
+      // (cols: the columns FinCom's AI read for this layout, said and changed on the 24Q page: screens/tds/SalaryCols.jsx)
+      b.salary = r.rows; b.salaryCols = r.cols || null; S.files["salary:" + b.cid] = f; await saveBooks();
       const noPan = r.rows.filter(x => !/^[A-Z]{5}\d{4}[A-Z]$/.test(x.pan)).length;
       toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + (r.undated ? ", " + r.undated + " without a date (in no quarter): give a Month or Date column" : "") + ".");
       render();

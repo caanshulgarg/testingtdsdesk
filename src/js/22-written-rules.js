@@ -458,7 +458,7 @@ async function uploadStatements(files, force){
       toast(file.name + ": " + x.say + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
-      b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
+      b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString(), head: err && err.diag && err.diag.head};
     }
   }
   } finally { on.delete(b.cid); }

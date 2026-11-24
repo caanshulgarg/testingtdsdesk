@@ -159,11 +159,26 @@ export function cleanMapping(r, head) {
   const why = {}; Object.entries((r && r.why) || {}).forEach(([f, w]) => { if (map[f] || f === "earn" || f === "ded") why[f] = String(w || "").slice(0, 80); });
   return { map, earn, ded, why };
 }
+// (24-Nov-2026, as next-fix-zoho-sales-sheet found for registers: the assistant reads at most 80 columns) a wide sheet
+// sends the columns with a value in the sample rows or a name FinCom knows first, at most AI_COLS, in their order
+export const AI_COLS = 80;
+export function forAi(head, rows) {
+  const all = (head || []).map((_, i) => i);
+  if (all.length <= AI_COLS) return all;
+  const body = (rows || []).filter((r) => (r || []).some((c) => String(c == null ? "" : c).trim())).slice(0, MAX_SAMPLE_ROWS);
+  const named = (i) => Object.values(NAMES).some((ps) => ps.some((p) => p.test(norm(head[i])))) || EARN.test(norm(head[i])) || DED.test(norm(head[i]));
+  const valued = (i) => body.some((r) => String((r || [])[i] == null ? "" : r[i]).trim() !== "");
+  const score = (i) => (named(i) ? 0 : 2) + (valued(i) ? 0 : 1) + (String(head[i] == null ? "" : head[i]).trim() ? 0 : 4);
+  return all.slice().sort((a, b) => score(a) - score(b) || a - b).slice(0, AI_COLS).sort((a, b) => a - b);
+}
 export async function propose(head, rows, ai) {
   if (typeof ai !== "function") throw new Error("FinCom's AI help is not available here: map the columns yourself.");
-  const s = samples(head, rows);
+  const pick = forAi(head, rows), s = samples(pick.map((i) => head[i]), (rows || []).map((r) => pick.map((i) => (r || [])[i])));
   const r = await ai({ head: s.head, rows: s.rows, side: "payroll", fields: SINGLE.concat(["earn", "ded"]) });
-  return Object.assign(cleanMapping(r, head), { cost: (r && r.cost) || null, ai: true });
+  const m = cleanMapping(r, head);
+  // an answer that names no column (cut short, or not read) is said, never shown as the AI's mapping
+  if (!Object.keys(m.map).length && !m.earn.length && !m.ded.length) throw new Error("FinCom's AI gave no columns for this layout: the columns found by their names are shown.");
+  return Object.assign(m, { cost: (r && r.cost) || null, ai: true });
 }
 // by names only (no AI): what the office usually calls each column. "Date of birth / joining / leaving" is never the pay
 // date, and a total or "net" column never an earning
