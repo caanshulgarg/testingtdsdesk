@@ -390,12 +390,14 @@ with sync_playwright() as p:
                # delivery-note sense, an order invoice written "Inv"
                "Sales Purchase", "Sales Purchases", "Sales Delivered", "Sales Deliveries", "Sales Order Inv", "Sales Order Inv.",
                # (the owner, 24-Nov-2026) an invoice, a bill of supply, a sales delivery on its own
-               "Tax Invoice", "Retail Invoice", "Bill of Supply", "Sales Delivery", "Sales - Delivery", "Export Invoice", "Job Work Invoice"]
+               "Tax Invoice", "Retail Invoice", "Bill of Supply", "Sales Delivery", "Sales - Delivery", "Export Invoice", "Job Work Invoice",
+               # (the owner, 24-Nov-2026) an outward supply under reverse charge is a sale: RCM or reverse charge with a sales word
+               "Sales RCM", "Sales (Reverse Charge)", "RCM Sales", "Sales - Reverse Charge"]
     CM_NOT = ["Sales Order", "Sales Orders", "Sales Reorder", "Delivery Note", "Delivery Challan", "Sales Delivery Challan", "Sales Quotation", "Sales Memorandum", "Sales Memo", "Cash Memorandum", "Purchase Cash Memo", "Cash Memo Return",
               "Petty Cash Memo", "Expense Cash Memo", "Sales Challan", "Challan Sales", "Sales_Challan", "Challans", "Purchase Invoice", "Purchases Invoice", "Purchase", "Proforma Invoice", "Pro-forma Invoice", "Delivery", "Sales Delivery Note",
               # (review of 69441fde7) "invoice" is no sales word for an inward, purchase-side or cancelled one
               "Import Invoice", "RCM Invoice", "Reverse Charge Invoice", "Service Invoice (Inward)", "Inward Invoice", "Invoice (Inward)", "Inward Supply Invoice", "Inward Bill of Supply",
-              "Supplier Invoice", "Vendor Invoice", "Pur Invoice", "Purch Invoice", "Job Work In Invoice", "Invoice Cancellation", "Cancelled Invoice", "Performa Invoice"]
+              "Supplier Invoice", "Vendor Invoice", "Pur Invoice", "Purch Invoice", "Job Work In Invoice", "Invoice Cancellation", "Cancelled Invoice", "Performa Invoice", "Sales Cancelled", "RCM", "Reverse Charge", "RCM Bill of Supply"]
     for i, t in enumerate(CM_SALE):
         a, st, sent = one("ZS/16%02d" % i, G["k"], sv("ZS/16%02d" % i, typ=t))
         ok(st == "intally " + t and sent == [], "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
