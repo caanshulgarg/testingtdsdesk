@@ -87,11 +87,11 @@ const EINV = {
   // whether the invoice needs an e-way bill (CGST Rules r.138), only for keeping it listed (salesNeedsAction, src/js/03;
   // the panel offers Make the e-way bill on any invoice with an IRN: offers): never a credit or debit note; goods (a line
   // whose HSN does not start with 99, the IRP's IsServc rule in build; a blank HSN counts as goods) that bear GST (exempt
-  // and 0% lines left out), worth more than EWB_MIN: their taxable value with GST (none under LUT to an SEZ, SEZWOP) and
+  // and 0% lines left out), worth more than EWB_MIN: their taxable value with GST (none under LUT: SEZWOP, EXPWOP) and
   // cess, with the invoice's own cess when no line carries one
   EWB_MIN: 50000,
   ewbNeeded(v){
-    const x = v.x || {}, lut = x.supply === "SEZWOP";
+    const x = v.x || {}, lut = /^(SEZWOP|EXPWOP)$/.test(x.supply || "");   // (under LUT, to an SEZ or exported: no GST)
     if (x.noteKind) return false;
     const goods = (x.items || []).filter(it => !/^99/.test(String(it.hsn || "").trim()) && num(it.gstRate) > 0 && !it.exempt);
     if (!goods.length) return false;
@@ -99,10 +99,25 @@ const EINV = {
     return goods.reduce((a, it) => { const t = num(it.taxable) || (num(it.qty) || 1) * num(it.rate); return a + t * (1 + (lut ? 0 : num(it.gstRate) / 100)) + num(it.cess); }, lineCess ? 0 : num(x.cess)) > this.EWB_MIN;
   },
   // the IRP's time limit, as the GST checks say it (src/js/12: "E-invoices generated more than 30 days after the invoice
-  // date"; it binds turnover of Rs 10 crore and above, which is not known here): past it, Make the IRN does not keep an
-  // invoice listed (the panel still offers it)
+  // date"), for turnover of Rs 10 crore and above in the year before the invoice's year: GSTF.aato (typed in GST settings,
+  // else from the books, as the late fee reads it), else the client's "Turnover last year was above Rs 10 crore" when
+  // that is not known. Not known either way: no limit. Past it, Make the IRN does not keep an invoice listed (the panel
+  // still offers it)
   IRN_DAYS: 30,
-  irnLate(v){ const d = Date.parse(String((v.x || {}).date || "").slice(0, 10)); return !!d && Date.now() - d > this.IRN_DAYS * 864e5; },
+  irnLate(v, co){
+    const x = v.x || {}, d = Date.parse(String(x.date || "").slice(0, 10));
+    if (!d || Date.now() - d <= this.IRN_DAYS * 864e5) return false;
+    let a = 0;
+    try { a = typeof GSTF === "object" && S.books ? num(GSTF.aato(GSTF.fyOf(String(x.date).slice(0, 7).replace("-", ""))).v) : 0; } catch (e){ a = 0; }
+    return a ? a >= 1e8 : !!(co || {}).turnover10cr;
+  },
+  // what keeps Make the IRN from being pressed that the person cannot set right on the Sales page: EINV.problems, less
+  // the client's own address PIN (Sales settings, opened from that page)
+  irnBlocked(v, co, cfg){
+    const pin = "Made-up 110001", seller = this.seller(v, co), c = Object.assign({}, cfg, {address: this.pin(cfg.address) ? cfg.address : pin});
+    if (seller) c["address_" + seller] = this.pin(cfg["address_" + seller]) ? cfg["address_" + seller] : pin;
+    return this.problems(v, co, c);
+  },
   accounts: {}, asked: {},
   // the client's e-invoice user, asked of the server once a session (and after a sign-in); never the password
   need(gstin){ if (!this.asked[gstin]){ this.asked[gstin] = Date.now(); this.status(gstin).then(() => render(), () => {}); } return this.accounts[gstin]; },

@@ -329,25 +329,38 @@ with sync_playwright() as p:
         IT = ("const it = (hsn, taxable, gstRate, more) => Object.assign({desc: 'Made-up item', hsn, qty: 1, rate: taxable, taxable, gstRate}, more || {}); "
               "const rd = (v) => { Object.assign(v.x, {date: new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10), address: 'Made-up Lane, Noida 201301', items: [it('8471', 2000, 18)]}); }; "
               "const irn = (v, items, more) => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: '', items}, more || {}); }; ")
-        m = pg.evaluate("() => { " + CP + GON + IT + """return {ready: cp(rd), blocked: cp(v => {}), late: cp(v => { rd(v); v.x.date = new Date(Date.now() - 40 * 864e5).toISOString().slice(0, 10); }),
+        m = pg.evaluate("() => { " + CP + GON + IT + """return {ready: cp(rd), blocked: cp(v => {}), late: cp(v => { rd(v); v.x.date = new Date(Date.now() - 40 * 864e5).toISOString().slice(0, 10); CO().turnover10cr = true; }),
           intallyBlocked: cp(v => { v.status = 'intally'; v.matchedAt = h(30); }), cancel2h: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: 'E1'}); }),
           noGoods30h: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''}); }), withEwb30h: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: 'E1'}); }),
           cancelledReady: cp(v => { rd(v); Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); }), cancelledBlocked: cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); })}; }""")
+        go(pg, "CO().turnover10cr = false;", 100)
         ok(m == {"ready": False, "blocked": True, "late": True, "intallyBlocked": True, "cancel2h": False, "noGoods30h": True, "withEwb30h": True, "cancelledReady": False, "cancelledBlocked": True},
-           look + "Sales: Make the IRN keeps it only when enabled and within 30 days (ready: stays; blocked by its problems, or late: hides); Cancel the IRN of 2 hours keeps it; IRN of 30 hours with no goods or with its e-way bill hides; IRN cancelled: Make the IRN again keeps it only when enabled: %s" % m)
+           look + "Sales: Make the IRN keeps it only when enabled and within 30 days (ready: stays; blocked by its problems, or late for a turnover over Rs 10 crore: hides); Cancel the IRN of 2 hours keeps it; IRN of 30 hours with no goods or with its e-way bill hides; IRN cancelled: Make the IRN again keeps it only when enabled: %s" % m)
+        # the IRP's 30 days bind only a turnover of Rs 10 crore and above in the year before (GSTF.aato: typed in GST settings,
+        # else the books; not known: the client's "above Rs 10 crore" tick; neither known: no limit); a missing PIN of the
+        # client's own address is set in Sales settings, from the Sales page: Make the IRN can still be done
+        m = pg.evaluate("() => { " + CP + GON + IT + """const late = (v) => { rd(v); v.x.date = new Date(Date.now() - 40 * 864e5).toISOString().slice(0, 10); }, co = CO();
+          if (!S.books) return 'no books'; const keep = S.books.gstAato, aa = (n) => { S.books.gstAato = {'2025-26': n, '2026-27': n, '2027-28': n}; };
+          const out = {}; co.turnover10cr = false; aa(3e7); out.t3cr = cp(late); aa(12e7); out.t12cr = cp(late); aa(1e8); out.t10cr = cp(late);
+          aa(0); out.unknown = cp(late); co.turnover10cr = true; out.unknownTicked = cp(late); aa(3e7); out.t3crTicked = cp(late); co.turnover10cr = false; aa(0);
+          out.recent12cr = (aa(12e7), cp(rd)); S.books.gstAato = keep;
+          const ca = SL().cfg.address; SL().cfg.address = ''; out.pinOnly = cp(rd); out.pinAndCustomer = cp(v => { rd(v); v.x.address = 'Made-up Lane, Noida'; }); SL().cfg.address = ca;
+          return out; }""")
+        ok(m == {"t3cr": False, "t12cr": True, "t10cr": True, "unknown": False, "unknownTicked": True, "t3crTicked": False, "recent12cr": False, "pinOnly": False, "pinAndCustomer": True},
+           look + "Sales, no IRN, 40 days old: Rs 3 crore stays, Rs 12 crore (or 10) hides, turnover not known stays (with the Rs 10 crore tick: hides); within 30 days stays; only the client's PIN missing stays, the customer's PIN missing too hides: %s" % m)
         # the e-way bill counts only when one is needed: goods (an HSN not starting with 99; a blank one counts) that bear GST,
         # worth over Rs 50,000 with GST and cess (EINV.ewbNeeded); never a credit or debit note; no GST under LUT to an SEZ
         m = pg.evaluate("() => { " + CP + GON + IT + """return {services: cp(v => irn(v, [it('998314', 90000, 18)])), goodsOver: cp(v => irn(v, [it('8471', 50000, 18)])),
           goodsAt: cp(v => irn(v, [it('8471', 50000, 0)])), goodsUnder: cp(v => irn(v, [it('8471', 30000, 18)])), mixedOver: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 45000, 18)])),
           mixedUnder: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 20000, 18)])), goodsOverWithEwb: cp(v => { irn(v, [it('8471', 50000, 18)]); v.x.ewayNo = 'E1'; }),
           creditNote: cp(v => irn(v, [it('8471', 60000, 18)], {noteKind: 'credit'})), debitNote: cp(v => irn(v, [it('8471', 60000, 18)], {noteKind: 'debit'})),
-          sezLut45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'SEZWOP'})), sezWithTax45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'SEZWP'})),
+          sezLut45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'SEZWOP'})), exportLut45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'EXPWOP'})), sezWithTax45k: cp(v => irn(v, [it('8471', 45000, 18)], {supply: 'SEZWP'})),
           exempt0pct60k: cp(v => irn(v, [it('0701', 60000, 0)])), exemptFlag60k: cp(v => irn(v, [it('0701', 60000, 5, {exempt: true})])),
           invoiceCess: cp(v => irn(v, [it('2402', 40000, 12)], {cess: 8000})), noInvoiceCess: cp(v => irn(v, [it('2402', 40000, 12)])),
           hsnBlank60k: cp(v => irn(v, [it('', 60000, 18)])), qtyRate59k: cp(v => irn(v, [{desc: 'x', hsn: '8471', qty: 2, rate: 25000, gstRate: 18}])),
           discount47k: cp(v => irn(v, [{desc: 'x', hsn: '8471', qty: 1, rate: 60000, taxable: 40000, gstRate: 18}])), irnTypedNoItems: cp(v => irn(v, [], {irnStatus: '', ackDt: '', taxable: 100000, igst: 18000, total: 118000}))}; }""")
         ok(m == {"services": True, "goodsOver": False, "goodsAt": True, "goodsUnder": True, "mixedOver": False, "mixedUnder": True, "goodsOverWithEwb": True, "creditNote": True, "debitNote": True,
-                 "sezLut45k": True, "sezWithTax45k": False, "exempt0pct60k": True, "exemptFlag60k": True, "invoiceCess": False, "noInvoiceCess": True, "hsnBlank60k": False, "qtyRate59k": False, "discount47k": True, "irnTypedNoItems": True},
+                 "sezLut45k": True, "exportLut45k": True, "sezWithTax45k": False, "exempt0pct60k": True, "exemptFlag60k": True, "invoiceCess": False, "noInvoiceCess": True, "hsnBlank60k": False, "qtyRate59k": False, "discount47k": True, "irnTypedNoItems": True},
            look + "Sales, an IRN of 30 hours and no e-way bill: only goods bearing GST worth over Rs 50,000 keep it (services, Rs 50,000 or under, notes, SEZ under LUT under the limit, exempt, a discount under it, no items: hide; blank HSN, qty x rate, the invoice's own cess count): %s" % m)
         m = pg.evaluate("() => { " + CP + "GSTAPI.on = window.__gon; return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: ''}); })]; }")
         ok(m == [True, True], look + "Sales: the firm's GST API off (no e-invoice part on the panel): nothing offered, it hides: %s" % m)
