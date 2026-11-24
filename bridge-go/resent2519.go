@@ -180,6 +180,7 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 		}
 		vs := xmlDoc(x).All("VOUCHER")
 		tag := reTag.FindString(x)
+		selfOpt := entryOptional(x) // the review of 24-Nov-2026 (B1): the entry is itself Optional (the client's setting)
 		d := ""
 		if len(vs) > 0 {
 			d = normDate(nt(vs[0], "DATE"))
@@ -219,7 +220,7 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 		if err, failed := fails[d]; failed {
 			var moved *vchKey
 			for i, e := range others[d] {
-				if e.date != d && hasTag(e.narration, tag) && !e.cancelled {
+				if e.date != d && hasTag(e.narration, tag) && !e.cancelled && (!e.optional || selfOpt) {
 					moved = &others[d][i]
 					break
 				}
@@ -239,14 +240,27 @@ func resentLookFirst(port int, company string, todo []M, ids map[string]bool) (l
 			}
 			continue
 		}
+		// next-bridge-reupload (the owner's rule of 24-Nov-2026): an Optional or cancelled voucher carrying the mark is not
+		// the entry in the books, never "already posted": the entry goes again. The review of 24-Nov-2026 (B1): unless the
+		// entry is itself Optional (a client that posts Optional vouchers by its setting): its Optional voucher IS it;
+		// cancelled is always void
 		var hit *vchKey
+		void := ""
 		for i, e := range reads[d] {
-			if hasTag(e.narration, tag) && !e.cancelled {
-				hit = &reads[d][i]
-				break
+			if !hasTag(e.narration, tag) {
+				continue
 			}
+			if e.cancelled || (e.optional && !selfOpt) {
+				void = map[bool]string{true: "cancelled", false: "Optional"}[e.cancelled]
+				continue
+			}
+			hit = &reads[d][i]
+			break
 		}
 		if hit == nil {
+			if void != "" {
+				writeLog("  entry " + k + ": its mark is in Tally only on " + map[bool]string{true: "a cancelled", false: "an Optional"}[void == "cancelled"] + " voucher of " + ddmmyyyy(d) + ", not in the books: sent again")
+			}
 			left = append(left, it)
 			continue
 		}
@@ -279,4 +293,10 @@ func resentAsking(tc *TC, x string) bool {
 		return false
 	}
 	return true
+}
+
+// the review of 24-Nov-2026 (B1): whether FinCom's voucher is itself Optional (ISOPTIONAL Yes: the client posts Optional
+// vouchers by its setting); then an Optional voucher carrying its mark is the entry
+func entryOptional(x string) bool {
+	return strings.EqualFold(strings.TrimSpace(tagRaw(x, "ISOPTIONAL")), "Yes")
 }

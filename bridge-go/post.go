@@ -447,8 +447,9 @@ func readBackTags(port int, company string, items []M, pre int64) (found, old ma
 		}
 		for _, k := range ks {
 			// 2.5.20 review A2: a cancelled or optional entry carrying the mark is not the entry sent (as resentLookFirst):
-			// left out of the matching and so of the count, never "posted" by it
-			if k.cancelled || k.optional {
+			// left out of the matching and so of the count, never "posted" by it. The review of 24-Nov-2026 (B1): an
+			// Optional one is kept for an entry sent Optional itself (matched below); a cancelled one never
+			if k.cancelled {
 				continue
 			}
 			heads = append(heads, headOfKey(k))
@@ -458,8 +459,9 @@ func readBackTags(port int, company string, items []M, pre int64) (found, old ma
 	for _, it := range items {
 		if tag := reTag.FindString(str(it["xml"])); tag != "" {
 			id := str(it["id"])
+			selfOpt := entryOptional(str(it["xml"]))
 			for _, h := range heads {
-				if !hasTag(str(h["narration"]), tag) {
+				if !hasTag(str(h["narration"]), tag) || (str(h["optional"]) == "Yes" && !selfOpt) {
 					continue
 				}
 				if a := re(`\D`).ReplaceAllString(str(h["alter"]), ""); a != "" && toI64(a) > pre {
