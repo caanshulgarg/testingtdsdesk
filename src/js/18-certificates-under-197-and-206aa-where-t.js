@@ -169,6 +169,8 @@ function openBooks(cid){
 }
 async function openBooksNow(cid){
   const opening = S.books = {cid, loading: true};
+  // an entry's window of What to fix (FixEntry.jsx) is of the client it was opened for: closed when a client opens
+  if (S.gstFix) S.gstFix.pop = null;
   render();
   // prefetch-books: these books being brought in behind the page (src/js/98) are finished first, at once, and opened from
   // this browser's store: nothing fetched twice

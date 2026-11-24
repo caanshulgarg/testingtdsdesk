@@ -173,7 +173,8 @@ const Bridge = {
       if (!again && await this.refind()) return this.call(path, body, ms, true);
       throw {code: "bridge_other_user", message: "The FinCom Bridge at " + c.url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
     }
-    if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
+    // (fix in place: the answer's status and body go with it, for the answers that say no: app/src/screens/gst/FixEntry.jsx)
+    if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + "."), status: r.status, body: j};
     return j;
   },
   // fresh: a person's action (opening FinCom, posting, connecting) may ask Tally which companies are open. The minute

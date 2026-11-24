@@ -69,7 +69,7 @@ function Group({ c, k, find, r3b }) {
   const st = (S.gstFix = S.gstFix || {}), open = !!st[k], all = !!st[k + "|all"];
   // fix in place (FixEntry.jsx): the entry opened in a window on this page (kept on the list, so the window stays while
   // its row leaves the list once fixed)
-  const setPop = (d) => { st.pop = d ? { d, what: c.what, at: k.split("|").slice(0, 3).join("|") } : null; render(); };
+  const setPop = (d) => { st.pop = d ? { d, what: c.what, at: k.split("|").slice(0, 3).join("|"), cid: (S.books || {}).cid } : null; render(); };
   const [label, word, why, tally] = sayOf(c);
   const rows = open ? (c.all || c.rows).slice(0, all ? undefined : SHOW).map((x) => [x, docOf(x, find)]) : [];
   const toggle = () => { st[k] = !open; render(); };
@@ -135,7 +135,8 @@ export function FixList({ ym, reg, ret, n }) {
 // the entry opened from the list, in its window (FixEntry.jsx)
 function FixPop({ list, at }) {
   const st = (S.gstFix = S.gstFix || {}), p = st.pop;
-  if (!p || p.at !== at) return null;
+  // (only for the client it was opened for: src/js/18's openBooksNow closes it when a client opens)
+  if (!p || p.at !== at || p.cid !== (S.books || {}).cid) return null;
   const c = list.find((x) => x.what === p.what) || { what: p.what }, [, , why, tally] = sayOf(c);
   const close = () => { st.pop = null; render(); };
   return <FixEntry key={p.d.id || p.d.no} d={p.d} c={c} why={why} tally={tally} onClose={close} onLookup={() => { close(); openDoc(p.d); }} />;
