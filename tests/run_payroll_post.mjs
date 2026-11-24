@@ -212,7 +212,7 @@ function world(o = {}) {
   };
   const answer = o.answer || ((v) => ({ id: v.id, ok: true, created: 1, vchId: String(100 + posts.length), word: "In Tally" }));
   const g = { tallyVia: () => o.via || "bridge", Bridge: { st: { version: o.version == null ? "2.5.18" : o.version }, post: async (pl) => { posts.push(pl); log.push("post " + pl.vouchers.map((v) => v.id).join(",")); return { ok: true, results: [answer(pl.vouchers[0], posts.length)] }; } },
-    TCloud: { on: () => true, has: () => o.via === "cloud", postThrough: () => (o.through === undefined ? { version: "2.5.18", computer: "MADEUP-PC" } : o.through) }, Cloud: { api: async () => o.jobs || [] } };
+    TCloud: { on: () => true, has: () => o.via === "cloud", postThrough: () => (o.through === undefined ? { version: "2.5.18", computer: "MADEUP-PC" } : o.through) }, Cloud: { api: async (path) => (/^night_entries/.test(String(path)) ? [JSON.parse(JSON.stringify(o.entry || E()))] : o.jobs || []) } };
   const rpc = async (fn, a) => { log.push(fn); if (fn === "entry_claim" && o.claim) return o.claim; return { ok: true, a }; };
   const env = { g, A, rpc, co: Object.assign({ id: "c1", payrollMethod: { value: "tally" }, payHeadPlan: { "earn:Basic": "Basic Pay" } }, o.co || {}),
     recheck: async () => o.recheck || "", books: { salary: o.rows || ROWS }, pay: { employees: o.emps || EMPS, heads: o.heads || HEADS }, seen: o.seen };
@@ -263,6 +263,23 @@ const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouch
   ok(!r.ok && r.why === TPost.CHANGED && !w.log.length, "a net that is not the night's entry's: changed, nothing sent");
   w = world({ claim: { ok: false, why: "On its way to Tally: wait for it to finish." } }); r = await TPost.approveTallyPayroll(E(), w.env);
   ok(!r.ok && /On its way/.test(r.why) && !w.posts.length, "the claim refused (someone else is posting it): nothing sent");
+  // (review 4) the race: made again between the second check and the claim (the running month's update after a save):
+  // the entry read again after the claim, not what was checked: released, nothing posted, said
+  w = world(); w.env.entryOf = async (id) => ({ id, voucher: Object.assign({}, E().voucher, { lines: E().voucher.lines.map((l) => (l.ledger === "Salary" ? { ledger: "Salary", dr: 86838.71 } : l)) }) });
+  r = await TPost.approveTallyPayroll(E(), w.env);
+  ok(!r.ok && r.why === "Updated to the salary kept now; check and approve." && w.log.join(" > ") === "entry_claim > entry_release" && !w.posts.length, "made again after the second check: claimed, read again, released, nothing posted: " + w.log.join(" > ") + " (" + r.why + ")");
+  w = world(); w.env.entryOf = async (id) => ({ id, voucher: JSON.parse(JSON.stringify(E().voucher)) });
+  r = await TPost.approveTallyPayroll(E(), w.env);
+  ok(r.ok && w.posts.length === 1 && !w.log.includes("entry_release"), "read again after the claim, as checked: posted");
+  // (review 5) claimed, then the read again gives back no row (an empty list, null, an empty body): not read, so released,
+  // nothing posted, said
+  for (const [what, rows] of [["an empty list", []], ["null", null], ["an empty body", [{}]]]) {
+    w = world(); w.g.Cloud.api = async (path) => (/^night_entries/.test(String(path)) ? rows : []);
+    r = await TPost.approveTallyPayroll(E(), w.env);
+    ok(!r.ok && r.why === "FinCom could not read this entry again. Try Approve again in a moment." && w.log.join(" > ") === "entry_claim > entry_release" && !w.posts.length, "claimed, then the read again gave back " + what + ": released, nothing posted: " + w.log.join(" > ") + " (" + r.why + ")");
+  }
+  w = world(); w.env.entryOf = async () => null; r = await TPost.approveTallyPayroll(E(), w.env);
+  ok(!r.ok && /could not read this entry again/.test(r.why) && w.log.join(" > ") === "entry_claim > entry_release" && !w.posts.length, "claimed, then the entry read as nothing: released, nothing posted");
 }
 {
   let w = world({ answer: (v) => ({ id: v.id, ok: false, message: "Failed: Employee 'Mehta, Sunil' does not exist!" }) }), r = await TPost.approveTallyPayroll(E(), w.env);
@@ -284,7 +301,7 @@ const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouch
   const gross = m.rows.reduce((s, x) => s + x.gross, 0), net = m.rows.reduce((s, x) => s + x.net, 0);
   const e = E({ voucher: { type: "Journal", period: "202610", date: "20261031", party: "Salary Payable", lines: [{ ledger: "Salary", dr: gross }, { ledger: "Professional Tax Payable", cr: 150 * 200 }, { ledger: "Salary Payable", cr: net }] } });
   let first = true;
-  const w = world({ rows: m.rows, emps: m.employees, heads: m.heads, co: { payHeadPlan: m.plan }, answer: (v, k) => (v.id.endsWith("-p2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "2" + k }) });
+  const w = world({ entry: e, rows: m.rows, emps: m.employees, heads: m.heads, co: { payHeadPlan: m.plan }, answer: (v, k) => (v.id.endsWith("-p2") && first ? { id: v.id, ok: false, message: "Voucher type 'Payroll' does not exist" } : { id: v.id, ok: true, created: 1, vchId: "2" + k }) });
   let r = await TPost.approveTallyPayroll(e, w.env);
   ok(!r.ok && w.posts.length === 2 && w.posts.every(xmlOk) && w.posts.map((p) => p.vouchers[0].id).join() === "dc-tp-202610-c1-p1,dc-tp-202610-c1-p2", "150 employees: two postings of one voucher each (dc-tp-202610-c1-p1, -2)");
   ok(r.proof.length === 2 && /^Part 1 of 2: Tally created 1/.test(r.proof[0].words) && /^Part 2 of 2: not posted\. Tally has no voucher type “Payroll”/.test(r.proof[1].words) && w.log.includes("entry_release"), "the proof part by part; part 2's refusal in plain words; released");

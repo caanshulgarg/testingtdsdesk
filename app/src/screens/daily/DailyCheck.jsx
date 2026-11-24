@@ -9,7 +9,7 @@ import { loadAll, cloudOn, canWrite, isOwner, nameOf, askable, undo, choose, ask
 import { TRUST_WORDS, LEVEL_WORDS } from "../../../../server/_shared/dailytrust.js";
 import Review from "./Review.jsx";
 import "./daily.css";
-/* global toast, navHome */
+/* global toast, navHome, S */
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const rs = (v) => "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -172,7 +172,9 @@ function Done({ list, open, toggle, busy, run }) {
 }
 
 export default function DailyCheck() {
-  const [data, setData] = useState(null), [err, setErr] = useState(""), [tab, setTab] = useState(""), [open, setOpen] = useState(""), [send, setSend] = useState(null), [busy, setBusy] = useState(false);
+  // (the Payroll page's "Make the journal now", Open it) the tab and the entry to open first, said once
+  const first0 = (k) => { try { const v = String(S[k] || ""); S[k] = ""; return v; } catch (e) { return ""; } };
+  const [data, setData] = useState(null), [err, setErr] = useState(""), [tab, setTab] = useState(() => first0("dcTab")), [open, setOpen] = useState(() => first0("dcOpen")), [send, setSend] = useState(null), [busy, setBusy] = useState(false);
   const reload = useCallback(() => loadAll().then((d) => { setData(d || false); setErr(""); }, (e) => setErr(String((e && e.message) || e))), []);
   useEffect(() => { reload(); }, [reload]);
   const run = (fn) => { setBusy(true); return Promise.resolve().then(fn).then(reload, oops).finally(() => setBusy(false)); };

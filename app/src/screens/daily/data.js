@@ -138,7 +138,7 @@ export function tallyPayrollFor(e, co) {
 export async function approveJournal(e) {
   const cid = e.client_id;
   await openCompany(cid);
-  const { recheck } = await import("./again.js");
+  const { recheck, stillAsChecked } = await import("./again.js");
   // next-payroll: a Tally Payroll company's month goes as Tally payroll vouchers (lib/payrollPost.js: the same second check,
   // claim, one posting a voucher and the proof)
   if (tallyPayrollFor(e, CO(cid))) {
@@ -169,6 +169,8 @@ export async function approveJournal(e) {
   // (review M3) claimed on the server first (ready -> approving, one person at a time); refused: nothing posted
   try { const c = await rpc("entry_claim", { p_id: e.id }); if (c && c.ok === false) { toast(c.why || "This entry is not ready."); return false; } }
   catch (x) { toast(String((x && x.message) || x).replace(/^.*?ERROR:\s*/, "") || "This entry is not ready."); return false; }
+  // (review 4) made again meanwhile (the running month's update after a save): not what was checked; released, said
+  { const moved = await stillAsChecked(e); if (moved) { await rpc("entry_release", { p_id: e.id, p_why: moved.slice(0, 200) }).catch(() => null); toast(moved); return false; } }
   const d = { id: v.id, from: "daily", dedupe: e.dedupe, night_entry: e.id, title: e.why || e.reason, vouchers: [v], created: new Date().toISOString(), by: A.me() };
   let r = null, res = {};
   try { r = await A.postDraft(co, d, list); res = (d.results || {})[v.id] || {}; }
