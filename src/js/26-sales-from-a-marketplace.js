@@ -404,16 +404,19 @@ async function postSalesRun(){
     const now = new Date().toISOString();
     masters.forEach(l => { const r = by.get("led:" + l.name); if (r && r.ok){ l.sent = true; l.sentAt = now; } });
     let ok = 0, bad = 0, queued = 0, refusedN = 0;
+    const early = [];
     let optionalN = 0;
     list.forEach(v => { const r = by.get(v.id), no = salesRefusal(r);
       // (item 4) "created 0 of N" with exceptions and no line error: a definite refusal of the request, said plainly;
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
+      if (r && r.earlier){ early.push([v, r]); return; }   /* (24-Nov-2026) an earlier posting holds it: FinCom's copy of Tally decides (src/js/96-not-in-tally.js) */
       if (r && r.ok && !postTaken(r)){ bad++; v.postError = salesUnconfirmed(r); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
+    const ew = early.length && typeof salesEarlier === "function" ? await salesEarlier(early, co) : "";
     saveBank({newLed: true});
     s.busy = ""; saveSales();
-    toast(ok + " posted to Tally" + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
+    toast(ok + " posted to Tally" + (ew ? "; " + ew : "") + (optionalN ? " (" + optionalN + " as Optional vouchers: Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers)" : "") + (queued ? "; " + queued + " queued, posts by itself" : "") + (bad ? "; " + bad + " not posted (see the red notes)" : "") +
       (refusedN ? "; " + refusedN + " refused by Tally with no reason given: under To review, “Post one by one to find the cause”" : "") + ".");
     if (!bad && !queued && !refusedN) s.filter = "done";
     else if (refusedN && !bad && !queued) s.filter = "review";

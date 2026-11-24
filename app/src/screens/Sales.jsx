@@ -28,6 +28,8 @@ import "../../../src/js/26-sales-invoice.js";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
+// next-fix-reupload-posted: "Not in Tally? Check and post again" (NotInTally, salesNotInTally)
+import "../../../src/js/96-not-in-tally.js";
 
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
@@ -80,14 +82,22 @@ function salesCols(s, list, nSel) {
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
-        <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span>
+        <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") + (v.postNote ? " · " + v.postNote : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span>
         {/* (under the ledger, not beside Open: the row's buttons fit the table at any width) */}
         {v.status === "intally" && <div><button className="linkbtn" data-sales-nottally={v.id} onClick={act("nottally", v)}>Not this Tally entry</button></div>}</> },
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
         {v.x.irnStatus !== "active" && <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>}
-      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}</> },
+      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}<NotThere v={v} /></> },
   ];
+}
+
+// next-fix-reupload-posted: a posted invoice that is not in Tally any more (deleted there, or only Optional): FinCom's own
+// copy of Tally decides and, if so, it is posted again (src/js/96-not-in-tally.js; nothing is asked of Tally)
+function NotThere({ v, wide }) {
+  if (v.status !== "posted" || v.postedVia === "file") return null;
+  const busy = NotInTally.on(v.id);
+  return <button className={wide ? "btn" : "linkbtn"} data-not-in-tally={v.id} disabled={busy} title="FinCom's copy of Tally decides: if it shows this invoice deleted in Tally, or only as an Optional or cancelled voucher, it is posted again." onClick={() => salesNotInTally(v.id)}>{busy ? "Checking…" : NotInTally.LABEL}</button>;
 }
 
 // a panel over the page (the invoice, or the settings); a click on the dark area around it or Esc closes it
@@ -173,6 +183,7 @@ function Detail({ v }) {
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
       {v.postError && v.status !== "intally" && <div className="bk-alert bad" data-sales-posterr="">Tally: {postCloudSay(v.postError)}</div>}
+      {v.status === "posted" && v.postWhy && <div className="bk-alert" data-post-why={v.id}>{v.postNote}: {v.postWhy}</div>}
       {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
       {/* next-dup-cloud-only: the duplicate check's one small line (an old FinCom cloud copy, or it did not answer), on the panel only: src/js/26-sales-invoice.js salesCheckSafe */}
       {v.copyCheck && <div className="bk-alert info" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}
@@ -219,6 +230,7 @@ function Detail({ v }) {
           <button className="btn small" disabled={!claudeReady()} onClick={act("reread", "claude")}>Claude</button></>}
         {v.status === "review" && <button className="btn primary" onClick={act("confirm")}>Confirm</button>}
         {v.status === "ready" && <button className="btn" onClick={act("unready")}>Back to review</button>}
+        <NotThere v={v} wide />
         <button className="btn" onClick={act("print")}>Print invoice</button>
         {S.files["sv:" + v.id] && <button className="btn" onClick={act("file")}>View uploaded file</button>}
         {!fro && <button className="btn" onClick={act("edit")}>{v.source === "created" ? "Edit invoice" : (x.items || []).length ? "Edit items" : "Enter items"}</button>}

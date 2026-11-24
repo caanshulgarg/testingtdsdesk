@@ -111,7 +111,8 @@ const CloudPost = {
     j = j || {};
     const resultsOf = at => ids.filter(jobOf).map(x => {
       const jj = (at && jobOf(x) === id ? at : rows.get(jobOf(x))) || {}, got = [].concat(jj.results || []).find(y => y.id === x);
-      if (got) return got;
+      // (24-Nov-2026) an earlier posting's answer is said to be one: never a new posting of the entry
+      if (got) return jobOf(x) === own ? got : Object.assign({}, got, {earlier: jobOf(x)});
       const o = {id: x, ok: false, job: jobOf(x), status: jj.status};
       if (!fin(jj)) return Object.assign(o, {held: true, message: (!jj.status ? "Not heard from the cloud for 30 minutes" : jj.status === "waiting" ? waits(jj) : "Being posted " + (dup.has(x) ? "in an earlier posting" : "on the Tally computer")) + ": it stays queued and posts by itself."});
       if (dup.has(x) && jj.status === "done") return Object.assign(o, {held: true, message: "Already posted in an earlier posting (it stays queued there until its result is marked here); not sent twice."});

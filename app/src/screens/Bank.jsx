@@ -10,6 +10,8 @@
 // The filter bar (search, quick chips UPI / IMPS / NEFT ... with counts, In / Out, unassigned, more filters, select all
 // shown, a rule from the filter), the bulk voucher type and narration and the keys are parts/bank/ (24-Oct-2026).
 import "../../../src/js/99-screen-parts.js";
+// next-fix-reupload-posted: "Not in Tally? Check and post again" (bankNotInTally)
+import "../../../src/js/96-not-in-tally.js";
 import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
 import { useRef, useEffect, useLayoutEffect, useState } from "react";
@@ -112,8 +114,10 @@ function RowActions({ r }) {
   if (r.state === "ready") return <>{live() && !BankOverlap.isOpen(r) && <><button className="btn small" onClick={act("post")}>Post</button> </>}{rule} <button className="linkbtn" onClick={act("unready")}>Undo</button></>;
   if (r.state === "attention") return <>{rule}{ignore}</>;
   // a line in Tally is not brought back (it could be posted twice); one matched to the wrong Tally entry is told so
-  if (r.state === "intally") return bankOwnPost(r) ? null : <button className="linkbtn" onClick={act("nottally")}>Not this Tally entry</button>;
-  return r.state === "sent" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
+  // next-fix-reupload-posted: a line FinCom posted that is not in Tally any more (FinCom's copy of Tally decides): posted again
+  const gone = typeof TCloud === "object" && TCloud.has(B().cid) && <button className="linkbtn" data-not-in-tally={r.id} disabled={NotInTally.on(r.id)} onClick={() => bankNotInTally(r.id)}>{NotInTally.on(r.id) ? "Checking…" : NotInTally.LABEL}</button>;
+  if (r.state === "intally") return bankOwnPost(r) ? gone || null : <button className="linkbtn" onClick={act("nottally")}>Not this Tally entry</button>;
+  return r.state === "sent" ? gone || null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
 }
 
 // the statement's lines (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
