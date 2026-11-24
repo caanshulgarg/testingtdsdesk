@@ -46,8 +46,10 @@
 -- tally_period_next_paced too, and a locked period day read again once its month is unlocked.
 -- Ingest review: tally_days_claim(..., p_auto) and tally_check_next_open(..., p_auto): with p_auto false (a bridge before
 -- 2.5.16) only upload, check and fill days are claimed, so FinCom's own days are never held from a newer bridge; the
--- 7- and 2-argument calls as before. A given-up period day (over2s, dates, shape, toomany, entries, payroll, other) is
--- read again as a check day under the backoff and unmarked once that day is read whole.
+-- 7- and 2-argument calls as before. A given-up period day (over2s, dates, shape, entries, payroll, other) is read
+-- again as a check day of its own source 'retry' (so never by an old bridge), under the backoff, and unmarked once that
+-- day is read whole; 'toomany' is not (a check read hits the same limit) and says so plainly; tally_period_upload backs
+-- the day's open check day off 1 h, 3 h, then 24 h.
 begin;
 set local lock_timeout = '10s';
 
@@ -146,8 +148,10 @@ update public.tally_period_days set upload_at = null, upload_why = null, upload_
 -- tally_autoday_queue_of)
 update public.tally_period_days set upload_words = 'FinCom did not bring in ' || to_char(day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month; FinCom then reads this day by itself.'
  where upload_at is not null and upload_why = 'locked' and coalesce(upload_words, '') ~* 'upload';
+update public.tally_period_days set upload_words = to_char(day, 'DD-Mon-YYYY') || ' has more entries than FinCom can read from Tally in one go.'
+ where upload_at is not null and upload_why = 'toomany' and coalesce(upload_words, '') ~* 'upload';
 update public.tally_period_days set upload_words = 'FinCom could not read ' || to_char(day, 'DD-Mon-YYYY') || ' from Tally by itself.'
- where upload_at is not null and coalesce(upload_why, '') <> 'locked' and coalesce(upload_words, '') ~* 'upload';
+ where upload_at is not null and coalesce(upload_why, '') not in ('locked', 'toomany') and coalesce(upload_words, '') ~* 'upload';
 
 -- ---------------------------------------------------------------- 2. helpers (granted to nobody)
 -- B.5: after a 2 s stop the day waits 1 h, then 3 h, then 24 h, and every 24 h after
@@ -332,17 +336,17 @@ begin
   end loop;
 
   -- the period's days given up for another reason (a slow or odd day, entries FinCom could not take, payroll): read again
-  -- as a check day, under its backoff (6 lists unfinished: 1 h, 3 h, then 24 h); the period day unmarked once that day
+  -- as a check day of its own source 'retry' (prio 5), under its backoff (6 lists unfinished: 1 h, 3 h, then 24 h); the period day unmarked once that day
   -- is read whole. A payroll day keeps backing off to 24 h until payroll vouchers can be read
   for rw in select d.day, d.upload_at from tally_period_days d
-             where d.book_id = p_book and d.upload_at is not null and d.upload_why in ('over2s', 'dates', 'shape', 'toomany', 'entries', 'payroll', 'other')
+             where d.book_id = p_book and d.upload_at is not null and d.upload_why in ('over2s', 'dates', 'shape', 'entries', 'payroll', 'other')   -- not 'toomany': a check read hits the same limit
                and d.day <= today and (b.from_date is null or d.day >= b.from_date)
              order by d.day desc limit 100 loop
     select * into c from tally_check_days where book_id = p_book and day = rw.day;
     if c.book_id is not null and c.done_at is not null and c.done_at > rw.upload_at then
       update tally_period_days set upload_at = null, upload_why = null, upload_type = null, upload_words = null where book_id = p_book and day = rw.day;
     else
-      n := n + tally_autoday_put(p_book, f, rw.day, 'check', 5, rw.upload_at);
+      n := n + tally_autoday_put(p_book, f, rw.day, 'retry', 5, rw.upload_at);      -- its own source: never handed to a bridge before 2.5.16
     end if;
   end loop;
   -- the period's days given up for a locked month: read again once the month is unlocked (as its words promise)
@@ -814,8 +818,12 @@ begin
   if f is null or p_day is null then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
   insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_type, upload_words)
   values (p_book, f, p_day, now(), left(coalesce(p_why, ''), 40), nullif(left(coalesce(p_type, ''), 100), ''),
-          left(case when coalesce(p_words, '') = '' or p_words ~* 'upload' then 'FinCom could not read ' || to_char(p_day, 'DD-Mon-YYYY') || ' from Tally by itself.' else p_words end, 300))     -- 222: never an ask to upload
+          left(case when p_why = 'toomany' then to_char(p_day, 'DD-Mon-YYYY') || ' has more entries than FinCom can read from Tally in one go.'     -- 222: plain, no promise
+                    when coalesce(p_words, '') = '' or p_words ~* 'upload' then 'FinCom could not read ' || to_char(p_day, 'DD-Mon-YYYY') || ' from Tally by itself.' else p_words end, 300))     -- 222: never an ask to upload
   on conflict (book_id, day) do update set upload_at = coalesce(tally_period_days.upload_at, now()), upload_why = excluded.upload_why, upload_type = excluded.upload_type, upload_words = excluded.upload_words;
+  -- 222: the day's open check day waits after each give-up: 1 h, then 3 h, then 24 h
+  update tally_check_days set tries = tries + 1, last_why = left(coalesce(nullif(p_why, ''), 'upload'), 40), next_at = now() + tally_autoday_backoff(tries + 1)     -- 222
+   where book_id = p_book and day = p_day and done_at is null and upload_at is null;     -- 222
   return jsonb_build_object('ok', true);
 end $function$;
 comment on function public.tally_period_upload(uuid, date, text, text, text) is 'tally autoday (migration 222)';
