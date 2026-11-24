@@ -65,7 +65,7 @@ function salesCols(s, list, nSel) {
     { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
       cell: (v) => { const x = v.x; return <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}{gstinFromLedger(v) && <> <span className="src" data-gstin-from={v.id}>GSTIN from Tally ledger</span></>}</div></>; } },
     { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
-    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <><span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>{salesOptShown(v) && <div className="nr" data-sales-opt={v.id}>Optional voucher</div>}{v.copyCheck && <div className="nr" data-sales-copy={v.id} title={v.copyCheck.note}>Checked on FinCom’s copy</div>}</>; } },
+    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <><span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>{salesOptShown(v) && <div className="nr" data-sales-opt={v.id}>Optional voucher</div>}</>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
     { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => <>{money(gstOf(v.x))}
       {(v.taxPicks || []).map((t, i) => <div key={i} className="nr" data-tax-led={t.kind} title={t.why ? t.ledger + ": " + t.why : t.ledger}>{t.ledger}</div>)}</> },
@@ -80,11 +80,13 @@ function salesCols(s, list, nSel) {
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
-        <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span></> },
+        <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span>
+        {/* (under the ledger, not beside Open: the row's buttons fit the table at any width) */}
+        {v.status === "intally" && <div><button className="linkbtn" data-sales-nottally={v.id} onClick={act("nottally", v)}>Not this Tally entry</button></div>}</> },
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
         {v.x.irnStatus !== "active" && <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>}
-      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}{v.status === "intally" && <button className="linkbtn" onClick={act("nottally", v)}>Not this Tally entry</button>}</> },
+      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}</> },
   ];
 }
 
@@ -172,8 +174,8 @@ function Detail({ v }) {
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
       {v.postError && v.status !== "intally" && <div className="bk-alert bad" data-sales-posterr="">Tally: {postCloudSay(v.postError)}</div>}
       {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
-      {/* next-fix-sales-readsoff: checked for duplicates against an old FinCom cloud copy (src/js/26-sales-invoice.js salesCheckSafe) */}
-      {v.copyCheck && <div className="bk-alert" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}
+      {/* next-dup-cloud-only: the duplicate check's one small line (an old FinCom cloud copy, or it did not answer), on the panel only: src/js/26-sales-invoice.js salesCheckSafe */}
+      {v.copyCheck && <div className="bk-alert info" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}
       <SalesAsk v={v} wide />
       <section><h3>Invoice details</h3>
         <div className="bk-form">
@@ -367,19 +369,14 @@ function BulkLine({ s }) {
 }
 // a GSTIN FinCom filled from the party's Tally ledger (a sheet that gave none), said where it is shown
 const gstinFromLedger = (v) => !!(v && v.filled && v.filled.customerGstin && v.filled.customerGstin === v.x.customerGstin);
-// on an invoice: "Try again" (refused by Tally, or not confirmed: the duplicate check runs first), and the answer to a Tally
-// voucher of the same number and another amount
+// on an invoice: "Try again" (refused by Tally, or not confirmed: the duplicate check runs first); no duplicate is ever
+// held for a person (the owner, 23-Nov-2026: the same entry is marked In Tally when posting, anything else posted)
 function SalesAsk({ v, wide }) {
   const s = SL(), cls = wide ? "btn small" : "linkbtn";
   if (!["review", "ready"].includes(v.status)) return null;
-  // (the invoices by number listed once for the drawing: salesDupNow, src/js/26-sales-invoice.js)
-  const dup = salesDupNow(v);
   return <>
     {s.vtAsk && s.vtAsk.length > 1 && !v.x.noteKind && <span data-sales-vt-row={v.id}>{s.vtAsk.map((t) => <button key={t.type} className={cls} data-vt-pick-row={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type}</button>)}</span>}
     {(v.refused || v.needsCheck) && <button className={cls} data-sales-retry={v.id} disabled={!!s.busy || !canPostTally(CO())} title="Checks Tally for it first, then sends it on its own" onClick={() => salesPostOneByOne([v.id])}>Try again</button>}
-    {dup && <span data-sales-dup={v.id}>{wide && <b>{salesDupWords(dup)} </b>}
-      {dup.src === "tally" && <><button className={cls} data-near-same="" onClick={() => salesNearAnswer(v.id)}>It is this invoice</button>{" · "}</>}
-      <button className={wide ? "btn small danger" : "linkbtn danger"} data-dup-override="" onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></span>}
   </>;
 }
 // the client's own sales voucher type from its books (src/js/25 salesLearnVt), and the one question when there are several
@@ -393,11 +390,8 @@ function SalesVt({ s }) {
 }
 function SalesRefused({ s }) {
   const waiting = s.list.filter((v) => v.refused && !v.refused.single && v.status === "review"), done = s.oneByOne;
-  const skipped = (s.dupSkipped || []).map((id) => s.list.find((v) => v.id === id)).filter((v) => v && salesDupNow(v));
-  if (!waiting.length && !(done && done.rows && done.rows.length) && !skipped.length) return null;
+  if (!waiting.length && !(done && done.rows && done.rows.length)) return null;
   return <div className="bk-alert" data-sales-refused="">
-    {skipped.length > 0 && <div data-sales-dupskipped=""><b>Not posted: already in Tally</b>
-      <ul style={{ margin: "4px 0 0 18px" }}>{skipped.map((v) => <li key={v.id}>{v.x.number}: {salesDupWords(salesDupNow(v))} <button className="linkbtn danger" data-dup-override={v.id} onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></li>)}</ul></div>}
     {waiting.length > 0 && <div><b>Refused by Tally:</b> {waiting.length} invoice{waiting.length === 1 ? "" : "s"}. {waiting[0].refused.hint}{" "}
       <button className="btn small" data-sales-onebyone="" disabled={!!s.busy || !canPostTally(CO())} onClick={() => salesPostOneByOne()}>Post one by one to find the cause</button></div>}
     {done && done.rows && done.rows.length > 0 && <div data-sales-onebyone-result="" style={{ marginTop: waiting.length ? 8 : 0 }}><b>Posted one by one:</b>
