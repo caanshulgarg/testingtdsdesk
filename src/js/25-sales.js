@@ -45,14 +45,56 @@ function fyLabel(iso){ const d = iso ? new Date(iso + "T00:00:00") : new Date();
 function SL(){ return S.sales; }
 const SALES_CFG_DEFAULT = {voucherType: "Sales", series: "INV/{FY}/", next: 1, pad: 4, address: "", phone: "", email: "", bankName: "", bankAc: "", bankIfsc: "", bankBranch: "",
   terms: "Goods once sold will not be taken back. Interest at 18% p.a. will be charged on payments made after the due date. Subject to local jurisdiction.", signatory: "", ledgers: {}, auto: true, items: {}};
-async function loadSales(cid){
-  S.sales = {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
-  render();
+// (old: the list open on screen, read again after a change from the cloud, next-fix-sales-delete-shake: the owner,
+// 24-Nov-2026 "the window was shaking". It stays as it is drawn while the copy is read, with its tab, search, ticks,
+// open invoice, Undo and bar: never the loading page in between. ids: the invoices the cloud changed; the copy read is
+// laid over those only, into the same list and the same invoice objects, and every other invoice is left as it is here
+// (one Posted or uploaded meanwhile keeps that: the reviews of a85572b8b and 8fc130d15). The page is then drawn once the
+// changes stop coming (salesSettleSoon))
+async function loadSales(cid, old, ids){
+  old = old && old === S.sales && old.cid === cid && !old.loading ? old : null;
+  const st = old || {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
+  if (!old){ S.sales = st; render(); }
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
-  const [list, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
-  if (!S.sales || S.sales.cid !== cid) return;
-  SALES_REV++; Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
+  // (re-review of e9c90fa34: a save of this client's list still waiting is written first, never lost to this reading)
+  if (salesSavePending && salesSavePending.cid === cid) await salesSaveNow();
+  const [list0, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
+  // (another read started since, a removal arriving while this one was reading: that one is drawn)
+  if (S.sales !== st) return;
+  let list = list0 || [];
+  if (old){
+    const got = new Map(list.map(v => [v.id, v])), marks = typeof Cloud === "object" ? Cloud.marks() : {}, dels = typeof Cloud === "object" ? Cloud.dels() : {};
+    // (removed here, sent or waiting: never brought back by a copy read)
+    const gone = v => { const k = "sales|" + cid + "|" + cid + ":" + v.id; return marks[k] === "gone" || k in dels; };
+    const lay = (v, n) => { Object.keys(v).forEach(k => { if (!(k in n)) delete v[k]; }); Object.assign(v, n); };
+    // (ids: id -> the copy the cloud sent, null for a removal. Only a removal takes an invoice off; a change the read
+    // lacks (another tab's save of the whole list) is laid from the cloud's copy itself: the re-review of b7e05251c, M2)
+    if (ids){
+      ids.forEach((data, id) => { const i = old.list.findIndex(v => v.id === id), n = data === null ? null : got.get(id) || (data && clone(data));
+        if (data === null){ if (i >= 0) old.list.splice(i, 1); }
+        else if (i >= 0 && n) lay(old.list[i], n); else if (n && !gone(n)) old.list.push(n); });
+    } else {
+      const had = new Set(), kept = old.list.filter(v => { const n = got.get(v.id); if (!n) return !gone(v); had.add(v.id); lay(v, n); return true; });
+      old.list.splice(0, old.list.length, ...kept, ...list.filter(v => !had.has(v.id) && !gone(v)));
+    }
+    list = old.list;
+    const here = new Set(list.map(v => v.id));
+    [...old.sel].forEach(id => { if (!here.has(id)) old.sel.delete(id); });
+    if (old.openId && !here.has(old.openId)) old.openId = null;
+    if (old.dupSkipped) old.dupSkipped = old.dupSkipped.filter(id => here.has(id));
+    old.remapKey = null;   // the invoices read again are mapped again on this computer (salesRemapWaiting)
+  }
+  SALES_REV++; Object.assign(S.sales, {list, cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
   salesCfgTook(S.sales);
+  if (old) salesSettleSoon(cid); else salesAfterRead(cid);
+}
+// the changes coming from the cloud drawn once: 300 ms after the last, or every second while they keep coming
+let salesSettleT = 0, salesSettleAt = 0;
+function salesSettleSoon(cid){
+  const now = Date.now(); if (!salesSettleT) salesSettleAt = now; clearTimeout(salesSettleT);
+  salesSettleT = setTimeout(() => { salesSettleT = 0; const s = SL(); if (s && s.cid === cid && !s.loading) salesAfterRead(cid); }, Math.max(0, Math.min(300, salesSettleAt + 1000 - now)));
+}
+function salesAfterRead(cid){
   // next-fix-sales-sync: with the ledger list here, every invoice waiting is mapped again on this computer
   const remapped = typeof salesRemapWaiting === "function" && salesRemapWaiting();
   // invoices filed from elsewhere are matched now
@@ -68,20 +110,38 @@ async function loadSales(cid){
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
 }
-let salesSaveTimer = null;
+let salesSaveTimer = null, salesSavePending = null;
 // next-fix-hang (review of bb5a5c53d): moved by every save of the sales (and their loading), so the GST figures kept
 // across drawings (GSTR.keptState, src/js/12) see a marketplace invoice changed in place (ignored, its GSTIN typed, undone)
 let SALES_REV = 0;
 function saveSales(what){
   SALES_REV++;
-  const s = SL(); if (!s) return;
+  const s = SL(); if (!s || s.loading) return;   // (a list not yet in: nothing of it to keep)
   const cid = s.cid, list = s.list;
   if (typeof cloudSoon === "function") cloudSoon();
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
-  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; BankDB.set("sales:" + cid, list.map(salesSynced)); }, 500);
+  // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay;
+  // re-review of e9c90fa34: waiting, salesSavePending, until it is written, so closing the page still writes it)
+  salesSavePending = {cid, s};
+  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(salesSaveNow); }, 500);
   if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))){ salesCfgStamp(s); salesCfgWrite(s); }
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
+}
+// the save waiting, written now: the list on screen if it is this client's and in, else the one saved (never a list not
+// yet loaded)
+async function salesSaveNow(){
+  const p = salesSavePending; if (!p) return;
+  const n = SL(), src = n && n.cid === p.cid && !n.loading ? n : p.s;
+  if (!src.loading) await BankDB.set("sales:" + p.cid, src.list.map(salesSynced));
+  if (salesSavePending === p) salesSavePending = null;
+}
+// a change to a client's sales list kept in this browser, in turn with the sync's own (cloudApply, src/js/27): the sync
+// reads the list, adds its rows and lays the list on screen afresh (loadSales); a save in between put the list as it was
+// back over those rows (review of 85592e3f6: invoices synced during an upload lost)
+function salesTurn(f){
+  if (typeof cloudApply !== "function") return f();
+  const run = (cloudApply.q || Promise.resolve()).then(f); cloudApply.q = run.catch(() => {}); return run;
 }
 /* ---------- next-fix-sales-sync (16-Nov-2026): Sales settings merged key by key ---------- */
 // The settings went to the cloud as one whole object, and the last computer to save won: one with empty ledger settings
@@ -157,7 +217,7 @@ let salesNoIdx = null;
 function salesOfNo(no){ return salesNoIdx ? salesNoIdx.get(normInvNo(no)) || [] : SL().list; }
 // the invoice as it is to be kept and sent: as it was before it was looked at again, while nothing else changed it
 function salesSynced(v){ const k = v.__vw; return k && JSON.stringify(v) === k.after ? JSON.parse(k.before) : v; }
-window.addEventListener("pagehide", () => { if (salesSaveTimer && S.sales){ clearTimeout(salesSaveTimer); BankDB.set("sales:" + S.sales.cid, S.sales.list.map(salesSynced)); } });
+window.addEventListener("pagehide", () => { if (salesSavePending){ clearTimeout(salesSaveTimer); salesSaveTimer = null; salesSaveNow(); } });
 function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
 
 /* ---------- ledgers (exact Tally names only) ---------- */
@@ -565,8 +625,10 @@ function invoiceProblems(v){
   if (x.customerGstin && !gstinValid(x.customerGstin)) p.push("customer GSTIN is not valid");
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
   // (the owner, 24-Nov-2026, as the items check in salesProblemsNow: the invoice's own stated Adjustment plus Rounding,
-  // x.roundOff, read from an uploaded PDF or sheet, explains the gap and posts in Round Off; never on an invoice made
-  // here, whose roundOff is worked out as the gap)
+  // x.roundOff, explains the gap and posts in Round Off when the invoice was read from a file: a PDF or photo (upload,
+  // salesReadFile in src/js/26-sales-invoice.js) or a sheet (sheet, market: SheetImport in app/src/lib/registers.js,
+  // only when the sheet's Adjustment and Round Off explain the gap); never on an invoice made here, whose roundOff is
+  // worked out as the gap)
   const ro = ["upload", "sheet", "market"].includes(v.source) ? num(x.roundOff) : 0;
   if (Math.abs(num(x.taxable) + gst + num(x.cess) + ro - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
   if (num(x.igst) && (num(x.cgst) || num(x.sgst))) p.push("both IGST and CGST/SGST");

@@ -66,9 +66,14 @@ const CloudDocs = {
       if (e){ e.docPath = path; e.docSize = size; Store.saveEntry(job.cid, e); }
     } else if (job.kind === "sale"){
       const s = SL();
-      // (the other invoices of the same PDF, docOf, share its one copy)
-      const vs = s && s.cid === job.cid ? s.list.filter(x => "sv:" + x.id === job.id || "sv:" + x.docOf === job.id) : [];
-      if (vs.length){ vs.forEach(v => { v.docPath = path; v.docSize = size; }); saveSales(); }
+      // (the other invoices of the same PDF, docOf, share its one copy; those read after it went up take it from sv)
+      (this.sv = this.sv || {})[job.cid + "|" + job.id] = [path, size];
+      const mark = l => l.filter(x => "sv:" + x.id === job.id || "sv:" + x.docOf === job.id).map(v => { v.docPath = path; v.docSize = size; }).length;
+      const shown = () => { const n = SL(); return n && n.cid === job.cid && !n.loading ? n : null; };
+      // (its client not on screen, or loading: the list kept in this browser, in turn with the sync, re-review of e9c90fa34)
+      if (shown()){ if (mark(shown().list)) saveSales(); }
+      else salesTurn(async () => { if (shown()){ if (mark(shown().list)) saveSales(); return; }
+        const k = "sales:" + job.cid, l = await BankDB.get(k); if (l && mark(l)){ await BankDB.set(k, l); if (shown()) mark(shown().list); } });
     } else if (job.kind === "gstret"){
       const x = S.books && S.books.cid === job.cid && typeof GSTV === "object" ? GSTV.list().find(z => z.id === job.id) : null;
       if (x){ x.docPath = path; x.docSize = size; saveBooks(); }

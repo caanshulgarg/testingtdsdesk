@@ -40,7 +40,10 @@ async function uploadSales(files){
   // client's list as it is now, and is kept at once: the one on screen, else the one in this browser (as salesIngest)
   const now = () => S.sales && S.sales.cid === cid ? S.sales : null;
   const say = t => { const s = now(); if (s){ s.busy = t; render(); } };
-  const live = async () => { while (now() && now().loading) await new Promise(ok => setTimeout(ok, 100)); return now(); };   // a list being loaded: once it is in
+  // (a list being loaded: once it is in; one whose loading failed is waited on 10 s, once, re-review of e9c90fa34)
+  let stuck = null;
+  const live = async () => { for (let t = 0; now() && now().loading && now() !== stuck && t < 100; t++) await new Promise(ok => setTimeout(ok, 100));
+    const s = now(); if (s && s.loading) stuck = s; return s && !s.loading ? s : null; };
   const kept = async () => { const s = await live(); return s ? s.list : ((await BankDB.get("sales:" + cid)) || []); };
   const told = new Set();
   let added = 0;
@@ -71,9 +74,14 @@ async function uploadSales(files){
       const doc = first.get(fh);
       S.files["sv:" + v.id] = file;
       if (doc) v.docOf = doc; else { first.set(fh, v.id); FileStore.put(cid, "sv:" + v.id, file); CloudDocs.add(cid, "sv:" + v.id, file, "sale"); }
-      const s = await live();
-      if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
-      else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
+      // (review of 85592e3f6) in turn with the sync (salesTurn), into the list as it is then: a sync's rows stay, and the
+      // link to the file in the firm account, once it is up, goes on every invoice from it (CloudDocs.sv)
+      await salesTurn(async () => {
+        const up = (CloudDocs.sv || {})[cid + "|sv:" + (v.docOf || v.id)]; if (up){ v.docPath = up[0]; v.docSize = up[1]; }
+        const s = await live();
+        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = salesSavePending = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
+        else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
+      });
       added++;
     } catch (e){
       toast(file.name + of + ": " + (e && e.code === "sales_unreadable" ? "the invoice could not be read. Create it by hand with Create invoice." : e && e.code === "sales_type" ? "use a PDF or a photo." : errCopy(e && e.code)));
@@ -500,6 +508,11 @@ function salesUndo(){
   const s = SL(), u = s.undo; if (!u) return;
   let kept = 0;
   u.before.forEach(old => { const i = s.list.findIndex(v => v.id === old.id); if (i >= 0 && salesInTally(s.list[i]) && s.list[i].status !== old.status){ kept++; return; } if (i >= 0) s.list[i] = old; else s.list.push(old); });
+  // (an invoice put back is no longer removed here: its removal is taken off the list waiting to be sent, so it is sent
+  // again as an invoice and a colleague's later removal of it is taken in: the review of 8fc130d15, N1)
+  // (one whose removal was already sent: that removal coming back takes it off again, and says so: src/js/27, M3)
+  if (typeof Cloud === "object"){ const d = Cloud.dels(), m = Cloud.marks(); let n = 0; s.undoneSent = s.undoneSent || new Set();
+    u.before.forEach(o => { const k = "sales|" + s.cid + "|" + s.cid + ":" + o.id; if (k in d){ delete d[k]; n++; } else if (m[k] === "gone") s.undoneSent.add(o.id); }); if (n) Cloud.setDels(d); }
   s.undo = null; saveSales(); if (kept) postPart(P => toast("Undone. " + P.keptWords(kept, "invoice"))); else toast("Undone."); render();
 }
 // set a customer ledger; other open invoices of the same customer follow
