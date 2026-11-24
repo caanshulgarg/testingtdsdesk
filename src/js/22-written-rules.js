@@ -676,7 +676,8 @@ function sameParty(a, b){
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
 // the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
-  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", matchedAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""}, postCleared(r.id));
+  // (polish 2) its Optional mark too: a line posted again is Optional only if that posting is (NotInTally.optional)
+  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", matchedAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: "", postedOptional: false}, postCleared(r.id));
   delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }

@@ -1263,14 +1263,16 @@ async function postBankToTally(ids){
       if (live !== b) held.forEach(r => { if (!done.has(r.id) && r.postError) { const q = live.rows.find(z => z.id === r.id); if (q && q.state === "ready" && !q.postError) q.postError = r.postError; } });
       saveBank({rows: true, posted: true});
     }
-    if (early.length && window.loadPart) await window.loadPart("notintally").then(() => postEarlier("bank", co, early, tname)).catch(() => {});
+    // (polish 2) its line goes into this toast and the report, the sales way (src/js/26 postSalesRun)
+    const ew = early.length && window.loadPart ? await window.loadPart("notintally").then(() => postEarlier("bank", co, early, tname)).catch(() => "") : "";
     const aN = already ? already.n : 0;
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, checking: !!j.checking,
-      already: aN, alreadyLine: aN ? bankAlreadyLine(already) : "", review: failed.filter(f => f.review).length,
+      already: aN, alreadyLine: aN ? bankAlreadyLine(already) : "", review: failed.filter(f => f.review).length, earlier: ew || "",
       // the posting went straight to the bridge and FinCom's cloud did not keep its record: said, never quiet
       unrecorded: j.recorded === false ? (j.recordWhy || "FinCom's cloud did not keep a record of this posting.") : ""};
     if (B() && B() !== b && B().cid === b.cid) B().postReport = b.postReport;
-    toast(aN && !ok && !failed.length ? bankAlreadyLine(already) : ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (aN ? ", " + aN + " already in Tally (marked as posted)" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
+    const rest = (skipped ? ", " + skipped + " were already there" : "") + (aN ? ", " + aN + " already in Tally (marked as posted)" : "") + (failed.length ? ", " + failed.length + " not posted" : "");
+    toast(aN && !ok && !failed.length && !ew ? bankAlreadyLine(already) : (ok || !ew ? ok + " posted to Tally" + rest + (ew ? "; " + ew : "") : ew + rest) + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
     b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again
@@ -1370,7 +1372,7 @@ async function postBillsToTally(opts){
       });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, byReplyN = 0, replyWords = "";
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, byReplyN = 0, replyWords = "", ew = "";
     const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
@@ -1424,11 +1426,13 @@ async function postBillsToTally(opts){
         }
         Store.saveEntry(co.id, e);
       });
-      if (early.length && window.loadPart) await window.loadPart("notintally").then(() => postEarlier("bill", co, early, tname)).catch(() => {});
+      // (polish 2) its line goes into this toast and S.billPost, the sales way (src/js/26 postSalesRun)
+      if (early.length && window.loadPart) ew = await window.loadPart("notintally").then(() => postEarlier("bill", co, early, tname)).catch(() => "");
     }
     S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, byReply: byReplyN, checkFailed, masters: masterWords, company: tname, checkNote,
-      reply: replyWords};
-    toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
+      reply: replyWords, earlier: ew || ""};
+    const rest = (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "");
+    toast((ok || !ew ? ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + rest + (ew ? "; " + ew : "") : ew + rest) + ".");
   } catch (e){
     if (e && e.code === "cancelled"){ S.billPost = {cancelled: e.message}; toast(e.message); }
     else { S.billPost = {error: e.message, failed}; toast("Posting failed: " + e.message); }

@@ -12,6 +12,10 @@ on the Post press itself. Made-up data only.
   2. "Not in Tally? Post again" on a posted invoice (row and panel): the posting that holds it found, the same decision
   3. the same on a purchase bill and a bank line FinCom posted
   4. nothing is ever asked of Tally or FinCom Bridge for it
+  5. (the polish) bank lines by the bank's own Optional setting; (polish 2) a line posted as an Optional voucher counts as
+     Optional whatever the setting is now: never asked, no button
+  6. (polish 2) the bank and bills Post press itself, the bridge's answer stubbed: a whole partial batch of an earlier
+     posting is never split into posted lines (FinCom's copy decides each), and the toast and report say it the sales way
 Screenshots (deviceScaleFactor 2) go to SHOTS when it is set.
 Run on the React build: TDSDESK_SITE=../app/dist-test SYNC_PORT=8961 python3 run_sales_reupload.py"""
 import os, threading, functools, http.server
@@ -55,6 +59,44 @@ STUB = """() => { window.__toasts = []; const t0 = window.toast; window.toast = 
   Bridge.post = async (p) => { window.__sent.push(p.vouchers.map(v => v.id)); return window.__post ? window.__post(p) : CloudPost.run(SL() ? SL().cid : CO().id, p); }; }"""
 STATE = "(id) => { const v = SL().list.find(v => v.id === id); return {st: v.status, at: v.postedAt || '', note: v.postNote || '', err: v.postError || '', opt: !!v.postedOptional, ovr: !!v.dupOverride}; }"
 LAST = "() => window.__toasts.slice(-1)[0] || ''"
+# (polish 2) a page of its own for the bank and bills Post press: FinCom Bridge's answer as window.__post says, FinCom's
+# copy of Tally holding nothing for the days posted, every call recorded
+STUB2 = """() => { window.__toasts = []; const t0 = window.toast; window.toast = (m) => { window.__toasts.push(String(m)); return t0 && t0(m); };
+  window.ensureTallyCompany = async () => "ZZ Test Reupload Traders"; window.syncLedgersFromTally = async () => true; window.checkBankBalance = async () => null;
+  window.tallyVia = () => "bridge"; window.__sent = []; window.__bcalls = []; window.__rpc = [];
+  Object.assign(Bridge.st, {state: "up", version: "2.5.20", tallyUp: true, open: [{name: "ZZ Test Reupload Traders", port: 9000}], allowImport: true});
+  Bridge.on = () => true; Bridge.up = () => true; Bridge.openFor = () => ({name: "ZZ Test Reupload Traders", port: 9000});
+  Bridge.call = async (url) => { window.__bcalls.push(String(url)); return {ok: true, vouchers: []}; };
+  TCloud.on = () => true; TCloud.has = () => true;
+  TCloud.book = () => ({book: "bk-zr", from: "2026-04-01", to: "2026-11-30", company: "ZZ Test Reupload Traders", daysAt: new Date().toISOString(), state: {seen: new Date().toISOString()}});
+  CloudTally.call = async () => ({ok: true, via: "cloud", vouchers: []});
+  TCloud.rpc = async (fn, args) => { window.__rpc.push([fn, args]); return fn === "tally_post_copy_resend" ? window.__copy(args) : {ok: true}; };
+  if (typeof PostReg === "object") Object.assign(PostReg, {readable: null, by: {}, busy: {}, missingAt: 0});
+  Bridge.post = async (p) => { window.__sent.push(p.vouchers.map(v => v.id)); return window.__post(p); }; }"""
+BANK2 = """async () => {
+  const BK = "Zeta Bank", RCPT = "Sundry Receipts";
+  const c = newCompany({name: "ZZ Test Reupload Bank", gstin: "09AAKFZ1234C1Z5"}); c.tallyName = "ZZ Test Reupload Traders"; c.bankAccounts = [{id: "a1", bank: "Zeta Bank", acct: "0001", ledger: BK}];
+  choiceConfirm(c, "bank:a1", BK); choiceConfirm(c, "postTo", "ZZ Test Reupload Traders");
+  S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+  await openCompany(c.id); S.tab = "bank";
+  window.__bankRows = (n) => Array.from({length: n}, (_, i) => ({id: "s1-" + i, fp: "fp-reup-" + i, date: "2026-09-0" + (2 + i), debit: 0, credit: 2000 + 100 * i, narr: "NEFT CR CUSTOMER " + i,
+    dec: {name: "CUSTOMER " + i, mode: "NEFT"}, ledger: i === 3 ? "Software" : RCPT, state: "ready", balOk: true, userSet: true}));
+  S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "Zeta Bank", acct: "0001", from: "2026-09-01", to: "2026-09-30"}], cur: "s1", rows: window.__bankRows(4), rules: [], wrules: [],
+    ledgers: {list: [{name: BK, group: "Bank Accounts"}, {name: RCPT, group: "Sundry Debtors"}, {name: "Software", group: "Indirect Expenses"}], importedAt: new Date().toISOString(), live: true}, newLed: [], keys: {}, books: {}, filter: "ready", grouped: false,
+    showSettings: false, q: "", limit: 500, pendingRule: null, busy: "", createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
+  try { localStorage.setItem(wideCheckKey(), String(Date.now())); } catch (e){}
+  render(); return c.id; }"""
+BILLS2 = """async () => {
+  const c = newCompany({name: "ZZ Test Reupload Bills", gstin: "09AANFZ3202D1ZR"}); c.tallyName = "ZZ Test Reupload Traders";
+  S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+  choiceConfirm(c, "tds:professional", "TDS Payable - Professional"); choiceConfirm(c, "postTo", "ZZ Test Reupload Traders");
+  await openCompany(c.id);
+  const leds = ["Alpha Consultants", "Professional Charges", "TDS Payable - Professional"];
+  const now = new Date().toISOString(); Ledgers.take(c.id, {list: leds.map(n => ({name: n, group: /Charges/.test(n) ? "Indirect Expenses" : /TDS/.test(n) ? "Duties & Taxes" : "Sundry Creditors"})), src: "file", at: now, srcAt: now});
+  window.__bill = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
+    e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); return e; };
+  window.postReconcile = () => 0; window.postJobStates = () => new Map(); window.remoteIdTrial = () => false; window.autoPostTo = async () => {};
+  refreshStats(c.id); goStep("post", "bills"); render(); return c.id; }"""
 OLD = {"id": "", "ok": True, "kind": "voucher", "byReply": True, "verified": False, "batchN": 10, "batchEnd": "45174", "company": "", "sentAt": "2026-11-18T11:23:12+05:30"}
 
 with sync_playwright() as p:
@@ -100,7 +142,10 @@ with sync_playwright() as p:
     A.evaluate("""() => { window.__copy = (a) => ({ok: false, state: "none", job: a.p_job, id: a.p_id, error: "FinCom's copy of Tally has no entry carrying this FinCom id, so it cannot tell whether it is in Tally. Nothing was sent."}); }""")
     vc = press("ZR/0459"); st = A.evaluate(STATE, vc); t = A.evaluate(LAST)
     ok(st["st"] == "posted" and st["at"].startswith("2026-11-18") and st["note"] == "Posted before by FinCom, not sent again", "Posted before, not sent again (%s)" % st)
-    ok("1 invoice was posted before by FinCom and not sent again" in t and A.evaluate("(id) => SL().list.find(v => v.id === id).postWhy", vc) == "FinCom's copy of Tally doesn't have this invoice, so it can't tell. Nothing was sent.", "readable, the reason kept in plain words (%s)" % t)
+    # (polish 2) the reason never contradicts the note: when the copy cannot tell, it says when FinCom posted it, and that
+    # the copy does not show it
+    WHY_C = A.evaluate("() => 'Posted by FinCom on ' + fmtDate('2026-11-18') + \". FinCom's copy of Tally doesn't show it, so it can't tell if it is still there. Nothing was sent.\"")
+    ok("1 invoice was posted before by FinCom and not sent again" in t and A.evaluate("(id) => SL().list.find(v => v.id === id).postWhy", vc) == WHY_C, "readable, the reason kept in plain words (%s)" % A.evaluate("(id) => SL().list.find(v => v.id === id).postWhy", vc))
     print(" d. the cloud cannot decide yet (migration 219 not run): the status kept, the red note says so")
     A.evaluate("""() => { window.__copy = () => ({throw: "Could not find the function public.tally_post_copy_resend(p_id, p_job) in the schema cache"}); }""")
     vd = press("ZR/0460"); st = A.evaluate(STATE, vd)
@@ -138,6 +183,8 @@ with sync_playwright() as p:
         os.makedirs(SHOTS, exist_ok=True); row.first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "1-sales-posted-row.png"))
     A.evaluate("(id) => { SL().openId = id; render(); }", vc); A.wait_for_timeout(500)
     ok(A.locator(".bk-panel [data-not-in-tally='%s']" % vc).count() == 1 and A.locator("[data-post-why='%s']" % vc).count() == 1, "the button and the reason in the invoice's panel")
+    pw = A.locator("[data-post-why='%s']" % vc).first.inner_text() if A.locator("[data-post-why='%s']" % vc).count() else ""
+    ok(pw.strip() == WHY_C and "not sent again:" not in pw, "(polish 2) the panel's reason says it once, without \"not sent again: … can't tell\" (%s)" % pw)
     if SHOTS:
         A.locator("[data-post-why='%s']" % vc).first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "2-sales-panel-reason.png"))
         A.locator(".bk-panel [data-not-in-tally='%s']" % vc).first.scroll_into_view_if_needed(); A.wait_for_timeout(200); A.screenshot(path=os.path.join(SHOTS, "3-sales-panel-button.png"))
@@ -195,11 +242,85 @@ with sync_playwright() as p:
       CO().bankOptional = false; return o; }""")
     ok(out["rpc"] == 0 and out["st"] == "sent" and out["sent"].startswith("2026-11-18"), "a bank line of such a client: not asked, posted before (%s)" % out)
     ok("Optional vouchers by its setting" in out["t"] and out["optBank"] is True and out["optSales"] is False, "its button says so and sends nothing; bankOptional is the bank's own setting (%s)" % out)
-    # (the polish) postBankToTally: an earlier posting's answer is looked at before a partial split takes the line
-    src = A.evaluate("() => fetch((document.querySelector('script[src*=legacy]') || {}).src || 'legacy.js').then(r => r.text())")
-    i = src.find("function postBankToTally("); seg = src[i:i + 20000]
-    ok(i >= 0 and 0 <= seg.find(".earlier)") < seg.find(".taken)"), "the earlier check comes before the split's taken lines (%d < %d)" % (seg.find(".earlier)"), seg.find(".taken)")))
+    print("5b. (polish 2) a line posted as an Optional voucher counts as Optional, whatever the client's setting is now")
+    out = A.evaluate("""async () => { window.__rpc = []; window.__toasts = []; CO().bankOptional = false; CO().createOptional = false;
+      const old = {ok: true, byReply: true, verified: false, sentAt: "2026-11-18T11:23:12+05:30"};
+      const r = {id: "stzr-5", fp: "stzr-5", state: "ready", date: "2026-11-10", narr: "NEFT ZZ", debit: 320, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, postedOptional: true};
+      B().rows.push(r); const lineK = await postEarlier("bank", CO(), [[r, Object.assign({id: r.id, earlier: "j-k5"}, old)]], "ZZ Test Reupload Traders");
+      const e = {id: "bill-zr-5", status: "approved", postedOptional: true, x: {invoiceNo: "ZB/85", invoiceDate: "2026-11-12", total: 650, vendorName: "Made-up Vendor"}, snapshot: {lines: []}};
+      D().entries[e.id] = e; const lineB = await postEarlier("bill", CO(), [[e, Object.assign({id: e.id, earlier: "j-b5"}, old)]], "ZZ Test Reupload Traders");
+      const o = {rpc: window.__rpc.length, toasts: window.__toasts.length, rst: r.state, exp: e.exportedAt || null, lineK, lineB};
+      const s = {id: "stzr-6", fp: "stzr-6", state: "sent", date: "2026-11-10", narr: "NEFT ZZ", debit: 330, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, sentAt: "2026-11-18T06:00:00.000Z", postedVia: "bridge", postedOptional: true};
+      B().rows.push(s); window.__ids = [{job_id: "j-k6"}]; await bankNotInTally(s.id); o.tBank = window.__toasts.slice(-1)[0] || "";
+      const e2 = {id: "bill-zr-6", status: "approved", exportedAt: "2026-11-18T06:00:00.000Z", postByReply: true, postedVia: "bridge", postedOptional: true, x: {invoiceNo: "ZB/86", invoiceDate: "2026-11-12", total: 660}, snapshot: {lines: []}};
+      D().entries[e2.id] = e2; await billNotInTally(e2.id); o.tBill = window.__toasts.slice(-1)[0] || ""; o.rpc2 = window.__rpc.length;
+      o.optLine = NotInTally.optional(CO(), "bank", s); o.optNone = NotInTally.optional(CO(), "bank", {});
+      bankClearPosting(s); o.cleared = s.postedOptional === true;
+      window.__ids = []; return o; }""")
+    ok(out["rpc"] == 0 and out["rst"] == "sent" and bool(out["exp"]) and out["exp"].startswith("2026-11-18"), "a bank line and a bill posted as Optional: not asked, posted before (%s)" % out)
+    ok(out["toasts"] == 0 and "bank line was posted before by FinCom and not sent again" in (out["lineK"] or "") and "bill was posted before by FinCom and not sent again" in (out["lineB"] or ""), "(polish 2) postEarlier gives its line back and shows no toast of its own (%s)" % out)
+    ok(out["rpc2"] == 0 and "Optional" in out["tBank"] and "Optional" in out["tBill"] and out["optLine"] is True and out["optNone"] is False, "their buttons say so and send nothing (%s; %s)" % (out["tBank"], out["tBill"]))
+    ok(out["cleared"] is False, "a bank line's posting cleared clears its Optional mark too")
+    vo = A.evaluate("""() => { const v = SL().list.find(v => v.status === 'posted' && !v.postedOptional && v.postedVia !== 'file'); v.postedOptional = true; SL().filter = 'done'; SL().openId = null; render(); return v.id; }""")
+    A.wait_for_timeout(400)
+    ok(A.locator("[data-not-in-tally='%s']" % vo).count() == 0, "an invoice posted as an Optional voucher: no \"Not in Tally? Post again\"")
+    A.evaluate("(id) => { SL().list.find(v => v.id === id).postedOptional = false; render(); }", vo)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally at all")
+
+    print("6. (polish 2) the bank and bills Post press itself, FinCom Bridge's answer stubbed")
+    P = ctx.new_page(); P.on("pageerror", lambda e: errors.append(str(e)))
+    P.goto("http://localhost:%d/" % PORT); P.wait_for_timeout(2500); P.evaluate(READY); P.wait_for_timeout(800)
+    P.evaluate(STUB2); P.evaluate(BANK2); P.wait_for_timeout(500)
+    print(" a. a whole partial batch of an earlier posting (Tally made 3 of 4, one ledger missing), each answer carrying earlier")
+    P.evaluate("""() => { window.__rpc = []; window.__toasts = []; window.__copy = (a) => ({ok: false, state: "none", job: a.p_job, id: a.p_id});
+      const at = "2026-11-18T11:23:12+05:30";
+      window.__post = (p) => ({ok: true, company: "ZZ Test Reupload Traders", results: p.vouchers.map(v => ({id: v.id, kind: "voucher", ok: false, needsReview: true, accepted: true, earlier: "j-old-bank",
+        created: 3, altered: 0, errors: 1, batchN: 4, batchEnd: "5004", sentAt: at, lineError: ["Ledger &apos;Software&apos; does not exist!"],
+        message: "Tally's reply: created 3 of 4, errors 1, Ledger 'Software' does not exist!"}))}); }""")
+    P.evaluate("() => postBankToTally()"); P.wait_for_timeout(1500)
+    R = P.evaluate("() => B().rows.map(r => ({id: r.id, st: r.state, err: r.postError || '', job: r.postJob || ''}))")
+    asked = [a for f, a in P.evaluate("() => window.__rpc") if f == "tally_post_copy_resend"]
+    ok(P.evaluate("() => window.__sent.length") == 1 and len(R) == 4, "the four lines went to the (stubbed) bridge once (%s)" % P.evaluate("() => window.__sent"))
+    ok(all(r["st"] == "ready" for r in R) and not any("Tally refused this line" in r["err"] for r in R), "no line is marked posted or refused from the split (%s)" % R)
+    ok(sorted(a["p_id"] for a in asked) == sorted(r["id"] for r in R) and all(a["p_job"] == "j-old-bank" for a in asked), "FinCom's copy is asked for each, for that earlier posting (%s)" % asked)
+    ok(all("created 3 of 4" in r["err"] for r in R), "each keeps that posting's words as its red note (%s)" % R[0])
+    t = P.evaluate(LAST); rp = P.evaluate("() => (B().postReport || {}).earlier || ''")
+    ok(t.startswith("4 not sent: see the red note on each") and "0 posted" not in t, "the toast the sales way, no \"0 posted\" (%s)" % t)
+    ok(rp == "4 not sent: see the red note on each", "and the line in the posting's report (%s)" % rp)
+    P.evaluate("() => { B().filter = 'all'; render(); }"); P.wait_for_timeout(400)
+    ok("4 not sent: see the red note on each" in (P.inner_text("[data-bank-report]") if P.locator("[data-bank-report]").count() else ""), "shown in the report on the page")
+    print(" b. an earlier posting Tally took, a regular voucher in the copy: posted before, said once")
+    P.evaluate("""() => { const b = B(); b.rows = window.__bankRows(1); b.postReport = null; b.postedTags = {}; window.__rpc = []; window.__toasts = []; window.__sent = [];
+      window.__copy = (a) => ({ok: false, state: "there", vtype: "Receipt", vno: "77", day: "2026-09-02"});
+      window.__post = (p) => ({ok: true, company: "ZZ Test Reupload Traders", results: p.vouchers.map(v => ({id: v.id, kind: "voucher", ok: true, byReply: true, verified: false, earlier: "j-old-b2", sentAt: "2026-11-18T11:23:12+05:30"}))}); }""")
+    P.evaluate("() => postBankToTally()"); P.wait_for_timeout(1500)
+    t = P.evaluate(LAST); st = P.evaluate("() => B().rows[0].state")
+    ok(st == "sent" and t == "1 bank line was posted before by FinCom and is in Tally: not sent again.", "In Tally, the toast one plain line (%s; %s)" % (st, t))
+    ok(len(P.evaluate("() => window.__toasts")) == 1, "one toast, not two (%s)" % P.evaluate("() => window.__toasts"))
+    print(" c. (polish 2) a bank line posted as an Optional voucher: its button not shown, whatever the setting")
+    P.evaluate("""() => { const b = B(); b.rows = window.__bankRows(3); b.rows.forEach(r => { r.state = 'sent'; r.sentAt = new Date().toISOString(); r.postedVia = 'bridge'; r.postByReply = true; r.tally = {company: 'ZZ Test Reupload Traders'}; });
+      b.rows[2].postedOptional = true; b.filter = 'done'; b.drawer = null; render(); }""")
+    P.wait_for_timeout(500)
+    cnt = lambda q: P.locator(q).count()
+    ok(cnt("[data-not-in-tally='s1-1']") >= 1 and cnt("[data-not-in-tally='s1-2']") == 0, "on the rows: the regular one has it, the Optional one not (%d, %d)" % (cnt("[data-not-in-tally='s1-1']"), cnt("[data-not-in-tally='s1-2']")))
+    P.evaluate("() => { B().drawer = 's1-1'; render(); }"); P.wait_for_timeout(300); d1 = cnt("[data-drawer-act='notintally']")
+    P.evaluate("() => { B().drawer = 's1-2'; render(); }"); P.wait_for_timeout(300); d2 = cnt("[data-drawer-act='notintally']")
+    P.evaluate("() => { B().drawer = null; render(); }")
+    ok(d1 == 1 and d2 == 0, "and in the line's drawer (%d, %d)" % (d1, d2))
+    print(" d. bills: an earlier posting Tally took, a regular voucher in the copy")
+    P.evaluate(BILLS2); P.wait_for_timeout(500)
+    P.evaluate("""() => { window.__bill("zb-1", "Alpha Consultants", "ZB/91", 1000); window.__rpc = []; window.__toasts = []; window.__sent = [];
+      window.__copy = (a) => ({ok: false, state: "there", vtype: "Journal", vno: "J-91", day: "2026-07-01"});
+      window.__post = (p) => ({ok: true, company: "ZZ Test Reupload Traders", results: p.vouchers.map(v => ({id: v.id, kind: "voucher", ok: true, byReply: true, verified: false, earlier: "j-old-bill", sentAt: "2026-11-18T11:23:12+05:30"}))}); }""")
+    P.evaluate("() => postBillsToTally()"); P.wait_for_timeout(1500)
+    t = P.evaluate(LAST); bp = P.evaluate("() => (S.billPost || {}).earlier || ''"); ex = P.evaluate("() => D().entries['zb-1'].exportedAt || ''")
+    ok(ex.startswith("2026-11-18") and t == "1 bill was posted before by FinCom and is in Tally: not sent again.", "posted before, the toast the sales way (%s; %s)" % (ex, t))
+    ok(bp == "1 bill was posted before by FinCom and is in Tally: not sent again" and len(P.evaluate("() => window.__toasts")) == 1, "the line in S.billPost, one toast (%s; %s)" % (bp, P.evaluate("() => window.__toasts")))
+    P.wait_for_timeout(300)
+    ok(bp and bp in (P.inner_text("[data-post-result]") if P.locator("[data-post-result]").count() else ""), "and on the Post screen's result line")
+    if SHOTS:
+        P.locator("[data-post-result]").first.scroll_into_view_if_needed(); P.wait_for_timeout(200); P.screenshot(path=os.path.join(SHOTS, "4-bills-post-result.png"))
+    ok(P.evaluate("() => window.__bcalls.filter(u => /^\\/(vouchers|ledgerlines|tags|daybook)/.test(u))") == [], "nothing read from Tally")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

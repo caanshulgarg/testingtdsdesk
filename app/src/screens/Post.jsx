@@ -80,6 +80,8 @@ function RunLine({ co }) {
       {bp.checkFailed ? " · " + bp.checkFailed + " not posted: Tally could not be checked first" : ""}
       {/* round 18: reading entries from Tally is off on the bridge (prospective only): the pre-check could not be made */}
       {bp.checkNote ? " · " + bp.checkNote : ""}
+      {/* (polish 2) bills an earlier posting of FinCom holds, decided by FinCom's copy of Tally (src/js/96 postEarlier) */}
+      {bp.earlier ? " · " + bp.earlier : ""}
       {failed.length ? " · " + failed.length + " failed and went back to To review (" + failed.map((f) => f.no + ": " + f.msg).join("; ") + ")" : ""}
       {(bp.masters || []).length > 0 && <span data-post-masters="">{" · Ledgers: " + bp.masters.map((m) => m.name + ": " + m.word).join(", ")}</span>}
       {bp.optional > 0 && <span>{" · " + bp.optional + " went in as Optional vouchers. " + OPTIONAL_HELP}</span>}

@@ -97,7 +97,7 @@ function salesCols(s, list, nSel) {
 // copy of Tally decides and, if so, it is posted again (src/js/96-not-in-tally.js; nothing is asked of Tally)
 function NotThere({ v, wide }) {
   // (a client posting Optional vouchers by its setting: its Optional voucher is the posting; no such button)
-  if (v.status !== "posted" || v.postedVia === "file" || NotInTally.optional(CO(SL().cid))) return null;
+  if (v.status !== "posted" || v.postedVia === "file" || NotInTally.optional(CO(SL().cid), "", v)) return null;
   const busy = NotInTally.on(v.id);
   return <button className={wide ? "btn" : "linkbtn"} data-not-in-tally={v.id} disabled={busy} title="FinCom's copy of Tally decides: if it shows this invoice deleted in Tally, or only as an Optional or cancelled voucher, it is posted again." onClick={() => salesNotInTally(v.id)}>{busy ? "Checking…" : NotInTally.LABEL}</button>;
 }
@@ -185,7 +185,8 @@ function Detail({ v }) {
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
       {v.postError && v.status !== "intally" && <div className="bk-alert bad" data-sales-posterr="">Tally: {postCloudSay(v.postError)}</div>}
-      {v.status === "posted" && v.postWhy && <div className="bk-alert" data-post-why={v.id}>{v.postNote}: {v.postWhy}</div>}
+      {/* (polish 2) the reason alone: it says when FinCom posted it and why the copy cannot tell, never beside "not sent again" */}
+      {v.status === "posted" && v.postWhy && <div className="bk-alert" data-post-why={v.id}>{v.postWhy}</div>}
       {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
       {/* next-dup-cloud-only: the duplicate check's one small line (an old FinCom cloud copy, or it did not answer), on the panel only: src/js/26-sales-invoice.js salesCheckSafe */}
       {v.copyCheck && <div className="bk-alert info" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}

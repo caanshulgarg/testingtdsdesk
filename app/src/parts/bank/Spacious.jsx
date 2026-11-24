@@ -246,7 +246,7 @@ export function Drawer({ rows }) {
       {r.state === "ignored" && <button className="btn small" data-drawer-act="restore" onClick={act("restore")}>Restore</button>}
       {r.state === "intally" && !bankOwnPost(r) && <button className="btn small" data-drawer-act="nottally" onClick={act("nottally")}>Not this Tally entry</button>}
       {r.state === "sent" && r.tally && r.tally.guid && live() && <button className="btn small" data-drawer-act="unpost" onClick={act("unpost")}>Take it back</button>}
-      {(r.state === "sent" || (r.state === "intally" && bankOwnPost(r))) && typeof TCloud === "object" && TCloud.has(b.cid) && !(CO(b.cid) || {}).bankOptional && typeof bankNotInTally === "function" && <button className="btn small" data-drawer-act="notintally" disabled={NotInTally.on(r.id)} onClick={() => bankNotInTally(r.id)}>{NotInTally.LABEL}</button>}
+      {(r.state === "sent" || (r.state === "intally" && bankOwnPost(r))) && typeof TCloud === "object" && TCloud.has(b.cid) && !(r.postedOptional || (CO(b.cid) || {}).bankOptional) && typeof bankNotInTally === "function" && <button className="btn small" data-drawer-act="notintally" disabled={NotInTally.on(r.id)} onClick={() => bankNotInTally(r.id)}>{NotInTally.LABEL}</button>}
     </div>}
   </aside>;
 }
