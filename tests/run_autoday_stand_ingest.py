@@ -126,6 +126,7 @@ try:
     print("== 1. a stuck line's day, by itself")
     beat(GB); beat()     # both bridges' records (cos) kept: each serves the book once tally-ingest asks again (every 20 s a book)
     time.sleep(21)
+    db.sql("delete from tally_work_claims where book_id = %s" % q(BOOK)); unask()     # (the older bridge may take the held day in those beats: 196's, as before)
     c, r, cd = beat()
     ok(cday(STUCK).get("source") == "held" and cday(STUCK).get("prio") == "1", "1. queued by the beat itself: held, prio 1 (%s)" % cday(STUCK))
     ok(c == 200 and d8(STUCK) in [d["day"] for d in cd] and all(d["kind"] == "check" for d in cd if d["day"] == d8(STUCK)), "1. handed to the 2.5.16 bridge serving the book, as a check day (%s)" % [d["day"] for d in cd])
