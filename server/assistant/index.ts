@@ -217,9 +217,11 @@ export function handler(deps: Deps) {
       const party = body.side === "vendor" || body.side === "customer";
       const cap = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE).catch(() => null);
       if (!cap?.ok) return reply(429, { ok: false, kind: "cap", error: cap ? capWords(String(cap.why || ""), Number(cap.cap_inr || 0), Number(cap.cap || 0)) : "The firm's AI limit could not be checked; try again." });
+      // (next-fix-zoho-sales-sheet, 24-Nov-2026: a 200-column sheet's answer was cut off at 1,200 tokens and read as no
+      // mapping at all; the page now sends at most 80 columns, those that matter)
       const client = deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 60_000 }) as unknown as TurnCtx["client"]);
       try {
-        const msg: any = await (client as any).messages.create({ model: HAIKU, max_tokens: 1200,
+        const msg: any = await (client as any).messages.create({ model: HAIKU, max_tokens: 2000,
           system: [{ type: "text", text: payroll ? PAYROLL_SYSTEM : party ? PARTY_SYSTEM : SHEET_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
           messages: [{ role: "user", content: payroll ? payrollPrompt(head, rows) : sheetPrompt(head, rows, String(body.side || "purchase")) }] });
         const text = (msg?.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("");

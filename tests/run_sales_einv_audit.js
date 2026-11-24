@@ -19,7 +19,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
 const NAMES = ["num", "r2", "INR", "money", "xesc", "GSTIN_RE", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_STATES", "SALES_RATES", "stateOfGstin", "fyLabel", "rateTag",
   "salesOwnGstins", "salesPan", "salesGstinOfPan", "salesOwnStates", "salesIsOwn", "salesSeriesKeys", "salesRegOf", "salesLearnReg",
   "salesTotals", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
-  "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync",
+  "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "postNamesKnown", "postNameScrub", "POST_REASONS", "postReasonText", "postCloudSay", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
   "inv", "blankItem", "salesIrnLocked", "startDraft", "recalcDraft", "draftProblems", "saveDraft", "salesSetField", "salesSetKind", "EINV"];
 const {ctx, x} = load(HTML, NAMES);
 // made-up GSTINs of one PAN in Maharashtra (27) and Karnataka (29), and customers'
@@ -30,7 +30,7 @@ const s = {cid: "c1", list: [], cfg: {auto: true, address: "1 Test Road, Pune 41
 let calls = [], toasts = [], jobs = {};
 Object.assign(ctx, {SL: () => s, CO: () => co, saveSales(){}, render(){}, toast: t => toasts.push(t), hasLedgerList: () => true, exactLedger: n => n || "",
   taxLedgerPick: (kind) => ({ledger: "Output " + kind.toUpperCase()}), salesLedgerFor: () => "Sales", roundOffLedger: () => "Round Off",
-  customerLedgerFor: () => ({ledger: "Made Up Customer", sure: true, label: "test"}), salesDupOf: () => null, salesDupWords: () => "", salesOfNo: () => s.list,
+  customerLedgerFor: () => ({ledger: "Made Up Customer", sure: true, label: "test"}), salesDupOf: () => null, salesOfNo: () => s.list,
   B: () => ({ledgers: {list: [{name: "Customer A", gstin: CMH, state: "Maharashtra"}, {name: "Customer B", gstin: CKA, state: "Karnataka"}]}}), salesSetUndo(){}, Cloud: {delete(){}},
   CloudPost: {row: async id => jobs[id]}, salesRefusal: () => null, salesMarkRefused(){}, plainMsg: m => String(m || ""),
   tallyLedgerName: n => n, fmtDate: d => d, toTallyDate: d => String(d).replace(/-/g, ""), learnCustomer(){}, esc: t => t,
@@ -174,7 +174,8 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   await x.EINV.cancel(q, "2", "test");
   ok(q.status === "ready" && q.x.irnCancelInTally === true, "a posting queued: the result still awaited, marked for cancelling in Tally (" + q.status + ")");
   x.mapInvoice(q);
-  jobs["job-ok-1"] = {status: "done", company: "Made Up Co", results: [{id: q.id, ok: true}]};
+  // (Tally's own reply says it took the voucher: since next-sales-followups an answer not confirmed is not posted)
+  jobs["job-ok-1"] = {status: "done", company: "Made Up Co", results: [{id: q.id, ok: true, byReply: true}]};
   await x.salesQueuedSync();
   ok(q.status === "posted" && q.x.irnCancelInTally === true, "the voucher reached Tally: posted, and the alert to cancel it there stands (" + q.status + ")");
   const q2 = add({taxable: 1000, cgst: 90, sgst: 90, total: 1180, irn: "IRN-Q2", irnStatus: "active", irnGstin: MH}); q2.status = "ready"; q2.postJob = "job-bad-1";

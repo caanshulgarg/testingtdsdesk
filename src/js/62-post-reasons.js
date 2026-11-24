@@ -156,7 +156,9 @@ function postCloudSay(m){
 }
 // the firm's computers' and Windows users' names (the computer keys, TLight and the Tally page's beats), whole words only,
 // never a common word ("Admin", "Tally", "PC", …, which ordinary posting words also use): {name (lower case): "pc"|"user"}
-const POST_COMMON = new Set("admin administrator tally user users owner pc desktop laptop office accounts account guest server home default public computer system staff fincom bridge windows the and for not you your this that with from".split(" "));
+const POST_COMMON = new Set(("admin administrator tally user users owner pc desktop laptop office accounts account guest server home default public computer system staff fincom bridge windows the and for not you your this that with from"
+  // (accounting words, which Tally's own words use: "Voucher type Sales does not exist", next-posting-followups)
+  + " sales sale purchase purchases gst igst cgst sgst tds tcs audit billing bill bills accounting finance tax ledger ledgers voucher vouchers invoice invoices bank cash payment receipt journal contra credit debit note stock payroll books ca").split(" "));
 function postNamesKnown(devs){
   const out = new Map(), one = (x, k) => { const t = String(x || "").trim().toLowerCase(); if (t.length >= 3 && !POST_COMMON.has(t) && !out.has(t)) out.set(t, k); };
   const add = (x, k) => { const s = String(x || ""); one(s, k); s.split(" \u00b7 ").forEach((p, i) => { one(p, i ? "user" : k); if (p.includes("\\")) one(p.split("\\").pop(), "user"); }); };
@@ -175,10 +177,15 @@ function postNameScrub(m, keep, devs){
   // (each name put in a mark first, so no word put in is looked at again)
   const mark = t => { hold.push(t); return "\u0001" + (hold.length - 1) + "\u0002"; };
   cos.forEach(c => { for (let i = lc().indexOf(c.toLowerCase()); i >= 0; i = lc().indexOf(c.toLowerCase(), i + 1)){ const k = mark(s.slice(i, i + c.length)); s = s.slice(0, i) + k + s.slice(i + c.length); } });
+  // a quoted ledger, party or voucher type ("Ledger \u201cOutput GST 18%\u201d", 'Sales UP') kept as it is, as a company's name;
+  // an apostrophe ("the firm's") opens no quote (next-posting-followups)
+  s = s.replace(/\u201c[^\u201c\u201d]{1,120}\u201d|"[^"]{1,120}"|(?<![\p{L}\p{N}_])['\u2018][^'\u2018\u2019\n]{1,120}['\u2019](?![\p{L}\p{N}_])/gu, mark);
   const has = (t, n, f) => { const l = t.toLowerCase(); for (let i = l.indexOf(n, f || 0); i >= 0; i = l.indexOf(n, i + 1)) if (!w(l[i - 1]) && !w(l[i + n.length])) return i; return -1; };
   s = s.replace(/ ?\(([^()]*)\)/g, (a, x) => / \u00b7 |\\|[A-Z]:\\/.test(x) || [...names.keys()].some(n => has(x, n) >= 0) ? "" : a);
   [...names.keys()].sort((a, b) => b.length - a.length).forEach(n => { for (let i = has(s, n); i >= 0; i = has(s, n, i + 1)){ const k = mark(names.get(n) === "user" ? "the Windows user" : "the Tally computer"); s = s.slice(0, i) + k + s.slice(i + n.length); } });
-  return s.replace(/\u0001(\d+)\u0002/g, (a, i) => hold[+i]).replace(/\s+([,.;:])/g, "$1").replace(/\s{2,}/g, " ").trim();
+  // (a quote may hold a company's mark: put back until none is left)
+  for (let k = 0; k < 3 && /\u0001\d+\u0002/.test(s); k++) s = s.replace(/\u0001(\d+)\u0002/g, (a, i) => hold[+i]);
+  return s.replace(/\s+([,.;:])/g, "$1").replace(/\s{2,}/g, " ").trim();
 }
 // HTML entities in a message (the bridge's XML words) without the page (plainMsg needs a document)
 function postReasonText(m){

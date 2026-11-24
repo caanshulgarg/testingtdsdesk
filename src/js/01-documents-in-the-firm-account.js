@@ -66,8 +66,10 @@ const CloudDocs = {
       if (e){ e.docPath = path; e.docSize = size; Store.saveEntry(job.cid, e); }
     } else if (job.kind === "sale"){
       const s = SL();
-      const v = s && s.cid === job.cid ? s.list.find(x => "sv:" + x.id === job.id) : null;
-      if (v){ v.docPath = path; v.docSize = size; saveSales(); }
+      // (the other invoices of the same PDF, docOf, share its one copy; those read after it went up take it from sv)
+      (this.sv = this.sv || {})[job.cid + "|" + job.id] = [path, size];
+      const vs = s && s.cid === job.cid ? s.list.filter(x => "sv:" + x.id === job.id || "sv:" + x.docOf === job.id) : [];
+      if (vs.length){ vs.forEach(v => { v.docPath = path; v.docSize = size; }); saveSales(); }
     } else if (job.kind === "gstret"){
       const x = S.books && S.books.cid === job.cid && typeof GSTV === "object" ? GSTV.list().find(z => z.id === job.id) : null;
       if (x){ x.docPath = path; x.docSize = size; saveBooks(); }

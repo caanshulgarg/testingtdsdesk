@@ -304,8 +304,8 @@ Object.assign(PostOwner, {
       if (!ok || v.status !== "intally") return;
       // back to review: a person confirms it before it is posted
       v.notTally = (v.notTally || []).concat(key); const no = normInvNo(v.x.number); s.cfg.notTally = Object.assign({}, s.cfg.notTally, {[no]: v.notTally}); saveSales({cfg: true}); delete v.tallyMatch; v.postNote = "";
-      // (the owner, 16-Nov-2026: not that entry, but its number and type are in Tally: never posted without "Post duplicate anyway")
-      v.status = "review"; if (m.key || m.number) v.dupBlock = m; mapInvoice(v); v.status = "review";
+      // (not that entry: back to To review for a person to confirm; nothing else holds it, the owner, 23-Nov-2026)
+      v.status = "review"; mapInvoice(v); v.status = "review";
       auditEvent("sales_not_tally", "Invoice " + (v.x.number || v.id) + ": not Tally entry " + words, s.cid);
       saveSales(); toast("Marked as not that Tally entry: it is not matched to it again."); render();
     });

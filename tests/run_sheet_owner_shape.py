@@ -36,6 +36,8 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      it right; "Edit type" does nothing to a row that is not held or is approved / posted, and a held bill is not
      approved until its type is set; a return carries no TDS (a 1,00,000 professional-fees return: TDS 0); the client's
      own name for its purchase voucher type is kept when Journal is chosen and chosen back.
+ 19. next-fix-zoho-sales-sheet (24-Nov-2026): Zoho Books' invoice export (no "Taxable value" column) by rules, no AI:
+     Item Total added up an invoice, the taxes far to the right, Draft and Void invoices left out and counted.
  17. the owner (16-Nov-2026): a number already in Tally or posted from FinCom is never posted without "Post duplicate
      anyway", confirmed twice (bulk Post skips and lists it); the client's own sales voucher type from its books.
  18. the owner (16-Nov-2026): every ledger of an invoice changed on it (a box of the client's Tally ledgers, kept as
@@ -330,8 +332,8 @@ with sync_playwright() as p:
     # the already-booked check: the same types asked of Tally; a note is matched to a note, an invoice never to a note
     chk = E("""async () => { const tv = window.tallyVia, tc = window.tallyCall; let url = "";
       const cn = SL().list.find(v => /^CN\//.test(v.x.number)), inv = SL().list.find(v => v.x.number === "UP/26-27/0011"), dn = SL().list.find(v => /^DN\//.test(v.x.number));
-      window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [{number: cn.x.number, type: "Credit Note", date: "20261013", amount: 590, guid: "g1"},
-        {number: inv.x.number, type: "Credit Note", date: "20261012", amount: 1180, guid: "g2"}, {number: dn.x.number, type: "Sales", date: "20261016", amount: 354, guid: "g3"}]}; };
+      window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [{number: cn.x.number, type: "Credit Note", date: "20261013", amount: 590, guid: "g1", party: cn.customerLedger},
+        {number: inv.x.number, type: "Credit Note", date: "20261012", amount: 1180, guid: "g2", party: inv.customerLedger}, {number: dn.x.number, type: "Sales", date: "20261016", amount: 354, guid: "g3", party: dn.customerLedger}]}; };
       try { await salesCheckTally(SL().list.filter(v => v.status === "ready")); } finally { window.tallyVia = tv; window.tallyCall = tc; }
       const r = {url, cn: cn.status, inv: inv.status, dn: dn.status}; [cn, inv, dn].forEach(v => { if (v.status === "intally"){ v.status = "ready"; delete v.tallyMatch; } }); return r; }""")
     # (next-fix-sales-upload, item 2: every voucher of the period is asked for, and the Sales-class types kept here)
@@ -671,12 +673,12 @@ with sync_playwright() as p:
     ok("not valid" not in p3[0], "a “not valid” label kept from before on a blank GSTIN is gone when the page opens (%s)" % p3)
     E("(id) => { SL().openId = id; salesSetField('customerGstin', '%s'); SL().openId = null; }" % G["delhi"], a.get("id"))
 
-    print("15. the already-booked check: every Sales-class type; Not this Tally entry side by side, asked twice")
+    print("15. the already-booked check: the same entry (its exact type); Not this Tally entry side by side, asked twice")
     box = lambda: pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
     chk = E("""async (G) => { const tv = window.tallyVia, tc = window.tallyCall; let url = "";
       const a = SL().list.find(v => v.x.number === "ZZ/1"), m = SL().list.find(v => v.x.number === "MX/1");
       window.tallyVia = () => true; window.tallyCall = async (co, u) => { url = decodeURIComponent(u); return {vouchers: [
-        {number: "ZZ/1", type: "Sales UP", date: "20261020", party: "ZZ Delhi Buyers", guid: "zz1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1000.00"}, {ledger: "Output IGST", amount: "180.00"}]},
+        {number: "ZZ/1", type: "Sales", date: "20261020", party: "ZZ Delhi Buyers", guid: "zz1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1000.00"}, {ledger: "Output IGST", amount: "180.00"}]},
         {number: "MX/1", type: "GST Sales", date: "20261022", party: "ZZ Delhi Buyers", guid: "mx1", entries: [{ledger: "ZZ Delhi Buyers", amount: "-3410.00"}, {ledger: "Consulting Income (A)", amount: "2000.00"}]},
         {number: "ZZ/3", type: "Journal", date: "20261021", party: "ZZ Far Buyers", guid: "jv", entries: [{ledger: "ZZ Far Buyers", amount: "-1180.00"}, {ledger: "Consulting Income (A)", amount: "1180.00"}]},
         {number: "ZZ/4", type: "Tax Invoice", date: "20261021", party: "ZZ Nowhere Buyers", guid: "ti", entries: [{ledger: "ZZ Nowhere Buyers", amount: "-590.00"}, {ledger: "Consulting Income (A)", amount: "500.00"}]},
@@ -685,28 +687,18 @@ with sync_playwright() as p:
       const g = n => SL().list.find(v => v.x.number === n);
       return {url, a: a.status, am: a.tallyMatch || null, m: m.status, c: g("ZZ/3").status, d: g("ZZ/4").status, b: g("ZZ/2").status, bn: g("ZZ/2").dupBlock || null, bp: (g("ZZ/2").problems || []).join(" | ")}; }""", G)
     ok("types=" not in chk["url"] and "from=20261019" in chk["url"] and "to=20261023" in chk["url"], "the invoices' own dates only (20 to 22 Oct, a day either side), every type (%s)" % chk["url"][-80:])
-    ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales UP" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
-       "the client's own “Sales UP” voucher of that number and amount is found, with its real amount 1,180 and its party (%s)" % chk["am"])
-    ok(chk["m"] == "intally" and chk["c"] != "intally" and chk["d"] != "intally", "a type named sales (“GST Sales”) is found; a Journal of that number crediting Sales Accounts is not, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
-    D20 = E("fmtDate('2026-10-20')")
-    ok(chk["b"] == "review" and (chk["bn"] or {}).get("amount") == 999 and ("Already in Tally as Sales ZZ/2 dated %s, ₹999.00. Post again anyway?" % D20) in chk["bp"],
-       "the same number of another amount (999 against 1,180): not taken for this invoice, but held: “Already in Tally as Sales ZZ/2 dated …, ₹999.00. Post again anyway?” (%s; %s)" % (chk["b"], chk["bp"]))
+    ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
+       "the same entry (number, type, year, amount, customer) is found, with its real amount 1,180 and its party (%s)" % chk["am"])
+    # (the owner, 24-Nov-2026: both with a GSTIN and the same one, any Sales-class type is the same type: "GST Sales" of the
+    # same customer GSTIN, number, year and amount is the same entry; never a Journal, nor a "Tax Invoice" type)
+    ok(chk["m"] == "intally" and chk["c"] != "intally" and chk["d"] != "intally", "another sales series (“GST Sales”) of the same GSTIN is the same entry; not a Journal of that number crediting Sales Accounts, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
+    # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow", superseding 16-Nov-2026's "Post duplicate anyway"):
+    # the same number of another amount is another entry: nothing holds it
+    ok(not chk["bn"] and "Already in Tally" not in chk["bp"] and "Post again anyway?" not in chk["bp"],
+       "the same number of another amount (999 against 1,180): not taken for this invoice, and not held for it (%s; %s)" % (chk["b"], chk["bp"]))
     bid = E("() => SL().list.find(v => v.x.number === 'ZZ/2').id")
     E("(id) => { SL().filter = 'review'; SL().openId = null; render(); }", bid); W(400)
-    row = '#app [data-sales-dup="%s"]' % bid
-    ok(pg.locator(row + " [data-dup-override]").count() == 1 and "Post duplicate anyway" in pg.inner_text(row + " [data-dup-override]") and pg.locator(row + " [data-near-same]").count() == 1,
-       "its row: “Post duplicate anyway” (and “It is this invoice”), no Confirm")
-    pg.click(row + " [data-dup-override]"); W(400)
-    ok(pg.locator("#confirmBox [data-dup-first]").count() == 1 and "Already in Tally as Sales ZZ/2" in box(), "the first ask names Tally's voucher (%r)" % box()[:120])
-    pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    ok(pg.locator("#confirmBox [data-dup-again]").count() == 1, "and it is asked a second time")
-    pg.click('#confirmBox [data-cbx="no"]'); W(300)
-    ok(E("(id) => !SL().list.find(v => v.id === id).dupOverride", bid), "Cancel at the second: nothing changes, still held")
-    pg.click(row + " [data-dup-override]"); W(400)
-    for i in range(2):
-        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    nb = E("(id) => { const v = SL().list.find(v => v.id === id); return [!!v.dupOverride, (v.dupOverride || {}).by || '', !!(v.dupOverride || {}).at, (v.problems || []).some(p => /Already in Tally/.test(p))]; }", bid)
-    ok(nb[0] and nb[1] and nb[2] and not nb[3], "both confirmed: allowed, with who and when kept (%s)" % nb)
+    ok(pg.locator("#app [data-dup-override]").count() == 0 and "Post duplicate anyway" not in pg.inner_text("#app"), "no “Post duplicate anyway” on the page")
     # the cloud copy's read stops at 20,000 entries: an answer that long is not trusted, nothing is posted
     # the cloud copy's read stops at 20,000 entries: an answer that long is read again in smaller pieces (review of
     # d487be4c1), by itself; only one day still at the cap is refused, said plainly
@@ -722,7 +714,7 @@ with sync_playwright() as p:
     bx = box()
     ok("Same number and type already in Tally. Posting it again will create a duplicate." in bx and pg.locator("#confirmBox [data-nottally-compare]").count() == 1, "the box: the plain words (%r)" % bx[:160])
     cmp_ = pg.inner_text("#confirmBox [data-nottally-compare]") if pg.locator("#confirmBox [data-nottally-compare]").count() else ""
-    ok("In FinCom" in cmp_ and "In Tally" in cmp_ and cmp_.count("1,180") == 2 and "Sales UP" in cmp_ and cmp_.count("ZZ Delhi Buyers") == 2 and cmp_.count(E("fmtDate('2026-10-20')")) == 2,
+    ok("In FinCom" in cmp_ and "In Tally" in cmp_ and cmp_.count("1,180") == 2 and cmp_.count("Sales") >= 2 and cmp_.count("ZZ Delhi Buyers") == 2 and cmp_.count(E("fmtDate('2026-10-20')")) == 2,
        "FinCom's and Tally's date, number and type, amount and party side by side (%r)" % cmp_)
     if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(pg.locator("#confirmBox [data-nottally-again]").count() == 1 and E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "intally", "a second confirmation is asked; nothing changes until it is answered")
@@ -733,22 +725,23 @@ with sync_playwright() as p:
         if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "review", "both answered: not that entry, back to To review (the override as before)")
     pz = E("(id) => (SL().list.find(v => v.id === id).problems || []).join(' | ')", a.get("id"))
-    ok(("Already in Tally as Sales UP ZZ/1 dated %s, ₹1,180.00. Post again anyway?" % E("fmtDate('2026-10-20')")) in pz, "… but its number and type are in Tally: it is still never posted without “Post duplicate anyway” (%s)" % pz)
+    ok("Post again anyway?" not in pz and "Already in Tally" not in pz, "… and nothing else holds it: no “Post again anyway?” (%s)" % pz)
 
     print("16. Tally refuses a batch with no reason: Refused by Tally; posted one by one, each one's own answer")
-    E("""() => { SL().list.forEach(v => { if (["ZZ/1", "MX/1"].includes(v.x.number)){ delete v.tallyMatch; v.notTally = []; v.status = "review"; v.userLedger = true; mapInvoice(v); v.status = "ready"; } });
+    E("""() => { SL().list.forEach(v => { if (["ZZ/1", "MX/1"].includes(v.x.number)){ delete v.tallyMatch; delete v.dupBlock; v.notTally = []; v.status = "review"; v.userLedger = true; mapInvoice(v); v.status = "ready"; } });
       SL().list = SL().list.filter(v => ["ZZ/1", "MX/1"].includes(v.x.number)); SL().cfg.notTally = {}; window.__enq.length = 0;
       window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, needsReview: true, accepted: false, created: 0, altered: 0, errors: 0, exceptions: vs.length, ignored: 0, batchN: vs.length, lineError: [], message: "Tally's reply: created 0 of " + vs.length + ", exceptions " + vs.length}));
       SL().filter = 'ready'; saveSales(); render(); }"""); W(500)
     ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
     E("() => { window.__vin = []; window.__vinAnswer = () => Array.from({length: 20000}, (x, i) => ({number: 'X' + i, type: 'Sales', date: '20261020', entries: []})); window.__toasts = []; }")
+    # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow"): the copy at its cap is a check not made, never a
+    # stop: the posting goes on, nothing said in the result
     post()
-    ok(len(E("window.__enq")) == 0 and any("Too many entries in Tally on" in t and "in one day" in t for t in E("window.__toasts")) and E("SL().list.map(v => v.status)") == ["ready", "ready"],
-       "the cloud copy at its cap even for one day: nothing is posted, and it is said (%s)" % E("window.__toasts")[-1:])
+    ok(len(E("window.__enq")) == 1 and not any("Too many entries" in t for t in E("window.__toasts")),
+       "the cloud copy at its cap even for one day: posted all the same, nothing said (%s)" % E("window.__toasts")[-1:])
     vin = E("window.__vin")
     ok(vin and vin[0].get("p_from") == "2026-10-19" and vin[0].get("p_to") == "2026-10-23", "the cloud copy is asked for the invoices' own dates only, a day either side (%s)" % (vin[:1],))
     E("() => { window.__vinAnswer = null; }")
-    post()
     rf = E("SL().list.map(v => [v.x.number, v.status, !!v.refused, (v.problems || [])[0] || ''])")
     ok(len(E("window.__enq")) == 1 and all(x[1] == "review" and x[2] and x[3].startswith("Refused by Tally: Tally created none of the 2 vouchers sent together and gave no reason") for x in rf),
        "“created 0 of 2”, exceptions, no line error: both Refused by Tally with a plain hint, not Ready (%s)" % rf)
@@ -801,7 +794,7 @@ with sync_playwright() as p:
     ok(t2 == ["posted", False], "Try again once more: the check runs again, then it posts (%s)" % t2)
     E("() => { window.__postAnswer = null; }")
 
-    print("17. the owner, 16-Nov-2026: a duplicate never posted without Post duplicate anyway; the client's own sales type")
+    print("17. the owner, 23-Nov-2026: the same number of another amount is posted, never held; the client's own sales type")
     E("""(G) => { SL().list = []; SL().dupSkipped = []; window.__enq.length = 0; window.__vin = [];
       const mk = (no, t, d) => { const v = newInvoice({number: no, date: d, customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: t, igst: r2(t * 0.18), total: r2(t * 1.18)}, "upload");
         v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v); };
@@ -811,26 +804,20 @@ with sync_playwright() as p:
     ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
     post()
     enq = E("window.__enq")
-    ok(len(enq) == 1 and len(enq[0]["vouchers"]) == 1 and "DUP/2" in enq[0]["vouchers"][0]["xml"], "Post to Tally (all): DUP/2 posted; DUP/1, whose number Tally has as Sales UP, skipped (%s)" % [len(x["vouchers"]) for x in enq])
+    ok(len(enq) == 1 and len(enq[0]["vouchers"]) == 2, "Post to Tally (all): DUP/1 (₹500 in Tally, ₹1,180 here) and DUP/2 posted together (%s)" % [len(x["vouchers"]) for x in enq])
     E("() => { SL().filter = 'review'; render(); }"); W(400)
-    sk = pg.inner_text("#app [data-sales-dupskipped]") if pg.locator("#app [data-sales-dupskipped]").count() else ""
-    ok("DUP/1" in sk and ("Already in Tally as Sales UP DUP/1 dated %s, ₹500.00. Post again anyway?" % E("fmtDate('2026-10-25')")) in sk and pg.locator("#app [data-sales-dupskipped] [data-dup-override]").count() == 1,
-       "the skipped one is listed with the same words and “Post duplicate anyway” (%r)" % sk)
-    d1 = E("() => SL().list.find(v => v.x.number === 'DUP/1').id")
-    pg.click("#app [data-sales-dupskipped] [data-dup-override]"); W(400)
-    for i in range(2):
-        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    ok(E("(id) => SL().list.find(v => v.id === id).status", d1) == "ready", "confirmed twice: Ready")
-    E("() => { SL().filter = 'ready'; render(); }"); W(300)
+    ok(pg.locator("#app [data-sales-dupskipped]").count() == 0 and pg.locator("#app [data-dup-override]").count() == 0, "nothing listed as skipped, no “Post duplicate anyway”")
+    # FinCom's own posted record: the same entry (number, type, year and amount) In Tally quietly; another amount posted
+    E("""(G) => { window.__vinAnswer = null; window.__enq.length = 0; const v = newInvoice({number: "DUP/2", date: "2026-10-26", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 2000, igst: 360, total: 2360}, "upload");
+      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; v.id = "dup2again"; SL().list.push(v); mapInvoice(v); SL().filter = 'ready'; render(); }""", G); W(400)
     post()
-    enq = E("window.__enq")
-    ok(len(enq) == 2 and "DUP/1" in enq[1]["vouchers"][0]["xml"] and E("(id) => SL().list.find(v => v.id === id).status", d1) == "posted", "then posted, the duplicate check honouring the person's answer (%d)" % len(enq))
-    # FinCom's own posted record: another invoice of a number posted from here, its type and year
-    E("""(G) => { window.__vinAnswer = null; const v = newInvoice({number: "DUP/2", date: "2026-10-26", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 10, igst: 1.8, total: 11.8}, "upload");
-      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v); SL().filter = 'review'; render(); }""", G); W(400)
-    d3 = E("() => { const v = SL().list.find(v => v.x.number === 'DUP/2' && v.status !== 'posted'); return [v.id, v.status, (v.problems || []).join(' | ')]; }")
-    ok(d3[1] == "review" and ("Already in Tally as Sales DUP/2 dated %s, ₹2,360.00. Post again anyway?" % E("fmtDate('2026-10-25')")) in d3[2] and pg.locator('#app [data-sales-dup="%s"] [data-dup-override]' % d3[0]).count() == 1,
-       "a number FinCom posted already: held with the same words and button, from FinCom's own record (%s)" % d3[2])
+    d3 = E("() => { const v = inv('dup2again'); return [v.status, v.postNote || '']; }")
+    ok(len(E("window.__enq")) == 0 and d3 == ["intally", "Already in Tally"], "DUP/2 again, as FinCom posted it: In Tally quietly, not sent (%s)" % d3)
+    E("""(G) => { const v = newInvoice({number: "DUP/2", date: "2026-10-26", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 10, igst: 1.8, total: 11.8}, "upload");
+      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; v.id = "dup2other"; SL().list.push(v); mapInvoice(v); SL().filter = 'all'; render(); }""", G); W(400)
+    d3 = E("() => { const v = inv('dup2other'); return [v.status, (v.problems || []).join(' | ')]; }")
+    ok("Post again anyway?" not in d3[1] and "Already in Tally" not in d3[1] and "already exists" not in d3[1] and pg.locator("#app [data-dup-override]").count() == 0,
+       "DUP/2 of another amount: never held for it (%s)" % d3)
     # B: the client's own sales voucher type, from the vouchers of its books FinCom already holds
     vt = E("""() => { window.__books0 = S.books; const cid = SL().cid, mk = (t, n) => Array.from({length: n}, (x, i) => ({id: t + i, type: t, no: String(i), date: "2026-10-01", ent: []}));
       S.books = Object.assign({}, S.books || {}, {cid, vouchers: mk("Sales UP", 12).concat(mk("Sales", 1), mk("Journal", 9))});
@@ -857,39 +844,27 @@ with sync_playwright() as p:
     ok(vt == ["Sales Delhi", "asked", False] and pg.locator("#app [data-sales-vt-ask]").count() == 0, "the answer is kept for the client and not asked again (%s)" % vt)
     ok(not E("(id) => (SL().list.find(v => v.id === id).problems || []).includes('Choose the voucher type')", hv[3]), "answered: the invoices no longer wait for it")
     E("() => { S.books = window.__books0; const c = SL().cfg; delete c.vtBy; delete c.vtFrom; delete c.vtNotice; c.voucherType = 'Sales'; SL().vtAsk = null; saveSales({cfg: true}); SL().list.forEach(v => mapInvoice(v)); render(); }")
-    # review of d487be4c1: "Post duplicate anyway" is good for one attempt: Tally makes the voucher but no answer comes;
-    # Try again checks again and asks again, never posting it a second time by itself
+    # never posted twice: Tally makes the voucher but no answer comes; Try again checks FinCom's copy again, finds the same
+    # entry there, and marks it In Tally, without sending it a second time
     E("""(G) => { SL().list = []; window.__enq.length = 0; const v = newInvoice({number: "DUP/9", date: "2026-10-28", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 1000, igst: 180, total: 1180}, "upload");
       v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v);
       window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]}];
-      SL().filter = 'ready'; saveSales(); render(); }""", G); W(400)
-    post()
+      window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, outcomeUnknown: true, message: "Sent to Tally, but no answer came"}));
+      v.status = "review"; v.refused = {n: 2, said: "Tally created nothing"}; SL().filter = 'review'; saveSales(); render(); }""", G); W(400)
     d9 = E("() => SL().list.find(v => v.x.number === 'DUP/9').id")
-    ok(len(E("window.__enq")) == 0 and E("(id) => SL().list.find(v => v.id === id).status", d9) == "review", "DUP/9: Tally has the number (another amount): skipped, held")
-    E("() => { SL().filter = 'review'; render(); }"); W(300)
-    pg.click('#app [data-sales-dup="%s"] [data-dup-override]' % d9); W(400)
-    for i in range(2):
-        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    # Tally creates it, but no answer comes back
-    E("""() => { window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, outcomeUnknown: true, message: "Sent to Tally, but no answer came"}));
-      window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]},
-        {number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "new9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}]}];
-      SL().filter = 'ready'; render(); }"""); W(300)
-    post()
-    o9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.dupOverride, (v.dupOverrideLog || []).length, !!v.needsCheck]; }", d9)
-    ok(len(E("window.__enq")) == 1 and o9 == ["review", False, 1, True], "posted once on the person's say-so; no answer: the override is spent, the invoice waits for the check again (%s)" % o9)
-    E("() => { window.__postAnswer = null; SL().filter = 'review'; render(); }"); W(300)
+    retry(d9)
+    o9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.needsCheck]; }", d9)
+    ok(len(E("window.__enq")) == 1 and o9 == ["review", True], "DUP/9: Tally has the number of another amount (₹700): posted all the same; no answer: it waits for the check (%s)" % o9)
+    E("""() => { window.__postAnswer = null; window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]},
+        {number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "new9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}]}]; SL().filter = 'review'; render(); }"""); W(300)
     if pg.locator('#app [data-sales-retry="%s"]' % d9).count(): pg.locator('#app [data-sales-retry="%s"]' % d9).first.click()
     for i in range(30):
         W(300)
         if not E("SL().busy"): break
     W(400)
-    a9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, (v.problems || []).filter(p => /Already in Tally/.test(p)).length, !!v.dupOverride]; }", d9)
-    ok(len(E("window.__enq")) == 1 and a9 == ["review", 1, False] and pg.locator('#app [data-sales-dup="%s"] [data-dup-override]' % d9).count() == 1,
-       "Try again: the check runs again and FinCom asks again (“Post duplicate anyway”); nothing is sent a second time (%s, %d postings)" % (a9, len(E("window.__enq"))))
-    E("() => { SL().filter = 'ready'; render(); }"); W(300)
-    post(); E("() => postSalesToTally()"); W(900)
-    ok(len(E("window.__enq")) == 1, "nor by Post to Tally (%d)" % len(E("window.__enq")))
+    a9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, (v.tallyMatch || {}).key || '']; }", d9)
+    ok(not any(w in pg.inner_text("#app") for w in ["Post duplicate anyway", "Post again anyway?"]), "no “Post duplicate anyway” on the page")
+    ok(len(E("window.__enq")) == 1 and a9 == ["intally", "new9"], "Try again: the copy has it (₹1,180): In Tally, nothing sent a second time (%s, %d postings)" % (a9, len(E("window.__enq"))))
     E("() => { window.__vinAnswer = null; SL().list = []; saveSales(); render(); }")
 
     print("18. the owner, 16-Nov-2026: every ledger on an invoice can be changed, on it and in bulk; kept as set by you")
@@ -964,6 +939,27 @@ with sync_playwright() as p:
     E("() => salesUndo()"); W(300)
     ok([x[1] for x in E("() => SL().list.map(v => [v.x.number, v.customerLedger || ''])")] == ["", "", ""], "Undo: both as they were")
     E("() => { SL().list = []; SL().undo = null; saveSales(); render(); }")
+
+    print("19. next-fix-zoho-sales-sheet: Zoho Books' invoice export on Sales, by rules; Draft and Void left out, said")
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }"); W(300)
+    ai0 = len(E("window.__ai") or [])
+    upload("sales_zoho_invoice.xlsx", "#salesIn")
+    zd = E("(SheetImport.st() && SheetImport.st().docs || []).map(d => [d.no, d.lines, d.taxable, r2(d.igst + d.cgst + d.sgst), d.total, d.pos, d.gstin, d.check.ok])")
+    ok(step() == "check" and len(E("window.__ai") or []) == ai0 and E("SheetImport.st().how") == "builtin" and "Zoho Books invoices" in panel(), "a format FinCom knows: no AI, straight to the check (%s, %s)" % (step(), E("SheetImport.st() && SheetImport.st().how")))
+    ok(zd == [["INV-000101", 2, 15000, 2700, 17700, "07", "07AABCD1111E1Z1", True], ["INV-000102", 1, 2000, 360, 2360, "09", "09AABCU2222F1Z2", True], ["INV-000106", 1, 8000, 0, 8000, "29", "29AABCK3333G1Z3", True], ["INV-000107", 3, 3500, 500, 4000, "07", "07AABCD1111E1Z1", True]],
+       "the issued invoices: Item Total added up an invoice, the tax, the place of supply from the state code, the customer's GSTIN (%s)" % zd)
+    note = pg.inner_text("#app [data-sheet-status-skipped]") if pg.locator("#app [data-sheet-status-skipped]").count() else ""
+    ok(note == "2 draft invoices and 1 void invoice left out: only issued invoices are read." and "note" in (pg.get_attribute("#app [data-sheet-status-skipped]", "class") or "") and pg.locator("#app [data-sheet-skipped]").count() == 0,
+       "said plainly, in the info tone, as invoices (%r)" % note)
+    tx = pg.locator("#app [data-sheet-step='check'] td", has_text="15,000.00").count()
+    ok(tx >= 1, "the taxable value is shown in the panel")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count() == 0:
+        for q in qids():
+            if pg.locator('#app [data-sheet-q="%s"] [data-sheet-a="create"]' % q[0]).count(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    zl = E("SL().list.map(v => [v.x.number, num(v.x.taxable)]).sort()")
+    ok(zl == [["INV-000101", 15000], ["INV-000102", 2000], ["INV-000106", 8000], ["INV-000107", 3500]], "four invoices in To review, each with its taxable value; no draft or void one (%s)" % zl)
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
 
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

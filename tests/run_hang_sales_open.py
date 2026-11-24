@@ -13,8 +13,8 @@ SALES (default 4000) made-up sales invoices on it, half posted, half to review. 
   2. the sidebar's client card on Sales: the click's own task within CLICK_MS (default 900, mostly the
      page laid out again for the switcher's box; 1,650-1,700 ms before, 370 after), the
      switcher open; Esc closes it, Sales still shown;
-  3. the duplicate check still says it: an invoice to review of a number already posted (same type and year) shows
-     "Already in Tally as ..." on its row and in its problems; one of another year does not.
+  3. the duplicate check holds nothing (the owner, 23-Nov-2026): an invoice to review of a number already posted (same
+     type and year, another amount) has no "Already in Tally as ..." and no "Post duplicate anyway"; nor one of another year.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE.
 BIG_DIR=a folder with Master.xml and DayBook.xml from mis_big_books.py (made in a temporary folder when not given)."""
 import os, sys, json, shutil, tempfile, threading, functools, subprocess, http.server
@@ -93,13 +93,13 @@ try:
         pg.keyboard.press("Escape"); pg.wait_for_timeout(1200)
         now = pg.evaluate(WHERE)
         ok(not now["sw"] and now["open"] == "company/sales" and pg.locator("#app table.bk-table tbody tr").count() == rows, "   Esc closes it, Sales still shown (%s)" % now["open"])
-        # 3. the duplicate check, as before
-        d = pg.evaluate("""() => { const a = inv('zsdup'), b = inv('zsnext');
-          return {rowA: !!document.querySelector('#app [data-sales-dup="zsdup"]'), rowB: !!document.querySelector('#app [data-sales-dup="zsnext"]'),
-            probA: (a.problems || []).filter(p => /^Already in Tally as/.test(p)).length, probB: (b.problems || []).filter(p => /^Already in Tally as/.test(p)).length,
-            dupA: !!salesDupOf(a), dupB: !!salesDupOf(b)}; }""")
-        ok(d["rowA"] and d["probA"] == 1 and d["dupA"], "3. an invoice to review of a number posted the same year: \"Already in Tally as\" on its row and in its problems (%s)" % d)
-        ok(not d["rowB"] and d["probB"] == 0 and not d["dupB"], "   the same number a year later: not a duplicate")
+        # 3. the duplicate check (the owner, 23-Nov-2026, "it should flow"): a number posted the same year, of another
+        # amount, is another entry: nothing holds it, no "Post duplicate anyway"; the same entry is found only when posting
+        d = pg.evaluate("""() => { const a = inv('zsdup'), b = inv('zsnext'), w = /Already in Tally as|Post again anyway/;
+          return {rowA: !!document.querySelector('#app [data-sales-dup="zsdup"], #app [data-dup-override]'), probA: (a.problems || []).filter(p => w.test(p)).length,
+            probB: (b.problems || []).filter(p => w.test(p)).length, dupA: !!salesDupOf(a), dupB: !!salesDupOf(b)}; }""")
+        ok(not d["rowA"] and d["probA"] == 0 and not d["dupA"], "3. an invoice to review of a number posted the same year, another amount: never held, no Post duplicate anyway (%s)" % d)
+        ok(d["probB"] == 0 and not d["dupB"], "   the same number a year later: not a duplicate")
         br.close()
 finally:
     srv.shutdown(); shutil.rmtree(root, ignore_errors=True)

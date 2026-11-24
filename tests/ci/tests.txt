@@ -453,6 +453,8 @@ run_fixed_assets_ui.py                420  TDSDESK_SITE=../app/dist-test
 # format; after that it should learn that format"): the engine on the made-up registers (no browser), then the panel, the
 # questions, To review and posting (Tally's queue; Zoho Books faked); GSTR-1 and GSTR-2B JSON by rules
 run_sheet_engine.js                   120
+# next-fix-zoho-sales-sheet (24-Nov-2026): Zoho Books' invoice export by rules (Item Total, Draft / Void left out); a wide new layout's columns to the AI
+run_sheet_zoho.js                     60
 run_sheet_import.py                   300  TDSDESK_SITE=../app/dist-test
 # next-fix-sheet-import (13-Nov-2026): a client's own Tally-style sales and purchase sheets (a ledger column, the client's
 # voucher type, ledgers in sub-groups), from the first upload to the posting; why Post is disabled, said
@@ -669,6 +671,9 @@ run_devlookup_gateway.py              120
 # next-fix-sales-hang (FINCOM-APP-STAGING-K, 18-Nov-2026): Sales with 4,000 made-up invoices on 51,758 made-up entries: opening it
 # and the sidebar's client card on it (the switcher draws the page again) each within budget; the duplicate check by number once a drawing
 run_hang_sales_open.py                300  TDSDESK_SITE=../app/dist-test
+# next-fix-sales-hang (FINCOM-APP-STAGING-K, 24-Nov-2026): the client switcher drawn by itself, not the page under it again:
+# its card, a letter typed and Esc on Sales with 3,000 made-up invoices, the CPU 3x slower, each under 200 ms of script
+run_hang_sales_switch.py              300  TDSDESK_SITE=../app/dist-test
 # next-fix-dashstall (FINCOM-APP-STAGING-K, 19-Nov-2026): a client with 2,400 made-up bills posted through made-up postings opened from
 # Clients: the click's task and the drafts' counts after it within budget; Post to Tally's counts and rows once a drawing, as before
 run_hang_post_counts.py               300  TDSDESK_SITE=../app/dist-test
@@ -680,6 +685,10 @@ run_purchase_tds_audit.js             120
 run_migration220.py                   600
 run_fbooks_rules.mjs                  120
 run_fbooks_ui.py                      600  TDSDESK_SITE=../app/dist-test
+run_dup_cloud_only.py                 240  TDSDESK_SITE=../app/dist-test
+run_sales_reads_off.py                240  TDSDESK_SITE=../app/dist-test
+run_sales_post_reply.py               600  TDSDESK_SITE=../app/dist-test
+run_legacy_room.py                    600  TDSDESK_SITE=../app/dist-test
 # Posting never stuck (next-posting-never-stuck, 23-Nov-2026): the Post page's words for a posting that waits (Tally closed,
 # the company not open, the Tally computer off; never a computer or Windows user named), and the cloud's waiting words
 post_wait_test.mjs                    60
