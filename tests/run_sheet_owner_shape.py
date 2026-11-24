@@ -688,25 +688,13 @@ with sync_playwright() as p:
     ok(chk["a"] == "intally" and (chk["am"] or {}).get("type") == "Sales UP" and (chk["am"] or {}).get("amount") == 1180 and (chk["am"] or {}).get("party") == "ZZ Delhi Buyers",
        "the client's own “Sales UP” voucher of that number and amount is found, with its real amount 1,180 and its party (%s)" % chk["am"])
     ok(chk["m"] == "intally" and chk["c"] != "intally" and chk["d"] != "intally", "a type named sales (“GST Sales”) is found; a Journal of that number crediting Sales Accounts is not, nor a “Tax Invoice” type (%s, %s, %s)" % (chk["m"], chk["c"], chk["d"]))
-    D20 = E("fmtDate('2026-10-20')")
-    ok(chk["b"] == "review" and (chk["bn"] or {}).get("amount") == 999 and ("Already in Tally as Sales ZZ/2 dated %s, ₹999.00. Post again anyway?" % D20) in chk["bp"],
-       "the same number of another amount (999 against 1,180): not taken for this invoice, but held: “Already in Tally as Sales ZZ/2 dated …, ₹999.00. Post again anyway?” (%s; %s)" % (chk["b"], chk["bp"]))
+    # next-dup-cloud-only (the owner, 23-Nov-2026, "it should flow", superseding 16-Nov-2026's "Post duplicate anyway"):
+    # the same number of another amount is another entry: nothing holds it
+    ok(not chk["bn"] and "Already in Tally" not in chk["bp"] and "Post again anyway?" not in chk["bp"],
+       "the same number of another amount (999 against 1,180): not taken for this invoice, and not held for it (%s; %s)" % (chk["b"], chk["bp"]))
     bid = E("() => SL().list.find(v => v.x.number === 'ZZ/2').id")
     E("(id) => { SL().filter = 'review'; SL().openId = null; render(); }", bid); W(400)
-    row = '#app [data-sales-dup="%s"]' % bid
-    ok(pg.locator(row + " [data-dup-override]").count() == 1 and "Post duplicate anyway" in pg.inner_text(row + " [data-dup-override]") and pg.locator(row + " [data-near-same]").count() == 1,
-       "its row: “Post duplicate anyway” (and “It is this invoice”), no Confirm")
-    pg.click(row + " [data-dup-override]"); W(400)
-    ok(pg.locator("#confirmBox [data-dup-first]").count() == 1 and "Already in Tally as Sales ZZ/2" in box(), "the first ask names Tally's voucher (%r)" % box()[:120])
-    pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    ok(pg.locator("#confirmBox [data-dup-again]").count() == 1, "and it is asked a second time")
-    pg.click('#confirmBox [data-cbx="no"]'); W(300)
-    ok(E("(id) => !SL().list.find(v => v.id === id).dupOverride", bid), "Cancel at the second: nothing changes, still held")
-    pg.click(row + " [data-dup-override]"); W(400)
-    for i in range(2):
-        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    nb = E("(id) => { const v = SL().list.find(v => v.id === id); return [!!v.dupOverride, (v.dupOverride || {}).by || '', !!(v.dupOverride || {}).at, (v.problems || []).some(p => /Already in Tally/.test(p))]; }", bid)
-    ok(nb[0] and nb[1] and nb[2] and not nb[3], "both confirmed: allowed, with who and when kept (%s)" % nb)
+    ok(pg.locator("#app [data-dup-override]").count() == 0 and "Post duplicate anyway" not in pg.inner_text("#app"), "no “Post duplicate anyway” on the page")
     # the cloud copy's read stops at 20,000 entries: an answer that long is not trusted, nothing is posted
     # the cloud copy's read stops at 20,000 entries: an answer that long is read again in smaller pieces (review of
     # d487be4c1), by itself; only one day still at the cap is refused, said plainly
@@ -733,7 +721,7 @@ with sync_playwright() as p:
         if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
     ok(E("(id) => SL().list.find(v => v.id === id).status", a.get("id")) == "review", "both answered: not that entry, back to To review (the override as before)")
     pz = E("(id) => (SL().list.find(v => v.id === id).problems || []).join(' | ')", a.get("id"))
-    ok(("Already in Tally as Sales UP ZZ/1 dated %s, ₹1,180.00. Post again anyway?" % E("fmtDate('2026-10-20')")) in pz, "… but its number and type are in Tally: it is still never posted without “Post duplicate anyway” (%s)" % pz)
+    ok("Post again anyway?" not in pz and "Already in Tally" not in pz, "… and nothing else holds it: no “Post again anyway?” (%s)" % pz)
 
     print("16. Tally refuses a batch with no reason: Refused by Tally; posted one by one, each one's own answer")
     E("""() => { SL().list.forEach(v => { if (["ZZ/1", "MX/1"].includes(v.x.number)){ delete v.tallyMatch; delete v.dupBlock; v.notTally = []; v.status = "review"; v.userLedger = true; mapInvoice(v); v.status = "ready"; } });
@@ -802,7 +790,7 @@ with sync_playwright() as p:
     ok(t2 == ["posted", False], "Try again once more: the check runs again, then it posts (%s)" % t2)
     E("() => { window.__postAnswer = null; }")
 
-    print("17. the owner, 16-Nov-2026: a duplicate never posted without Post duplicate anyway; the client's own sales type")
+    print("17. the owner, 23-Nov-2026: the same number of another amount is posted, never held; the client's own sales type")
     E("""(G) => { SL().list = []; SL().dupSkipped = []; window.__enq.length = 0; window.__vin = [];
       const mk = (no, t, d) => { const v = newInvoice({number: no, date: d, customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: t, igst: r2(t * 0.18), total: r2(t * 1.18)}, "upload");
         v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v); };
@@ -812,26 +800,20 @@ with sync_playwright() as p:
     ok(E("SL().list.map(v => v.status)") == ["ready", "ready"], "two invoices Ready (%s)" % E("SL().list.map(v => [v.x.number, v.status, v.problems, v.ledgerIssues])"))
     post()
     enq = E("window.__enq")
-    ok(len(enq) == 1 and len(enq[0]["vouchers"]) == 1 and "DUP/2" in enq[0]["vouchers"][0]["xml"], "Post to Tally (all): DUP/2 posted; DUP/1, whose number Tally has as Sales UP, skipped (%s)" % [len(x["vouchers"]) for x in enq])
+    ok(len(enq) == 1 and len(enq[0]["vouchers"]) == 2, "Post to Tally (all): DUP/1 (₹500 in Tally, ₹1,180 here) and DUP/2 posted together (%s)" % [len(x["vouchers"]) for x in enq])
     E("() => { SL().filter = 'review'; render(); }"); W(400)
-    sk = pg.inner_text("#app [data-sales-dupskipped]") if pg.locator("#app [data-sales-dupskipped]").count() else ""
-    ok("DUP/1" in sk and ("Already in Tally as Sales UP DUP/1 dated %s, ₹500.00. Post again anyway?" % E("fmtDate('2026-10-25')")) in sk and pg.locator("#app [data-sales-dupskipped] [data-dup-override]").count() == 1,
-       "the skipped one is listed with the same words and “Post duplicate anyway” (%r)" % sk)
-    d1 = E("() => SL().list.find(v => v.x.number === 'DUP/1').id")
-    pg.click("#app [data-sales-dupskipped] [data-dup-override]"); W(400)
-    for i in range(2):
-        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    ok(E("(id) => SL().list.find(v => v.id === id).status", d1) == "ready", "confirmed twice: Ready")
-    E("() => { SL().filter = 'ready'; render(); }"); W(300)
+    ok(pg.locator("#app [data-sales-dupskipped]").count() == 0 and pg.locator("#app [data-dup-override]").count() == 0, "nothing listed as skipped, no “Post duplicate anyway”")
+    # FinCom's own posted record: the same entry (number, type, year and amount) In Tally quietly; another amount posted
+    E("""(G) => { window.__vinAnswer = null; window.__enq.length = 0; const v = newInvoice({number: "DUP/2", date: "2026-10-26", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 2000, igst: 360, total: 2360}, "upload");
+      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; v.id = "dup2again"; SL().list.push(v); mapInvoice(v); SL().filter = 'ready'; render(); }""", G); W(400)
     post()
-    enq = E("window.__enq")
-    ok(len(enq) == 2 and "DUP/1" in enq[1]["vouchers"][0]["xml"] and E("(id) => SL().list.find(v => v.id === id).status", d1) == "posted", "then posted, the duplicate check honouring the person's answer (%d)" % len(enq))
-    # FinCom's own posted record: another invoice of a number posted from here, its type and year
-    E("""(G) => { window.__vinAnswer = null; const v = newInvoice({number: "DUP/2", date: "2026-10-26", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 10, igst: 1.8, total: 11.8}, "upload");
-      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v); SL().filter = 'review'; render(); }""", G); W(400)
-    d3 = E("() => { const v = SL().list.find(v => v.x.number === 'DUP/2' && v.status !== 'posted'); return [v.id, v.status, (v.problems || []).join(' | ')]; }")
-    ok(d3[1] == "review" and ("Already in Tally as Sales DUP/2 dated %s, ₹2,360.00. Post again anyway?" % E("fmtDate('2026-10-25')")) in d3[2] and pg.locator('#app [data-sales-dup="%s"] [data-dup-override]' % d3[0]).count() == 1,
-       "a number FinCom posted already: held with the same words and button, from FinCom's own record (%s)" % d3[2])
+    d3 = E("() => { const v = inv('dup2again'); return [v.status, v.postNote || '']; }")
+    ok(len(E("window.__enq")) == 0 and d3 == ["intally", "Already in Tally"], "DUP/2 again, as FinCom posted it: In Tally quietly, not sent (%s)" % d3)
+    E("""(G) => { const v = newInvoice({number: "DUP/2", date: "2026-10-26", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 10, igst: 1.8, total: 11.8}, "upload");
+      v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; v.id = "dup2other"; SL().list.push(v); mapInvoice(v); SL().filter = 'all'; render(); }""", G); W(400)
+    d3 = E("() => { const v = inv('dup2other'); return [v.status, (v.problems || []).join(' | ')]; }")
+    ok("Post again anyway?" not in d3[1] and "Already in Tally" not in d3[1] and "already exists" not in d3[1] and pg.locator("#app [data-dup-override]").count() == 0,
+       "DUP/2 of another amount: never held for it (%s)" % d3)
     # B: the client's own sales voucher type, from the vouchers of its books FinCom already holds
     vt = E("""() => { window.__books0 = S.books; const cid = SL().cid, mk = (t, n) => Array.from({length: n}, (x, i) => ({id: t + i, type: t, no: String(i), date: "2026-10-01", ent: []}));
       S.books = Object.assign({}, S.books || {}, {cid, vouchers: mk("Sales UP", 12).concat(mk("Sales", 1), mk("Journal", 9))});
@@ -858,39 +840,27 @@ with sync_playwright() as p:
     ok(vt == ["Sales Delhi", "asked", False] and pg.locator("#app [data-sales-vt-ask]").count() == 0, "the answer is kept for the client and not asked again (%s)" % vt)
     ok(not E("(id) => (SL().list.find(v => v.id === id).problems || []).includes('Choose the voucher type')", hv[3]), "answered: the invoices no longer wait for it")
     E("() => { S.books = window.__books0; const c = SL().cfg; delete c.vtBy; delete c.vtFrom; delete c.vtNotice; c.voucherType = 'Sales'; SL().vtAsk = null; saveSales({cfg: true}); SL().list.forEach(v => mapInvoice(v)); render(); }")
-    # review of d487be4c1: "Post duplicate anyway" is good for one attempt: Tally makes the voucher but no answer comes;
-    # Try again checks again and asks again, never posting it a second time by itself
+    # never posted twice: Tally makes the voucher but no answer comes; Try again checks FinCom's copy again, finds the same
+    # entry there, and marks it In Tally, without sending it a second time
     E("""(G) => { SL().list = []; window.__enq.length = 0; const v = newInvoice({number: "DUP/9", date: "2026-10-28", customerName: "ZZ Delhi Buyers", customerGstin: G.delhi, pos: "07", taxable: 1000, igst: 180, total: 1180}, "upload");
       v.customerLedger = "ZZ Delhi Buyers"; v.userLedger = true; SL().list.push(v); mapInvoice(v);
       window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]}];
-      SL().filter = 'ready'; saveSales(); render(); }""", G); W(400)
-    post()
+      window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, outcomeUnknown: true, message: "Sent to Tally, but no answer came"}));
+      v.status = "review"; v.refused = {n: 2, said: "Tally created nothing"}; SL().filter = 'review'; saveSales(); render(); }""", G); W(400)
     d9 = E("() => SL().list.find(v => v.x.number === 'DUP/9').id")
-    ok(len(E("window.__enq")) == 0 and E("(id) => SL().list.find(v => v.id === id).status", d9) == "review", "DUP/9: Tally has the number (another amount): skipped, held")
-    E("() => { SL().filter = 'review'; render(); }"); W(300)
-    pg.click('#app [data-sales-dup="%s"] [data-dup-override]' % d9); W(400)
-    for i in range(2):
-        if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); W(400)
-    # Tally creates it, but no answer comes back
-    E("""() => { window.__postAnswer = (vs) => vs.map(v => ({id: v.id, ok: false, outcomeUnknown: true, message: "Sent to Tally, but no answer came"}));
-      window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]},
-        {number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "new9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}]}];
-      SL().filter = 'ready'; render(); }"""); W(300)
-    post()
-    o9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.dupOverride, (v.dupOverrideLog || []).length, !!v.needsCheck]; }", d9)
-    ok(len(E("window.__enq")) == 1 and o9 == ["review", False, 1, True], "posted once on the person's say-so; no answer: the override is spent, the invoice waits for the check again (%s)" % o9)
-    E("() => { window.__postAnswer = null; SL().filter = 'review'; render(); }"); W(300)
+    retry(d9)
+    o9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, !!v.needsCheck]; }", d9)
+    ok(len(E("window.__enq")) == 1 and o9 == ["review", True], "DUP/9: Tally has the number of another amount (₹700): posted all the same; no answer: it waits for the check (%s)" % o9)
+    E("""() => { window.__postAnswer = null; window.__vinAnswer = () => [{number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "old9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-700.00"}]},
+        {number: "DUP/9", type: "Sales", date: "20261028", party: "ZZ Delhi Buyers", guid: "new9", entries: [{ledger: "ZZ Delhi Buyers", amount: "-1180.00"}]}]; SL().filter = 'review'; render(); }"""); W(300)
     if pg.locator('#app [data-sales-retry="%s"]' % d9).count(): pg.locator('#app [data-sales-retry="%s"]' % d9).first.click()
     for i in range(30):
         W(300)
         if not E("SL().busy"): break
     W(400)
-    a9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, (v.problems || []).filter(p => /Already in Tally/.test(p)).length, !!v.dupOverride]; }", d9)
-    ok(len(E("window.__enq")) == 1 and a9 == ["review", 1, False] and pg.locator('#app [data-sales-dup="%s"] [data-dup-override]' % d9).count() == 1,
-       "Try again: the check runs again and FinCom asks again (“Post duplicate anyway”); nothing is sent a second time (%s, %d postings)" % (a9, len(E("window.__enq"))))
-    E("() => { SL().filter = 'ready'; render(); }"); W(300)
-    post(); E("() => postSalesToTally()"); W(900)
-    ok(len(E("window.__enq")) == 1, "nor by Post to Tally (%d)" % len(E("window.__enq")))
+    a9 = E("(id) => { const v = SL().list.find(v => v.id === id); return [v.status, (v.tallyMatch || {}).key || '']; }", d9)
+    ok(not any(w in pg.inner_text("#app") for w in ["Post duplicate anyway", "Post again anyway?"]), "no “Post duplicate anyway” on the page")
+    ok(len(E("window.__enq")) == 1 and a9 == ["intally", "new9"], "Try again: the copy has it (₹1,180): In Tally, nothing sent a second time (%s, %d postings)" % (a9, len(E("window.__enq"))))
     E("() => { window.__vinAnswer = null; SL().list = []; saveSales(); render(); }")
 
     print("18. the owner, 16-Nov-2026: every ledger on an invoice can be changed, on it and in bulk; kept as set by you")

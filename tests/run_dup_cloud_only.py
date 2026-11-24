@@ -59,7 +59,11 @@ ADD = """([n, d, cg, tot]) => { const s = SL(), t = tot || 1180; const v = newIn
 NEWCO = """(g) => { const c = newCompany({name: "ZZ Test Dup Traders", gstin: g.up}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
   return openCompany(c.id).then(() => loadBank(c.id)).then(() => { S.tab = "sales"; S.step = null; return loadSales(c.id); }).then(() => c.id); }"""
 SST = "() => SL().list.map(v => ({n: v.x.number, st: v.status, match: (v.tallyMatch && v.tallyMatch.number) || '', copy: (v.copyCheck && v.copyCheck.note) || ''}))"
-QUIET = lambda t: NOTE not in t and "Looks already" not in t and "anyway" not in t.lower() and "Checked against" not in t
+# the words of the old hold (the owner, 16-Nov-2026, superseded 23-Nov-2026): never on the posting path again
+DUPW = ["Post duplicate anyway", "Post again anyway?"]
+NODUP = lambda t: not any(w in t for w in DUPW)
+QUIET = lambda t: NOTE not in t and "Looks already" not in t and "Post anyway" not in t and NODUP(t) and "Checked against" not in t
+PAGE = "() => document.querySelector('#app').innerText + ' | ' + window.__toasts.join(' | ') + ' | ' + JSON.stringify(SL().list.map(v => [v.problems || [], v.postError || ''])) + ' | ' + JSON.stringify((SL().oneByOne || {}).rows || [])"
 def sv(n, d="20261102", amt="1180.00"): return "{guid: 'g-%s', masterId: '%s', date: '%s', type: 'Sales', number: '%s', party: 'Kappa Retail', cancelled: 'No', entries: [{ledger: 'Kappa Retail', amount: '-%s'}]}" % (n, n, d, n, amt)
 def sfresh(A, *nos, d="2026-11-02"):
     A.evaluate("() => { SL().list = []; SL().dupSkipped = []; SL().oneByOne = null; }"); A.evaluate(RESET)
@@ -180,6 +184,49 @@ with sync_playwright() as p:
     A.evaluate("() => { window.__cloud = {has: true, fail: true, at: new Date().toISOString(), vouchers: []}; }")
     A.evaluate("() => salesPostOneByOne()"); A.wait_for_timeout(700)
     ok(A.evaluate(SST)[0]["st"] == "posted" and QUIET(last(A)), "one by one, the copy does not answer: posted, quiet (%s)" % last(A))
+    A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
+
+    print("SALES 6. the copy has the same number of another amount: not the same entry, so posted; never held")
+    ids = sfresh(A, "ZS/20", "ZS/21")
+    A.evaluate("() => { window.__cloud.vouchers = [" + sv("ZS/20", amt="999.00") + "]; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    st = A.evaluate(SST); sent = A.evaluate("() => window.__sent")
+    ok([x["st"] for x in st] == ["posted", "posted"] and sent == [ids], "ZS/20 (₹999 in the copy, ₹1,180 here) and ZS/21 both posted (%s, sent %s)" % (st, sent))
+    ok(last(A).startswith("2 posted to Tally") and QUIET(last(A)), "the result: 2 posted, nothing else (%s)" % last(A))
+    A.evaluate("() => { SL().filter = 'all'; SL().openId = SL().list[0].id; render(); }"); A.wait_for_timeout(500)
+    ok(NODUP(A.evaluate(PAGE)), "no “Post duplicate anyway” or “Post again anyway?” anywhere (%s)" % A.evaluate(PAGE)[:300])
+    A.evaluate("() => { SL().openId = null; render(); }")
+    print("   the same with Post one by one")
+    ids = sfresh(A, "ZS/22")
+    A.evaluate("(ids) => ids.forEach(id => { const v = SL().list.find(v => v.id === id); v.status = 'review'; v.refused = {n: 2, said: 'Tally created nothing'}; })", ids)
+    A.evaluate("() => { window.__cloud.vouchers = [" + sv("ZS/22", amt="999.00") + "]; }")
+    A.evaluate("() => salesPostOneByOne()"); A.wait_for_timeout(700)
+    st = A.evaluate(SST)
+    ok(st[0]["st"] == "posted" and A.evaluate("() => window.__sent") == [ids] and NODUP(A.evaluate(PAGE)), "one by one: posted, never held (%s | %s)" % (st, A.evaluate(PAGE)[:300]))
+
+    print("SALES 7. the same entry is the same number, amount and financial year")
+    sfresh(A)
+    ids = [A.evaluate(ADD, ["ZS/23", "2026-04-01", G["k"], 0])]
+    A.evaluate("() => { window.__cloud.vouchers = [" + sv("ZS/23", d="20260331") + "]; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    st = A.evaluate(SST)
+    ok(st[0]["st"] == "posted" and A.evaluate("() => window.__sent") == [ids], "ZS/23 of 01-Apr-2026, the copy's ZS/23 of 31-Mar-2026 (another year): posted (%s)" % st)
+    sfresh(A, "ZS/24")
+    A.evaluate("() => { window.__cloud.vouchers = [" + sv("ZS/24", d="20261103") + "]; }")
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    st = A.evaluate(SST)
+    ok(st[0]["st"] == "intally" and A.evaluate("() => window.__sent") == [], "ZS/24, the copy's of the same year and amount: In Tally, not sent (%s)" % st)
+    ok(last(A).startswith("1 already in Tally") and "These invoices are already in Tally" not in last(A) and QUIET(last(A)), "the result says what happened (%s)" % last(A))
+
+    print("SALES 8. FinCom's own posted invoice: the same entry In Tally quietly; another amount posted")
+    ids = sfresh(A, "ZS/25", "ZS/26")
+    A.evaluate("(ids) => ids.forEach(id => { const v = SL().list.find(v => v.id === id); v.status = 'posted'; })", ids)
+    a = A.evaluate(ADD, ["ZS/25", "2026-11-02", G["k"], 0]); b = A.evaluate(ADD, ["ZS/26", "2026-11-02", G["k"], 999])
+    A.evaluate("() => { window.__cloud.vouchers = []; SL().filter = 'all'; render(); }"); A.wait_for_timeout(300)
+    ok(NODUP(A.evaluate(PAGE)) and A.evaluate("(ids) => ids.map(id => SL().list.find(v => v.id === id).status)", [a, b]) == ["ready", "ready"], "before posting: both Ready, no hold (%s)" % A.evaluate(SST))
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+    st = A.evaluate("(ids) => ids.map(id => SL().list.find(v => v.id === id).status)", [a, b])
+    ok(st == ["intally", "posted"] and A.evaluate("() => window.__sent") == [[b]] and NODUP(A.evaluate(PAGE)), "ZS/25 (₹1,180 as posted) In Tally, ZS/26 (₹999 against ₹1,180) posted (%s, sent %s)" % (st, A.evaluate("() => window.__sent")))
     A.evaluate("() => { window.__cloud = {has: true, fail: false, at: new Date().toISOString(), vouchers: []}; }")
 
     print("BANK 1. the copy has no data for those days: posted, Tally never read")

@@ -135,6 +135,9 @@ function salesCopyAt(cid){
 async function salesCheckSafe(list){
   const co = CO(SL().cid);
   list.forEach(v => { delete v.copyCheck; });
+  // (the same entry FinCom posted itself, salesDupOf: In Tally quietly, never posted twice; it needs no copy)
+  list.forEach(v => { const o = v.status !== "intally" && salesDupOf(v); if (!o) return;
+    v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {key: "fincom:" + o.id, date: String(o.date || "").replace(/-/g, ""), number: o.number, type: o.type, party: o.party, amount: o.amount}; });
   try { await salesCheckTally(list, dupCopy); }
   catch (e){ list.forEach(v => { v.copyCheck = {note: DUP_NOT_CHECKED, off: true}; }); return; }
   const at = salesCopyAt(co.id);
@@ -158,8 +161,7 @@ async function salesPostOneByOne(ids){
     s.busy = "Checking FinCom\u2019s copy of Tally for invoices already booked\u2026"; render();
     await salesCheckSafe(list);
     list.filter(v => v.status === "intally").forEach(v => { delete v.refused; out.push({id: v.id, number: v.x.number, ok: true, word: "Already in Tally: not posted again"}); });
-    list.filter(v => v.status !== "intally" && salesDupOf(v)).forEach(v => out.push({id: v.id, number: v.x.number, ok: false, word: salesDupWords(salesDupOf(v)) + " Not posted: press “Post duplicate anyway” on it to post it."}));
-    list = list.filter(v => v.status !== "intally" && !salesDupOf(v));
+    list = list.filter(v => v.status !== "intally");
     for (let i = 0; i < list.length; i++){
       const v = list[i];
       s.busy = "Posting one by one: " + (i + 1) + " of " + list.length + " (" + v.x.number + ")\u2026"; render();
@@ -261,23 +263,6 @@ function salesBulkLine(role, rate, ledger){
 if (typeof salesLinePick !== "undefined") globalThis.salesLinePick = salesLinePick;
 if (typeof salesLineUnset !== "undefined") globalThis.salesLineUnset = salesLineUnset;
 if (typeof salesBulkLine !== "undefined") globalThis.salesBulkLine = salesBulkLine;
-// "Post duplicate anyway" (the owner, 16-Nov-2026: any person, no role needed): an invoice whose number Tally, or FinCom's
-// own posted record, already has under a Sales-class type is posted again only when a person presses it and confirms a
-// second time; who and when are kept on the invoice and in the audit trail. It is then Ready, and goes with Post to Tally
-async function salesDupOverride(id){
-  const s = SL(), v = inv(id), d = v && salesDupOf(v); if (!d || !["review", "ready"].includes(v.status)) return;
-  const words = salesDupWords(d);
-  const a = await askConfirm({title: "Post a duplicate?", ok: "Post duplicate anyway", danger: true, body: '<p class="note" data-dup-first=""><b>' + esc(words) + "</b></p><p class=\"note\">Invoice " + esc(v.x.number || "") + " has the same number and type. Posting it creates a second voucher of that number in Tally.</p>"});
-  if (!a) return;
-  const b = await askConfirm({title: "Post it again, for certain?", ok: "Yes, post the duplicate", danger: true, body: '<p class="note" data-dup-again="">Tally will have two vouchers numbered ' + esc(d.number || v.x.number || "") + ". This is kept with your name and the time.</p>"});
-  if (!b || !inv(id)) return;
-  v.dupOverride = {no: normInvNo(v.x.number), by: whoAmI(), at: new Date().toISOString(), of: d};
-  delete v.dupBlock; s.dupSkipped = (s.dupSkipped || []).filter(x => x !== id);
-  auditEvent("sales_duplicate_override", "Invoice " + (v.x.number || v.id) + ": posted again over " + words + " (by " + v.dupOverride.by + ")", s.cid);
-  mapInvoice(v); saveSales(); toast(v.status === "ready" ? "Ready to post: it goes with Post to Tally." : "Kept. It still needs: " + ((v.problems || []).concat(v.ledgerIssues || [])[0] || "a look"));
-  render();
-}
-if (typeof salesDupOverride !== "undefined") globalThis.salesDupOverride = salesDupOverride;
 if (typeof salesSetKind !== "undefined") globalThis.salesSetKind = salesSetKind;
 if (typeof salesPostOneByOne !== "undefined") globalThis.salesPostOneByOne = salesPostOneByOne;
 if (typeof salesCheckSafe !== "undefined") globalThis.salesCheckSafe = salesCheckSafe;
@@ -389,9 +374,7 @@ function salesByNo(f){
   salesNoIdx = got.i;
   try { return f(); } finally { salesNoIdx = was; }
 }
-function salesDupNow(v){ return salesByNo(() => salesDupOf(v)); }
 if (typeof salesByNo !== "undefined") globalThis.salesByNo = salesByNo;
-if (typeof salesDupNow !== "undefined") globalThis.salesDupNow = salesDupNow;
 // (this file comes with the Sales screen: what is open is looked at now)
 setTimeout(() => { try { if (salesRemapWaiting()) render(); } catch (e){} }, 0);
 /* @react-lazy: end */

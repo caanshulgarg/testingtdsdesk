@@ -270,20 +270,17 @@ async function salesCheckTally(list, call){
     // (a note is matched to a voucher of its own type only, an invoice to a Sales-class voucher, or one of no type said)
     const kind = x => v.x.noteKind ? lc(x.type) === lc(salesVt(v.x)) : (!x.type || isInv(x.type));
     const any = no ? (by.get(no) || []).filter(kind) : [], same = !not.includes("num:" + no) ? any.filter(x => !not.includes(salesTallyKey(x))) : [];
+    // (a hold of the old rule, 16-Nov-2026, kept on an invoice saved before: it ends here)
     const had = !!v.dupBlock; delete v.dupBlock;
     // (this invoice's duplicate check has run again: an answer not confirmed before no longer holds it, item 3)
     if (v.needsCheck){ delete v.needsCheck; mapInvoice(v); }
-    // a person pressed "Post duplicate anyway" and confirmed it for this number: nothing of that number holds it
-    // (good for the one post attempt it was given for: salesOverrideSpent ends it after that attempt)
-    if (v.dupOverride && v.dupOverride.no === no){ if (had) mapInvoice(v); return; }
-    // the number AND the amount (to ₹1): In Tally. The number alone is never enough to call it this invoice; but it is
-    // never posted again without a person's "Post duplicate anyway" (the owner, 16-Nov-2026), also after "Not this
-    // Tally entry": held, with Tally's voucher said
-    // (an invoice posted before as a duplicate on a person's say-so: a voucher of its number and amount may be the one
-    // that attempt made, or the one it duplicated; never taken for it by itself: the person is asked again)
-    const hit = v.dupOverrideLog ? null : same.find(x => Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
+    // the same entry (the owner, 23-Nov-2026: "it should flow"): the number, the amount (to ₹1) AND the financial year
+    // (fyLabel, as salesDupOf): In Tally, quietly. Anything less (the number alone, another amount or year) is not this
+    // invoice: nothing holds it, it is posted
+    const fy = v.x.date ? fyLabel(v.x.date) : "", d8 = x => String(x.date || "").replace(/-/g, "").slice(0, 8);
+    const sameFy = x => /^\d{8}$/.test(d8(x)) && fy === fyLabel(d8(x).replace(/^(\d{4})(\d\d)(\d\d)$/, "$1-$2-$3"));
+    const hit = !fy ? null : same.find(x => sameFy(x) && Math.abs(salesTallyAmount(x) - r2(Math.abs(num(v.x.total)))) <= 1);
     if (hit){ v.status = "intally"; v.postNote = "Already in Tally"; v.tallyMatch = info(hit); v.postError = ""; v.postedOptional = /^yes$/i.test(hit.optional || ""); n++; }
-    else if (any.length){ v.dupBlock = info(same[0] || any[0]); if (["ready", "review"].includes(v.status)) mapInvoice(v); }
     else if (had) mapInvoice(v);
   });
   return n;
@@ -377,16 +374,15 @@ async function postSalesRun(){
   s.busy = "Checking FinCom\u2019s copy of Tally for invoices already booked\u2026"; render();
   let sent = [];
   try {
-    const asked = list.slice();
+    const asked = list.slice(), inT = () => asked.filter(v => v.status === "intally").length;
     // (checked on FinCom's cloud copy only, never Tally: one found there is In Tally, quietly; the rest go, also when the
     // copy has nothing or does not answer: src/js/26-sales-invoice.js salesCheckSafe)
     await salesCheckSafe(list);
     list = list.filter(v => v.status === "ready");
     const probs = salesReadyProblems(list);
-    // (a number already in Tally or posted from FinCom: skipped, listed with "Post duplicate anyway")
-    s.dupSkipped = asked.filter(v => v.status !== "ready" && salesDupOf(v)).map(v => v.id);
+    s.dupSkipped = [];
     list = list.filter(v => v.status === "ready");
-    if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : "These invoices are already in Tally."); render(); return; }
+    if (!list.length){ s.busy = ""; saveSales(); toast(probs.length ? "Fix these first: " + probs.slice(0, 2).join("; ") : inT() ? inT() + " already in Tally: marked In Tally, not posted again." : "No invoice is ready to post."); render(); return; }
     const masters = mastersFor(list);
     s.busy = "Posting " + list.length + " invoice" + (list.length > 1 ? "s" : "") + " to Tally\u2026"; render();
     const tn = tallyCoName(co);

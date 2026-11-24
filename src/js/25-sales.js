@@ -551,10 +551,8 @@ function invoiceProblems(v){
   if (gst > 0 && !inter && num(x.igst) && pos) p.push("IGST is charged, but the place of supply is " + stName(pos) + from + ", the state " + co.name + " issues it from, so CGST + SGST are expected");
   // (asked once the customer ledger is set: with none, the ledger is what it waits for, and Tally's master gives the state)
   if (num(x.igst) > 0 && !pos && v.customerLedger) p.push("IGST is charged, but the party\u2019s state is not known (no GSTIN or state on the sheet or in its Tally ledger): set the customer\u2019s GSTIN or the place of supply");
-  // (the owner, 16-Nov-2026) the same number and type already in Tally, or posted from FinCom: never posted again
-  // without a person's "Post duplicate anyway", confirmed twice
-  const dupOf = salesDupOf(v);
-  if (dupOf) p.push(salesDupWords(dupOf));
+  // (the owner, 23-Nov-2026, "it should flow", superseding 16-Nov-2026's "Post duplicate anyway"): no invoice is held for
+  // a number already in Tally or posted from FinCom; the same entry is marked In Tally when posting (salesCheckSafe)
   if (v.needsCheck) p.push("Not confirmed: check Tally before posting again");
   // (the books use several sales voucher types: an invoice waits for the person's answer, none is applied before it)
   if (SL().vtAsk && !x.noteKind) p.push("Choose the voucher type");
@@ -562,24 +560,20 @@ function invoiceProblems(v){
   if (Math.abs(num(x.cgst) - num(x.sgst)) > 0.05) p.push("CGST and SGST differ");
   if (salesTotals(x).some(g => g.mixed)) p.push("GST is not at one standard rate (several rates?): use Enter items");
   if (x.sellerGstin && co.gstin && !salesIsOwn(x.sellerGstin, co)) p.push("the seller GSTIN on the invoice is not " + co.name + "\u2019s");
-  const dup = salesOfNo(x.number).find(o => o.id !== v.id && o.status !== "ignored" && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));
-  if (x.number && dup && !(dupOf && dupOf.src === "fincom")) p.push("invoice " + x.number + " already exists");
+  // (two not yet posted of one number and year: one is a mistake; one already posted or In Tally holds nothing)
+  const dup = salesOfNo(x.number).find(o => o.id !== v.id && !["ignored", "posted", "intally"].includes(o.status) && normInvNo(o.x.number) === normInvNo(x.number) && o.x.date && x.date && fyLabel(o.x.date) === fyLabel(x.date));
+  if (x.number && dup) p.push("invoice " + x.number + " already exists");
   return p;
 }
-// the voucher of this number and type already in Tally (the duplicate check's v.dupBlock) or posted from FinCom (another
-// invoice of the number, its type and year, posted or found in Tally): {src, type, number, date, amount}, or null when
-// there is none or a person pressed "Post duplicate anyway" for this number
+// the same entry posted from FinCom: another invoice of the number, its type, its financial year AND its amount (to ₹1),
+// posted or found in Tally: {src, type, number, date, amount, party, id}, or null. Never a hold (the owner, 23-Nov-2026):
+// salesCheckSafe marks it In Tally quietly; the number alone is another entry, and is posted
 function salesDupOf(v){
   if (!v || !["review", "ready"].includes(v.status)) return null;
-  const no = normInvNo(v.x.number); if (!no || (v.dupOverride && v.dupOverride.no === no)) return null;
-  if (v.dupBlock) return Object.assign({src: "tally"}, v.dupBlock);
-  const vt = String(salesVt(v.x)).toLowerCase();
-  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && v.x.date && fyLabel(o.x.date) === fyLabel(v.x.date));
-  return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), id: o.id} : null;
-}
-function salesDupWords(d){
-  const dt = String(d.date || ""), iso = /^\d{8}$/.test(dt) ? dt.slice(0, 4) + "-" + dt.slice(4, 6) + "-" + dt.slice(6) : dt;
-  return "Already in Tally as " + [d.type || "Sales", d.number].filter(Boolean).join(" ") + (iso ? " dated " + fmtDate(iso) : "") + ", " + money0(num(d.amount)) + ". Post again anyway?";
+  const no = normInvNo(v.x.number); if (!no || !v.x.date) return null;
+  const vt = String(salesVt(v.x)).toLowerCase(), amt = r2(Math.abs(num(v.x.total)));
+  const o = salesOfNo(v.x.number).find(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && normInvNo(o.x.number) === no && String(salesVt(o.x)).toLowerCase() === vt && o.x.date && fyLabel(o.x.date) === fyLabel(v.x.date) && Math.abs(r2(Math.abs(num(o.x.total))) - amt) <= 1);
+  return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), party: o.customerLedger || o.x.customerName || "", id: o.id} : null;
 }
 // next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already
 // reads (the client's books): the Sales-class type most used, the default for uploads, shown as "(from your Tally)"; a
