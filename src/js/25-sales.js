@@ -533,7 +533,11 @@ function invoiceProblems(v){
   if (!(num(x.total) > 0)) p.push("total missing");
   if (x.customerGstin && !gstinValid(x.customerGstin)) p.push("customer GSTIN is not valid");
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
-  if (Math.abs(num(x.taxable) + gst + num(x.cess) - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
+  // (the owner, 24-Nov-2026, as the items check in salesProblemsNow: the invoice's own stated Adjustment plus Rounding,
+  // x.roundOff, read from an uploaded PDF or sheet, explains the gap and posts in Round Off; never on an invoice made
+  // here, whose roundOff is worked out as the gap)
+  const ro = ["upload", "sheet", "market"].includes(v.source) ? num(x.roundOff) : 0;
+  if (Math.abs(num(x.taxable) + gst + num(x.cess) + ro - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
   if (num(x.igst) && (num(x.cgst) || num(x.sgst))) p.push("both IGST and CGST/SGST");
   const inter = isInterState(x, co), home = salesRegOf(v).code || stateOfGstin(co.gstin), pos = x.pos || stateOfGstin(x.customerGstin);
   // next-fix-sales-upload (item 1): the place of supply named, and where it came from (the party's Tally ledger when the

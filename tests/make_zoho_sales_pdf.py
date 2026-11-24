@@ -26,7 +26,7 @@ def gstin(body):
 
 SELLER = "ZZ Sparkle Car Care Pvt Ltd"
 SELLER_GSTIN = gstin("29AAZCZ9999Q1Z")
-NAMES = ["Asha", "Ravi K", "Meera", "Arjun", "Kavya", "Nikhil", "Divya", "Sanjay", "Pooja", "Rahul", "Sneha", "Varun"]
+NAMES = ["Asha", "Ravi K", "Meera", "Arjun", "Kavya", "Nikhil", "Divya", "Quorvin", "Pooja", "Rahul", "Sneha", "Zelmar"]
 CARS = ["Hatchback One", "Sedan Two", "SUV Three", "Compact Four"]
 SERVICES = [("Foam Wash - Premium", 900.0), ("Interior Detailing", 1800.0), ("Coating Top-up", 1500.0), ("Ceramic Coating", 12000.0)]
 NOTE = ("We clean the outside and the inside, vacuum the seats and the floor, and wipe every surface. "

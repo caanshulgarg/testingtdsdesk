@@ -86,7 +86,7 @@
  {
   "number": "ZZ-CW000905",
   "date": "2026-10-21",
-  "customer": "Sanjay",
+  "customer": "Quorvin",
   "pos": "29",
   "taxable": 11459.0,
   "cgst": 1031.31,
@@ -134,7 +134,7 @@
  {
   "number": "ZZ-CW000901",
   "date": "2026-10-17",
-  "customer": "Varun",
+  "customer": "Zelmar",
   "pos": "29",
   "taxable": 11000.0,
   "cgst": 990.0,

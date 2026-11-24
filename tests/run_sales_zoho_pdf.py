@@ -87,14 +87,22 @@ with sync_playwright() as p:
     # the owner, 24-Nov-2026: a Zoho "Adjustment" (and Rounding) goes to Round Off with no separate ledger, and an invoice
     # whose difference is its own stated Adjustment plus Rounding posts with it there; only a difference the invoice does
     # not explain is held
-    ro = pg.evaluate("""() => { const mk = (no, ro, total) => { const v = newInvoice({number: no, date: "2026-10-05", customerName: "Cash", pos: "29", taxable: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, roundOff: ro, total}, "upload");
-        v.customerLedger = "Cash"; SL().list.push(v); mapInvoice(v); return v; };
-      const one = v => { const l = salesLines(v).filter(l => l.role === "roundoff"); return {ro: l.map(l => (l.side === "Cr" ? 1 : -1) * l.amt), held: (v.problems || []).filter(p => /Round Off/.test(p)).length}; };
-      const r = {plus: one(mk("ADJ/1", 25, 1205)), minus: one(mk("ADJ/2", -25, 1155)), gap: one(mk("ADJ/3", 0, 1205)), wrong: one(mk("ADJ/4", 10, 1205))}; saveSales(); render(); return r; }""")
-    ok(ro["plus"] == {"ro": [25], "held": 0}, "Adjustment \u20b925 on the invoice: posts, with \u20b925 to Round Off (%s)" % ro["plus"])
-    ok(ro["minus"] == {"ro": [-25], "held": 0}, "Adjustment (-) \u20b925: posts, with \u20b925 to Round Off on the debit side (%s)" % ro["minus"])
-    ok(ro["gap"]["held"] == 1, "a \u20b925 gap the invoice does not explain: still held (%s)" % ro["gap"])
-    ok(ro["wrong"]["held"] == 1, "a \u20b925 gap with only \u20b910 stated: still held (%s)" % ro["wrong"])
+    # (review of 85592e3f6: the checks matched "Round Off" or "plus GST", but the hold says "taxable value + GST does not equal
+    # the total", so ADJ/1 and ADJ/2 stayed in To review unseen) each invoice's status, all its problems, its Round Off line
+    # and the voucher; an invoice made here (its roundOff the gap, worked out) is never excused
+    ro = pg.evaluate("""() => { const mk = (no, ro, total, src) => { const v = newInvoice({number: no, date: "2026-10-05", customerName: "Cash", pos: "29", taxable: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, roundOff: ro, total}, src || "upload");
+        v.customerLedger = "Cash"; v.userLedger = true; SL().list.push(v); mapInvoice(v); return v; };
+      const one = v => { const xml = salesVoucherXml(v, CO(SL().cid)); return {status: v.status, problems: v.problems.concat(v.ledgerIssues || []),
+        ro: salesLines(v).filter(l => l.role === "roundoff").map(l => l.ledger + " " + l.side + " " + l.amt), xml: /<LEDGERNAME>Round Off<\/LEDGERNAME>/.test(xml) && /25\.00/.test(xml)}; };
+      const r = {plus: one(mk("ADJ/1", 25, 1205)), minus: one(mk("ADJ/2", -25, 1155)), gap: one(mk("ADJ/3", 0, 1205)), wrong: one(mk("ADJ/4", 10, 1205)),
+        sheet: one(mk("ADJ/5", 25, 1205, "sheet")), made: one(mk("ADJ/6", 25, 1205, "created"))}; saveSales(); render(); return r; }""")
+    held = lambda r: r["status"] == "review" and any("+ GST does not equal the total" in p for p in r["problems"])
+    ok(ro["plus"]["status"] == "ready" and not ro["plus"]["problems"] and ro["plus"]["ro"] == ["Round Off Cr 25"] and ro["plus"]["xml"], "ADJ/1, Adjustment \u20b925 on the invoice: Ready, posts with Round Off Cr 25 (%s)" % ro["plus"])
+    ok(ro["minus"]["status"] == "ready" and not ro["minus"]["problems"] and ro["minus"]["ro"] == ["Round Off Dr 25"] and ro["minus"]["xml"], "ADJ/2, Adjustment (-) \u20b925: Ready, posts with Round Off Dr 25 (%s)" % ro["minus"])
+    ok(held(ro["gap"]), "ADJ/3, a \u20b925 gap the invoice does not explain: held in To review (%s)" % ro["gap"])
+    ok(held(ro["wrong"]), "ADJ/4, a \u20b925 gap with only \u20b910 stated: held in To review (%s)" % ro["wrong"])
+    ok(ro["sheet"]["status"] == "ready" and ro["sheet"]["ro"] == ["Round Off Cr 25"], "ADJ/5, the same from a sheet: Ready, Round Off Cr 25 (%s)" % ro["sheet"])
+    ok(held(ro["made"]), "ADJ/6, a \u20b925 gap on an invoice made here: held in To review (%s)" % ro["made"])
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()
