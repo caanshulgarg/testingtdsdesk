@@ -78,6 +78,11 @@ marked(block(S("migration-196-recorder-no-held.sql"), "tally_recorder_fetching_s
 marked(block(S("migration-196-recorder-no-held.sql"), "tally_held_status"), block(text, "tally_held_status"), "tally_held_status (196's)")
 marked(block(S("migration-182-gap-after-post.sql"), "tally_check_status_of"), block(text, "tally_check_status_of"), "tally_check_status_of (182's)")
 marked(block(S("migration-197-day-retry.sql"), "tally_period_day_stop"), block(text, "tally_period_day_stop"), "tally_period_day_stop (197's)")
+marked(block(S("migration-98-period-pull.sql"), "tally_period_entries"), block(text, "tally_period_entries"), "tally_period_entries (98's)")
+marked(block(S("migration-182-gap-after-post.sql"), "tally_period_next_paced"), block(text, "tally_period_next_paced"), "tally_period_next_paced (182's)")
+for g in ("grant execute on function public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb) to service_role;", "revoke all on function public.tally_period_entries(uuid, date, jsonb, jsonb, jsonb, jsonb) from public, anon, authenticated;",
+          "grant execute on function public.tally_period_next_paced(uuid, integer, boolean) to service_role;", "revoke all on function public.tally_period_next_paced(uuid, integer, boolean) from public, anon, authenticated;"):
+    ok(g in text, "the replaced period functions' grants restated: " + g[:90])
 ok("grant execute on function public.tally_period_day_stop(uuid, date, text) to service_role;" in text and "revoke all on function public.tally_period_day_stop(uuid, date, text) from public, anon, authenticated;" in text, "tally_period_day_stop: 197's grants restated (service_role)")
 
 st = T.build(int(os.environ.get("PG222_PORT") or 31222), with221=True); db = st.db; j = st.j
@@ -113,8 +118,11 @@ try:
               (%(B)s, %(F)s, %(L)s, 'held', 1, now() - interval '2 days', 'FinCom could not correct it: its month is locked in FinCom. Unlock the month, then upload that day''s Day Book again.', null, null);
               insert into tally_period_pulls (book_id, firm_id, fy_start, state) values (%(B6)s, %(F)s, %(FY)s, 'going');
               insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_words) values (%(B6)s, %(F)s, %(S3)s, now() - interval '1 day', 'slow3', 'Tally could not send it in time on 3 days. Upload that day''s Day Book to finish it.');
-              insert into tally_period_day_retry (book_id, firm_id, day, fails, first_at, last_at, retry_at, why) values (%(B6)s, %(F)s, %(S3)s, 3, now() - interval '3 days', now() - interval '1 day', now() + interval '20 hours', 'over2s')"""
-           % {"B": q(BK[6]), "B6": q(BK[6]), "F": q(F), "U": q(UPD.isoformat()), "L": q(LKD.isoformat()), "S3": q(S3.isoformat()), "FY": q(FY.isoformat())})
+              insert into tally_period_day_retry (book_id, firm_id, day, fails, first_at, last_at, retry_at, why) values (%(B6)s, %(F)s, %(S3)s, 3, now() - interval '3 days', now() - interval '1 day', now() + interval '20 hours', 'over2s');
+              insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_words) values
+                (%(B6)s, %(F)s, %(E1)s, now() - interval '1 day', 'entries', 'FinCom could not read that day from Tally. Please upload that day''s Day Book.'),
+                (%(B6)s, %(F)s, %(L1)s, now() - interval '1 day', 'locked', 'FinCom did not bring in that day: its month is locked in FinCom. Unlock the month, then upload that day''s Day Book.')"""
+           % {"B": q(BK[6]), "B6": q(BK[6]), "F": q(F), "U": q(UPD.isoformat()), "L": q(LKD.isoformat()), "S3": q(S3.isoformat()), "FY": q(FY.isoformat()), "E1": q(D(44).isoformat()), "L1": q(D(45).isoformat())})
     if text:
         db.sql("alter table tally_check_days add column prio text")
         r = st.psql_text(text); ok(r.returncode != 0 and "column tally_check_days.prio (not smallint)" in r.stderr, "the guard stops it over an existing column of another type (%s)" % r.stderr.strip()[-100:])
@@ -368,6 +376,19 @@ try:
     j("select tally_period_upload(%s, %s, 'shape', 'Payroll', 'Please upload the Day Book of that day.')::text" % (q(BK[6]), q(D(43).isoformat())))
     w = db.one("select upload_words from tally_period_days where book_id = %s and day = %s" % (q(BK[6]), q(D(43).isoformat())))
     ok(w == "FinCom could not read %s from Tally by itself." % D(43).strftime("%d-%b-%Y"), "1. tally_period_upload's words never ask for an upload (%r)" % w)
+    pw = {r_["day"]: r_ for r_ in db.rows("select day::text as day, coalesce(upload_why, '') as why, coalesce(upload_words, '') as words, (upload_at is not null)::text as up from tally_period_days where book_id = %s and day in (%s, %s)" % (q(BK[6]), q(D(44).isoformat()), q(D(45).isoformat())))}
+    e1, l1 = pw.get(D(44).isoformat(), {}), pw.get(D(45).isoformat(), {})
+    ok(e1.get("words") == "FinCom could not read %s from Tally by itself." % D(44).strftime("%d-%b-%Y"), "1. a period day marked 'entries' before 222: its words no longer ask for an upload (%s)" % e1)
+    ok(l1.get("words") == "FinCom did not bring in %s: its month is locked in FinCom. Unlock the month; FinCom then reads this day by itself." % D(45).strftime("%d-%b-%Y"), "1. a period day marked 'locked': the new words (%s)" % l1)
+    # the two period functions that wrote the locked words
+    ok("Unlock the month, then upload" not in block(text, "tally_period_entries") and "Unlock the month; FinCom then reads this day by itself." in block(text, "tally_period_entries")
+       and "Unlock the month, then upload" not in block(text, "tally_period_next_paced") and "Unlock the month; FinCom then reads this day by itself." in block(text, "tally_period_next_paced"),
+       "2. tally_period_entries and tally_period_next_paced: the locked words never ask for an upload")
+    print("  -- 2. a locked period day opened again once its month is unlocked")
+    lk0 = db.one("select tally_month_locked(%s, array[%s::date])::text" % (q(BK[6]), q(D(45).isoformat())))
+    queue(6)
+    l1b = db.rows("select (upload_at is null)::text as open, coalesce(upload_why, '') as why, coalesce(upload_words, '') as words from tally_period_days where book_id = %s and day = %s" % (q(BK[6]), q(D(45).isoformat())))
+    ok(lk0 is None and l1b == [{"open": "true", "why": "", "words": ""}], "the month not locked: the period day unmarked, read again by itself (%s, %s)" % (lk0, l1b))
     print("  -- 2. a hand-out is never a try; a day held_queue_of opens again starts afresh")
     k = 4; db.sql("update tally_check_runs set state = 'going', stop_why = null where book_id = %s" % q(BK[k]))
     db.sql("delete from tally_check_days where book_id = %s" % q(BK[k]))
