@@ -70,7 +70,8 @@ with sync_playwright() as p:
     items = [x for x in E(BELL) if "ZZ Gap Client" in x["text"]]
     g = items[0] if items else {"sev": "", "text": "", "fix": "", "act": "", "details": ""}
     ok(len(items) == 1 and g["text"].startswith("ZZ Gap Client: 12 entries made in Tally since") and g["text"].endswith("are not yet in FinCom."), "the gap: one alert in the bell (%s)" % g["text"])
-    ok(g["sev"] == "bad" and "Upload the Day Book for" in g["fix"] and g["act"] == "Upload Day Book", "red, with what to do and its button (%s | %s)" % (g["fix"], g["act"]))
+    # Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for; FinCom brings the days itself, the Tally page has the row
+    ok(g["sev"] == "bad" and g["fix"] == "FinCom brings them from Tally by itself." and g["act"] == "Open on Tally page", "red, FinCom brings them itself, Open on Tally page (%s | %s)" % (g["fix"], g["act"]))
     ok("Tally's change number 512, received up to 500" in g["details"], "the change numbers behind its details (%s)" % g["details"][:120])
     shut()
     ok(pg.locator("#app [data-gap-line], #app [data-alert-line]").count() == 0 and "not yet in FinCom" not in txt("#app"), "nothing on the client's dashboard")
@@ -78,18 +79,12 @@ with sync_playwright() as p:
     gl = txt("#app [data-alert-line]")
     ok(gl.startswith("ZZ Gap Client: 12 entries made in Tally") and pg.locator("#app [data-alert-line]").count() == 1, "the client's books page: the one slim line (%s)" % gl)
     btn = pg.locator("#app [data-alert-line] [data-alert-act]")
-    ok(btn.count() == 1 and btn.inner_text().strip() == "Upload Day Book", "with the button 'Upload Day Book'")
-    btn.click(); pg.wait_for_timeout(1200)
-    today = E("(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })()")
+    ok(btn.count() == 1 and btn.inner_text().strip() == "Open on Tally page", "its button opens the Tally page, never an upload (%s)" % (btn.inner_text() if btn.count() else ""))
+    # From Tally still takes a file by hand (never asked for): the gap is a row of "Days FinCom is bringing from Tally"
+    E("() => { S.tab = 'books'; S.booksTab = 'import'; render(); }"); pg.wait_for_timeout(1200)
     since = E("(() => { const d = new Date('2026-10-02T08:35:00Z'); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })()")
-    ok(E("S.tab") == "books" and E("booksTab()") == "import", "the button opens Books -> From Tally (%s / %s)" % (E("S.tab"), E("booksTab()")))
-    ok(E("S.dbFrom") == since and E("S.dbTo") == today, "the Day Book dates filled in: from %s (gap.since) to %s (today) (%s .. %s)" % (since, today, E("S.dbFrom"), E("S.dbTo")))
-    # 2.4.0 (the upload page simpler): no date boxes; the upload part says those dates are the ones taken, and the gap is a
-    # row of "Days that need a Day Book" with its own Upload
-    lim = txt("#app [data-up-limit]"); fd = lambda x: E("(x) => fmtDate(x)", x)
-    ok(fd(since) in lim and fd(today) in lim, "the upload part says only those dates are taken from the Day Book (%s)" % lim)
     row = txt('#app [data-need-day="%s"]' % since)
-    ok("12 entries made in Tally since then are not in FinCom" in row and row.endswith("Upload"), "the gap is a day row with its Upload (%s)" % row)
+    ok("12 entries made in Tally since then are not in FinCom" in row and row.endswith("Upload a file"), "From Tally: the gap is a day row, a file may be uploaded by hand (%s)" % row)
     # ---- the Tally page: no line (15-Oct-2026 (the owner: "why we need gb texcoat info.. unnecessary info is there"): a client's data alerts are not on the Tally page); the bell keeps it
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     ok(pg.locator("#app [data-alert-line]").count() == 0 and "ZZ Gap Client: 12 entries" not in txt("#app"), "the Tally page: no client's data line (the client's Books page and the bell have it)")

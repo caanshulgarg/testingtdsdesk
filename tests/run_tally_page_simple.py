@@ -304,10 +304,11 @@ def main():
                  mk(36, "waiting: Tally busy; FinCom asks again at 14:05", "2026-10-03")]); pg.wait_for_timeout(1800)
         G = lambda k: '#app [data-sync-needs] [data-needs-group^="%s|"]' % k
         acts = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group').split('|')[0], [...g.querySelectorAll('button:not([data-alert-clear])')].map(b => b.getAttribute('data-needs-act') + ':' + b.innerText.trim()), g.querySelectorAll('[data-alert-clear]').length])")
-        ok(sorted(a[0] for a in acts) == ["baseline", "dupid", "locked", "masters", "readstop"] and all(len(a[1]) == 1 for a in acts), "each kind its group, ONE action each (%s)" % acts)
+        ok(sorted(a[0] for a in acts) == ["baseline", "dupid", "locked", "masters", "readstop"] and all(len(a[1]) == (0 if a[0] == "dupid" else 1) for a in acts), "each kind its group, ONE action each (the Day Book never asked for: none for dupid) (%s)" % acts)
         ok(all(a[2] == 1 for a in acts), "each group: its Clear besides its ONE action (next-alerts-clear, 08-Oct-2026: hides the notification only) (%s)" % [a[2] for a in acts])
         A = {a[0]: a[1] for a in acts}
-        ok(A.get("dupid") == ["daybook:Upload the Day Book for 07-Oct-2026"] and "double posting" in txt(G("dupid") + " [data-needs-text]"), "FinCom id on two entries: check Tally for a double posting, then the Day Book (%s)" % txt(G("dupid")))
+        # Tally tell (the owner, 24-Nov-2026): FinCom brings the day itself; the group says so instead of an upload button
+        ok(A.get("dupid") == [] and "double posting" in txt(G("dupid") + " [data-needs-text]") and "FinCom is bringing this day from Tally." in txt(G("dupid")), "FinCom id on two entries: check Tally for a double posting; FinCom brings the day itself (%s)" % txt(G("dupid")))
         ok(A.get("readstop") == ["resume:Resume reading"] and "stopped" in txt(G("readstop") + " [data-needs-text]"), "reading stopped: the owner's Resume reading, not Apply now (%s)" % A.get("readstop"))
         ok(A.get("locked") == ["tieout:Open Tie-out"], "a locked month: Open Tie-out (unlock it there) (%s)" % A.get("locked"))
         ok(A.get("masters") == ["masters:Open From Tally"], "a ledger line with no GUID: read the ledgers from Tally (%s)" % A.get("masters"))
@@ -346,15 +347,13 @@ def main():
         # should close the error"): ONE block per company (parts/HeldBlock.jsx) instead of a row per day, with ONE upload for
         # the period, "Show days" folding the day rows, and why it happens
         blocks = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-held-block]')].map(g => [g.getAttribute('data-held-block'), g.querySelector('[data-held-text]').innerText.trim(), g.querySelectorAll('button:not([data-alert-clear])').length, g.querySelectorAll('[data-alert-clear]').length, g.querySelectorAll('[data-held-day]').length])")
-        want = {"GARG SHEKHAR: 4 changes saved in Tally between 06-Oct and 07-Oct are not yet in FinCom. Upload one Day Book for 06-Oct-2026 to 07-Oct-2026",
-                "ABC LTD: 1 change saved in Tally on 07-Oct is not yet in FinCom. Upload one Day Book for 07-Oct-2026"}
+        want = {"GARG SHEKHAR: 4 changes saved in Tally between 06-Oct and 07-Oct are not yet in FinCom. FinCom brings them from Tally by itself.",
+                "ABC LTD: 1 change saved in Tally on 07-Oct is not yet in FinCom. FinCom brings them from Tally by itself."}
         ok(len(blocks) == 2 and {g[1] for g in blocks} == want and pg.locator(nd + " [data-needs-group]").count() == 0, "one plain block per company, no row per day (%s)" % [g[1] for g in blocks])
-        ok(all(g[2] == 1 and g[3] == 1 for g in blocks) and pg.locator(nd + " [data-held-upload]").count() == 2, "each block: ONE action, Upload Day Book (besides its Clear, 08-Oct-2026: hides the notification only)")
+        ok(all(g[2] == 0 and g[3] == 1 for g in blocks) and pg.locator(nd + " [data-held-upload]").count() == 0, "each block: no upload asked, its Clear (08-Oct-2026: hides the notification only)")
         ok(sorted(g[4] for g in blocks) == [1, 2] and pg.locator(nd + " [data-held-why]").count() == 2 and "Tally saved changes FinCom had not read yet" in txt(nd + " [data-held-why]"), "Show days folds the day rows; one line says why")
         ok(pg.locator("#app [data-sync-fetching]").count() == 0, "ended lines: nothing 'being fetched'")
         shot("sync-needs-you")
-        pg.click(nd + ' [data-held-block="GARG SHEKHAR"] [data-held-upload]'); pg.wait_for_timeout(1500)
-        ok(E("[S.view, S.coId, S.dbFrom, S.dbTo]") == ["company", cid, "2026-10-06", "2026-10-07"], "the action opens the client's Day Book upload for the period (%s)" % E("[S.view, S.coId, S.dbFrom, S.dbTo]"))
         # a fresh line (still being fetched): quiet, no yellow, no 'Needs you'
         E(SYNC, FRESH); pg.wait_for_timeout(1800)
         fe = "#app [data-sync-fetching]"
@@ -372,11 +371,9 @@ def main():
         scene([sd], LINKED)
         cid = E(SYNC, []); pg.wait_for_timeout(1800)
         sg = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group'), g.querySelector('[data-needs-text]').innerText.trim(), [...g.querySelectorAll('button')].map(b => b.getAttribute('data-needs-act'))])")
-        want = "GARG SHEKHAR · 07-Oct-2026: 2 saves from NWS144 could not be stored in FinCom since 09:15; FinCom keeps trying \u2014 if it continues, upload the Day Book for 07-Oct-2026"
-        ok(len(sg) == 1 and sg[0][1] == want and sg[0][2] == ["daybook"], "saves FinCom could not store: Needs you, one sentence, the Day Book upload (%s)" % sg)
+        want = "GARG SHEKHAR · 07-Oct-2026: 2 saves from NWS144 could not be stored in FinCom since 09:15; FinCom keeps trying by itself"
+        ok(len(sg) == 1 and sg[0][1] == want and sg[0][2] == [], "saves FinCom could not store: Needs you, one sentence, never an upload (Tally tell, 24-Nov-2026) (%s)" % sg)
         ok(E("() => Rec.needKind(Rec.stuckRow({n: 2}))") == "daybook" and not E("() => AlertHub.oursHeld(Rec.stuckRow({n: 2}))"), "the one classifier: daybook (Needs you), the bell agrees")
-        pg.click('#app [data-sync-needs] [data-needs-daybook]'); pg.wait_for_timeout(1500)
-        ok(E("[S.view, S.coId, S.dbFrom, S.dbTo]") == ["company", cid, "2026-10-07", "2026-10-07"], "the action opens the client's Day Book upload for that day (%s)" % E("[S.view, S.coId, S.dbFrom, S.dbTo]"))
         scene([dev(1, "NWS144", "anshul", beat={"recorderStuck": []})], LINKED)
         E(SYNC, []); pg.wait_for_timeout(1800)
         ok(pg.locator("#app [data-sync-needs]").count() == 0, "none left: nothing said")

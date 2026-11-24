@@ -54,22 +54,21 @@ with sync_playwright() as p:
     cid = scene([withAlerts([ra()])])
     nd = [x for x in E(NEEDS) if x["key"].startswith("renumber|")]
     ok(len(nd) == 1 and CO in nd[0]["text"] and "3 entries may have been renumbered in Tally" in nd[0]["text"], "Sync activity: one Needs you item for the company, in plain words (%s)" % nd)
-    ok(nd and nd[0]["act"] == ["Upload the Day Book from 05-Oct-2026"], "its one action: Upload the Day Book from 05-Oct-2026 (%s)" % (nd[0]["act"] if nd else None))
+    # Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for; FinCom brings the days itself (no button)
+    ok(nd and nd[0]["act"] == [] and "FinCom brings the days from 05-Oct-2026 by itself" in nd[0]["text"], "no upload asked: FinCom brings the days from 05-Oct-2026 by itself (%s)" % (nd[0] if nd else None))
     # ---- 2. the bell: one amber item, the same action
     b = E(BELL) or []
     rn = [x for x in b if x["key"].startswith("renumber:")]
-    ok(len(rn) == 1 and rn[0]["sev"] == "warn" and "renumbered" in rn[0]["text"] and rn[0]["act"] == "Upload the Day Book from 05-Oct-2026" and rn[0]["fix"].startswith("Needs you"),
-       "the bell: one amber Needs you item with the same action (%s)" % rn)
+    ok(len(rn) == 1 and rn[0]["sev"] == "warn" and "renumbered" in rn[0]["text"] and rn[0]["act"] == "" and rn[0]["fix"].startswith("FinCom brings the days from 05-Oct-2026"),
+       "the bell: one amber item, no upload asked (%s)" % rn)
     E(CLOSE)
-    # ---- 3. the action: Books -> From Tally, from that day to today
-    E("""() => { const b = document.querySelector('#app [data-needs-group^="renumber|"] button[data-needs-act]'); if (b) b.click(); }"""); pg.wait_for_timeout(1500)
-    st = E("() => ({from: S.dbFrom, to: S.dbTo, co: S.coId, view: S.view, today: Rec.ymdLocal(Date.now())})")
-    ok(st["from"] == "2026-10-05" and st["to"] == st["today"] and st["co"] == cid and st["view"] == "company", "the action opens the Day Book upload from 05-Oct-2026 to today for that client (%s)" % st)
+    # ---- 3. (Tally tell, 24-Nov-2026: no upload action; a Day Book file can still be uploaded from Books -> From Tally)
+    ok(pg.locator('#app [data-needs-group^="renumber|"] button[data-needs-act]').count() == 0, "no button asks for the Day Book")
     # ---- 4. two computers, the second saying more and an earlier date: one item, the earliest date, "more than"
     d2 = withAlerts([ra(500, "20261003", True)]); d2["id"] = "d0000000-0000-4000-8000-000000000002"; d2["name"] = "Laptop"
     scene([withAlerts([ra()]), d2])
     nd = [x for x in E(NEEDS) if x["key"].startswith("renumber|")]
-    ok(len(nd) == 1 and "more than 503 entries" in nd[0]["text"] and nd[0]["act"] == ["Upload the Day Book from 03-Oct-2026"], "two alerts for the company: one item, more than, the earliest date (%s)" % nd)
+    ok(len(nd) == 1 and "more than 503 entries" in nd[0]["text"] and nd[0]["act"] == [] and "from 03-Oct-2026" in nd[0]["text"], "two alerts for the company: one item, more than, the earliest date (%s)" % nd)
     # ---- 5. gone when the bridge no longer carries it
     scene([dev(recording=True)])
     ok(not [x for x in E(NEEDS) if x["key"].startswith("renumber|")], "no alert on the beat: no Needs you item")

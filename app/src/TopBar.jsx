@@ -209,7 +209,7 @@ function PanelUpload({ co }) {
   const b = S.books && S.books.cid === co.id ? S.books : null, days = b ? needDays(b, co.id) : [], nd = days.reduce((a, x) => a + x.days, 0);
   return <p className="tp-upload" data-tp-upload-line="">
     <button type="button" className="btn small" data-tp-upload="" onClick={() => { doAct("tallyPanelClose"); goClient("books:import"); }}>Upload Day Book or masters</button>
-    {nd > 0 && <span className="note" data-tp-days=""> {nd} day{nd === 1 ? "" : "s"} need a Day Book</span>}</p>;
+    {nd > 0 && <span className="note" data-tp-days=""> {nd} day{nd === 1 ? "" : "s"} not in FinCom yet: FinCom brings them from Tally</span>}</p>;
 }
 
 function TopRight() {

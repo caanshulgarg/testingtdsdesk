@@ -47,10 +47,10 @@ with sync_playwright() as p:
     # ---------------------------------------------------------------- 1. the page: one status line, four parts
     cid = U.open_page(pg, "owner")
     st = txt("#app [data-up-status]")
-    ok(st.startswith("Books from Tally: FY 2025-26 · entries 01-Apr-2025 to 31-Mar-2026 · ") and re.search(r"· 33 days need a Day Book$", st), "1. one status line (%s)" % st)
+    ok(st.startswith("Books from Tally: FY 2025-26 · entries 01-Apr-2025 to 31-Mar-2026 · ") and re.search(r"· 33 days not in FinCom yet: FinCom brings them from Tally$", st), "1. one status line (%s)" % st)
     ok(pg.locator("#app [data-up-status]").count() == 1, "1. exactly one status line")
     heads = E("() => [...document.querySelectorAll('#app [data-upload-page] h3')].map(h => h.innerText.trim())")
-    ok(heads[:2] == ["Bring in from Tally", "Days that need a Day Book"], "the parts in order: Upload Tally data, Days that need a Day Book (%s)" % heads)
+    ok(heads[:2] == ["Bring in from Tally", "Days FinCom is bringing from Tally"], "the parts in order: Upload Tally data, Days FinCom is bringing from Tally (Tally tell, 24-Nov-2026: never asked for) (%s)" % heads)
     ok(txt("#app details[data-howto] summary") == "How to export from Tally" and pg.locator("#app details[data-howto] li").count() == 3
        and not E("document.querySelector('#app details[data-howto]').open"), "How to export from Tally: folded, three steps")
     t = txt("#app")
@@ -108,7 +108,7 @@ with sync_playwright() as p:
     keys = [r[0] for r in rows]
     ok("2026-10-06" in keys and "2026-10-07" in keys and "2025-08-01" in keys, "each day (the shared classifier) and the month between the files (%s)" % keys)
     d7 = [r[1] for r in rows if r[0] == "2026-10-07"]
-    ok(d7 and "07-Oct-2026" in d7[0] and "2 entries" in d7[0] and d7[0].endswith("Upload"), "a day: its date, what waits, its Upload (%s)" % d7)
+    ok(d7 and "07-Oct-2026" in d7[0] and "2 entries" in d7[0] and d7[0].endswith("Upload a file"), "a day: its date, what waits, a file may be uploaded by hand (%s)" % d7)
     E("() => { window.__clicked = ''; const el = document.getElementById('tallyIn'); el.click = () => { window.__clicked = 'tallyIn'; }; }")
     pg.click('#app [data-need-day="2026-10-07"] button'); pg.wait_for_timeout(300)
     ok(E("window.__clicked") == "tallyIn" and E("[S.dbFrom, S.dbTo]") == ["2026-10-07", "2026-10-07"], "its Upload opens the one file box for that day only")
@@ -142,7 +142,7 @@ with sync_playwright() as p:
         return E("() => [...document.querySelectorAll('#app [data-upload-page] button, #app [data-upload-page] [role=button], #cobar [data-upload]')].map(b => (b.innerText || '').trim()).filter(Boolean).sort()")
     U.open_page(pg, "owner"); own = controls()
     U.open_page(pg, "staff"); stf = controls()
-    ok(own == stf and "Upload" in stf, "staff see the same upload, days and More as an owner (%s)" % stf)
+    ok(own == stf and "Upload a file" in stf, "staff see the same upload, days and More as an owner (%s)" % stf)
     ok(txt("#app [data-up-status]").startswith("Books from Tally: FY 2025-26"), "staff: the status line")
     ok(E("window.__rpc.length") == 0, "nothing asked of Tally by the page (%s)" % E("window.__rpc"))
 

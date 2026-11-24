@@ -213,8 +213,8 @@ const Rec = {
     out.forEach(g => {
       const k = g.lines.length, d = g.day ? fmtDate(g.day) : "", head = g.company + (d ? " · " + d : "") + ": ";
       const w = String(g.lines[0].held_why || ""), m = /^FinCom id (\S+)/.exec(w);
-      g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally \u2014 upload the Day Book for " + (d || "that day")
-        : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
+      g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally yet \u2014 FinCom brings " + (d || "that day") + " from Tally by itself"
+        : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting; FinCom then brings " + (d || "that day") + " by itself"
         : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
         : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
         : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: From Tally \u2192 Tally ledgers"
@@ -230,7 +230,7 @@ const Rec = {
       const d = x.day ? fmtDate(x.day) : "", hm = /T(\d{2}:\d{2})/.exec(String(x.since || "")), k = num(x.n);
       out.push({key: kind + "|" + x.company + "|" + (x.day || "") + "|stuck|" + x.deviceId, kind, cid: this.clientOf(x.company), company: x.company, day: x.day || "", pc: x.pc, deviceId: x.deviceId, lines: [], stuck: true,
         text: x.company + (d ? " \u00b7 " + d : "") + ": " + k + (k === 1 ? " save" : " saves") + " from " + x.pc + " could not be stored in FinCom" + (hm ? " since " + hm[1] : "") +
-          "; FinCom keeps trying \u2014 if it continues, upload the Day Book for " + (d || "that day")});
+          "; FinCom keeps trying by itself"});
     });
     // 2.4.0 review MEDIUM (next-renumber): the bridges' renumbering alerts are "Needs you" too (kind renumber), first
     const rn = this.renumberNeeds().filter(g => !S.syncClient || g.cid === S.syncClient);
@@ -259,7 +259,7 @@ const Rec = {
     });
     return [...by.values()].filter(g => !(this.renOk && this.renOk(g))).sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
       text: g.company + " \u00b7 " + fmtDate(g.day) + ": " + (g.more ? "more than " : "") + g.n + (g.n === 1 && !g.more ? " entry" : " entries") +
-        " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again \u2014 upload the Day Book from " + fmtDate(g.day)}));
+        " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again yet \u2014 FinCom brings the days from " + fmtDate(g.day) + " by itself"}));
   },
   // the Day Book upload from a day to today: Books -> From Tally
   async uploadFrom(cid, day){

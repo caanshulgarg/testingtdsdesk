@@ -307,7 +307,7 @@ with sync_playwright() as p:
         go(pg3, cid3, "books:reports")
         g = pg3.evaluate(LINE)
         ok(g and g["textW"] >= 0.8 * g["lineW"], "phone %d: the alert's words get the line's width (%s)" % (W, g and (round(g["textW"]), round(g["lineW"]))))
-        ok(g and not g["cut"] and re.search(r"GARG SHEKHAR & COMPANY: .+ not yet in FinCom\. Upload the Day Book for .+\.", g["text"]), "phone %d: the whole sentence shown, nothing cut off (%r)" % (W, g and g["text"]))
+        ok(g and not g["cut"] and re.search(r"GARG SHEKHAR & COMPANY: .+ not yet in FinCom\. FinCom brings it from Tally by itself\.", g["text"]), "phone %d: the whole sentence shown, nothing cut off (%r)" % (W, g and g["text"]))
         ok(g and g["below"] and g["inside"], "phone %d: the buttons (action, Clear, +more) on a row below the words, inside the line" % W)
         ok(g and not g["scroll"], "phone %d: no sideways scroll (%s)" % (W, g and g["scroll"] and pg3.evaluate("() => [document.documentElement.scrollWidth, ...[...document.querySelectorAll('#app *, header *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1).slice(0, 6).map(e => e.tagName + '.' + e.className + ' ' + Math.round(e.getBoundingClientRect().right))]")))
     pg3.set_viewport_size({"width": 390, "height": 800}); pg3.wait_for_timeout(400)

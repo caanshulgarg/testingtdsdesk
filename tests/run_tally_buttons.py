@@ -282,7 +282,7 @@ def main():
                 E("() => { window.__fill = {total: 7, done: 6, waiting: 1}; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(2500)
                 ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Bringing the missing days", 6000) != "", "4. Bring missing days, one more day done: 'Bringing …' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
                 E("() => { window.__fill = {total: 7, done: 6, waiting: 0, upload: 1}; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(2500)
-                ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^1 day needs a Day Book upload", 6000) != "", "4. Bring missing days, a day Tally could not send: handled, '1 day needs a Day Book upload' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+                ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Tally did not send 1 day yet: FinCom asks again by itself", 6000) != "", "4. Bring missing days, a day Tally could not send: handled, asked again by itself, never an upload (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
             E("() => { TCloud.rpc = window.__fillRpc0; if (window.tfxRefresh) window.tfxRefresh(); render(); }"); pg.wait_for_timeout(2000)
             # bridge 2.5.10: the bridge's own acknowledgement of the missing days (kind fill)
             forget("fill:"); pg.click(R(ORBIT) + ' [data-tpt-main="bring"]')

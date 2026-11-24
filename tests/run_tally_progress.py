@@ -244,30 +244,30 @@ def main():
         ok(mains(ORBIT) == ["turnon"] and txt(R(ORBIT) + " [data-tpt-main]") == "Turn on for this computer" and n(R(ORBIT) + " [data-tpt-note]") == 0,
            "3 (Fingate, review). reading older entries off, an owner: Turn on for this computer is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-act")))
         more(ORBIT); pg.click(L(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(600)
-        ok(n(L(ORBIT) + ' [data-tsm-col="do"] [data-tsm-act="upload"]') == 1 and n(L(ORBIT) + " [data-tpt-daybook]") == 1,
-           "3 (Fingate, review). the upload still there for an owner: in Answers, Upload a Day Book file under More (%s)" % txt(L(ORBIT) + ' [data-tsm-col="do"]'))
+        # Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for; a file can still be uploaded from More
+        ok(n(L(ORBIT) + ' [data-tsm-col="do"] [data-tsm-act="upload"]') == 0 and n(L(ORBIT) + " [data-tpt-daybook]") == 1,
+           "3 (Fingate, review). no upload asked in Answers; Upload a Day Book file stays under More (%s)" % txt(L(ORBIT) + ' [data-tsm-col="do"]'))
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
         pg.click(R(ORBIT) + ' [data-tpt-main="turnon"]'); pg.wait_for_timeout(800)
         to = calls("tally_device_period_fetch")
         ok(to and to[-1][1].get("p_on") is True and to[-1][1].get("p_device"), "3 (Fingate, review). Turn on for this computer: tally_device_period_fetch, on (%s)" % to)
         E("(c) => { (window.__sum.find(x => x.client === c) || {devices: []}).devices.forEach(d => { d.fetchOn = false; }); S.account.me.role = 'staff'; if (window.tfxRefresh) window.tfxRefresh(); render(); }", cid(ORBIT)); pg.wait_for_timeout(1500)
-        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book"
-           and txt(R(ORBIT) + " [data-tpt-note]") == "Reading older entries is off for the computer that has this company: an owner can turn it on",
-           "3 (Fingate, review). not an owner: Upload Day Book, and the note that an owner can turn reading on (%s)" % txt(R(ORBIT) + " .tpt-act"))
+        ok("upload" not in mains(ORBIT) and txt(R(ORBIT) + " [data-tpt-note]") == "Reading older entries is off for the computer that has this company: an owner can turn it on",
+           "3 (Fingate, review). not an owner: no upload asked, the note that an owner can turn reading on (%s)" % txt(R(ORBIT) + " .tpt-act"))
         E("(c) => { S.account.me.role = 'owner'; (window.__sum.find(x => x.client === c) || {}).devices = []; if (window.tfxRefresh) window.tfxRefresh(); render(); }", cid(ORBIT)); pg.wait_for_timeout(1500)
-        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and n(R(ORBIT) + " [data-tpt-note]") == 0,
-           "3 (Fingate, review). no computer has the company: Upload Day Book is the button, never Bring books (%s)" % txt(R(ORBIT) + " .tpt-act"))
+        ok("upload" not in mains(ORBIT) and n(R(ORBIT) + " [data-tpt-note]") == 0,
+           "3 (Fingate, review). no computer has the company: no upload asked (%s)" % txt(R(ORBIT) + " .tpt-act"))
         # (review) held lines and a held day: the upload is the button even with the company open on a live bridge
         E("""(c) => { (window.__sum.find(x => x.client === c) || {}).devices = window.__orbDevs; window.__ah0 = {heldFor: AlertHub.heldFor, heldDay: AlertHub.heldDay}; window.__nk0 = Rec.needKind; const d = new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10);
           AlertHub.heldFor = (ids) => ids.includes(c) ? [{cid: c, day: d, kind: 'daybook'}] : []; AlertHub.heldDay = (l) => l.day; Rec.needKind = (l) => l.kind || '';
           if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(1500)
-        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and "Upload that day" in txt(R(ORBIT) + " .tpt-st"),
-           "3 (Fingate, review). a held day, the company open on a live bridge: Upload Day Book is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-st")))
+        ok("upload" not in mains(ORBIT) and "FinCom asks again by itself" in txt(R(ORBIT) + " .tpt-st"),
+           "3 (Fingate, review). a held day, the company open on a live bridge: FinCom asks again by itself, no upload (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-st")))
         # (review) the held day's note stays in view while a read runs (Update from Tally pressed: the run's words)
         E("""(c) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'ORBIT SPACE', prog: {read: 40, of: 438}}; }""", cid(ORBIT))
         E("(c) => { if (window.FCRunState) window.FCRunState[c] = {at: S.tcoSync[c].at}; render(); }", cid(ORBIT)); pg.wait_for_timeout(1200)
         hs = [txt(R(ORBIT) + " [data-tpt-state]"), txt(R(ORBIT) + " [data-tpt-held]")]
-        ok(hs[0] in ("Updating", "Waiting for Tally") and hs[1] == "Tally could not send these entries. Upload that day’s Day Book.",
+        ok(hs[0] in ("Updating", "Waiting for Tally") and hs[1] == "Tally did not send these entries yet. FinCom asks again by itself.",
            "3 (review). a read running: the held day's note stays (%s)" % hs)
         E("""(c) => { Object.assign(AlertHub, window.__ah0); Rec.needKind = window.__nk0; delete S.tcoSync[c]; if (window.FCRunState) delete window.FCRunState[c];
           Rec.gapFor = window.__gapWas; TCloud.st[c].books = window.__orbBooks; (window.__sum.find(x => x.client === c) || {}).devices = window.__orbDevs;

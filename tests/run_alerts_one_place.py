@@ -69,7 +69,8 @@ with sync_playwright() as p:
     ok(len(garg) == 1, "the cursor's gap, two days of gap alerts (the computer not recording too): ONE alert for the book (%s)" % [x["text"] for x in b["items"]])
     g = garg[0] if garg else {"text": "", "fix": "", "act": "", "details": "", "sev": "", "dot": "", "read": True}
     ok(re.search(r"GARG SHEKHAR & COMPANY: 1 entry made in Tally since 08:00 IST today is not yet in FinCom\.", g["text"]), "in plain words: what (%s)" % g["text"])
-    ok(re.search(r"Upload the Day Book for \d{2}-[A-Z][a-z]{2}", g["fix"]) and g["act"].startswith("Upload"), "what to do, with its button (%s | %s)" % (g["fix"], g["act"]))
+    # Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for; FinCom brings it itself, the Tally page has the row
+    ok(g["fix"] == "FinCom brings it from Tally by itself." and g["act"] == "Open on Tally page", "what to do, with its button (%s | %s)" % (g["fix"], g["act"]))
     ok(not re.search(r"NWS144|54396|54395|change number|AlterID", g["text"] + " " + g["fix"]) and "54396" in g["details"], "the change numbers only behind details (%s)" % g["details"][:160])
     # 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option"): the computer not recording adds
     # no ask to the gap's alert (FinCom Bridge 2.4.5 puts the add-on into Tally itself): the Day Book of those days only

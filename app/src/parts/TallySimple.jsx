@@ -26,6 +26,7 @@ import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, compa
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
 import OlderEntries, { TurnOn, owner, TURN_FROM } from "./TallyFetch.jsx";
+import { TellLine, TellPcs } from "./TallyTell.jsx";   // Tally tell (migration 221): the one sentence a company, the computers' lines
 import { PostingWait } from "./StuckJobs.jsx";
 import { press, say, busyOf, saidOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
@@ -309,7 +310,7 @@ async function bringDays(row, a) {
   const b0 = (r && r.fill) || f0 || {}, base = Number(b0.done) || 0, up0 = Number(b0.upload) || 0;
   const fill = () => { const f = fillNow(row.cid); return !!f && (Number(f.done) > base || Number(f.upload) > up0); };
   const words = () => { const f = fillNow(row.cid) || {}, up = (Number(f.upload) || 0) - up0;
-    return up > 0 ? nOfW(up, "day needs", "days need") + " a Day Book upload: Tally did not send " + (up === 1 ? "it" : "them") + "." + (Number(f.done) > base ? " The rest are coming in from Tally now." : "")
+    return up > 0 ? "Tally did not send " + nOfW(up, "day", "days") + " yet: FinCom asks again by itself." + (Number(f.done) > base ? " The rest are coming in from Tally now." : "")
       : "Bringing the missing days from Tally now."; };
   return { text: "Asked: FinCom brings " + (q > 0 ? nOfW(q, "missing day", "missing days") : "the missing days") + " from Tally within a few minutes.",
     watch: { started: fill, cid: row.cid, company: row.company, startedText: words, acks } };
@@ -584,7 +585,9 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   // button wherever it is the only way: held lines, a held day, days missing with no computer set to read older entries.
   // One exception: a computer has the company with that reading turned off; an owner can turn it on (Turn on for this
   // computer is the button); anyone else keeps the upload and is told an owner can
-  const off = mm === "upload" && !!(row.act && row.act.off);
+  // (Tally tell, the owner, 24-Nov-2026: the Day Book is never asked for; days FinCom waits for carry no button, the
+  // turned-off reading keeps the owner's Turn on)
+  const off = !!(row.act && row.act.off && (mm === "upload" || row.act.kind === "wait"));
   let btn = null, main = "", note = "";
   if (!canWrite()) { btn = null; if (row.kind === "client" || row.kind === "company") note = VIEW_ONLY; }
   else if (off && owner() && bookSum(row.cid)) { btn = <TurnOn b={bookSum(row.cid)} main />; main = "turnon"; }
@@ -610,6 +613,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   else if (pg.kind === "open") { btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid, "data-tpt-main": "connect" }} />; main = "connect"; }
   else if (pg.kind === "company" && row.best && !row.ask) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
   else { btn = <ActLink row={row} />; main = "link"; }
+  if (off && main !== "turnon" && !note) note = OFF_NOTE;
   const aw = pg.btn === "again" && pg.kind !== "waiting" ? Again.why(row, cs) : null; // (waiting: the Masters cell's short reason)
   const near = pg.kind === "away" && x ? (x.unlinked || []).find((u) => coKey(u.company) !== coKey(row.company) && (baseKey(u.company) === baseKey(row.company) || !!(globalThis.LinkRec && LinkRec.same && LinkRec.same(u.company, row.company)))) : null;
   // (a client being read: its Masters and Entries cells say how far, the read's own words too; not a second time here.
@@ -633,6 +637,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {why && <span title={typeof why === "string" ? why : undefined} className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
         {held && <span className="tpt-why" title={held} data-tpt-held="">{held}</span>}
+        {/* Tally tell (migration 221): the cloud's one sentence for this company, and its one button */}
+        {row.cid && <TellLine cid={row.cid} company={row.company} />}
         {/* next-bell-tally: opened for a control only Advanced has (the bell's lines waiting, a company in two places): "More settings" to it */}
         {row.focus && S.tallyAdv && S.tallyAdv.cid === row.cid && <span className="tpt-why"><button type="button" className="linkbtn" data-tally-more-go={S.tallyAdv.to}
           onClick={() => moreGo(S.tallyAdv)}>More settings</button></span>}
@@ -689,12 +695,12 @@ const isLinked = (r) => r.kind === "client" && r.c.w === YES;
 const CHIPS = [["all", "All"], ["need", "Needs attention"], ["reading", "Reading now"], ["ok", "Up to date"], ["open", "Open in Tally now"], ["away", "Not open in Tally"], ["free", "Not linked"]];
 const CHIP_DOT = { need: "warn", reading: "read", ok: "ok", away: "idle", free: "ring" };
 const G_MA = [["done", "Up to date"], ["reading", "Reading or waiting"], ["none", "Not brought yet"], ["why", "Not done"]];
-const G_EN = [["up", "Up to date"], ["going", "Bringing"], ["behind", "Days to bring"], ["upload", "Upload needed"], ["held", "Paused or stopped"], ["none", "Not brought yet"]];
+const G_EN = [["up", "Up to date"], ["going", "Bringing"], ["behind", "Days to bring"], ["upload", "Tally did not send"], ["held", "Paused or stopped"], ["none", "Not brought yet"]];
 const G_LAST = [["any", "Any time"], ["today", "Today"], ["week", "In the last 7 days"], ["older", "Older than 7 days"], ["never", "Never"]];
 const G_OPEN = [["any", "Open or not"], ["open", "Open in Tally now"], ["away", "Not open in Tally"]];
 const SORTS = [["need", "Needs attention first"], ["open", "Open in Tally first"], ["name", "Client name A–Z"], ["last", "Last entry, newest"], ["days", "Most days to bring"]];
 const NO_F = { chip: "all", fma: [], fen: [], flast: "any", fopen: "any", fpc: [] };
-const VIEWS = [["all", "All clients", {}], ["need", "Needs attention", { chip: "need" }], ["books", "Bringing books", { fen: ["going"] }], ["upload", "Upload needed", { fen: ["upload"] }]];
+const VIEWS = [["all", "All clients", {}], ["need", "Needs attention", { chip: "need" }], ["books", "Bringing books", { fen: ["going"] }], ["upload", "Tally did not send", { fen: ["upload"] }]];
 const arr = (v) => (Array.isArray(v) ? v : []);
 const fOf = (ui) => ({ chip: ui.chip || "all", fma: arr(ui.fma), fen: arr(ui.fen), flast: ui.flast || "any", fopen: ui.fopen || "any", fpc: arr(ui.fpc), sort: ui.sort || "need", dir: ui.dir === -1 ? -1 : 1 });
 const viewSig = (f) => JSON.stringify([f.chip || "all", [...arr(f.fma)].sort(), [...arr(f.fen)].sort(), f.flast || "any", f.fopen || "any", [...arr(f.fpc)].sort(), f.sort || "need", f.dir === -1 ? -1 : 1]);
@@ -734,7 +740,7 @@ function tagsOf(r, i, seen, devs, now, by) {
   const en = !L ? [] : [es === "uptodate" || es === "done" ? "up" : es === "after" || es === "going" ? "going" : es === "paused" || es === "stopped" ? "held" : es];
   // Upload needed: the row's button is the Day Book upload, or days of its book Tally did not send wait for one (what is
   // already read: nothing is asked for the filters)
-  if (L && ((r.act && r.act.kind === "upload") || (e.b && e.b.pull && arr(e.b.pull.upload).length))) en.push("upload");
+  if (L && ((r.act && (r.act.kind === "upload" || r.act.kind === "wait")) || (e.b && e.b.pull && arr(e.b.pull.upload).length))) en.push("upload");
   const lm = Date.parse(r.last || "") || 0;
   const l = !lm ? ["never"] : now - lm < 7 * 86400e3 ? (ISTD(lm) === ISTD(now) ? ["today", "week"] : ["week"]) : ["older"];
   let days = e && es === "behind" ? parseInt(e.sub, 10) || 0 : 0;
@@ -1040,5 +1046,6 @@ export default function SimpleTally({ installed, ready = true, download, sha, ch
     {ready && showGuide && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
     {down && ready && R.extra && !rows.length ? <Part name="short" v={v}><ShortCard rows={rows} cs={cs} /></Part>
       : <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} oneDl={oneDl} cs={cs} x={R.extra} checkAgain={checkAgain} /></Part>}
+    {!(typeof window === "object" && window.FCNewLook && window.FCNewLook.on()) && <Part name="computers" v={v}><TellPcs /></Part>}
   </div>;
 }

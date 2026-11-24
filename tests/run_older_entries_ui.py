@@ -170,7 +170,8 @@ def main():
         ok(calls("tally_period_held_retry")[-1:] == [{"p_book": "bk-zz", "p_day": "%d-10-12" % FYN}], "1b. Try again now queues the retry (%s)" % calls("tally_period_held_retry")[-1:])
         E("(h) => { window.__held = h; }", [{"day": D12, "n": 1, "tries": 3, "manual": True, "words": WM}])
         state(sb(pull=dict(GOING, x=8414, upload=[{"day": D12, "why": "held", "words": WM}])), wait=1400)
-        ok(txt(hl).startswith(WM) and n(hl + " [data-older-upload-go]") == 1 and n(card + " [data-older-upload]") == 0, "1b. after 3 tries the manual step, once, with its Upload button (%s)" % txt(hl))
+        # Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for: after 3 tries, said plainly, no Upload button
+        ok(txt(hl).startswith("12-Oct-%d: Tally did not send this day yet. FinCom tries it again by itself." % FYN) and n(hl + " [data-older-upload-go]") == 0 and n(card + " [data-older-upload]") == 0, "1b. after 3 tries: said once, nothing asked (%s)" % txt(hl))
         E("() => { window.__heldFail = true; }")
         state(sb(pull=dict(GOING, x=8415, upload=[{"day": D12, "why": "held", "words": WM}])), wait=1400)
         ok(n(hl) == 0 and n(card + ' [data-older-upload="%s"]' % D12) == 1, "1b. the held list cannot be read (a cloud without migration 154): the upload line stays")

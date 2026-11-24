@@ -195,8 +195,8 @@ const AlertHub = {
           // 182: the gap's own days match Tally: the changes are on older dates (the cloud's words, and the day to upload from)
           const words = gapN ? this.n(gapN) : "Entries", o = gap.older;
           out.push(Object.assign(base, {sev: "bad", text: who + ": " + (o ? o.say : words + " made in Tally" + (gap.since ? " since " + this.when(gap.since) : "") + (gapN === 1 ? " is" : " are") + " not yet in FinCom."),
-            fix: o ? o.fix : "Upload the Day Book for " + this.days(gap.since) + " to bring " + (gapN === 1 ? "it" : "them") + " in.",
-            act: {label: "Upload Day Book", run: () => Rec.uploadDays(b.cid, gap)}}));
+            fix: o && !/day book/i.test(o.fix) ? o.fix : "FinCom brings " + (gapN === 1 ? "it" : "them") + " from Tally by itself.",
+            act: {label: "Open on Tally page", run: () => openTallyFor(b.cid)}}));
         } else if (b.other.length){
           const locked = b.other.filter(l => /^month locked/i.test(String(l.held_why || "")));
           const hd = b.other.filter(l => l.state === "held");
@@ -206,7 +206,7 @@ const AlertHub = {
             fix: locked.length === b.other.length ? "Apply them from the Tally page (More settings), or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
               ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
               : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
-              ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (the Tally page has the button)."
+              ? "FinCom brings " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " from Tally by itself."
               : hd.length === b.other.length ? "See them on the Tally page." : "See why on the Tally page.",
             // next-bell-tally: the basic Tally page at the client's row; its "More settings" opens Sync activity for it
             act: {label: "Open on Tally page", run: () => openTallyFor(b.cid, {to: "activity"})}}));
@@ -216,8 +216,7 @@ const AlertHub = {
       // (Rec.renumberNeeds: one a company, from every computer's beat): Needs you, the Day Book from that day
       if (Rec.renumberNeeds) Rec.renumberNeeds().forEach(g => out.push({key: "renumber:" + g.company, sev: "warn", cid: g.cid, selfClear: true, details: g.pc,
         text: g.text.replace(/ \u2014 upload the Day Book from .*$/, "."),
-        fix: "Needs you: upload the Day Book from " + fmtDate(g.day) + " so FinCom has Tally's numbers.",
-        ...(g.cid ? {act: {label: "Upload the Day Book from " + fmtDate(g.day), run: () => Rec.uploadFrom(g.cid, g.day)}} : {})}));
+        fix: "FinCom brings the days from " + fmtDate(g.day) + " from Tally by itself."}));
       // ---- the ledgers a client's entries use that FinCom does not have yet (the owner, 15-Oct-2026: "there should be some
       // smart way to show it"): one item a client, the count only (Rec.unkGroups, settled ones left out); the client's Books
       // page and Ledgers say which, with the way to Books › From Tally. Information (no line on the pages from here); gone by itself
@@ -272,6 +271,8 @@ const AlertHub = {
         sev: ask ? "bad" : "info", cid: x.client_id || "", text: x.words, fix: "", at: x.at, selfClear: ask, alert: ask ? null : x, drop: ask ? x : null}); });
       // ---- what cannot clear itself: the daily summary, until read
       unread.filter(x => x.kind === "summary" && !drop(x)).forEach(x => out.push({key: "alert:" + x.id, fp: AlertClear.fp(["alert:" + x.id]), sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
+      // ---- Tally tell (migration 221): the open 'tell' rows (cleared_at null), the cloud's sentence (app/src/lib/tallyTell.js)
+      if (typeof FCTell == "object") out.push(...FCTell.bell(unread));
     }
     // ---- the app's own warnings
     const a = S.account, bal = a && a.firm ? num(a.firm.balance) : 0, warnAt = a && a.firm ? num(a.firm.warn_at) : 0;

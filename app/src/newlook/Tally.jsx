@@ -20,6 +20,7 @@ import { ownState, localBridges, bridgesOf, sameUser, placeOf, ownRule } from ".
 import { freePort } from "../lib/tallyPort.js";
 import { connectSteps, TITLES } from "../lib/connectSteps.js";
 import { Pill } from "./parts.jsx";
+import { TellPcWords } from "../parts/TallyTell.jsx";   // Tally tell (migration 221): each computer's one line
 import "./newlook.css";
 
 const lc = (s) => String(s || "").trim().toLowerCase();
@@ -109,6 +110,7 @@ function Computers({ own }) {
     { k: "ver", label: "FinCom Bridge", v: (r) => r.version || "", cell: (r) => r.version || "—" },
     { k: "tally", role: "status", label: "Tally", v: (r) => (r.tally === "open" ? "Open" : "Closed"), cell: (r) => (r.tally === "open" ? "Open" : "Closed") },
     { k: "open", label: "Companies open", cls: "n", v: (r) => (r.open || []).length, cell: (r) => (r.open || []).length },
+    { k: "tell", label: "Now", v: () => "", cell: (r) => <TellPcWords id={r.device.id} /> },
   ];
   return <ListTable name="nlPcs" className="bk-table nl-table" cols={cols} rows={rows} rowKey={(r) => r.device.id + ":" + r.id} unit={["computer", "computers"]}
     loading={TCloud.pane.devices == null && !TCloud.pane.err ? "the computers" : false} empty="No computer sends Tally’s books yet: they show here after step 1." />;

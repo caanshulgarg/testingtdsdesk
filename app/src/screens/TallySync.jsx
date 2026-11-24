@@ -73,7 +73,7 @@ export default function SyncActivity() {
     {head}
     <p className="note" style={{ margin: "6px 0 8px" }}>Every change saved in Tally on a computer with FinCom’s recorder, as FinCom’s cloud received it: entered in the books, already in the books, or received and not yet entered, with the reason. Newest first.</p>
     <details className="note" data-sync-meaning="" style={{ margin: "0 0 8px" }}><summary style={{ cursor: "pointer" }}>What does this mean?</summary>
-      <div style={{ marginTop: 4 }}><b>Needs you</b>: FinCom cannot settle these by itself; each line says the one thing to do (most often: upload that day’s Day Book). <b>Being fetched</b>: FinCom Bridge is still asking Tally for these entries; they enter the books by themselves. When nothing is said, nothing is waiting.</div></details>
+      <div style={{ marginTop: 4 }}><b>Needs you</b>: FinCom cannot settle these by itself; each line says the one thing to do. <b>Being fetched</b>: FinCom Bridge is still asking Tally for these entries; they enter the books by themselves. When nothing is said, nothing is waiting.</div></details>
     <SyncFlow flow={flow} canApply={canApply} busy={!!(msg && msg.busy)} />
     {/* the ledgers entries use that FinCom does not have yet: not here (the owner, 15-Oct-2026: one line a client, on the
         client's Books page and Ledgers; the bell has the count) */}

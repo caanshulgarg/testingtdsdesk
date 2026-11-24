@@ -352,3 +352,12 @@
 @media (min-width: 761px) {
   #app .tpt-tr:not(.tpt-open) .tpt-why:not(:has(button, select)) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 }
+
+/* Tally tell (migration 221): the cloud's sentence is said whole, never cut; the computers' lines in a card */
+#app .tpt-tr .tpt-why.tpt-tell-line.tpt-tell-line { white-space: normal; overflow: visible; text-overflow: clip; color: var(--text-secondary); }
+#app .tpt-tell-line .btn { margin-top: 4px; }
+#app .tpt-tell-pcs { padding: 14px 16px; margin-top: 12px; }
+#app .tpt-tell-pclist { margin: 8px 0 0; padding-left: 18px; }
+#app .tpt-tell-pclist li { margin: 4px 0; overflow-wrap: anywhere; }
+#app .tpt-tell-pcname { font-weight: 600; }
+#app a.btn[data-tell-fix] { text-decoration: none; }

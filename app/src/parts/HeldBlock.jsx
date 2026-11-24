@@ -11,7 +11,6 @@
 // Folded: the "daybook" groups (Rec.needKind) of a company, its held lines "waiting for the entry's details" (otherwise
 // said as being fetched), and its renumbering item; a renumbering item alone stays as it was. The renumbering item leaves
 // by itself once 136 says every day from its first day is checked (Rec.renOk, read by Rec.renumberNeeds).
-import Button from "./Button.jsx";
 import { QUIET } from "../lib/quietReads.js";
 import { soonDraw } from "../lib/soonDraw.js";
 import { ClearBtn } from "./Bell.jsx";
@@ -75,12 +74,13 @@ export function heldWords(b) {
   const days = [...new Set(b.days.map((g) => g.day).concat(b.lines.map((r) => String(r.vch_date || "").slice(0, 10)), st && st.held > 0 ? [ymd(st.from), ymd(st.to)] : [])
     .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort(), d0 = days[0] || "", d1 = days[days.length - 1] || d0, n = Math.max(b.lines.length, (st && st.held) || 0);
   const from = b.renumber && b.renumber.day && (!d0 || b.renumber.day < d0) ? b.renumber.day : d0, to = b.renumber ? Rec.ymdLocal(Date.now()) : d1;
-  const up = "upload one Day Book for " + (from === to ? fmtDate(from) : fmtDate(from) + " to " + fmtDate(to));
+  const up = "FinCom brings them from Tally by itself";
   const pct = c.total > 0 ? Math.round((100 * c.done) / c.total) : 0;
-  const how = c.state === "checking" || c.state === "queued" ? "FinCom is checking them with Tally now (" + pct + "%" + (c.etaMin ? " · about " + c.etaMin + " min" : "") + ") — or " + up
-    : c.state === "stopped" ? "FinCom stopped checking them with Tally" + (c.words ? " (" + c.words + ")" : "") + " — " + up
-    : c.state === "off" ? (c.why === "offline" ? "FinCom checks them by itself once the Tally computer that reads older entries is connected" : "FinCom checks them by itself once reading older entries is on for the Tally computer") + " — or " + up
-    : up.charAt(0).toUpperCase() + up.slice(1);
+  // (Tally tell, the owner, 24-Nov-2026: the Day Book is never asked for; a file can still be uploaded from From Tally)
+  const how = (c.state === "checking" || c.state === "queued" ? "FinCom is checking them with Tally now (" + pct + "%" + (c.etaMin ? " · about " + c.etaMin + " min" : "") + ")"
+    : c.state === "stopped" ? "FinCom stopped checking them with Tally" + (c.words ? " (" + c.words + ")" : "") + "; it tries again by itself"
+    : c.state === "off" ? (c.why === "offline" ? "FinCom checks them by itself once the Tally computer that reads older entries is connected" : "FinCom checks them by itself once reading older entries is on for the Tally computer")
+    : up) + ".";
   const text = b.company + ": " + (n === 1 ? "1 change" : n + " changes") + " saved in Tally " + (d0 === d1 ? "on " + short(d0) : "between " + short(d0) + " and " + short(d1)) +
     (n === 1 ? " is" : " are") + " not yet in FinCom. " + how;
   return { text, from, to };
@@ -92,10 +92,10 @@ export default function HeldBlock({ b, canApply }) {
   if (clr && AC.cleared(clr)) return null;
   return <div data-held-block={b.company} style={{ margin: "6px 0 0" }}>
     <span data-held-text="">{w.text}</span>{" "}
-    {canApply && b.cid ? <Button className="btn small" data-held-upload="" data-needs-act="daybook-range" onClick={() => uploadRange(b.cid, w.from, w.to)}>Upload Day Book</Button>
-      : <span className="note">{" (a member of the firm who may write does this)"}</span>}
+    {/* Tally tell (migration 221): the book's own sentence, when FinCom's cloud says one (what stops FinCom bringing it) */}
+    {(() => { const t = b.cid && globalThis.FCTell ? FCTell.book(b.cid, b.company) : null, c = t && t.cause; return c && c.code && c.words ? <span className="note" data-needs-act="tell" data-needs-tell={b.cid}>{c.words + " "}</span> : null; })()}
     {" "}<ClearBtn x={clr} />
-    <div className="note" data-held-why="">Why: Tally saved changes FinCom had not read yet (they reached FinCom after its last Day Book); they clear by themselves once checked or uploaded.</div>
+    <div className="note" data-held-why="">Why: Tally saved changes FinCom had not read yet (they reached FinCom after its last Day Book); they clear by themselves once checked.</div>
     <details data-held-days="" style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Show days</summary>
       {b.renumber && <div className="note" data-held-day="renumber">{b.renumber.text}</div>}
       {b.days.slice().sort((x, y) => String(x.day).localeCompare(String(y.day))).map((g) => <div key={g.key} className="note" data-held-day={g.day}>{g.text}</div>)}

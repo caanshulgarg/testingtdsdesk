@@ -226,6 +226,12 @@ export function TurnOn({ b, onDone, main = false }) {
     {here && <Said k={k} hook="turnon" className="note" />}</>;
 }
 export const TURN_FROM = {};
+// Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for (a file can still be uploaded from From Tally): a
+// cloud's words that ask for it say FinCom tries the day again by itself
+export const noAsk = (w) => /drop the file|Alt\+E|\(Export\)/i.test(String(w || "")) ? "Tally did not send this day yet. FinCom tries it again by itself." : String(w || "").replace(/\s*[:;,.\u2014-]*\s*(or )?(please )?upload (the|that day['’]s|this day['’]s|its|a|one) day ?book[^.]*\.?$/i, ". FinCom tries it again by itself.").replace(/\.\. /, ". ");
+// a year asked of Tally for a book (Bring another year's Start; Tally tell's "Add 2025-26", the owner's 24-Nov-2026 answer:
+// said once, added only when a person presses it): the days FinCom lacks (135), else 98's choice
+export const askYear = (args) => rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; });
 
 // next-buttons: has the pull asked at `at` started? p0: the pull as it was just before the press. A pull chosen since
 // (a new chosenAt): done, or no longer going (paused, stopped: its own words say why), or its count moved past the FIRST
@@ -272,7 +278,7 @@ export default function OlderEntries({ cid, say = false }) {
     return () => { on = false; }; }, [heldSig]);
   const heldRetry = (day) => { setHeldBusy(day); rpc("tally_period_held_retry", { p_book: book, p_day: day.slice(0, 4) + "-" + day.slice(4, 6) + "-" + day.slice(6, 8) })
     .then(() => rpc("tally_period_held_list", { p_book: book })).then((r) => { if (r && r.ok && Array.isArray(r.held)) { setHeld(r.held); setHeldOk(true); } summary(true); }, (e) => setErr(errWords(e))).finally(() => setHeldBusy("")); };
-  if (!b) return say && typeof TCloud === "object" && TCloud.on() ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
+  if (!b) return say && typeof TCloud === "object" && TCloud.on() ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{SUM.off ? "Bring another year is not in FinCom’s cloud yet."
     : SUM.books ? "FinCom’s cloud has no books of this client from Tally yet: press Update from Tally first, then come back here." : "Reading the books from FinCom’s cloud…"}</p> : null;
   // staging, 11-Nov-2026 (the owner: "while bringing another year, I am not able to see previous periods"): the years are
   // this one and the five before it, whatever day FinCom's book starts on (b.from is the day FinCom began the book, chosen
@@ -292,7 +298,7 @@ export default function OlderEntries({ cid, say = false }) {
   // next-buttons: Start says what happens and when; no Tally computer on it in 2 minutes: "Not started: <why>"
   const sk = "older:" + book;
   const start = () => { if (busy || lockOf("choose:" + book)) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, seen = pullWatch(p); setBusy("start"); setErr("");
-    press(sk, () => { const acks = ackSnap(book, ["period"]); return rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
+    press(sk, () => { const acks = ackSnap(book, ["period"]); return askYear(args)
       .then((r) => { summary(true); askStatus(true);
         if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
         const started = () => seen((bookSum(cid) || {}).pull);
@@ -329,11 +335,10 @@ export default function OlderEntries({ cid, say = false }) {
     {sp && checkLine(cid) && <p className={"note" + (/Differs/.test(checkLine(cid)) ? " bad" : "")} data-older-split-check="" style={{ margin: "4px 0 0" }}>{checkLine(cid)}</p>}
     <Said k={sk} hook="older" className="note" />
     {!may() && <p className="note" data-older-view="" style={{ margin: "4px 0 0" }}>{VIEW_ONLY}</p>}
-    {held.map((h) => <p key={"held" + h.day} className="note" data-older-held={h.day} data-older-held-manual={h.manual ? "1" : "0"} style={{ margin: "4px 0 0" }}>{h.words + " "}
+    {held.map((h) => <p key={"held" + h.day} className="note" data-older-held={h.day} data-older-held-manual={h.manual ? "1" : "0"} style={{ margin: "4px 0 0" }}>{(h.manual ? dayLong(h.day) + ": " : "") + noAsk(h.words) + " "}
       {may() && <button className="linkbtn" data-older-held-retry={h.day} disabled={heldBusy === h.day} onClick={() => heldRetry(h.day)}>{heldBusy === h.day ? "Asking…" : "Try again now"}</button>}
-      {h.manual && <>{" "}<button className="linkbtn" data-older-upload-go={h.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(h.day), tallyDate(h.day))}>{"Upload " + dayLong(h.day)}</button></>}</p>)}
-    {p && (p.upload || []).filter((u) => !(u.why === "held" && heldOk && held.some((h) => h.day === u.day))).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
-      <button className="linkbtn" data-older-upload-go={u.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(u.day), tallyDate(u.day))}>{"Upload " + dayLong(u.day)}</button></p>)}
+      </p>)}
+    {p && (p.upload || []).filter((u) => !(u.why === "held" && heldOk && held.some((h) => h.day === u.day))).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{noAsk(u.words)}</p>)}
   </section>;
 }
 

@@ -210,8 +210,8 @@ def main():
         scene(cos(sal="GS"), books={"GS": [{"book": "bk-S", "company": SAL, "from": "2025-04-01", "to": "2026-03-31", "days": 300, "ledgersAt": "ago:9"}]}, ledn={"bk-S": 88})
         E("() => { S.ledgerHist = S.ledgerHist; }"); tally_page(); pg.wait_for_timeout(1200)
         pg.click('#app [data-tco-row="%s"] [data-tco-more] summary' % SAL); pg.wait_for_timeout(300)
-        ok(pg.locator('#app [data-tco-row="%s"] [data-tco-daybook]' % SAL).count() == 1 and "Upload older entries (Day Book)" in txt('#app [data-tco-row="%s"] [data-tco-daybook]' % SAL),
-           "4. days of this year missing: ⋯ Upload older entries (Day Book)")
+        ok(pg.locator('#app [data-tco-row="%s"] [data-tco-daybook]' % SAL).count() == 1 and "Upload a Day Book file" in txt('#app [data-tco-row="%s"] [data-tco-daybook]' % SAL),
+           "4. days of this year missing: ⋯ Upload a Day Book file (optional: Tally tell, 24-Nov-2026, never asked for)")
         # the Disconnected rows, for the pictures
         r = row(SAL)
         ok(r and r["pill"] == "Waiting for Tally" and "not open in Tally now" in r["text"] and "Garg Shekhar & Company" in r["text"], "4. a linked company not open: Waiting for Tally, quietly, with its client (%s)" % (r and r["text"][:160]))

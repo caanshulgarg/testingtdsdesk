@@ -49,11 +49,11 @@ function Status({ b, days }) {
   const first = firstEntry(b), span = fyOf(first) === fyOf(last) ? "FY " + fyOf(last) : "FY " + fyOf(first) + " to " + fyOf(last);
   const bits = ["Books from Tally: " + (n && last ? span : "nothing yet")];
   if (n && last) bits.push("entries " + d(first) + " to " + d(last));
-  else bits.push("upload the Day Book (XML or JSON) exported from Tally");
+  else bits.push("no entries yet");
   if (n && !b.ledInfoAt && !Object.keys(b.pans || {}).length) bits.push("ledger masters not uploaded");
   if (n && (m.parts || []).length && !(b.tb && Object.keys(b.tb.led || {}).length)) bits.push("opening balances not uploaded");
   const k = days.reduce((a, x) => a + x.days, 0);
-  if (k) bits.push(k + (k === 1 ? " day needs" : " days need") + " a Day Book");
+  if (k) bits.push(k + (k === 1 ? " day" : " days") + " not in FinCom yet: FinCom brings them from Tally");
   // Update from Tally (24-Oct-2026: the link line that carried it is gone; the Tally page's row has Sync now too)
   const linked = typeof tallyLinkOf === "function" && tallyLinkOf(CO()).state !== "unlinked";
   const can = n > 0 && (linked || (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
@@ -156,15 +156,15 @@ function Days({ days }) {
   if (!days.length) return null;
   const from = days.reduce((a, x) => (!a || x.from < a ? x.from : a), ""), to = days.reduce((a, x) => (x.to > a ? x.to : a), "");
   const k = days.reduce((a, x) => a + x.days, 0), fold = days.length > DAYS_FOLD;
-  return <section className="dash-card" data-need-days="" data-folded={fold && !open ? "" : undefined} style={{ marginBottom: 12 }}><h3>Days that need a Day Book</h3>
+  return <section className="dash-card" data-need-days="" data-folded={fold && !open ? "" : undefined} style={{ marginBottom: 12 }}><h3>Days FinCom is bringing from Tally</h3>
     {fold && <p className="row" data-need-days-one="" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 6px" }}>
-      <span style={{ minWidth: 0, flex: "1 1 220px" }}>{plural(k, "day", "days") + " between " + d(from) + " and " + d(to) + " need that day’s Day Book. Upload one Day Book for " + d(from) + " to " + d(to) + "; FinCom takes only those days from it."}</span>
-      <span className="row" style={{ gap: 8 }}><button className="btn small primary" data-need-days-upload="" onClick={() => tallyPickFor(tallyDate(from), tallyDate(to))}>Upload</button>
+      <span style={{ minWidth: 0, flex: "1 1 220px" }}>{plural(k, "day", "days") + " between " + d(from) + " and " + d(to) + " are not in FinCom yet. FinCom brings them from Tally by itself."}</span>
+      <span className="row" style={{ gap: 8 }}><button className="btn small primary" data-need-days-upload="" onClick={() => tallyPickFor(tallyDate(from), tallyDate(to))}>Upload a file</button>
         <button className="linkbtn" data-need-days-show="" aria-expanded={open ? "true" : "false"} onClick={() => setOpen(!open)}>{open ? "Hide days" : "Show days"}</button></span></p>}
     {(!fold || open) && <ul className="up-days" style={{ listStyle: "none", margin: 0, padding: 0 }}>{days.map((x) =>
       <li key={x.from + x.to} data-need-day={tallyDate(x.from)} className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid var(--rule)" }}>
         <span style={{ minWidth: 0, flex: "1 1 220px" }}><b>{d(x.from) + (x.to !== x.from ? " to " + d(x.to) : "")}</b>{" · " + x.say}</span>
-        <button className="btn small" onClick={() => tallyPickFor(tallyDate(x.from), tallyDate(x.to))}>Upload</button></li>)}</ul>}
+        <button className="linkbtn" onClick={() => tallyPickFor(tallyDate(x.from), tallyDate(x.to))}>Upload a file</button></li>)}</ul>}
   </section>;
 }
 

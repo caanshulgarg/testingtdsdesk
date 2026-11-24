@@ -26,6 +26,8 @@ import { ownOpen, NO_CO, lookOnce, checkAll, checkedSay } from "../lib/tallySimp
 import "../lib/connectSteps.js";
 import { errWords, slowClock, SLOW_MS } from "./TallyBtn.jsx";   // next-buttons: a failure in plain words; a slow cloud said so
 import { noAnswer, readWhere } from "../lib/readFollow.js";
+import { TellFix } from "./TallyTell.jsx";   // Tally tell (migration 221): the sentence's one button
+import { book as tellBook } from "../lib/tallyTell.js";
 // next-bell-tally: "Open Tally page" for a control only Advanced has: the row's "More settings" to it (as lib/linkStatus.js)
 const TWO = { to: "support", at: "[data-tco-two-places]" }, ACTIVITY = { to: "activity" };
 
@@ -112,6 +114,9 @@ function Actions({ co, s, run, busy }) {
     const rw = co && s.company ? readWhere(s.company) : null, na = rw && !rw.reader ? noAnswer(s.company) : "";
     return na ? { bad: true, text: "Asked at " + now() + ", but " + na.charAt(0).toLowerCase() + na.slice(1) } : "Asked Tally for its new entries at " + now() + ". They come within a few minutes."; }, true);
   if (!co) return s.icon === "none" ? <Download /> : s.icon === "linked" ? null : row(check(true));
+  // Tally tell: the cloud's sentence (the line above) and its one button; Check again when it waits for Tally
+  if (s.cause === "tell") { const f = s.tell && s.tell.cause && s.tell.cause.fix;
+    return f ? <p className="tally-pop-acts" data-tally-pop-tell-fix={f}><TellFix fix={f} cid={co.id} b={s.tell} /></p> : s.icon === "waiting" ? row(check(true)) : null; }
   if (s.icon === "linked" || s.far) return row(update());   // (far: linked, read in another's Tally: Update now all the same)
   if (s.icon === "waiting") return row(check(true));
   if (s.icon === "none") return s.p && (s.p.kind === "unlinked" || s.p.state === "unlinked") ? <LinkPick co={co} run={run} busy={busy} /> : <Download />;
@@ -149,6 +154,8 @@ export default function TallyPop({ co, nOpen, close, back }) {
     onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); if (back) back(); } }}>
     <p className="tally-pop-head"><span className={"tsign-dot " + TONE[s.icon]} aria-hidden="true" /><b data-tally-pop-word="">{s.word}</b></p>
     {line && <p className="tally-pop-line" data-tally-pop-line="">{line}</p>}
+    {/* Tally tell (A.3.2): days FinCom is bringing, or a slow day tried again: the count line under Linked */}
+    {co && s.cause !== "tell" && (() => { const b = tellBook(co.id, s.company), c = b && b.cause; return c && c.words && (c.code === "days_waiting" || c.code === "slow_day") ? <p className="note" data-tally-pop-tell={c.code}>{c.words}</p> : null; })()}
     {/* next-fix-clientremove (the owner: "no visibility of which client it's linked to"): the company linked, and where */}
     {co && (s.icon !== "none" || s.far) && s.company && <p className="tally-pop-co" data-tally-pop-company="">{"Tally company: "}<b>{s.company}</b></p>}
     <Actions co={co} s={s} run={run} busy={busy} />

@@ -3,16 +3,16 @@
 // the ONE action of a "Needs you" group (Rec.needKind, src/js/61): who may do it, else the words say who does
 import "../../../src/js/99-screen-parts.js";
 import Button from "./Button.jsx";
+const tellWords = (cid) => { const t = cid && globalThis.FCTell ? FCTell.book(cid) : null, c = t && t.cause; return (c && c.code && c.words) || "FinCom is bringing this day from Tally."; };
 export default function NeedAction({ g, canApply, busy }) {
-  const owner = Rec.owner(), day = g.day ? fmtDate(g.day) : "that day";
+  const owner = Rec.owner();
   const b = (act, label, go, extra) => <Button className="btn small" data-needs-act={act} {...extra} onClick={go}>{label}</Button>;
   switch (g.kind) {
-    case "daybook": case "dupid":
-      return canApply && g.cid ? b("daybook", "Upload the Day Book for " + day, () => Rec.uploadDay(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
+    // Tally tell (the owner, 24-Nov-2026): FinCom brings the day from Tally itself; the book's sentence when FinCom's cloud says one
+    case "daybook": case "dupid": case "renumber":
+      return <span className="note" data-needs-act="tell" data-needs-tell={g.cid || ""}>{" " + tellWords(g.cid)}</span>;
     case "readstop":
       return owner ? b("resume", "Resume reading", () => Rec.resumeOn(g), { "data-needs-resume": "" }) : null;
-    case "renumber": // 2.4.0 review (next-renumber): entries Tally may have renumbered: the Day Book from that day to today
-      return canApply && g.cid ? b("daybook-from", "Upload the Day Book from " + day, () => Rec.uploadFrom(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
     case "baseline":
       return b("tally", "Open the Tally page", () => Rec.openTallyPage());
     case "masters":

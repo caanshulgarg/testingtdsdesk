@@ -450,7 +450,7 @@ function needOf(r, latest, owner, allStopped) {
   if (base.length) return { kind: "baseline", text: base[0].company + " needs a fresh starting point on " + pc + ": " + (base[0].cur.state_why || "no reason given"), act: owner && !p.noBaselineClear ? "baseline" : "", say: owner ? "" : "An owner of the firm clears it.", book: base[0].book, company: base[0].company };
   const bodies = r.recorderOff && typeof r.recorderOff.bodies === "object" && verAtLeast(r.version, "2.3.2") ? r.recorderOff.bodies : {};
   const slow = Object.keys(bodies).filter((co) => co && bodies[co] && bodies[co].off === true).sort();
-  if (slow.length) return { kind: "slow", text: "Tally on " + pc + " is too slow to send " + slow.join(", ") + "'s entries one by one: new entries wait until that day's Day Book is uploaded", act: "details" };
+  if (slow.length) return { kind: "slow", text: "Tally on " + pc + " is too slow to send " + slow.join(", ") + "'s entries one by one: FinCom tries again by itself, a day at a time", act: "details" };
   if (latest && vnum(latest) > vnum(r.version) && !(p.releases && !p.noControl)) return { kind: "version", text: "Install FinCom Bridge " + latest + " on " + pc, act: "download" };
   return null;
 }

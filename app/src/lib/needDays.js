@@ -29,7 +29,7 @@ export function needDays(b, cid) {
       // 182: until checkUntil, Rec.gapChecking). next-fix-false-errors (migration 217): the older days too, while FinCom
       // reads them by itself (the year's days counted again, From Tally's older days): no upload asked meanwhile
       const checking = Rec.gapChecking(x);
-      out.push({ from: since, to: today, days: n, ...(checking ? { checking: true } : {}), say: o ? o.say + (checking ? " FinCom is reading those days from Tally by itself (no action needed)." : " " + o.fix) : (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" + (checking ? "; FinCom is checking with Tally (no action needed)" : "") });
+      out.push({ from: since, to: today, days: n, ...(checking ? { checking: true } : {}), say: o ? o.say + (checking ? " FinCom is reading those days from Tally by itself (no action needed)." : /day book/i.test(o.fix) ? " FinCom brings them from Tally by itself." : " " + o.fix) : (k ? plural(k, "entry", "entries") : "Entries") + " made in Tally since then " + (k === 1 ? "is" : "are") + " not in FinCom" + (checking ? "; FinCom is checking with Tally (no action needed)" : "") });
     });
   }
   // the dates between the files brought in
@@ -40,7 +40,7 @@ export function needDays(b, cid) {
       if (p.from > BridgeSeed.add(end, 1)) {
         const f = BridgeSeed.add(end, 1), t = BridgeSeed.add(p.from, -1);
         let n = 0; for (let x = f; x <= t; x = BridgeSeed.add(x, 1)) n++;
-        out.push({ from: f, to: t, days: n, say: "no Day Book uploaded for these dates" });
+        out.push({ from: f, to: t, days: n, say: "not in FinCom yet" });
       }
       if (p.to > end) end = p.to;
     });

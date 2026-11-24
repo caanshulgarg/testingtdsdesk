@@ -66,28 +66,25 @@ with sync_playwright() as p:
     # ---- 1. one block
     cid = scene([withAlerts([ra()])], LINES, status())
     bl = E(BLOCK)
-    want = CO + ": 5 changes saved in Tally between 05-Oct and 07-Oct are not yet in FinCom. FinCom is checking them with Tally now (40% · about 3 min) — or upload one Day Book for 05-Oct-2026 to " + tdl
+    want = CO + ": 5 changes saved in Tally between 05-Oct and 07-Oct are not yet in FinCom. FinCom is checking them with Tally now (40% · about 3 min)."
     ok(len(bl) == 1 and bl[0]["text"] == want, "1. one block for the company in plain words (%s)" % [b["text"] for b in bl])
-    ok(bl and bl[0]["btns"] == ["Upload Day Book"], "1. ONE button: Upload Day Book (%s)" % (bl[0]["btns"] if bl else None))
+    # Tally tell (the owner, 24-Nov-2026): the Day Book is never asked for: no upload button (From Tally still takes a file)
+    ok(bl and bl[0]["btns"] == [], "1. no button asks for the Day Book (%s)" % (bl[0]["btns"] if bl else None))
     ok(E(GROUPS) == [], "1. no row per day, no separate renumbering row (%s)" % E(GROUPS))
     ok(pg.locator("#app [data-sync-fetching]").count() == 0, "1. the lines waiting for their details are in the block, not 'being fetched'")
     ok(bl and sorted(bl[0]["days"]) == ["2026-10-05", "2026-10-07", "renumber"], "1. Show days: the day rows and the renumbering words (%s)" % (bl[0]["days"] if bl else None))
     ok(bl and "Tally saved changes FinCom had not read yet" in bl[0]["why"], "1. one line says why")
     ok(not pg.locator("#app [data-held-days]").first.evaluate("e => e.open"), "1. the days folded")
-    # ---- 2. the button
-    pg.click("#app [data-held-upload]"); pg.wait_for_timeout(1500)
-    st = E("() => ({from: S.dbFrom, to: S.dbTo, co: S.coId, view: S.view})")
-    ok(st == {"from": "2026-10-05", "to": today, "co": cid, "view": "company"}, "2. opens the client's Day Book upload with the period preset (%s)" % st)
     # ---- 3. stopped, off
     scene([withAlerts([ra()])], LINES, status("stopped", words="FinCom stopped reading from Tally: Tally was busy."))
     t3 = (E(BLOCK) or [{}])[0].get("text", "")
-    ok("FinCom stopped checking them with Tally (FinCom stopped reading from Tally: Tally was busy.) — upload one Day Book for 05-Oct-2026" in t3, "3. stopped: said, the upload offered (%s)" % t3)
+    ok("FinCom stopped checking them with Tally (FinCom stopped reading from Tally: Tally was busy.); it tries again by itself." in t3, "3. stopped: said, tried again by itself (%s)" % t3)
     scene([withAlerts([ra()])], LINES, status("off", fetch=False, why="switch"))
     t3 = (E(BLOCK) or [{}])[0].get("text", "")
-    ok("once reading older entries is on for the Tally computer — or upload one Day Book" in t3, "3. reading older entries off: said (%s)" % t3)
+    ok("once reading older entries is on for the Tally computer." in t3, "3. reading older entries off: said (%s)" % t3)
     scene([withAlerts([ra()])], LINES, status("off", fetch=False, why="offline"))
     t3 = (E(BLOCK) or [{}])[0].get("text", "")
-    ok("once the Tally computer that reads older entries is connected — or upload one Day Book" in t3, "3. that computer not connected: said, not 'checking' (%s)" % t3)
+    ok("once the Tally computer that reads older entries is connected." in t3, "3. that computer not connected: said, not 'checking' (%s)" % t3)
     # ---- 4. settled live: counts down, then gone
     scene([withAlerts([ra()])], LINES, status())
     E(HELD, status(held=3, done=8, frm="20261006")); E("() => { const r = Rec.act.rows.find(x => x.id === 1); Rec.lineIn(Object.assign({}, r, {state: 'applied'})); Rec.lineIn(Object.assign({}, Rec.act.rows.find(x => x.id === 2), {state: 'applied'})); }"); pg.wait_for_timeout(1200)

@@ -46,6 +46,7 @@ import { splitOf, isSplitCo, splitLink, splitUnlink, endsGuess, sameGuid, dayWor
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
+import { TellLine } from "./TallyTell.jsx";   // Tally tell (migration 221): the company's one sentence
 // 30-Oct-2026 (the owner): the client's row has the one button "Check for changes in Tally", its progress and its result
 import CheckChanges from "./TallyCheck.jsx";
 // next-tally-linknow: the companies being sent to FinCom and linked now (coKey: true), for the rows' words
@@ -1050,7 +1051,7 @@ export function LinkedMenu({ r, co, may, onPick, onChange = null, computer = "" 
       {may && onChange && <button data-tco-change={co.id} onClick={close(onChange)}>Change Tally company…<small>{"Link " + co.name + " to another Tally company."}</small></button>}
       {may && <button data-tco-not-this={r.company} onClick={close(() => onPick(true))}>Link to another client<small>It moves to the client you choose (asked once).</small></button>}
       {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>The company is free to link again.</small></button>}
-      {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
+      {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload a Day Book file<small>Optional: FinCom brings the days of this year from Tally by itself.</small></button>}
       {TCloud.groupStatus && <button data-tco-cloud-check={co.id} onClick={close(() => TCloud.groupStatus(co.id))}>What is in the cloud?<small>The groups, and the ledgers with a group, FinCom’s cloud holds.</small></button>}
       {isOwner() && TCloud.reparse && <button data-tco-reparse={co.id} onClick={close(() => TCloud.reparse(co.id))}>Read the kept day books again<small>For support: FinCom’s cloud reads what it keeps again.</small></button>}
       <button data-tco-open={co.id} onClick={close(() => openCompany(co.id))}>Open client<small>{co.name}</small></button>
@@ -1143,6 +1144,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
     {drop && <div className="tco-under" data-tco-ledger-drop={co.id}><Suspense fallback={null}><LedgerDrop x={drop} where="row" /></Suspense></div>}
     {co && !earlier && <TwoPlaces co={co} company={r.company} />}
+    {co && !quiet && <TellLine cid={co.id} company={r.company} where="tco" />}
     {co && <div className="tco-under"><SyncLine cid={co.id} bar /><CloudSays cid={co.id} /></div>}
     {pick && <div className="tco-under"><Pick r={r} co={co} pre={co || askFirst(r) ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
     {chg && co && <div className="tco-under"><ChangePick co={co} cur={r.company} onClose={() => setChg(false)} /></div>}
@@ -1217,7 +1219,7 @@ function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks })
             : <button className="danger" data-tlk-unlink={co.id} data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>The company is free to link again.</small></button>}
           {/* (kept from the quiet rows before: Sync now, and the Day Book while days of this year are missing) */}
           <button data-tco-sync-now={co.id} onClick={close(() => syncNow(co.id, r.company))}>Update from Tally<small>Masters and vouchers, when the company is open in Tally.</small></button>
-          {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
+          {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload a Day Book file<small>Optional: FinCom brings the days of this year from Tally by itself.</small></button>}
         </div></details></span>}
     </div>
     <div className="tco-under"><SyncLine cid={co.id} bar /></div>

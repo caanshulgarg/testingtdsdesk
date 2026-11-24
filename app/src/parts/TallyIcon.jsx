@@ -19,6 +19,9 @@ const TallyPop = lazy(() => import("./TallyPop.jsx"));
 // this person's own bridge and Tally (window.FCOwn): a small file of its own, asked for once the app is drawn
 // (a load that failed, a network blip, is asked again: after 4 s, 8 s, … a minute at most, never the failed answer kept)
 const own = () => globalThis.FCOwn || (own.p = own.p || import("../lib/ownBridge.js").catch(() => { setTimeout(() => { own.p = 0; if (typeof soonRender === "function") soonRender(); }, own.w = Math.min((own.w || 2000) * 2, 60000)); }), null);
+// Tally tell (migration 221, lib/tallyTell.js): the cloud's one sentence for the client's book, a small file of its own
+// fetched once the app is drawn with FinCom's cloud on (none, or a cloud without it: the sign as before)
+export const tell = () => globalThis.FCTell || (typeof TCloud === "object" && TCloud.on() && !tell.p && (tell.p = import("../lib/tallyTell.js").then((m) => m.load(), () => {})), null);
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
 const noBridge = () => !tallyDevs().length && !(typeof Bridge === "object" && Bridge.on());
 // "2:41 pm" (India time)
@@ -43,6 +46,8 @@ export function tallyIconState(co, real) {
     const company = p.company || k.company || co.tallyName || co.name;
     const o = (icon, word, line, cause) => ({ icon, word, line, cause: cause || "", company, p, step: cs });
     if (kind === "unlinked") return o("none", "Not linked", "Not linked to a Tally company yet.");
+    const tl = tell() && FCTell.icon(co);
+    if (tl) return Object.assign(o(tl.icon, tl.word, tl.line, "tell"), { tell: tl.tell });
     // (read in another's Tally, not open in this person's own: the data's line, grey; never "Connected")
     if (kind === "linked") { const last = lastEntry(co, k), m = p.far === undefined ? F && F.has(company) : !p.far; return Object.assign(o(m ? "linked" : "none", "Linked", m ? "Connected to Tally" + (last ? " · last entry " + clock(last) : "") : farLine(last)), { far: !m }); }
     if (kind === "waiting") return cs ? o("waiting", "Waiting for Tally", stepSay(cs)) : noBridge() ? o("none", "Not connected", "Not connected to Tally yet.") : o("waiting", "Waiting for Tally", "Open " + company + " in Tally");
@@ -82,6 +87,7 @@ export default function TallyIcon() {
   // closed by Esc or a click on nothing: the focus back on the icon (the keyboard carries on from there)
   const was = useRef(false);
   useEffect(() => { const a = document.activeElement; if (was.current && !open && (!a || a === document.body)) back(); was.current = open; }, [open]);
+  tell();
   const s = tallyIconState(co), t = typeof tallyStatus === "function" ? tallyStatus(co) : { state: "" };
   // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no count or badge of companies not linked
   const nOpen = 0;

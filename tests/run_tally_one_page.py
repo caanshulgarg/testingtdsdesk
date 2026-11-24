@@ -295,7 +295,7 @@ def main():
         shot("tally-page-mixed-desktop-light")
 
         # ---- 5./6. the actions: Add as client, Link to a client…, the ⋯ of a linked row, Sync now, Post entries here
-        it = [x for x in menu(GSC) if not x.startswith("Upload older entries")]
+        it = [x for x in menu(GSC) if not x.startswith("Upload a Day Book file")]
         # Move here was a person's link: it allowed posting into that company too (the owner, 26-Oct-2026)
         ok(it == ["Sync master", "Sync vouchers", "Stop posting here", "Change Tally company…", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
         ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == [GSC, "confirmed"], "6. linked by a person: it posts into that company (confirmed from the link)")
