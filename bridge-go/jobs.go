@@ -313,9 +313,6 @@ func newPostJob(pl M) (M, error) {
 			if truthy(o["bank"]) {
 				it["bank"] = true // round 15: FinCom marks a bank line; else its voucher type tells (isBankItem)
 			}
-			if truthy(o["lookFirst"]) {
-				it["lookFirst"] = true // next-bridge-reupload: a person's "Not in Tally? Check and post again" (reupload.go)
-			}
 			items = append(items, it)
 		}
 	}
@@ -872,9 +869,8 @@ func jobWorker(dir string) {
 	// audit fix: the record of each voucher as this check saw it; looked at again under postGate right before its part
 	// goes (a browser's /import may have sent it meanwhile: postGate is taken only around each part)
 	seenRec := map[string]string{}
-	var lookedNow map[string]bool // next-bridge-reupload: the entries looked for in Tally just now (reupload.go)
 	{
-		var left, recLook []M
+		var left []M
 		for _, it := range todo {
 			k := str(it["id"])
 			if str(it["kind"]) != "voucher" {
@@ -895,31 +891,12 @@ func jobWorker(dir string) {
 				left = append(left, it)
 				continue
 			}
-			// next-bridge-reupload (the owner's rule of 24-Nov-2026): looked for in Tally before it is called sent
-			if ok, _ := recordLookable(k, str(it["xml"])); ok && truthy(it["lookFirst"]) {
-				recLook = append(recLook, it)
-				continue
-			}
 			r := sentBeforeRefusal(k, str(it["xml"]))
 			r["company"], r["port"] = company, port
 			results = append(results, r)
 			writeLog("  voucher " + k + ": NOT SENT: " + str(r["message"]))
 		}
 		todo = left
-		if len(recLook) > 0 {
-			send, rs := recordLookFirst(port, company, recLook)
-			results = append(results, rs...)
-			lookedNow = map[string]bool{}
-			for _, it := range send {
-				k, x := str(it["id"]), str(it["xml"])
-				seenRec[acceptedKey(k, x)] = recSig(acceptedInfo(acceptedKey(k, x)))
-				lookedNow[k], lookedNow[acceptedKey(k, x)] = true, true
-				todo = append(todo, it)
-			}
-			if len(rs) > 0 {
-				save()
-			}
-		}
 	}
 	// 2.5.19 (E, the owner's option a): an entry FinCom had handed out before is looked for in Tally (FinComTag, its
 	// date) before the first part; an ordinary posting asks nothing more (resent2519.go)
@@ -927,17 +904,8 @@ func jobWorker(dir string) {
 	// back, looks again; and again in the part loop below whenever FinCom's lease had to be taken anew
 	delete(p, "resentLooked") // (a progress.json of an earlier build of this branch)
 	resent := resentIDs(pl)
-	firstLook := resent
-	if len(lookedNow) > 0 { // (not looked for twice in a row)
-		firstLook = map[string]bool{}
-		for k := range resent {
-			if !lookedNow[k] {
-				firstLook[k] = true
-			}
-		}
-	}
-	if len(firstLook) > 0 {
-		left, rs := resentLookFirst(port, company, todo, firstLook)
+	if len(resent) > 0 {
+		left, rs := resentLookFirst(port, company, todo, resent)
 		results = append(results, rs...)
 		todo = left
 	}
