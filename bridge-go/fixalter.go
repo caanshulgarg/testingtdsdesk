@@ -25,7 +25,7 @@
 // The review of 595554fbe (24-Nov-2026): the entry's date and type FinCom sends must be the ones just read, else
 // "changed since" and nothing is sent; the typing gate is looked at again right before the send; what Tally changed
 // beyond what was asked is said in the answer (alsoChanged); a ledger fix needs the ledger's AlterID; the
-// registration type goes as read (Regular only when there is none); the recorder line's source is "fix"; an ACTION
+// registration type goes as read (Regular when there is none, or when it is unregistered: a GSTIN is given); the recorder line's source is "fix"; an ACTION
 // with '&' in its value is refused by the posting rule (post.go cannotSend)
 //
 // The owner's decision of 24-Nov-2026 (amends decision 5, "ledger only"): a GSTIN fix corrects the party ledger AND that
@@ -586,6 +586,12 @@ func fixLedgersOf(x string) []string {
 	return o
 }
 
+// review of c00b14edb: Tally's unregistered types (Unregistered/Consumer, the older Unregistered), in any case or spacing
+func fixUnregistered(typ string) bool {
+	t := strings.ToLower(strings.Join(strings.Fields(strings.ReplaceAll(typ, "/", " / ")), ""))
+	return t == "unregistered" || t == "unregistered/consumer"
+}
+
 // the ledger's dated GST registration as read: the latest APPLICABLEFROM and its registration type ("" when none)
 func fixLedgerReg(raw, name string) (from, regType string) {
 	type reg struct{ from, typ string }
@@ -662,7 +668,10 @@ func fixLedger(p M, gstin, pan string, port int, company string) M {
 		if from == "" {
 			from = bf
 		}
-		if typ == "" { // review of 595554fbe: the type as read; Regular only when the ledger has none
+		if typ == "" || fixUnregistered(typ) {
+			// review of 595554fbe: the type as read; Regular when the ledger has none. Review of c00b14edb: a party read
+			// as unregistered (Unregistered/Consumer, Unregistered) that is given a GSTIN is registered: Regular
+			// (Composition, or any other type read, goes as read)
 			typ = "Regular"
 		}
 		x, why = fixLedgerGSTRequest(company, row.name, from, typ, gstin)

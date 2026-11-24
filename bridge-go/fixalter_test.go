@@ -371,8 +371,9 @@ func TestFixLedgerGSTIN(t *testing.T) {
 	if r["ok"] != true || len(s.sent) != 1 || reads != 2 || sentUp != 1 {
 		t.Fatalf("%v sent %d reads %d up %d", r, len(s.sent), reads, sentUp)
 	}
-	if !strings.Contains(s.sent[0], "<APPLICABLEFROM>20240401</APPLICABLEFROM>\n<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>") || checkAllowed(s.sent[0]) != nil {
-		t.Fatalf("not the approved shape with the dated record as read: %s", s.sent[0])
+	// the dated record as read; read as Unregistered/Consumer and given a GSTIN: sent as Regular
+	if !strings.Contains(s.sent[0], "<APPLICABLEFROM>20240401</APPLICABLEFROM>\n<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>") || checkAllowed(s.sent[0]) != nil {
+		t.Fatalf("not the approved shape with the dated record as read (an unregistered party given a GSTIN as Regular): %s", s.sent[0])
 	}
 	// FinCom showed a GSTIN Tally no longer has: nothing sent
 	ask["was"], ask["alterId"] = M{"gstin": "27AAAAA0000A1Z5"}, "12"

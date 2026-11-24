@@ -119,9 +119,12 @@ func TestImportRefusesEncodedAction(t *testing.T) {
 	}
 }
 
-// the registration type goes as read (any of Tally's types), not turned into Regular; none read: Regular
+// the registration type goes as read, not turned into Regular; none read: Regular. A party read as unregistered
+// (Unregistered/Consumer, or Unregistered) that is given a GSTIN goes as Regular (a GSTIN is a registration); one read
+// as Composition stays Composition
 func TestFixLedgerRegTypeAsRead(t *testing.T) {
-	for _, c := range []struct{ read, want string }{{"Unregistered/Consumer", "Unregistered/Consumer"}, {"Composition", "Composition"}, {"Regular", "Regular"}, {"", "Regular"}} {
+	for _, c := range []struct{ read, want string }{{"Unregistered/Consumer", "Regular"}, {"Unregistered", "Regular"}, {" unregistered / consumer ", "Regular"},
+		{"Composition", "Composition"}, {"Regular", "Regular"}, {"", "Regular"}} {
 		s := &fixStand{}
 		s.install(t)
 		o1, o2, o3 := fixReadLedgerFn, fixLedgerSendFn, fixBooksFromFn
