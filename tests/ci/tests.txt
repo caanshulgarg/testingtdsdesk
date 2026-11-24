@@ -695,3 +695,8 @@ post_wait_test.mjs                    60
 run_post_wait_ui.py                   240  TDSDESK_SITE=../app/dist-test
 run_post_retry_words.py               240  TDSDESK_SITE=../app/dist-test
 run_post_wait_words_ingest.py         300
+# next-fix-zoho-sales-pdf (24-Nov-2026): a Zoho Books PDF of 12 made-up sales invoices read and kept, each invoice's own
+# Adjustment and Rounding to Round Off; and the same PDF uploaded while the sync brings 420 invoices, the page closed with
+# a save waiting, the list loaded again, the file's link on every invoice
+run_sales_zoho_pdf.py                 300  TDSDESK_SITE=../app/dist-test
+run_sales_upload_race.py              600  TDSDESK_SITE=../app/dist-test
