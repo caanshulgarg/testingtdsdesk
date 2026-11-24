@@ -32,6 +32,12 @@ bridge-go/fixalter.go does), so the real Bridge.call is what FinCom's /fix goes 
      one not valid or the ledger's old one (a branch's and an old registration's never), keeps the GSTIN box (a wrong
      valid GSTIN on the ledger typed over: the ledger, then the invoices), retries only the one refused, a cash sale's
      buyer gets only its invoices fixed, and another client opened mid-loop stops it; FixQ.mine by state code.
+ 13. The review of 24-Nov-2026 (rev-fip4): the party is a ledger only under Sundry Debtors or Sundry Creditors (a
+     sub-group too); Cash, a bank, or a group not known: only the invoice opened, no GSTIN written for that ledger; a
+     waiting change with no Tally company is refused ("Open this entry again to save the change."); the ledger held
+     queues its invoices after it (sent in order, not sent when the ledger is refused); one invoice held queues the
+     rest; a new change is "sending" until its own send answers; the page drawn sends a colleague's waiting change and
+     the history shows who sent it.
 Made-up books only (tests/fixtures/books). Screenshots (deviceScaleFactor 2) go to FIX_SHOTS when set: classic light and
 New look dark of refused, changed, needs the newer bridge and waiting, and (SHOT_PREFIX) the invoices step and the ledger
 read from Tally first. Runs on the React build: app/dist-test."""
@@ -91,9 +97,9 @@ def wait_idle(pg, ms=300):
     try: pg.wait_for_function("() => !document.querySelector('#app .pg-skel, #app [data-page-skeleton], #app [data-loading], #app [data-rx-preparing]')", timeout=60000, polling=100)
     except Exception: pass
 
-def month(pg, ym):
+def month(pg, ym, ret="GSTR-1"):
     pg.evaluate("(m) => { S.tab = 'books'; S.booksTab = 'gst'; S.gstView = 'year'; S.gstReg = '07'; S.gstYm = m; render(); }", ym); wait_idle(pg, 500)
-    pg.click('#app [data-cell="GSTR-1|%s"]' % ym); wait_idle(pg, 400)
+    pg.click('#app [data-cell="%s|%s"]' % (ret, ym)); wait_idle(pg, 400)
 
 def group(pg, what):
     pg.evaluate("(w) => { const g = Array.from(document.querySelectorAll('#app [data-fix-group]')).find(x => x.dataset.fixGroup === w); if (g && !g.querySelector('[data-fix-row]')) g.querySelector('[data-fix-toggle]').click(); }", what); wait_idle(pg, 150)
@@ -261,8 +267,10 @@ def invoice_steps(pg, what2, gid, led, good):
     ok(st and st[0] == "waiting" and len(calls(pg)) == 1 and calls(pg)[0][1].get("readFirst") is True, "no change number, Tally closed: held, Waiting for Tally (%s)" % st)
     pg.evaluate("() => { window.__calls = []; window.__tallyG = '27AAPFU0939F1ZV'; window.__fix = " + GSTFIX + "; }")
     pump(pg, 1200)
-    last = pg.evaluate("() => S.books.fixq[S.books.fixq.length - 1]")
-    ok(len(calls(pg)) == 1 and last["state"] == "changed", "sent when Tally opens: Tally's GSTIN is another, so changed since and nothing sent (%s, %d calls)" % (last["state"], len(calls(pg))))
+    last = pg.evaluate("() => S.books.fixq.filter(x => x.ask.target === 'ledger').slice(-1)[0]")
+    after = pg.evaluate("(i) => S.books.fixq.filter(x => x.after === i).map(x => x.state)", last["id"])
+    ok(len(calls(pg)) == 1 and last["state"] == "changed" and after and all(x == "refused" for x in after),
+       "sent when Tally opens: Tally's GSTIN is another, so changed since and nothing sent, its invoices neither (%s, %s, %d calls)" % (last["state"], after, len(calls(pg))))
     ok(pg.evaluate("(l) => S.books.gstins[l]", led) == "27AAPFU0939F1ZV", "changed since: FinCom Books take Tally's GSTIN of the ledger")
     cancel(pg)
     pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; S.books.ledInfo[a[0]] = {alt: 33}; BOOKS_REV++; render(); }", [led, good])
@@ -362,15 +370,15 @@ def review4(pg, A, vid, gid, led, good):
     month(pg, "202504"); rows = group(pg, what2)
     ok(rows and cash1 in rows, "the cash sale's invoice is in What to fix (%s)" % (rows and len(rows)))
     open_entry(pg, what2, cash1); s = inv_state(pg)
-    ok(s["step"] == "invoices" and s["led"] is None and sorted(x[0] for x in s["rows"] or []) == sorted([cash1, cash2]) and not s["save"],
-       "a cash sale's buyer: no ledger step, the buyer's invoices listed, Save waits for a valid GSTIN (%s)" % {k: s[k] for k in ("step", "led", "rows", "save")})
+    ok(s["step"] == "invoices" and s["led"] is None and [x[0] for x in s["rows"] or []] == [cash1] and not s["save"],
+       "a cash sale's buyer: no ledger step, only the invoice opened listed, Save waits for a valid GSTIN (%s)" % {k: s[k] for k in ("step", "led", "rows", "save")})
     good3 = valid_for(pg, "07AAZFZ1234R1Z")
     typein(pg, good3)
     pg.evaluate("() => { window.__calls = []; window.__fix = " + GSTFIX + "; }")
     pg.click("[data-fix-entry] [data-fix-save]"); settle(pg)
     c = calls(pg)
-    ok(len(c) == 2 and all(x[1].get("target") == "voucher" and x[1].get("fields") == {"gstin": good3} for x in c) and "Zeta Walk-in Buyer" not in pg.evaluate("() => JSON.stringify(Object.keys(S.books.gstins))"),
-       "the cash sale: only its invoices sent, no ledger touched (%s)" % [x[1].get("target") for x in c])
+    ok(len(c) == 1 and c[0][1].get("guid") == cash1 and c[0][1].get("target") == "voucher" and c[0][1].get("fields") == {"gstin": good3} and "Zeta Walk-in Buyer" not in pg.evaluate("() => JSON.stringify(Object.keys(S.books.gstins))"),
+       "the cash sale: only the invoice opened sent, no ledger touched (%s)" % [x[1].get("target") for x in c])
     pg.wait_for_timeout(1400)
 
     # --- another client opened mid-loop: the loop stops; the rest stay for their own client
@@ -397,6 +405,116 @@ def review4(pg, A, vid, gid, led, good):
     # the clones go, the books as they were
     pg.evaluate("(b) => { S.books.vouchers = S.books.vouchers.filter(v => !(v.id.startsWith(b) && /^8\\d\\d$/.test(v.id.slice(-3)))); BOOKS_REV++; render(); }", base)
     return good2
+
+# a copy of an entry whose party is a ledger of another group (PARTYNAME empty: the party is that ledger, a line of it)
+CLONEL = """(a) => { const vs = S.books.vouchers, v = vs.find(x => x.id === a[0]), n = Object.assign({}, v, {id: a[1], no: a[2], gstin: a[3], alt: 600, party: a[4]});
+  n.ent = (v.ent || []).map(e => e.l === v.party ? Object.assign({}, e, {l: a[4]}) : e);
+  const i = vs.findIndex(x => x.id === a[1]); if (i >= 0) vs[i] = n; else vs.push(n); BOOKS_REV++; render(); }"""
+def last_recs(pg, n):
+    return pg.evaluate("(n) => S.books.fixq.slice(-n).map(x => ({id: x.id, state: x.state, target: x.ask.target, guid: x.ask.guid || '', after: x.after || '', words: x.words}))", n)
+
+def review5(pg, A, vid, gid, led):
+    """13. the review of 24-Nov-2026 (rev-fip4)"""
+    what2, sup = "Buyer GSTINs that are not valid", "Supplier GSTINs that are not valid"
+    base, goodN = gid[:-3], valid_for(pg, "07AAJFQ3157R1Z")
+    # --- a party that is not under Sundry Debtors or Sundry Creditors: no ledger step, only the invoice opened
+    pid = pg.evaluate("() => (GSTR.inward('202507', '07') || [])[0].id")
+    pbase = pid[:-3]
+    for title, src, ym, ret, what, party, ids in (
+            ("a petty cash purchase against Cash", pid, "202507", "GSTR-3B", sup, "Cash", (pbase + "901", pbase + "902")),
+            ("a sale against a bank ledger", gid, "202504", "GSTR-1", what2, "Tamarind Urban Bank - CA 0042", (base + "911", base + "912")),
+            ("a party of a group not known", gid, "202504", "GSTR-1", what2, "Orchid Unlisted Traders", (base + "921", base + "922"))):
+        for i in ids: pg.evaluate(CLONEL, [src, i, "PC/" + i[-3:], BADG, party])
+        month(pg, ym, ret); rows = group(pg, what)
+        if not rows or ids[0] not in rows:
+            ok(False, "%s: its invoice is in What to fix (%s)" % (title, rows)); continue
+        open_entry(pg, what, ids[0]); s = inv_state(pg)
+        ok(s["step"] == "invoices" and s["led"] is None and [x[0] for x in s["rows"] or []] == [ids[0]],
+           "%s: no ledger step, only the invoice opened listed, never every invoice of %s (%s)" % (title, party, {k: s[k] for k in ("step", "led", "rows")}))
+        typein(pg, goodN)
+        pg.evaluate("() => { window.__calls = []; window.__fix = " + GSTFIX + "; }")
+        pg.click("[data-fix-entry] [data-fix-save]"); settle(pg)
+        c = calls(pg)
+        ok(len(c) == 1 and c[0][1].get("target") == "voucher" and c[0][1].get("guid") == ids[0] and not pg.evaluate("(p) => (S.books.gstins || {})[p] != null", party),
+           "%s: only that invoice sent, no GSTIN written for the ledger %s (%s)" % (title, party, [(x[1].get("target"), x[1].get("guid", "")[-3:]) for x in c]))
+        pg.wait_for_timeout(1400); cancel(pg)
+        pg.evaluate("(l) => { S.books.vouchers = S.books.vouchers.filter(v => !l.includes(v.id)); BOOKS_REV++; render(); }", list(ids))
+
+    # --- a waiting change with no Tally company of its own: refused, said plainly, never sent
+    pg.evaluate("""() => { const b = S.books, x = JSON.parse(JSON.stringify(b.fixq.filter(y => y.ask && y.ask.target === 'voucher').slice(-1)[0]));
+      x.id = 'fx-nocoguid'; x.state = 'waiting'; x.coGuid = ''; b.fixq.push(x); window.__calls = []; render(); }""")
+    pump(pg)
+    r = pg.evaluate("() => { const x = S.books.fixq.find(y => y.id === 'fx-nocoguid'); return [x.state, x.words]; }")
+    ok(len(calls(pg)) == 0 and r == ["refused", "Open this entry again to save the change."], "a waiting change with no Tally company kept: not sent, 'Open this entry again to save the change.' (%d calls, %s)" % (len(calls(pg)), r))
+
+    # --- the ledger's change held (Tally closed): the listed invoices queued after it, sent in order when Tally opens
+    miss = base + "931"
+    pg.evaluate(CLONE, [gid, miss, "LFE/25-26/931", "", ""]); bad_again(pg, gid, BADG)
+    pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; S.books.ledInfo[a[0]] = {alt: 33}; BOOKS_REV++; render(); }", [led, BADG]); month(pg, "202504")
+    group(pg, what2); open_entry(pg, what2, gid); typein(pg, goodN)
+    pg.evaluate("() => { window.__calls = []; window.__fix = " + HELD + "; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); settle(pg, 300)
+    q = last_recs(pg, 3)
+    ok(len(calls(pg)) == 1 and [x["target"] for x in q] == ["ledger", "voucher", "voucher"] and all(x["state"] == "waiting" for x in q)
+       and sorted(x["guid"] for x in q[1:]) == sorted([gid, miss]) and all(x["after"] == q[0]["id"] for x in q[1:]),
+       "the ledger held: its invoices queued as waiting, each after the ledger; only the ledger tried (%d calls, %s)" % (len(calls(pg)), [(x["target"], x["state"], x["guid"][-3:]) for x in q]))
+    s = inv_state(pg) or {}
+    ok(s.get("rows") and all(x[2] == "waiting" for x in s["rows"]) and not s.get("save"), "the window shows the invoices waiting too, Save off (%s)" % s.get("rows"))
+    cancel(pg)
+    pg.evaluate("() => { window.__calls = []; window.__fix = " + GSTFIX + "; }"); pump(pg)
+    c = calls(pg); q2 = pg.evaluate("(l) => l.map(i => S.books.fixq.find(x => x.id === i).state)", [x["id"] for x in q])
+    ok([x[1].get("target") for x in c] == ["ledger", "voucher", "voucher"] and q2 == ["done", "done", "done"], "Tally open: the ledger, then its invoices, in order (%s, %s)" % ([x[1].get("target") for x in c], q2))
+    # the ledger refused when it goes: its invoices are not sent
+    bad_again(pg, gid, BADG); pg.evaluate(CLONE, [gid, miss, "LFE/25-26/931", "", ""])
+    pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; S.books.ledInfo[a[0]] = {alt: 33}; BOOKS_REV++; render(); }", [led, BADG]); month(pg, "202504")
+    group(pg, what2); open_entry(pg, what2, gid); typein(pg, goodN)
+    pg.evaluate("() => { window.__calls = []; window.__fix = " + HELD + "; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); settle(pg, 300); cancel(pg)
+    q = last_recs(pg, 3)
+    pg.evaluate("() => { window.__calls = []; window.__fix = (b) => ({body: {ok: false, refused: true, message: 'Tally did not change it: test.'}}); }"); pump(pg)
+    q2 = pg.evaluate("(l) => l.map(i => S.books.fixq.find(x => x.id === i).state)", [x["id"] for x in q])
+    ok(len(calls(pg)) == 1 and q2 == ["refused", "refused", "refused"], "the ledger refused when Tally opens: its invoices are not sent (%d calls, %s)" % (len(calls(pg)), q2))
+
+    # --- one invoice held: the rest queued after it
+    pg.evaluate("(a) => { S.books.gstins[a[0]] = a[1]; S.books.ledInfo[a[0]] = {alt: 33}; BOOKS_REV++; render(); }", [led, goodN])
+    bad_again(pg, gid, BADG); pg.evaluate(CLONE, [gid, miss, "LFE/25-26/931", "", ""]); month(pg, "202504")
+    group(pg, what2); open_entry(pg, what2, gid); s = inv_state(pg)
+    pg.evaluate("() => { window.__calls = []; window.__fix = " + HELD + "; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); settle(pg, 300)
+    q = last_recs(pg, 2)
+    ok(len(calls(pg)) == 1 and [x["state"] for x in q] == ["waiting", "waiting"] and sorted(x["guid"] for x in q) == sorted([gid, miss]),
+       "one invoice held: the rest queued as waiting, not tried now (%d calls, %s)" % (len(calls(pg)), [(x["state"], x["guid"][-3:]) for x in q]))
+    cancel(pg)
+    pg.evaluate("() => { window.__calls = []; window.__fix = " + GSTFIX + "; }"); pump(pg)
+    q2 = pg.evaluate("(l) => l.map(i => S.books.fixq.find(x => x.id === i).state)", [x["id"] for x in q])
+    ok([x[1].get("guid") for x in calls(pg)] == [x["guid"] for x in q] and q2 == ["done", "done"], "Tally open: sent in the order queued (%s)" % q2)
+
+    # --- a new change is 'sending' while its own send is on its way: the background sending skips it
+    alt[0] += 2; pg.evaluate(PLANT, [vid, LONG, alt[0]])
+    month(pg, "202507"); group(pg, WHAT); open_entry(pg, WHAT, vid); typein(pg, SHORT)
+    pg.evaluate("() => { window.__calls = []; window.__go = null; window.__ans = " + DONE + "; window.__fix = (b) => { const a = window.__ans(b); return new Promise((r) => { window.__go = () => r(a); }); }; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); pg.wait_for_function("() => window.__calls.length === 1", timeout=10000)
+    st0 = pg.evaluate("() => S.books.fixq[S.books.fixq.length - 1].state")
+    pg.evaluate("() => { FixQ.last = 0; FixQ.pump(true); }"); pg.wait_for_timeout(400)
+    ok(st0 == "sending" and len(calls(pg)) == 1, "a new change is 'sending' until its own send answers; the background sending leaves it (%s, %d calls)" % (st0, len(calls(pg))))
+    pg.evaluate("() => window.__go && window.__go()"); settle(pg, 300)
+    ok(pg.evaluate("() => S.books.fixq[S.books.fixq.length - 1].state") == "done", "then saved")
+    pg.wait_for_timeout(1300); cancel(pg)
+    # left 'sending' by a page closed mid-send: taken as waiting after two minutes and sent
+    pg.evaluate("""() => { const b = S.books, x = JSON.parse(JSON.stringify(b.fixq.filter(y => y.ask && y.ask.target === 'voucher').slice(-1)[0]));
+      x.id = 'fx-stale'; x.state = 'sending'; x.at = new Date(Date.now() - 600000).toISOString(); b.fixq.push(x); window.__calls = []; window.__fix = (q) => ({body: {ok: true, after: {}}}); }""")
+    pump(pg)
+    ok(len(calls(pg)) == 1 and pg.evaluate("() => S.books.fixq.find(x => x.id === 'fx-stale').state") == "done", "a change left 'sending' by a closed page: sent later as a waiting one (%d calls)" % len(calls(pg)))
+
+    # --- the once-a-minute draw sends a colleague's waiting change; the history says who sent it
+    pg.evaluate("""() => { const b = S.books, x = JSON.parse(JSON.stringify(b.fixq.filter(y => y.ask && y.ask.target === 'voucher').slice(-1)[0]));
+      x.id = 'fx-draw'; x.state = 'waiting'; x.dev = 'dev-colleague-2'; x.by = 'colleague2@example.com'; delete x.sentDev; delete x.sentBy; b.fixq.push(x);
+      window.__calls = []; FixQ.last = 0; FixQ.who = () => 'me@example.com'; }""")
+    month(pg, "202507"); settle(pg, 500)
+    h = pg.evaluate("() => { const h = document.querySelector('#app [data-fix-history]'); h.open = true; return h.textContent.replace(/\\s+/g, ' '); }")
+    ok(len(calls(pg)) == 1 and pg.evaluate("() => S.books.fixq.find(x => x.id === 'fx-draw').state") == "done" and "saved by colleague2@example.com · sent from another computer by me@example.com" in h,
+       "the page drawn (once a minute) sends a colleague's waiting change; the history shows who saved it and who sent it (%d calls)" % len(calls(pg)))
+    pg.evaluate("() => { FixQ.who = window.__who0; S.books.vouchers = S.books.vouchers.filter(v => !/9\\d\\d$/.test(v.id.slice(-3)) || !v.id.startsWith('" + base + "')); BOOKS_REV++; render(); }")
 
 def should_fix(pg, vid):
     """11. the review's should-fix items"""
@@ -452,6 +570,9 @@ try:
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500)
         pg.evaluate("(a) => { const v = (" + SALE + ")(a[0]); v.no = a[1]; if (v.alt == null) v.alt = 57; }", [SHORT, LONG])
         pg.evaluate("(a) => { const v = (" + SALE + ")(a[0]); v.gstin = a[1]; S.books.gstins = S.books.gstins || {}; S.books.gstins[v.party] = a[1]; }", ["LFE/25-26/001", BADG])
+        # Tally's groups: the party under a sub-group of Sundry Debtors; Cash and a bank under their own groups
+        pg.evaluate("(a) => { const v = (" + SALE + ")(a); " + """S.books.under = Object.assign(S.books.under || {}, {[v.party]: 'Debtors - Delhi', 'Cash': 'Cash-in-Hand', 'Tamarind Urban Bank - CA 0042': 'Bank Accounts'});
+          S.books.groups = Object.assign(S.books.groups || {}, {'Debtors - Delhi': 'Sundry Debtors', 'Sundry Debtors': 'Current Assets', 'Cash-in-Hand': 'Current Assets', 'Bank Accounts': 'Current Assets', 'Current Assets': 'Primary'}); }""", "LFE/25-26/001")
         vid = pg.evaluate("(a) => (" + SALE + ")(a).id", LONG)
         A = pg.evaluate("S.books.cid"); ALT0 = voucher(pg, vid)["alt"]
         pg.evaluate(STUB, {"url": BURL, "key": BKEY, "id": BID}); pg.evaluate(XMLOF)
@@ -670,6 +791,7 @@ try:
 
         should_fix(pg, vid)
         review4(pg, A, vid, gid, led, good)
+        review5(pg, A, vid, gid, led)
 
         # the invoices step and the ledger read first, in New look, dark
         pg.evaluate("() => { window.FCNewLook.set(true); }"); pg.emulate_media(color_scheme="dark"); pg.wait_for_timeout(800)

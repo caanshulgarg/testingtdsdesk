@@ -21,7 +21,7 @@
 //     the client (who saved it and who sent it are both kept: by and dev, sentBy and sentDev).
 //   - Every change is kept in Changes made here, with Undo where the earlier value is one Tally can be given again.
 // Anyone who can post to Tally may fix (decision 6). Plain words only, no warnings.
-/* global GST_STATE_ALIAS, S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
+/* global ledGroupPath, GST_STATE_ALIAS, S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
 import { useState, useEffect, useRef } from "react";
 import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 
@@ -63,6 +63,17 @@ const OLD = "This needs FinCom Bridge 2.5.21 or later on the Tally computer. Upd
 const SAID = { done: "Saved in Tally", waiting: "Waiting for Tally", already: "Already in Tally" };
 const ALREADY = "Already in Tally: it holds this value now, though it was not sent from here.";
 const KEEP = 200; // changes kept with the books: the newest 200, the oldest dropped
+const NOCO = "Open this entry again to save the change.";
+const STALE = 120000; // a change left "sending" (its page closed mid-send) is taken as waiting after two minutes
+// still to go to Tally: waiting, or being sent from the page it was saved on ("sending": the background sending leaves it)
+const toGo = (x) => x.state === "waiting" || x.state === "sending";
+const tookIt = (x) => x.state === "done" || x.state === "already";
+// the party is a ledger to change only under Sundry Debtors or Sundry Creditors, or a sub-group of them (review of
+// 24-Nov-2026): Cash-in-Hand, Bank Accounts, Bank OD A/c or a group not known never
+const DRCR = /^sundry (debtors|creditors)$/i;
+export function partyGroupOk(b, name) {
+  try { return !!name && typeof ledGroupPath === "function" && ledGroupPath(b || {}, name).some((g) => DRCR.test(String(g || "").trim())); } catch (e) { return false; }
+}
 
 // the changes kept with the client's books: held ones, and the history (b.fixq, one of BOOKS_KEYS). Each change carries
 // the client it was made for (cid) and that client's Tally company (coGuid): it is sent for that client and its answer
@@ -79,7 +90,7 @@ export const FixQ = {
   // the client's linked Tally company, as the link record says (no bridge needed)
   async coGuid(co) { try { return (typeof LinkRec === "object" && (await LinkRec.guidFor(co, tallyCoName(co)))) || ""; } catch (e) { return ""; } },
   // a change waiting, or with Tally now, for this entry (or ledger)
-  waitingFor(key) { return !!key && FixQ.list().some((x) => x.state === "waiting" && (x.vid === key || (x.ask && x.ask.target === "ledger" && x.ask.ledger === key))); },
+  waitingFor(key) { return !!key && FixQ.list().some((x) => toGo(x) && (x.vid === key || (x.ask && x.ask.target === "ledger" && x.ask.ledger === key))); },
   // Tally holds exactly what was asked (the number as typed, letter case too; a place of supply by its state code, so
   // "Jammu & Kashmir" is "Jammu and Kashmir")
   mine(rec, now) {
@@ -105,6 +116,9 @@ export const FixQ = {
     try { tname = await ensureTallyCompany(co); lg = tname ? await linkGuid(co, tname) : null; } catch (e) { lg = null; }
     if (!tname) return { state: "waiting", words: WAIT };
     if (!lg || !lg.guid) return { state: "refused", words: (lg && lg.why) || "Not sent: this client's Tally company is not linked." };
+    // a waiting change that does not say which Tally company it was made for is never sent (review of 24-Nov-2026);
+    // one being saved now from its window takes the linked company
+    if (!rec.coGuid) { if (rec.state !== "sending") return { state: "refused", words: NOCO }; rec.coGuid = lg.guid; }
     if (rec.coGuid && lg.guid !== rec.coGuid) return { state: "refused", words: "Not sent: this client's Tally company is not the one this change was made for." };
     if (typeof auditEvent === "function") auditEvent("tally.fix", tname + " · " + rec.label, rec.cid || "");
     // one /fix: its answer, or {fail} for what is said at once (an older bridge, a network fault: no answer at all)
@@ -152,10 +166,17 @@ export const FixQ = {
     if (FixQ.flying.has(rec.id)) return rec;
     FixQ.flying.add(rec.id);
     try {
-      const co = CO(rec.cid);
-      const p = !co || typeof bridgeLive !== "function" || !bridgeLive(co) ? { state: "waiting", words: NOBRIDGE } : await FixQ.ask(rec, co);
+      const co = CO(rec.cid), bk = rec.after ? await FixQ.books(rec.cid) : null;
+      // queued after another change (an invoice after its party ledger): it waits for that one, and is not sent when
+      // that one did not go
+      const dep = bk ? FixQ.list(bk).find((y) => y.id === rec.after) : null;
+      const p = dep && toGo(dep) ? { state: "waiting", words: rec.words || WAIT }
+        : dep && !tookIt(dep) ? { state: "refused", words: "Not sent: the party ledger was not changed in Tally." }
+        : !co || typeof bridgeLive !== "function" || !bridgeLive(co) ? { state: "waiting", words: NOBRIDGE } : await FixQ.ask(rec, co);
       // sent from here: who and which computer sent it, kept beside who saved it (rec.by, rec.dev)
-      if (p.state !== "waiting") Object.assign(p, { sentBy: FixQ.who(), sentDev: FixQ.dev(), sentAt: new Date().toISOString() });
+      // held just now: the background sending waits its minute before asking Tally again
+      if (p.state === "waiting") FixQ.last = Date.now();
+      if (p.state !== "waiting" && !(dep && !tookIt(dep))) Object.assign(p, { sentBy: FixQ.who(), sentDev: FixQ.dev(), sentAt: new Date().toISOString() });
       await FixQ.put(rec, p);
     } finally { FixQ.flying.delete(rec.id); }
     if (typeof render === "function") render();
@@ -189,7 +210,8 @@ export const FixQ = {
   async back(b, rec, r) {
     if (rec.ask.target === "ledger") {
       const a = r.after || r.now || {}, led = rec.ask.ledger;
-      if (a.gstin == null && a.pan == null) return false;
+      // never a GSTIN written for a ledger outside Sundry Debtors and Sundry Creditors
+      if ((a.gstin == null && a.pan == null) || !partyGroupOk(b, led)) return false;
       if (a.gstin != null) { b.gstins = b.gstins || {}; if (a.gstin) b.gstins[led] = a.gstin; else delete b.gstins[led]; }
       if (a.pan) { b.pans = b.pans || {}; b.pans[led] = a.pan; }
       // its change number kept, also for a ledger FinCom has no other details of (a changed or read answer)
@@ -219,6 +241,8 @@ export const FixQ = {
     if (!cid || b.loading || FixQ.busy || (!force && Date.now() - FixQ.last < 60000)) return;
     const co = CO(cid);
     if (!co || typeof bridgeLive !== "function" || !bridgeLive(co)) return;
+    // a change left "sending" by a page closed mid-send: waiting (Tally may have it; the change number decides)
+    FixQ.list(b).forEach((x) => { if (x.state === "sending" && !FixQ.flying.has(x.id) && !(Date.now() - Date.parse(x.at || 0) < STALE)) Object.assign(x, { state: "waiting", mayHave: true, words: WAIT }); });
     const w = FixQ.list(b).filter((x) => x.state === "waiting" && x.cid === cid && !FixQ.flying.has(x.id));
     if (!w.length) return;
     FixQ.busy = true; FixQ.last = Date.now();
@@ -230,20 +254,22 @@ export const FixQ = {
       }
     } finally { FixQ.busy = false; render(); }
   },
-  // a new change for the client open: kept first (so a closed page or Tally loses nothing), then sent
-  async add(ask, label, extra) {
+  // a new change for the client open: kept first (so a closed page or Tally loses nothing) as "sending", then sent; its
+  // own answer makes it waiting when it did not go. queued (words): kept as waiting, not sent now (it goes in its turn)
+  async add(ask, label, extra, queued) {
     const b = S.books, cid = b && b.cid;
     if (!cid) return null;
     const co = CO(cid), coGuid = co ? await FixQ.coGuid(co) : "";
     const rec = Object.assign({ id: "fx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(),
-      by: FixQ.who(), dev: FixQ.dev(), cid, coGuid, ask, label, state: "waiting", words: "Saving in Tally…" }, extra || {});
+      by: FixQ.who(), dev: FixQ.dev(), cid, coGuid, ask, label,
+      state: queued ? "waiting" : "sending", words: queued || "Saving in Tally…" }, extra || {});
     const l = FixQ.list(b);
     l.push(rec);
     // the newest KEEP kept: the oldest dropped first, a change still waiting for Tally last
-    for (let i = 0; l.length > KEEP && i < l.length;) { if (l[i].state !== "waiting" && l[i] !== rec) l.splice(i, 1); else i++; }
+    for (let i = 0; l.length > KEEP && i < l.length;) { if (!toGo(l[i]) && l[i] !== rec) l.splice(i, 1); else i++; }
     while (l.length > KEEP) l.splice(l[0] === rec ? 1 : 0, 1);
     if (typeof saveBooks === "function") await saveBooks({}, b);
-    return FixQ.send(rec);
+    return queued ? rec : FixQ.send(rec);
   },
 };
 if (typeof window === "object") window.FixQ = FixQ;
@@ -255,12 +281,13 @@ const SUPPLIER = /^(Purchases with no supplier GSTIN|Supplier GSTINs that are no
 const rowsOf = (what, ym, reg) => { try { return (SUPPLIER.test(what) ? GSTR.inward(ym, reg) : GSTR.outward(ym, reg)) || []; } catch (e) { return []; } };
 const up = (g) => String(g || "").trim().toUpperCase();
 // the party ledger of an entry (review of 24-Nov-2026): Tally's PARTYLEDGERNAME is always one of the entry's ledger
-// lines, so the party is its ledger when it is one of them. A cash sale with the buyer's details (PARTYNAME a buyer, the
-// party ledger Cash) has no ledger of the party: only its invoices are corrected.
+// lines, so the party is its ledger when it is one of them and its group is under Sundry Debtors or Sundry Creditors.
+// Anything else (a cash sale with the buyer's details, Cash or a bank as the party, a group not known): no ledger step,
+// and only the invoice opened is corrected.
 export function partyLedgerOf(v, party) {
   const p = String(party || ""), u = (x) => (Books && Books.unesc ? Books.unesc(x) : String(x || ""));
-  if (!p || !v || !Array.isArray(v.ent) || !v.ent.length) return p;
-  return v.ent.some((e) => e && (e.l === p || u(e.l) === u(p))) ? p : "";
+  if (!p || (v && Array.isArray(v.ent) && v.ent.length && !v.ent.some((e) => e && (e.l === p || u(e.l) === u(p))))) return "";
+  return partyGroupOk(S.books, p) ? p : "";
 }
 // a party's invoices of the month that the GSTIN fix corrects: no GSTIN, one that is not valid (its check digit), or one
 // of `wrong` (the ledger's old wrong GSTIN). Never one with another valid GSTIN: another address, a branch, or a
@@ -306,7 +333,8 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
   // the ledger to change first (another GSTIN typed than it holds); the GSTINs whose invoices are corrected too
   const ledNeeds = kind === "gstin" && !!led && clean !== ledG;
   const wrong = olds.concat(ledNeeds && ledG ? [ledG] : [], !led ? [up(d0.gstin)] : []);
-  const invNow = kind === "gstin" ? partyInvoices(c.what, ym, reg, party, gstGood ? clean : null, wrong) : [];
+  // with no ledger of the party, only the invoice opened (never every invoice with that name)
+  const invNow = kind !== "gstin" ? [] : partyInvoices(c.what, ym, reg, party, gstGood ? clean : null, wrong).filter((x) => led || x.id === d0.id);
   // the invoices step: no ledger (only invoices), or the ledger right with invoices to correct; it stays once begun
   if (kind === "gstin" && (!led || (gstGood && !ledNeeds && invNow.length))) inStep.current = true;
   const step = kind === "gstin" && inStep.current ? "invoices" : "entry";
@@ -326,23 +354,32 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
   const later = (f) => setTimeout(f, 1200);
   // the ticked invoices, one at a time, each read back (Tally closed: that one waits, the rest are not sent now). Another
   // client opened meanwhile: stopped; the rest stay to be fixed for their own client.
-  const sendInvoices = async (list, cid) => {
+  // one invoice's GSTIN fix (each with its own change number), sent now, or queued as waiting (words) after `after`
+  const addInvoice = (x, queued, after) => {
+    const iv = voucherOf(x.id);
+    if (!iv || iv.alt == null) return Promise.resolve({ state: "refused", words: "Not sent: FinCom has no change number of this invoice. Read the books from Tally again." });
+    const ask = { target: "voucher", guid: iv.id, alterId: String(iv.alt), vchType: Books.unesc(iv.type), vchDate: iv.date, fields: { gstin: clean } };
+    return FixQ.add(ask, "GSTIN on " + (x.no || "the invoice") + " of " + day(iv.date) + ": " + (iv.gstin || "none") + " → " + clean,
+      Object.assign({ was: String(iv.gstin || ""), to: clean, kind: "gstin", vid: iv.id }, after ? { after } : {}), queued);
+  };
+  // the ticked invoices, one at a time, each read back. Tally closed (or no bridge here): that one waits and the rest
+  // are queued after it, to go in order when Tally opens. Another client opened meanwhile: stopped; the rest stay to be
+  // fixed for their own client. after/queued: the party ledger's change held, so every one is queued after it.
+  const sendInvoices = async (list, cid, after, queued) => {
     setInv({ g: clean, rows: list });
     const now = {}, show = () => setInvSt((o) => Object.assign({}, o, now));
+    let hold = queued || "";
     for (const x of list) {
       if (off.has(x.id) || finished(said(x))) continue;
       if (!S.books || S.books.cid !== cid) break;
-      const iv = voucherOf(x.id);
-      if (!iv || iv.alt == null) { now[x.id] = { state: "refused", to: clean, words: "Not sent: FinCom has no change number of this invoice. Read the books from Tally again." }; show(); continue; }
-      now[x.id] = { state: "waiting", to: clean, words: "Saving in Tally…" }; show();
-      const ask = { target: "voucher", guid: iv.id, alterId: String(iv.alt), vchType: Books.unesc(iv.type), vchDate: iv.date, fields: { gstin: clean } };
-      const rec = await FixQ.add(ask, "GSTIN on " + (x.no || "the invoice") + " of " + day(iv.date) + ": " + (iv.gstin || "none") + " → " + clean, { was: String(iv.gstin || ""), to: clean, kind: "gstin", vid: iv.id });
+      if (!hold) { now[x.id] = { state: "waiting", to: clean, words: "Saving in Tally…" }; show(); }
+      const rec = await addInvoice(x, hold, after);
       if (!rec) break;
       now[x.id] = { state: rec.state, words: rec.words, to: clean }; show();
-      if (rec.state === "waiting") break;
+      if (rec.state === "waiting") hold = rec.words || WAIT;
     }
     render();
-    if (S.books && S.books.cid === cid && list.every((x) => off.has(x.id) || finished(now[x.id]) || finished(said(x)))) later(onClose);
+    if (!hold && S.books && S.books.cid === cid && list.every((x) => off.has(x.id) || finished(now[x.id]) || finished(said(x)))) later(onClose);
   };
   const save = async () => {
     const cid = (S.books || {}).cid, fromStep = step === "invoices", seen = invList;
@@ -361,6 +398,12 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
       const rec = await FixQ.add(ask, label, { was: kind === "gstin" ? ledG : kind === "number" ? noNow : posNow, to: clean, kind, vid: kind === "gstin" ? "" : d0.id || "" });
       if (!rec) return;
       setSt(rec); render();
+      // the party ledger held (Tally closed, or no bridge here): its invoices are queued after it, to go in order
+      if (kind === "gstin" && rec.state === "waiting") {
+        const l = fromStep ? seen : partyInvoices(c.what, ym, reg, party, clean, olds.concat(ledG ? [ledG] : []));
+        if (l.length) { inStep.current = true; await sendInvoices(l, cid, rec.id, rec.words || WAIT); }
+        return;
+      }
       if (!finished(rec)) return;
       if (kind !== "gstin") { later(onClose); return; }
       // the ledger saved: its GSTIN before is one whose invoices are corrected too. From the invoices step the same Save
@@ -436,7 +479,7 @@ export function FixHistory() {
   useEffect(() => { FixQ.pump(false); });
   const l = FixQ.list();
   if (!l.length) return null;
-  const pending = (x) => FixQ.undoing.has(x.id) || l.some((y) => y.undoOf === x.id && y.state === "waiting");
+  const pending = (x) => FixQ.undoing.has(x.id) || l.some((y) => y.undoOf === x.id && toGo(y));
   const can = (x) => x.state === "done" && !x.undone && !x.undoOf && undoable(x);
   // one Undo for a double click; marked used only once Tally took it
   const undo = async (x) => {
