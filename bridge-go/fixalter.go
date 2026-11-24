@@ -291,7 +291,15 @@ var (
 	fixBooksFromFn = func(company string) (string, error) { return booksFromForRead(fixTC(), company) }
 	// review of cd7b81337: the company's groups as this computer last read them from Tally (FinComGroupList's
 	// group-list.json; nothing is asked for a fix)
-	fixGroupsFn = func(company string) [][2]string { return heldGroupList(syncFolder(company)) }
+	// review of 0e0e0f3a1: the company's own folder (keep.go companyDir), where the masters read writes it; a name with
+	// no folder: no list (the group is then not known, and the fix refused)
+	fixGroupsFn = func(company string) [][2]string {
+		dir, err := companyDir(company)
+		if err != nil {
+			return nil
+		}
+		return heldGroupList(dir)
+	}
 )
 
 // the group list held in dir (group-list.json: [name, parent] rows; a primary group's parent is empty); nil when none
@@ -328,6 +336,40 @@ func fixPartyGroup(parent string, groups [][2]string) (party, known bool) {
 		g = strings.TrimSpace(re(`^\W*Primary$`).ReplaceAllString(p, ""))
 	}
 	return false, strings.TrimSpace(parent) != ""
+}
+
+// review of 0e0e0f3a1: the entry's party ledger (PARTYLEDGERNAME, as just read) is a party: nil; else the refusal
+// (Tally not answering the ledger read: held, as any read of a fix)
+func fixVoucherParty(raw string, port int, company string) M {
+	name := strings.TrimSpace(html.UnescapeString(tagRaw(raw, "PARTYLEDGERNAME")))
+	if name == "" || !ledNameOK(name) {
+		writeLog("Fix in place: an entry's GSTIN is not changed: it names no party ledger")
+		return M{"ok": false, "notParty": true, "message": "This entry names no party ledger, so its GSTIN is not changed."}
+	}
+	bf, err := fixBooksFromFn(company)
+	if err != nil {
+		return fixHeldWhy(err)
+	}
+	lr, err := fixReadLedgerFn(port, company, bf, name)
+	if err != nil {
+		return fixHeldWhy(err)
+	}
+	rows, _ := ledRowsOf(lr)
+	var row *ledRow
+	for i := range rows {
+		if strings.EqualFold(rows[i].name, name) {
+			row = &rows[i]
+		}
+	}
+	parent := ""
+	if row != nil {
+		parent = row.parent
+	}
+	if why := fixNotPartyWords(parent, fixGroupsFn(company), "GSTIN"); why != "" {
+		writeLog("Fix in place: an entry's GSTIN is not changed: its party " + name + " is not a party ledger (its group: " + or(parent, "not read") + ")")
+		return M{"ok": false, "notParty": true, "message": why}
+	}
+	return nil
 }
 
 // the refusal's words when the ledger is not a party ("" when it is one)
@@ -513,6 +555,13 @@ func fixVoucher(p M, ff fixFields, port int, company string) M {
 		return M{"ok": false, "changed": true, "now": now, "alterNow": now["alterId"], "xml": raw,
 			"message": "Changed in Tally since it was opened here. This is how it is now."}
 	}
+	// review of 0e0e0f3a1: a GSTIN fix only on an entry whose party ledger is a party, the ledger fix's rule and words
+	// (its PARENT read by FinComLedgerByName, the group list held); nothing is sent otherwise
+	if ff.gstin != "" {
+		if r := fixVoucherParty(raw, port, company); r != nil {
+			return r
+		}
+	}
 	x, why := fixVoucherRequest(company, guid, vt, date, ff)
 	if why != "" {
 		return M{"ok": false, "message": "Not sent: " + why + "."}
@@ -640,10 +689,12 @@ func fixLedgersOf(x string) []string {
 	return o
 }
 
-// review of c00b14edb: Tally's unregistered types (Unregistered/Consumer, the older Unregistered), in any case or spacing
+// review of c00b14edb: Tally's types with no registration (Unregistered/Consumer, the older Unregistered, Consumer,
+// Unknown), in any case or spacing
 func fixUnregistered(typ string) bool {
 	t := strings.ToLower(strings.Join(strings.Fields(strings.ReplaceAll(typ, "/", " / ")), ""))
-	return t == "unregistered" || t == "unregistered/consumer"
+	// review of 0e0e0f3a1: Consumer and Unknown given a GSTIN go as Regular too
+	return t == "unregistered" || t == "unregistered/consumer" || t == "consumer" || t == "unknown"
 }
 
 // the ledger's dated GST registration as read: the latest APPLICABLEFROM and its registration type ("" when none)
@@ -734,7 +785,7 @@ func fixLedger(p M, gstin, pan string, port int, company string) M {
 		}
 		if typ == "" || fixUnregistered(typ) {
 			// review of 595554fbe: the type as read; Regular when the ledger has none. Review of c00b14edb: a party read
-			// as unregistered (Unregistered/Consumer, Unregistered) that is given a GSTIN is registered: Regular
+			// as unregistered (Unregistered/Consumer, Unregistered, Consumer, Unknown) that is given a GSTIN: Regular
 			// (Composition, or any other type read, goes as read)
 			typ = "Regular"
 		}

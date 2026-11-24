@@ -99,3 +99,62 @@ func TestFixLedgerGroupUnknownRefused(t *testing.T) {
 		}
 	}
 }
+
+// review of 0e0e0f3a1: the REAL fixGroupsFn reads the group list the masters read writes (ledgers.go, group-list.json
+// in the company's own folder), so a sub-group of Sundry Creditors is known; a company with no folder: no list
+func TestFixGroupsFnReadsTheMastersList(t *testing.T) {
+	f := ledgerTally(t, 3, "")
+	f.mu.Lock()
+	f.grp = append(f.grp, [2]string{"Creditors North", "Sundry Creditors"}, [2]string{"Cash-in-Hand", "Current Assets"}, [2]string{"Current Assets", "Primary"})
+	f.mu.Unlock()
+	if err := newRun("now", "fixgrp").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	g := fixGroupsFn(zz)
+	if len(g) < 5 {
+		t.Fatalf("the group list held for %s: %v", zz, g)
+	}
+	if p, k := fixPartyGroup("Creditors North", g); !p || !k {
+		t.Fatalf("Creditors North under Sundry Creditors: party %v known %v (%v)", p, k, g)
+	}
+	if p, k := fixPartyGroup("Cash-in-Hand", g); p || !k {
+		t.Fatalf("Cash-in-Hand: party %v known %v", p, k)
+	}
+	if g := fixGroupsFn(".."); g != nil {
+		t.Fatalf("a company name with no folder gave a list: %v", g)
+	}
+}
+
+// review of 0e0e0f3a1: a voucher GSTIN fix only for an entry whose party ledger is a party (the same rule and words
+// as the ledger fix): the party ledger read by FinComLedgerByName; Cash, a bank, no party on the entry: nothing sent
+func TestFixVoucherGSTINPartyOnly(t *testing.T) {
+	for _, c := range []struct{ party, group, want string }{
+		{"Cash", "Cash-in-Hand", "This ledger is not a party (it is under Cash-in-Hand), so its GSTIN is not changed."},
+		{"Sample Bank", "Bank Accounts", "This ledger is not a party (it is under Bank Accounts), so its GSTIN is not changed."},
+		{"Sample Buyer", "-", "Tally did not say which group this ledger is under, so its GSTIN is not changed."},
+		{"-", "", "This entry names no party ledger, so its GSTIN is not changed."},
+	} {
+		s := &fixStand{alter: "57", number: "INV-7", gstin: "27AAPFU0939F1ZA", reply: "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>", party: c.party, partyGroup: c.group}
+		s.install(t)
+		fixGroupsFn = func(string) [][2]string { return fixPartyGroups }
+		r := runFix(fixGSTAsk("57", fxGST))
+		if r["ok"] != false || r["notParty"] != true || str(r["message"]) != c.want || len(s.sent) != 0 {
+			t.Fatalf("party %s under %s: %v, %d sent", c.party, c.group, r, len(s.sent))
+		}
+	}
+	// a party under a sub-group of Sundry Creditors: sent; the ledger read once
+	s := &fixStand{alter: "57", number: "INV-7", gstin: "27AAPFU0939F1ZA", reply: "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>", party: "Sample Vendor", partyGroup: "Creditors North"}
+	s.install(t)
+	fixGroupsFn = func(string) [][2]string { return fixPartyGroups }
+	if r := runFix(fixGSTAsk("57", fxGST)); r["ok"] != true || len(s.sent) != 1 || s.ledReads != 1 {
+		t.Fatalf("a party under Creditors North: %v, %d sent, %d ledger reads", r, len(s.sent), s.ledReads)
+	}
+	// a number fix alone reads no ledger
+	s2 := &fixStand{alter: "57", number: "INV-7", reply: "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>", party: "Cash", partyGroup: "Cash-in-Hand"}
+	s2.install(t)
+	a := fixAsk("57")
+	a["fields"] = M{"number": "INV-8"}
+	if r := runFix(a); r["ok"] != true || s2.ledReads != 0 {
+		t.Fatalf("a number fix: %v, %d ledger reads", r, s2.ledReads)
+	}
+}

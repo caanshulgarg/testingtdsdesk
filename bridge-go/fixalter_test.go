@@ -195,6 +195,10 @@ type fixStand struct {
 	afterNum string // the number Tally holds after the import ("" : the one sent)
 	gstin    string // the entry's PARTYGSTIN in Tally ("" : none on the entry)
 	keepGST  bool   // Tally keeps its own PARTYGSTIN after the import
+	// review of 0e0e0f3a1: the entry's party ledger (PARTYLEDGERNAME; "-": none on the entry) and its group as
+	// FinComLedgerByName reads it ("" : Sundry Debtors; "-": no PARENT); the ledger reads counted apart
+	party, partyGroup string
+	ledReads          int
 }
 
 func (s *fixStand) install(t *testing.T) {
@@ -203,6 +207,18 @@ func (s *fixStand) install(t *testing.T) {
 	t.Cleanup(func() { logFileOverride = "" })
 	o1, o2, o3, o4, o5 := fixReadVoucherFn, fixSendFn, fixQueueFn, fixTypingFn, fixPortFn
 	t.Cleanup(func() { fixReadVoucherFn, fixSendFn, fixQueueFn, fixTypingFn, fixPortFn = o1, o2, o3, o4, o5 })
+	o6, o7, o8 := fixReadLedgerFn, fixBooksFromFn, fixGroupsFn
+	t.Cleanup(func() { fixReadLedgerFn, fixBooksFromFn, fixGroupsFn = o6, o7, o8 })
+	fixBooksFromFn = func(string) (string, error) { return "20250401", nil }
+	fixGroupsFn = func(string) [][2]string { return nil }
+	fixReadLedgerFn = func(port int, company, bf, name string) (string, error) {
+		s.ledReads++
+		par := "<PARENT>" + or(s.partyGroup, "Sundry Debtors") + "</PARENT>"
+		if s.partyGroup == "-" {
+			par = ""
+		}
+		return `<ENVELOPE><LEDGER NAME="` + name + `"><GUID>g-led-1</GUID><MASTERID>5</MASTERID><ALTERID>11</ALTERID><NAME>` + name + `</NAME>` + par + `</LEDGER></ENVELOPE>`, nil
+	}
 	fixPortFn = func(p M) (int, string, error) { return 9000, fxCo, nil }
 	fixTypingFn = func() bool { return s.typing }
 	fixReadVoucherFn = func(port int, company, mid, date string) (string, error) {
@@ -211,7 +227,7 @@ func (s *fixStand) install(t *testing.T) {
 			return "", s.readErr
 		}
 		return `<VOUCHER REMOTEID="` + fxGUID + `" VCHTYPE="Sales"><GUID>` + fxGUID + `</GUID><MASTERID>42</MASTERID><ALTERID>` + s.alter +
-			`</ALTERID><DATE>20260525</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>` + s.number + `</VOUCHERNUMBER>` + gstTag(s.gstin) + `<NARRATION>made up</NARRATION>` +
+			`</ALTERID><DATE>20260525</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>` + s.number + `</VOUCHERNUMBER>` + partyTag(s.party) + gstTag(s.gstin) + `<NARRATION>made up</NARRATION>` +
 			`<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sample Buyer</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>`, nil
 	}
 	fixSendFn = func(port int, x string) (string, error) {
@@ -481,4 +497,12 @@ func TestFixLedgerPAN(t *testing.T) {
 		tallyRequestID(x) != fixLedgerID || checkAllowed(x) != nil {
 		t.Fatalf("not the approved PAN form: %s", x)
 	}
+}
+
+// the entry's PARTYLEDGERNAME in the stand ("" : Sample Buyer; "-": none)
+func partyTag(p string) string {
+	if p == "-" {
+		return ""
+	}
+	return "<PARTYLEDGERNAME>" + or(p, "Sample Buyer") + "</PARTYLEDGERNAME>"
 }
