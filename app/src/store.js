@@ -84,7 +84,14 @@ function why() { try { whyPass(); } catch (e) { /* never in the way of the page 
 // o.keep (renderTop: the top bar's own news): the figures of the last drawing are used again when the books did not change
 // since (memoKeep, src/js/01)
 export function redraw(o) { const f = noteFocus(); if (o && o.keep && typeof window.memoKeep === "function") window.memoKeep(drawReactNow); else drawReact(); why(); giveFocus(f); }
-window.FinComReact = { redraw };
+// next-fix-sales-hang-2 (FINCOM-APP-STAGING-K, staging 24-Nov-2026: 2,059 ms in the client card's click on Sales): the
+// switcher (renderSwitcher: opened, a letter typed, an arrow, Esc) is drawn by itself; the page under it was drawn again
+// whole, all its figures with it, for a box that only lists the clients. tests/run_hang_sales_switch.py
+const swSubs = new Set(); let swV = 0;
+export const subscribeSw = (f) => (swSubs.add(f), () => swSubs.delete(f));
+export const swSnapshot = () => swV;
+function sw() { swV++; flushSync(() => swSubs.forEach((fn) => fn())); }
+window.FinComReact = { redraw, sw };
 
 window.render = function render() {
   const f = noteFocus();

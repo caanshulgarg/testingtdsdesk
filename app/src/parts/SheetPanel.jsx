@@ -25,7 +25,7 @@ function MapStep({ st }) {
   return <section data-sheet-step="map">
     {st.remap && <p className="bk-alert" data-sheet-remap="">{"This layout was saved with a column read wrongly. " + st.remap.why + " FinCom has put it right below (no AI): check it and save."}</p>}
     {!st.remap && st.pendingAgain && <p className="note" data-sheet-ai="" data-sheet-pending="">{"This layout was uploaded before and its columns are not saved yet: the mapping proposed then is shown, with any changes you made (FinCom's AI is not asked again). Check it and save, or Cancel to let it go."}</p>}
-    {!st.remap && !st.pendingAgain && <p className="note" data-sheet-ai="">{st.aiErr ? "FinCom's AI could not read this format (" + st.aiErr + "): choose each column's field yourself."
+    {!st.remap && !st.pendingAgain && <p className="note" data-sheet-ai="">{st.aiErr ? "FinCom's AI could not read this format (" + st.aiErr + "). The columns FinCom knows by name are filled in: check them and choose the rest yourself."
       : "A format FinCom has not seen. FinCom's AI read its header and 10 rows once (names and numbers masked) and proposes these columns. Check them, change any, and save the format: the next sheet like it is read with no AI."}</p>}
     <label className="f"><span>Name of the format</span><input type="text" value={st.fmtName || ""} data-sheet-name="" onChange={(ev) => { st.fmtName = ev.target.value; render(); }} /></label>
     <div className="tblwrap"><table className="data sheet-map" data-sheet-map="">
@@ -63,13 +63,14 @@ function Question({ st, q }) {
 }
 
 function CheckStep({ st }) {
-  const docs = st.docs || [], bad = docs.filter((d) => d.check && !d.check.ok), open = SheetImport.open(), add = SheetImport.docsToAdd();
+  const docs = st.docs || [], bad = docs.filter((d) => d.check && !d.check.ok), open = SheetImport.open(), add = SheetImport.docsToAdd(), lo = SheetFmt.leftOut(docs.skipped);
   const tax = (d) => r2(num(d.igst) + num(d.cgst) + num(d.sgst) + num(d.cess));
   return <section data-sheet-step="check">
     <p className="note" data-sheet-how={st.how}>{(st.fmtName ? "Format: " + st.fmtName + ". " : "") + (HOW[st.how] || "")}</p>
     {st.grown && <p className="note" data-sheet-grown="">{[st.grown.added.length ? "New in this sheet, now read: " + st.grown.added.map((a) => "“" + a.col + "” as " + a.label).join(", ") + "." : "",
       st.grown.other.length ? "Not read (not in the saved format): " + st.grown.other.map((c) => "“" + c + "”").join(", ") + ". To read " + (st.grown.other.length === 1 ? "it" : "them") + ", use Map again in Client setup → Register formats." : ""].filter(Boolean).join(" ")}</p>}
-    {(docs.skipped || []).length > 0 && <p className="note" data-sheet-skipped="">{docs.skipped.length + " row" + (docs.skipped.length === 1 ? "" : "s") + " left out: " + Array.from(new Set(docs.skipped.map((x) => x.why))).join(", ") + "."}</p>}
+    {lo.status && <p className="note" data-sheet-status-skipped="">{lo.status}</p>}
+    {lo.rows.length > 0 && <p className="note" data-sheet-skipped="">{lo.rows.length + " row" + (lo.rows.length === 1 ? "" : "s") + " left out: " + Array.from(new Set(lo.rows.map((x) => x.why))).join(", ") + "."}</p>}
     {bad.length > 0 && <div className="bk-alert bad" data-sheet-bad="">{bad.length + " document" + (bad.length === 1 ? " does" : "s do") + " not add up to the paisa; they go to To review marked so:"}
       <ul>{bad.map((d) => <li key={d.no}>{d.no + ": " + d.check.text}</li>)}</ul></div>}
     {(st.questions || []).length > 0 && <section className="sheet-qs"><h3>{open.length ? "To answer (" + open.length + ")" : "Answered"}</h3><ul className="post-attn">{st.questions.map((q) => <Question key={q.id} st={st} q={q} />)}</ul></section>}

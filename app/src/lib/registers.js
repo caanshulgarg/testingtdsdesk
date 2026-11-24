@@ -37,7 +37,9 @@ const SHEET_FIELDS = [["date", "Invoice date"], ["no", "Invoice no."], ["party",
   ["tax", "Total tax (one column)"], ["total", "Invoice total"], ["hsn", "HSN / SAC"], ["qty", "Quantity"], ["ledger", "Party's ledger in Tally"],
   ["sledger", "Sales / purchase ledger"], ["doctype", "Document type (invoice / credit note)"], ["vchtype", "Voucher type (information only)"], ["against", "Against invoice no."],
   ["owngstin", "Our GSTIN (the client's registration)"], ["branch", "Branch / series"], ["regtype", "Party's registration (regular / unregistered)"],
-  ["rcm", "Reverse charge (Y / N)"], ["itc", "ITC available (Y / N)"]];
+  ["rcm", "Reverse charge (Y / N)"], ["itc", "ITC available (Y / N)"], ["status", "Invoice status (Draft / Void left out)"]];
+// (status, next-fix-zoho-sales-sheet: the owner, 24-Nov-2026: only issued invoices are imported; a row its status column
+// calls Draft or Void is left out, and the panel says how many)
 // (rcm, itc: next-fix-audit-imports, Purchase only: a bill under reverse charge books the tax as payable by the client
 // and as its input credit; one with no credit (GSTR-2B's ITC Availability "No") books its tax as part of the cost)
 // (regtype, next-fix-sales-upload: a row it calls unregistered or a consumer never takes a GSTIN from the party's Tally
@@ -128,6 +130,21 @@ const SheetFmt = {
         cgst: f("centraltax"), sgst: h.find(x => x.startsWith("statetax") || x.startsWith("stateuttax")) || "", cess: f("cess")};
       return {id: "builtin:2b-excel", name: "GSTR-2B / 2A (Excel)", builtin: "2b-excel", side: "purchase", map, transforms: {date: "dmy", groupByNo: true, twoB: true}};
     }
+    // Zoho Books' "Invoice" export (next-fix-zoho-sales-sheet, 24-Nov-2026: a client's Zoho sheet came in with no taxable
+    // value read): one row a line, 200 columns, no "Taxable value" column. The line's taxable value is its "Item Total"
+    // (after the line's discount), added up an invoice; the invoice's own figures ("SubTotal", "Total") are on each of its
+    // lines, taken once; the taxes are CGST / SGST / IGST / CESS (never their "(FCY)" or "Rate %" columns); the customer's
+    // GSTIN is "GST Identification Number (GSTIN)"; the place of supply a state code ("DL"); the client's own
+    // registration "Supplier GST Registration Number"; Draft and Void invoices left out ("Invoice Status")
+    const is = n => h.includes(n);
+    if (side === "sales" && is("invoicenumber") && is("invoicestatus") && (is("itemtotal") || is("subtotal")) && (is("cgst") || is("igst"))){
+      const one = (...l) => l.find(is) || "";
+      const map = {date: one("invoicedate"), no: "invoicenumber", party: one("customername"), gstin: h.find(x => x.startsWith("gstidentificationnumber")) || one("customergstin", "gstin"),
+        pos: one("placeofsupply", "placeofsupplywithstatecode"), taxable: one("itemtotal", "subtotal"), igst: one("igst"), cgst: one("cgst"), sgst: one("sgst", "utgst"), cess: one("cess"),
+        total: one("total"), hsn: one("hsnsac"), qty: one("quantity"), owngstin: one("suppliergstregistrationnumber"), branch: one("branchname"), status: "invoicestatus"};
+      return {id: "builtin:zoho-invoice", name: "Zoho Books invoices", builtin: "zoho-invoice", side: "sales", map,
+        transforms: {date: "dmy", groupByNo: true, docTotal: true, docTaxable: !is("itemtotal")}};
+    }
     return null;
   },
   // a known format for this header: {fmt, how: "builtin" | "known" | "drift"} or null
@@ -172,6 +189,44 @@ const SheetFmt = {
     });
     return Object.keys(added).length || other.length ? {map: Object.assign({}, map, added), added, other} : null;
   },
+  // the rows left out, in words: Draft and Void invoices counted as invoices (the owner, 24-Nov-2026: "12 draft invoices
+  // left out"), said apart from the other rows left out (a total row, no invoice number)
+  leftOut(skipped){
+    const by = {}, sk = skipped || [];
+    sk.forEach(x => { if (x.status) (by[x.status] = by[x.status] || new Set()).add(x.no || x.row); });
+    const part = k => by[k].size + " " + k + " invoice" + (by[k].size === 1 ? "" : "s");
+    const ks = ["draft", "void"].filter(k => by[k]);
+    return {status: ks.length ? ks.map(part).join(" and ") + " left out: only issued invoices are read." : "", rows: sk.filter(x => !x.status)};
+  },
+  // the columns a field is known by, sure enough to propose with no AI (a field the AI left out, or every field when
+  // its answer could not be read), the first found; the person checks them on the mapping as always
+  NAMES: {date: ["invoicedate", "billdate", "documentdate", "voucherdate", "date"], no: ["invoicenumber", "invoiceno", "billno", "billnumber", "vchno", "voucherno", "documentnumber"],
+    party: ["customername", "partyname", "suppliername", "vendorname", "buyername"], pos: ["placeofsupply", "pos"],
+    taxable: ["taxablevalue", "taxableamount", "taxableamt", "taxable", "assessablevalue", "itemtotal"], igst: ["igst", "igstamount", "igstamt", "integratedtax"],
+    cgst: ["cgst", "cgstamount", "cgstamt", "centraltax"], sgst: ["sgst", "sgstamount", "sgstamt", "sgstutgst", "statetax", "stateuttax"], cess: ["cess", "cessamount"],
+    total: ["invoicevalue", "invoiceamount", "invoicetotal", "totalinvoicevalue", "billamount", "grandtotal", "total"], hsn: ["hsnsac", "hsn", "hsncode"], qty: ["quantity", "qty"],
+    status: ["invoicestatus"]},
+  byName(head, side){
+    const h = (head || []).map(x => this.norm(x)), sure = this.SURE[side === "purchase" ? "purchase" : "sales"], map = {}, used = new Set();
+    const names = Object.assign({}, this.NAMES, {gstin: ["gstidentificationnumbergstin"].concat(sure.gstin)},
+      side === "purchase" ? {party: ["suppliername", "vendorname", "partyname", "sellername"]} : {});
+    Object.keys(names).forEach(f => { const n = names[f].find(x => h.includes(x) && !used.has(x)); if (n){ map[f] = n; used.add(n); } });
+    return map;
+  },
+  // the columns the AI is sent (their indexes, in the sheet's order): those with a value in the rows sent, the ones whose
+  // names say a field first, at most 80 (what the assistant reads). A Zoho export has 200 columns, its taxes past the
+  // 140th: sent whole, the AI never saw them (next-fix-zoho-sales-sheet)
+  AI_COLS: 80,
+  forAi(head, rows){
+    const names = (head || []).map(x => this.norm(x)), sample = (rows || []).slice(0, 10);
+    const filled = i => sample.some(r => String((r || [])[i] == null ? "" : r[i]).trim() !== "");
+    const KEY = /date|invoice|bill|voucher|vch|number|^no|party|customer|supplier|vendor|buyer|name|gstin|gst|supply|pos|taxable|value|amount|amt|total|igst|cgst|sgst|utgst|cess|tax|rate|hsn|sac|qty|quantity|ledger|account|type|note|status|branch|against|reference|reverse|itc/;
+    const NOISE = /fcy|street|address|city|zip|pin|phone|mobile|fax|email|attention|country|eway|einvoice|qr|ack|transport|dispatch|payment|terms|notes|template|salesperson|retention|exchange|currency|(id|code)$/;
+    const score = i => KEY.test(names[i]) && !NOISE.test(names[i]) ? 0 : NOISE.test(names[i]) ? 2 : 1;
+    let idx = names.map((n, i) => i).filter(i => names[i] && (filled(i) || !sample.length));
+    if (idx.length > this.AI_COLS) idx = idx.slice().sort((a, b) => score(a) - score(b) || a - b).slice(0, this.AI_COLS).sort((a, b) => a - b);
+    return idx;
+  },
   // what the AI is shown: the header, and up to 10 rows with every identifier, name and long number masked
   masked(head, rows){
     const map = new Map(), tok = (kind, v) => { const k = kind + "|" + v; if (!map.has(k)) map.set(k, kind + "_" + (Array.from(map.keys()).filter(x => x.startsWith(kind + "|")).length + 1)); return map.get(k); };
@@ -210,7 +265,7 @@ const SheetFmt = {
   },
   // a new format's mapping: asked of the AI once (SheetAI, the firm's assistant on the cheap model), never a figure
   async propose(head, rows, side){
-    const m = this.masked(head, rows);
+    const pick = this.forAi(head, rows), m = this.masked(pick.map(i => head[i]), (rows || []).map(r => pick.map(i => (r || [])[i])));
     if (typeof SheetAI !== "object" || !SheetAI.map) throw new Error("FinCom's AI help is not available here: map the columns yourself.");
     const FL = this.fieldsFor(side);
     const r = await SheetAI.map({head: m.head, rows: m.rows, side, fields: FL.map(f => f[0]).filter(f => f !== "vchtype" && f !== "regtype")});
@@ -220,12 +275,22 @@ const SheetFmt = {
       const i = typeof col === "number" ? col : names.indexOf(this.norm(col));
       if (i >= 0 && names[i]) map[field] = names[i];
     });
-    return {map: this.fix(map, head, rows) || map, transforms: Object.assign({date: "dmy", groupByNo: true}, (r && r.transforms) || {}), skip: (r && r.skip) || [], why: (r && r.why) || {}, cost: (r && r.cost) || null};
+    // what the AI left out (or all of it, an answer cut short), taken by its plain name, and said so
+    const why = Object.assign({}, (r && r.why) || {});
+    this.fill(map, why, head, side);
+    return {map: this.fix(map, head, rows) || map, transforms: Object.assign({date: "dmy", groupByNo: true}, (r && r.transforms) || {}), skip: (r && r.skip) || [], why, cost: (r && r.cost) || null};
+  },
+  // a mapping's fields left out, taken by name where a column is sure (never a column already used)
+  fill(map, why, head, side){
+    if (side === "vendor" || side === "customer") return map;
+    const used = new Set(Object.values(map)), label = n => (head || [])[(head || []).map(x => this.norm(x)).indexOf(n)] || n;
+    Object.entries(this.byName(head, side)).forEach(([f, n]) => { if (!map[f] && !used.has(n) && this.fieldsFor(side).some(x => x[0] === f)){ map[f] = n; used.add(n); why[f] = "by its name, “" + label(n) + "”"; } });
+    return map;
   },
   // the documents a mapped sheet holds: one per invoice number (lines of one invoice added up), totals and blank rows
   // skipped; FinCom's rules work out the tax split, the place of supply, the totals and the check to the paisa
   apply(fmt, grid, hi, co, side){
-    if (fmt.builtin && fmt.side === "sales" && fmt.builtin !== "2b-excel"){
+    if (fmt.builtin && fmt.side === "sales" && MarketRead.COLS[fmt.builtin]){
       const m = MarketRead.read(grid.slice(hi), fmt.builtin), out = m.map(x => this.fromMarket(x));
       out.skipped = (m.skipped || []).map(x => ({row: hi + x.row, why: x.why}));
       return out;
@@ -245,6 +310,9 @@ const SheetFmt = {
       const fi = r.findIndex(c => String(c == null ? "" : c).trim()), TOT = /^(grand\s*|sub\s*|net\s*)?total\b/i;
       const tot = TOT.test(no) || (TOT.test(first) && fi !== idx.party && !String(get(r, "date") == null ? "" : get(r, "date")).trim());
       if (!no || tot){ skipped.push({row: hi + 2 + n, why: tot || TOT.test(first) ? "a total row" : "no invoice number"}); return; }
+      // a Draft or Void invoice (its status column): not issued, left out and counted (the owner, 24-Nov-2026)
+      const stv = String(get(r, "status") == null ? "" : get(r, "status")).trim().toLowerCase().replace(/^voided$/, "void");
+      if (stv === "draft" || stv === "void"){ skipped.push({row: hi + 2 + n, why: "a " + stv + " invoice", status: stv, no}); return; }
       // the kind the document-type column says (the owner, 13-Nov-2026): never a voucher type's name, and by whole
       // words only ("Non-returnable" is no return, "Credit" alone no credit note). A negative total is looked at on
       // the whole invoice, once its lines are added up (below)
@@ -294,7 +362,9 @@ const SheetFmt = {
       // reverse charge and input credit, as the sheet says them (GSTR-2B's "Supply Attract Reverse Charge", "ITC Availability")
       if (idx.rcm >= 0 && /^(y|yes)$/i.test(String(get(r, "rcm") || "").trim())) d.rcm = true;
       if (idx.itc >= 0 && /^(n|no)$/i.test(String(get(r, "itc") || "").trim())){ const w = String(get(r, "itcwhy") || "").trim(); d.itc = {available: false, why: w || "not available in 2B"}; }
-      let taxable = a("taxable"), igst = a("igst"), cgst = a("cgst"), sgst = a("sgst"), cess = a("cess"), total = a("total");
+      // (an invoice's own figures on each of its lines, as Zoho writes them: its total, or its taxable value when there is
+      // no line-wise one, taken from its first line only)
+      let taxable = t.docTaxable && had ? 0 : a("taxable"), igst = a("igst"), cgst = a("cgst"), sgst = a("sgst"), cess = a("cess"), total = a("total");
       const rate = this.amount(get(r, "rate"));
       // one tax column: split by the place of supply (the same state as the client: CGST + SGST, else IGST)
       if (idx.tax >= 0 && !igst && !cgst && !sgst){
@@ -305,7 +375,7 @@ const SheetFmt = {
       // no taxable column: the rate and the total tell it
       if (!taxable && total && rate) taxable = r2(total / (1 + rate / 100));
       d.taxable = r2(d.taxable + taxable); d.igst = r2(d.igst + igst); d.cgst = r2(d.cgst + cgst); d.sgst = r2(d.sgst + sgst); d.cess = r2(d.cess + cess);
-      d.lineTotals = (d.lineTotals || []).concat([total]);
+      d.lineTotals = t.docTotal && had ? d.lineTotals : (d.lineTotals || []).concat([total]);
       if (rate && !d.rates.includes(rate)) d.rates.push(rate);
       // next-fix-sales-upload (item 5): each row's own GST rate (its rate column, else its tax over its taxable value at
       // the nearest standard rate), its figures kept rate-wise: an invoice whose rows carry two rates becomes one item line
@@ -1075,7 +1145,7 @@ const SheetImport = {
       st.busy = "A new format: FinCom's AI is reading its columns…"; render();
       let p = null;
       try { p = await SheetFmt.propose(st.head, g.slice(st.hi + 1, st.hi + 11), side); }
-      catch (e){ st.aiErr = (e && e.message) || String(e); p = {map: {}, transforms: {date: "dmy", groupByNo: true}, why: {}}; }
+      catch (e){ st.aiErr = (e && e.message) || String(e); const why = {}; p = {map: SheetFmt.fill({}, why, st.head, side), transforms: {date: "dmy", groupByNo: true}, why}; }
       st.map = p.map; st.transforms = p.transforms; st.why = p.why || {}; st.aiCost = p.cost || null;
       st.fmtName = this.suggestName(f.name); st.step = "map"; st.busy = "";
       if (!st.aiErr) this.keepPending(st);

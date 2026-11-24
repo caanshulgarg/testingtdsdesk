@@ -36,6 +36,8 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      it right; "Edit type" does nothing to a row that is not held or is approved / posted, and a held bill is not
      approved until its type is set; a return carries no TDS (a 1,00,000 professional-fees return: TDS 0); the client's
      own name for its purchase voucher type is kept when Journal is chosen and chosen back.
+ 19. next-fix-zoho-sales-sheet (24-Nov-2026): Zoho Books' invoice export (no "Taxable value" column) by rules, no AI:
+     Item Total added up an invoice, the taxes far to the right, Draft and Void invoices left out and counted.
  17. the owner (16-Nov-2026): a number already in Tally or posted from FinCom is never posted without "Post duplicate
      anyway", confirmed twice (bulk Post skips and lists it); the client's own sales voucher type from its books.
  18. the owner (16-Nov-2026): every ledger of an invoice changed on it (a box of the client's Tally ledgers, kept as
@@ -937,6 +939,27 @@ with sync_playwright() as p:
     E("() => salesUndo()"); W(300)
     ok([x[1] for x in E("() => SL().list.map(v => [v.x.number, v.customerLedger || ''])")] == ["", "", ""], "Undo: both as they were")
     E("() => { SL().list = []; SL().undo = null; saveSales(); render(); }")
+
+    print("19. next-fix-zoho-sales-sheet: Zoho Books' invoice export on Sales, by rules; Draft and Void left out, said")
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }"); W(300)
+    ai0 = len(E("window.__ai") or [])
+    upload("sales_zoho_invoice.xlsx", "#salesIn")
+    zd = E("(SheetImport.st() && SheetImport.st().docs || []).map(d => [d.no, d.lines, d.taxable, r2(d.igst + d.cgst + d.sgst), d.total, d.pos, d.gstin, d.check.ok])")
+    ok(step() == "check" and len(E("window.__ai") or []) == ai0 and E("SheetImport.st().how") == "builtin" and "Zoho Books invoices" in panel(), "a format FinCom knows: no AI, straight to the check (%s, %s)" % (step(), E("SheetImport.st() && SheetImport.st().how")))
+    ok(zd == [["INV-000101", 2, 15000, 2700, 17700, "07", "07AABCD1111E1Z1", True], ["INV-000102", 1, 2000, 360, 2360, "09", "09AABCU2222F1Z2", True], ["INV-000106", 1, 8000, 0, 8000, "29", "29AABCK3333G1Z3", True], ["INV-000107", 3, 3500, 500, 4000, "07", "07AABCD1111E1Z1", True]],
+       "the issued invoices: Item Total added up an invoice, the tax, the place of supply from the state code, the customer's GSTIN (%s)" % zd)
+    note = pg.inner_text("#app [data-sheet-status-skipped]") if pg.locator("#app [data-sheet-status-skipped]").count() else ""
+    ok(note == "2 draft invoices and 1 void invoice left out: only issued invoices are read." and "note" in (pg.get_attribute("#app [data-sheet-status-skipped]", "class") or "") and pg.locator("#app [data-sheet-skipped]").count() == 0,
+       "said plainly, in the info tone, as invoices (%r)" % note)
+    tx = pg.locator("#app [data-sheet-step='check'] td", has_text="15,000.00").count()
+    ok(tx >= 1, "the taxable value is shown in the panel")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count() == 0:
+        for q in qids():
+            if pg.locator('#app [data-sheet-q="%s"] [data-sheet-a="create"]' % q[0]).count(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    zl = E("SL().list.map(v => [v.x.number, num(v.x.taxable)]).sort()")
+    ok(zl == [["INV-000101", 15000], ["INV-000102", 2000], ["INV-000106", 8000], ["INV-000107", 3500]], "four invoices in To review, each with its taxable value; no draft or void one (%s)" % zl)
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
 
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
