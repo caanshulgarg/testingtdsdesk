@@ -23,10 +23,11 @@ const NotInTally = {
   busy: {},
   LABEL: "Not in Tally? Post again",
   on(id){ return !!this.busy[String(id)]; },
-  // an entry whose Optional voucher is its posting: one posted as an Optional voucher (x.postedOptional), or of a client
-  // whose entries go to Tally as Optional vouchers by its setting (Client setup): bills and invoices (createOptional),
-  // bank lines their own (bankOptional, src/js/22 bankVoucherXml)
-  optional(co, kind, x){ return !!((x && x.postedOptional) || (co && (kind === "bank" ? co.bankOptional : co.createOptional))); },
+  // an entry whose Optional voucher is its posting: one FinCom itself sent as an Optional voucher (x.sentOptional: the
+  // client's setting as it sent it), never one Tally or its copy calls Optional (a voucher type Optional by default in
+  // Tally is not FinCom's choice: the re-upload polish 3). An entry with no such record: the client's setting now, bills
+  // and invoices (createOptional), bank lines their own (bankOptional, src/js/22 bankVoucherXml)
+  optional(co, kind, x){ return x && typeof x.sentOptional === "boolean" ? x.sentOptional : !!(co && (kind === "bank" ? co.bankOptional : co.createOptional)); },
   fid(id){ return String(id || "").replace(/[^A-Za-z0-9]/g, ""); },
   // the posting that holds the entry's FinCom id (live), else ""
   async holder(co, fid){
@@ -56,7 +57,7 @@ const NotInTally = {
     return Object.assign({}, r, {state: st, words});
   },
   // one entry marked posted (a button): the posting that holds it, then the cloud's decision; o: {co, id, fid, kind, what,
-  // entry (its postedOptional), when (when FinCom posted it), sent(r), there(r)}
+  // entry (its sentOptional), when (when FinCom posted it), sent(r), there(r)}
   async run(o){
     const k = String(o.id);
     if (this.busy[k]) return null;
@@ -124,11 +125,11 @@ async function postEarlier(kind, co, early, tname){
     n[w.there ? "there" : w.way]++;
     const when = salesWhen(r) || new Date().toISOString(), ans = Object.assign({}, r, {ok: true, verified: true, vchNumber: (d && d.vno) || r.vchNumber || r.vchNo || ""});
     if (kind === "bill"){
-      if (w.way === "posted"){ billPosted(cid, x, ans, tname, when, {quiet: true}); x.postNote = w.there ? "Posted before by FinCom; in Tally" : "Posted before by FinCom, not sent again"; }
+      if (w.way === "posted"){ billPosted(cid, x, ans, tname, when, {quiet: true, earlier: true}); x.postNote = w.there ? "Posted before by FinCom; in Tally" : "Posted before by FinCom, not sent again"; }
       else { x.postError = w.words; if (w.way === "sent") x.postJobNew = r.earlier; }
       Store.saveEntry(cid, x);
     } else {
-      if (w.way === "posted") bankPosted(cid, x, ans, tname, when, {quiet: true});
+      if (w.way === "posted") bankPosted(cid, x, ans, tname, when, {quiet: true, earlier: true});
       else { x.postError = w.words; if (w.way === "sent") x.postJob = r.earlier; }
     }
   }
@@ -141,7 +142,7 @@ async function salesNotInTally(id){
   const s = SL(), v = s && s.list.find(x => x.id === id);
   if (!v || v.status !== "posted") return null;
   return NotInTally.run({co: CO(s.cid), id: v.id, kind: "invoice", what: "invoice " + (v.x.number || v.id), entry: v, when: v.postedAt,
-    sent: (r, job) => { v.status = "ready"; delete v.postedAt; v.postJob = job; v.postNote = ""; delete v.postWhy; v.postError = r.words; v.postedOptional = false; saveSales(); },
+    sent: (r, job) => { v.status = "ready"; delete v.postedAt; v.postJob = job; v.postNote = ""; delete v.postWhy; v.postError = r.words; v.postedOptional = false; delete v.sentOptional; saveSales(); },
     there: r => { v.postNote = "Posted before by FinCom; in Tally"; delete v.postWhy; v.tallyMatch = {number: String(r.vno || ""), date: String(r.day || ""), type: String(r.vtype || "")}; saveSales(); }});
 }
 // a purchase bill sent to Tally

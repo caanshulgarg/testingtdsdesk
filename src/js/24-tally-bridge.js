@@ -887,6 +887,9 @@ function bankPosted(cid, r, x, tname, now, o){
   o = o || {};
   const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
   r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; delete r.postJobNew; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
+  // (re-upload polish 3) what FinCom sent (the bank's Optional setting), never Tally's answer; unknown for a line marked
+  // from an earlier posting (src/js/96 postEarlier): the setting decides then
+  if (o.earlier) delete r.sentOptional; else r.sentOptional = !!(CO(cid) || {}).bankOptional;
   r.postByReply = x.verified !== true && x.byReply === true;
   // (an Optional voucher is not in the books: its tag "optional:", never a reason to call the line In Tally again)
   if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = (x.optional ? "optional:" : "") + now; }
@@ -1070,7 +1073,7 @@ function refreshBusy(){ softRender(); }
 // the answers of a posting onto the same lines of the statement reloaded meanwhile (matchedAt: when one was found in Tally)
 function bankPostCarry(rows, into){
   const was = new Map(rows.map(r => [r.id, r]));
-  into.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "matchedAt", "postedVia", "postError", "postedOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
+  into.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "matchedAt", "postedVia", "postError", "postedOptional", "sentOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
 }
 async function postBankToTally(ids){
   const b = B(), co = CO(b.cid), st = curStmt();
@@ -1445,7 +1448,7 @@ function billPosted(cid, e, x, tname, now, o){
   o = o || {};
   const who = o.by || (Cloud.st && Cloud.st.email) || "";
   if (!o.quiet) logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: who});
-  delete e.release; delete e.postJobNew; if (e.deletedInTally) delete e.deletedInTally.verified; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  delete e.release; delete e.postJobNew; if (e.deletedInTally) delete e.deletedInTally.verified; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; if (o.earlier) delete e.sentOptional; else e.sentOptional = !!(CO(cid) || {}).createOptional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
   // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back): in Tally (billInTally), said so
   e.postByReply = x.verified !== true && x.byReply === true;
   e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: x.company || tname};

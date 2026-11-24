@@ -12,8 +12,10 @@ on the Post press itself. Made-up data only.
   2. "Not in Tally? Post again" on a posted invoice (row and panel): the posting that holds it found, the same decision
   3. the same on a purchase bill and a bank line FinCom posted
   4. nothing is ever asked of Tally or FinCom Bridge for it
-  5. (the polish) bank lines by the bank's own Optional setting; (polish 2) a line posted as an Optional voucher counts as
-     Optional whatever the setting is now: never asked, no button
+  5. (the polish) bank lines by the bank's own Optional setting; (polish 2, 3) a line FinCom itself sent as an Optional
+     voucher (sentOptional, never Tally's answer) counts as Optional whatever the setting is now: never asked, no button;
+     one Tally only called Optional (a voucher type Optional by default in Tally), or the earlier bug's record without
+     sentOptional, is decided by the setting now: the button shows and FinCom's copy decides (1i)
   6. (polish 2) the bank and bills Post press itself, the bridge's answer stubbed: a whole partial batch of an earlier
      posting is never split into posted lines (FinCom's copy decides each), and the toast and report say it the sales way
 Screenshots (deviceScaleFactor 2) go to SHOTS when it is set.
@@ -170,6 +172,27 @@ with sync_playwright() as p:
     A.evaluate("(id) => { SL().filter = 'done'; render(); }", vh); A.wait_for_timeout(400)
     ok(A.locator("[data-not-in-tally='%s']" % vh).count() == 0, "no \"Not in Tally? Post again\" for such a client")
     A.evaluate("() => { CO().createOptional = false; }")
+    print(" i. (polish 3) the client's Optional setting off; Tally answered Optional (a voucher type Optional by default in Tally)")
+    vi = A.evaluate(ADD, ["ZR/0465", "2026-11-14", G["k"]])
+    A.evaluate("""(id) => { const v = SL().list.find(v => v.id === id); v.postJob = 'j-' + id; window.__rows = window.__rows || {};
+      window.__rows['j-' + id] = {id: 'j-' + id, status: 'done', company: 'ZZ Test Reupload Traders', results: [{id, ok: true, byReply: true, verified: false, optional: true, sentAt: new Date().toISOString()}]}; }""", vi)
+    A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(500)
+    v = A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); return {st: v.status, posted: !!v.postedOptional, sent: v.sentOptional}; }", vi)
+    ok(v["st"] == "posted" and v["posted"] is True and v["sent"] is False, "Posted; Tally's answer kept as postedOptional, what FinCom sent as sentOptional false (%s)" % v)
+    # the earlier bug's record: Posted, postedOptional from that posting's old answer, no sentOptional (before this field)
+    vj = A.evaluate(ADD, ["ZR/0466", "2026-11-14", G["k"]])
+    A.evaluate("""(id) => { const v = SL().list.find(v => v.id === id); Object.assign(v, {status: 'posted', postedAt: '2026-11-24T07:08:17.600Z', postedOptional: true, postNote: '', postError: '', postedInto: ''}); delete v.sentOptional;
+      SL().filter = 'done'; SL().openId = null; render(); }""", vj)
+    A.wait_for_timeout(500)
+    ok(A.locator("[data-not-in-tally='%s']" % vi).count() == 1 and A.locator("[data-not-in-tally='%s']" % vj).count() == 1, "both show \"Not in Tally? Post again\" (%d, %d)" % (A.locator("[data-not-in-tally='%s']" % vi).count(), A.locator("[data-not-in-tally='%s']" % vj).count()))
+    A.evaluate("""(id) => { window.__ids = [{job_id: 'j-old-' + id}]; window.__rpc = []; window.__toasts = []; window.__copy = (a) => ({ok: true, state: "deleted", job: a.p_job, id: a.p_id, released: true, resent: true}); }""", vj)
+    A.locator("[data-not-in-tally='%s']" % vj).first.click(); A.wait_for_timeout(1200)
+    st = A.evaluate(STATE, vj)
+    ok(copyrpc() == [{"p_job": "j-old-" + vj, "p_id": vj}] and st["st"] == "ready" and "deleted in Tally: sent again" in A.evaluate(LAST), "the earlier bug's record: the copy decides (deleted: sent again) (%s; %s)" % (copyrpc(), st))
+    A.evaluate("""(id) => { window.__ids = [{job_id: 'j-' + id}]; window.__rpc = []; window.__copy = (a) => ({ok: false, state: "there", vtype: "Sales", vno: "ZR/0465", day: "2026-11-14"}); }""", vi)
+    A.evaluate("(id) => salesNotInTally(id)", vi); A.wait_for_timeout(500)
+    ok(copyrpc() == [{"p_job": "j-" + vi, "p_id": vi}] and A.evaluate(STATE, vi)["st"] == "posted", "the one Tally called Optional: the copy asked too (%s)" % copyrpc())
+    A.evaluate("() => { window.__ids = []; window.__copy = () => ({ok: false, state: 'none'}); }")
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally (%s)" % A.evaluate("() => window.__bridgeCalls"))
 
     print("2. Not in Tally? Post again on a posted invoice")
@@ -242,29 +265,29 @@ with sync_playwright() as p:
       CO().bankOptional = false; return o; }""")
     ok(out["rpc"] == 0 and out["st"] == "sent" and out["sent"].startswith("2026-11-18"), "a bank line of such a client: not asked, posted before (%s)" % out)
     ok("Optional vouchers by its setting" in out["t"] and out["optBank"] is True and out["optSales"] is False, "its button says so and sends nothing; bankOptional is the bank's own setting (%s)" % out)
-    print("5b. (polish 2) a line posted as an Optional voucher counts as Optional, whatever the client's setting is now")
+    print("5b. (polish 2, 3) a line FinCom sent as an Optional voucher (sentOptional) counts as Optional, whatever the setting is now")
     out = A.evaluate("""async () => { window.__rpc = []; window.__toasts = []; CO().bankOptional = false; CO().createOptional = false;
       const old = {ok: true, byReply: true, verified: false, sentAt: "2026-11-18T11:23:12+05:30"};
-      const r = {id: "stzr-5", fp: "stzr-5", state: "ready", date: "2026-11-10", narr: "NEFT ZZ", debit: 320, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, postedOptional: true};
+      const r = {id: "stzr-5", fp: "stzr-5", state: "ready", date: "2026-11-10", narr: "NEFT ZZ", debit: 320, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, sentOptional: true};
       B().rows.push(r); const lineK = await postEarlier("bank", CO(), [[r, Object.assign({id: r.id, earlier: "j-k5"}, old)]], "ZZ Test Reupload Traders");
-      const e = {id: "bill-zr-5", status: "approved", postedOptional: true, x: {invoiceNo: "ZB/85", invoiceDate: "2026-11-12", total: 650, vendorName: "Made-up Vendor"}, snapshot: {lines: []}};
+      const e = {id: "bill-zr-5", status: "approved", sentOptional: true, x: {invoiceNo: "ZB/85", invoiceDate: "2026-11-12", total: 650, vendorName: "Made-up Vendor"}, snapshot: {lines: []}};
       D().entries[e.id] = e; const lineB = await postEarlier("bill", CO(), [[e, Object.assign({id: e.id, earlier: "j-b5"}, old)]], "ZZ Test Reupload Traders");
       const o = {rpc: window.__rpc.length, toasts: window.__toasts.length, rst: r.state, exp: e.exportedAt || null, lineK, lineB};
-      const s = {id: "stzr-6", fp: "stzr-6", state: "sent", date: "2026-11-10", narr: "NEFT ZZ", debit: 330, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, sentAt: "2026-11-18T06:00:00.000Z", postedVia: "bridge", postedOptional: true};
+      const s = {id: "stzr-6", fp: "stzr-6", state: "sent", date: "2026-11-10", narr: "NEFT ZZ", debit: 330, credit: 0, ledger: "Kappa Retail", dec: {name: "Kappa Retail"}, sentAt: "2026-11-18T06:00:00.000Z", postedVia: "bridge", sentOptional: true};
       B().rows.push(s); window.__ids = [{job_id: "j-k6"}]; await bankNotInTally(s.id); o.tBank = window.__toasts.slice(-1)[0] || "";
-      const e2 = {id: "bill-zr-6", status: "approved", exportedAt: "2026-11-18T06:00:00.000Z", postByReply: true, postedVia: "bridge", postedOptional: true, x: {invoiceNo: "ZB/86", invoiceDate: "2026-11-12", total: 660}, snapshot: {lines: []}};
+      const e2 = {id: "bill-zr-6", status: "approved", exportedAt: "2026-11-18T06:00:00.000Z", postByReply: true, postedVia: "bridge", sentOptional: true, x: {invoiceNo: "ZB/86", invoiceDate: "2026-11-12", total: 660}, snapshot: {lines: []}};
       D().entries[e2.id] = e2; await billNotInTally(e2.id); o.tBill = window.__toasts.slice(-1)[0] || ""; o.rpc2 = window.__rpc.length;
       o.optLine = NotInTally.optional(CO(), "bank", s); o.optNone = NotInTally.optional(CO(), "bank", {});
-      bankClearPosting(s); o.cleared = s.postedOptional === true;
+      bankClearPosting(s); o.cleared = s.postedOptional === true || "sentOptional" in s;
       window.__ids = []; return o; }""")
     ok(out["rpc"] == 0 and out["rst"] == "sent" and bool(out["exp"]) and out["exp"].startswith("2026-11-18"), "a bank line and a bill posted as Optional: not asked, posted before (%s)" % out)
     ok(out["toasts"] == 0 and "bank line was posted before by FinCom and not sent again" in (out["lineK"] or "") and "bill was posted before by FinCom and not sent again" in (out["lineB"] or ""), "(polish 2) postEarlier gives its line back and shows no toast of its own (%s)" % out)
     ok(out["rpc2"] == 0 and "Optional" in out["tBank"] and "Optional" in out["tBill"] and out["optLine"] is True and out["optNone"] is False, "their buttons say so and send nothing (%s; %s)" % (out["tBank"], out["tBill"]))
     ok(out["cleared"] is False, "a bank line's posting cleared clears its Optional mark too")
-    vo = A.evaluate("""() => { const v = SL().list.find(v => v.status === 'posted' && !v.postedOptional && v.postedVia !== 'file'); v.postedOptional = true; SL().filter = 'done'; SL().openId = null; render(); return v.id; }""")
+    vo = A.evaluate("""() => { const v = SL().list.find(v => v.status === 'posted' && !v.sentOptional && v.postedVia !== 'file'); v.sentOptional = true; SL().filter = 'done'; SL().openId = null; render(); return v.id; }""")
     A.wait_for_timeout(400)
-    ok(A.locator("[data-not-in-tally='%s']" % vo).count() == 0, "an invoice posted as an Optional voucher: no \"Not in Tally? Post again\"")
-    A.evaluate("(id) => { SL().list.find(v => v.id === id).postedOptional = false; render(); }", vo)
+    ok(A.locator("[data-not-in-tally='%s']" % vo).count() == 0, "an invoice FinCom sent as an Optional voucher: no \"Not in Tally? Post again\"")
+    A.evaluate("(id) => { delete SL().list.find(v => v.id === id).sentOptional; render(); }", vo)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally at all")
 
     print("6. (polish 2) the bank and bills Post press itself, FinCom Bridge's answer stubbed")
@@ -299,10 +322,10 @@ with sync_playwright() as p:
     ok(len(P.evaluate("() => window.__toasts")) == 1, "one toast, not two (%s)" % P.evaluate("() => window.__toasts"))
     print(" c. (polish 2) a bank line posted as an Optional voucher: its button not shown, whatever the setting")
     P.evaluate("""() => { const b = B(); b.rows = window.__bankRows(3); b.rows.forEach(r => { r.state = 'sent'; r.sentAt = new Date().toISOString(); r.postedVia = 'bridge'; r.postByReply = true; r.tally = {company: 'ZZ Test Reupload Traders'}; });
-      b.rows[2].postedOptional = true; b.filter = 'done'; b.drawer = null; render(); }""")
+      b.rows[2].sentOptional = true; b.rows[1].postedOptional = true; b.filter = 'done'; b.drawer = null; render(); }""")
     P.wait_for_timeout(500)
     cnt = lambda q: P.locator(q).count()
-    ok(cnt("[data-not-in-tally='s1-1']") >= 1 and cnt("[data-not-in-tally='s1-2']") == 0, "on the rows: the regular one has it, the Optional one not (%d, %d)" % (cnt("[data-not-in-tally='s1-1']"), cnt("[data-not-in-tally='s1-2']")))
+    ok(cnt("[data-not-in-tally='s1-1']") >= 1 and cnt("[data-not-in-tally='s1-2']") == 0, "on the rows: the regular one (Tally called it Optional) has it, the one FinCom sent as Optional not (%d, %d)" % (cnt("[data-not-in-tally='s1-1']"), cnt("[data-not-in-tally='s1-2']")))
     P.evaluate("() => { B().drawer = 's1-1'; render(); }"); P.wait_for_timeout(300); d1 = cnt("[data-drawer-act='notintally']")
     P.evaluate("() => { B().drawer = 's1-2'; render(); }"); P.wait_for_timeout(300); d2 = cnt("[data-drawer-act='notintally']")
     P.evaluate("() => { B().drawer = null; render(); }")

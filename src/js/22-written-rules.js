@@ -678,7 +678,7 @@ function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intal
 function bankClearPosting(r, state){
   // (polish 2) its Optional mark too: a line posted again is Optional only if that posting is (NotInTally.optional)
   Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", matchedAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: "", postedOptional: false}, postCleared(r.id));
-  delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew;
+  delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew; delete r.sentOptional;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }
 function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay, tdsLedger: r.tdsLedger || "", salesIds: r.salesIds || null, splits: (r.splits || []).slice()}; }

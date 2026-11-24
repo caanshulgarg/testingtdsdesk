@@ -3070,7 +3070,7 @@ function billClearPosting(e){
   // postedVia is kept: an older result of FinCom's cloud is not marked on it again (postReconcile, postBucket: postCleared)
   Object.assign(e, {exportedAt: null, postVerified: false, postByReply: false, tally: null, tallyVchNo: "", postNote: "", tallyCheck: null, postUnconfirmed: null, postError: "", postCheckFailed: null,
     postedInto: "", postAltered: false, postedOptional: false}, postCleared(e.id));
-  delete e.goneFromTally; delete e.postJobNew;
+  delete e.goneFromTally; delete e.postJobNew; delete e.sentOptional;
 }
 function undoApproval(e){
   const cid = S.coId;
