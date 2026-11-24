@@ -642,7 +642,7 @@ export function payrollNow(ym, inp) {
   if (!months.includes(ym)) return { kind: "old", words: "Daily Check makes payroll entries for the last " + LOOKBACK + " months only." };
   if (inp.booksFrom && ym < ymOf(inp.booksFrom)) return { kind: "old", words: "The books in FinCom’s cloud begin after " + label + "." };
   const rows = sheetMonths(inp, months).get(ym);
-  if (!rows || !rows.length) return { kind: "none", words: "No salary is kept with the books for " + label + "." };
+  if (!rows || !rows.length) return { kind: "none", nosalary: true, words: "No salary is kept with the books for " + label + "." };
   const r = payrollOne(ym, rows, inp);
   if (!r) return { kind: "none", words: label + "’s salary is already in the books, or its entry is on its way to Tally." };
   const note = running ? label + " isn’t over yet. This is made from the salary kept now." : "";

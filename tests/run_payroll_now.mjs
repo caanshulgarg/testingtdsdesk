@@ -82,7 +82,7 @@ console.log("2. the night's rules");
 console.log("3. kept in the cloud as the night keeps it");
 // a stand-in for the cloud's tables (PostgREST paths, the service role)
 function cloud(o = {}) {
-  const db = { night_findings: (o.findings || []).slice(), night_entries: (o.entries || []).slice(), daily_log: [], night_runs: [] }, calls = [];
+  const db = { night_findings: (o.findings || []).slice(), night_entries: (o.entries || []).slice(), daily_log: [], night_runs: [], client_asks: (o.asks || []).slice() }, calls = [];
   let id = 0;
   const q = (path) => { const [t, qs] = path.replace(/^\/rest\/v1\//, "").split("?"); const p = new URLSearchParams(qs || ""); const f = []; p.forEach((v, k) => { if (/^eq\./.test(v)) f.push([k, v.slice(3)]); }); return { t, f, sel: p.get("select") }; };
   const rest = async (path, _t, init = {}) => {
@@ -251,17 +251,76 @@ console.log("8. (review 3) the running month kept again: the entry follows the s
   const r1 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "updated", id: "e1", state: "ready" }) });
   ok(r1 === "Updated to the salary kept now; check and approve." && same(calls, [["c1", "202611"]]), "stale at Approve: payroll_now called for Nov 2026, said: " + r1);
   const r2 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "none", words: "No salary is kept with the books for Nov 2026. The entry made for it earlier is taken back." }) });
-  ok(r2 === "No salary is kept with the books for Nov 2026. The entry made for it earlier is taken back.", "nothing to make now: the server's plain words: " + r2);
+  ok(r2 === "The salary kept here is not in FinCom’s cloud yet. Try again in a minute.", "(review 4) the server finds no salary, the books here have it: not in the cloud yet, said: " + r2);
   const r3 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "kept", words: "Daily Check needs you for Nov 2026. The entry made for it earlier is taken back." }) });
   ok(/Daily Check needs you for Nov 2026/.test(r3) && r3 !== CHANGED, "Needs you: said: " + r3);
   const r4 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "already", id: "e1", state: "ready" }), entryOf: async () => ({ voucher: again.entry.voucher }) });
   ok(r4 === "Updated to the salary kept now; check and approve.", "already updated in the cloud (the entry here is older): said the same: " + r4);
   const r5 = await atA(stale, e, { payrollNow: srv({ ok: true, kind: "already", id: "e1", state: "ready" }), entryOf: async () => ({ voucher: e.voucher }) });
-  ok(r5 && r5 !== CHANGED && !/Updated/.test(r5), "the cloud has not the salary here yet: said, nothing updated: " + r5);
+  ok(r5 === "The salary kept here is not in FinCom’s cloud yet. Try again in a minute.", "the cloud has not the salary here yet: said, nothing updated: " + r5);
   calls.length = 0;
   ok(await atA(pay({ sheet: NOV() }), e, { payrollNow: srv({ kind: "updated" }) }) === "" && calls.length === 0, "not stale: goes on, the server not called");
   const oct = J.payrollNow("202610", input(pay(), T));
   ok(await atA(pay({ sheet: sheet.map((r, i) => i ? r : Object.assign({}, r, { gross: 51000, net: 48300 })) }), Object.assign({ id: "e2", state: "ready" }, oct.entry), { payrollNow: srv({ kind: "updated" }) }) === CHANGED && calls.length === 0, "a month that has ended: as before (" + CHANGED + "), the night makes it again");
+}
+
+console.log("9. (review 4) a press is the person's new decision; the update after a save is not; the claim read again");
+{
+  const T = "20261124", ctx = (c, press) => ({ rest: c.rest, firm: F, cid: "c1", night: "2026-11-24", by: "u1", press });
+  const first = J.payrollNow("202611", input(pay({ sheet: NOV() }), T)), again = J.payrollNow("202611", input(pay({ sheet: NOV({ gross: 51000, net: 48300 }) }), T));
+  const D = (x = {}) => Object.assign({ id: "f7", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "dismissed", decided_by: "u2", decided_at: "2026-11-20T05:00:00Z", undone_at: null, evidence: [] }, x);
+  const o1 = J.payrollNow("202610", input(pay(), T));
+  // a month that has ended, set aside ("Not needed"): pressed: opened again, made as normal, logged with who pressed
+  const c = cloud({ findings: [D()] });
+  const a = await applyNow(ctx(c, true), o1);
+  const fd = c.db.night_findings[0], en = c.db.night_entries[0];
+  ok(a.kind === "made" && a.reopened === "dismissed" && en && en.state === "ready" && en.finding_id === "f7" && same(en.voucher, o1.entry.voucher), "set aside, pressed: the entry made (ready, the night's voucher): " + JSON.stringify(a));
+  ok(fd.state === "resolved" && fd.decided_by === null && fd.decided_at === null, "the finding opened again, as FinCom finds it now (resolved, nobody's choice)");
+  ok(c.db.daily_log.some((l) => l.what === "payroll_now" && l.evidence.kind === "reopened" && l.evidence.by === "u1" && l.evidence.was === "dismissed") && c.db.daily_log.some((l) => l.evidence.kind === "made" && l.evidence.by === "u1"), "logged: opened again and made, by who pressed");
+  // the update after a save (no press): the choice stays, nothing made
+  const k = cloud({ findings: [D()] });
+  ok((await applyNow(ctx(k, false), o1)).kind === "kept" && k.db.night_entries.length === 0 && k.db.night_findings[0].state === "dismissed" && k.db.night_findings[0].decided_by === "u2", "no press (the update after a save): kept, the choice stays, nothing made");
+  // the running month set aside with its entry ready: pressed: the same entry made again, never taken back
+  const r = cloud(); await applyNow(ctx(r), first);
+  const fr = r.db.night_findings.find((f) => f.kind === "payroll_due"); fr.state = "dismissed"; fr.decided_by = "u2";
+  const ra = await applyNow(ctx(r, true), again);
+  ok(ra.kind === "updated" && r.db.night_entries.length === 1 && r.db.night_entries[0].state === "ready" && same(r.db.night_entries[0].voucher, again.entry.voucher) && fr.state === "resolved", "the running month set aside, pressed: its entry made again (ready, the new figures): " + JSON.stringify(ra));
+  // undone, back as a question to no one (ask, no question to the client): pressed: made
+  const U = (x = {}) => D(Object.assign({ state: "ask", decided_by: null, decided_at: null, undone_by: "u2", undone_at: "2026-11-21T05:00:00Z" }, x));
+  const u = cloud({ findings: [U()] });
+  const ua = await applyNow(ctx(u, true), o1);
+  ok(ua.kind === "made" && ua.reopened === "undone" && u.db.night_entries.length === 1 && u.db.night_entries[0].state === "ready" && u.db.night_findings[0].state === "resolved" && u.db.night_findings[0].undone_at === null, "undone and asked of no one, pressed: made, the entry there: " + JSON.stringify(ua));
+  const u0 = cloud({ findings: [U()] });
+  ok((await applyNow(ctx(u0, false), o1)).kind === "kept" && u0.db.night_entries.length === 0, "undone, no press: kept, as before");
+  const uq = cloud({ findings: [U()], asks: [{ id: "q1", finding_id: "f7", state: "asked" }] });
+  ok((await applyNow(ctx(uq, true), o1)).kind === "kept" && uq.db.night_entries.length === 0 && uq.db.night_findings[0].state === "ask", "undone with a question to the client open: kept (the client's to answer)");
+  const uc = cloud({ findings: [U()], asks: [{ id: "q1", finding_id: "f7", state: "closed" }] });
+  ok((await applyNow(ctx(uc, true), o1)).kind === "made" && uc.db.night_entries.length === 1, "its question closed: pressed, made");
+  // a person's other choice (decided, not set aside) is not touched by a press
+  const dd = cloud({ findings: [D({ state: "ask" })] });
+  ok((await applyNow(ctx(dd, true), o1)).kind === "kept" && dd.db.night_findings[0].decided_by === "u2", "a person's other choice (ask the client) stays");
+
+  // 3. the same mismatch again, not a salary difference: no loop, the server's own words
+  const { stillAsChecked, NOT_YET } = await import("../app/src/screens/daily/again.js");
+  const e = Object.assign({ id: "e31", state: "ready" }, first.entry), rows = pay({ sheet: NOV() });
+  const atA = async (ent, o) => { const b = booksOf(JSON.parse(JSON.stringify(Object.assign({}, rows, { made: undefined }))));
+    Object.assign(globalThis, { S: { books: b, coId: "c1", companies: { c1: rows.co } }, CO: () => rows.co, GSTR: E3.GSTR, GSTF: E3.GSTF, GSTSet: E3.GSTSet, Books: E3.Books, ledGroupPath: E3.ledGroupPath });
+    try { return await recheck(Object.assign({ client_id: "c1" }, ent), Object.assign({ today: T, ledgers: rows.ledgers.map((l) => l.name), drafts: [], prior: [], bookId: "b1", jobs: {} }, o)); }
+    finally { ["S", "CO", "GSTR", "GSTF", "GSTSet", "Books", "ledGroupPath"].forEach((x) => delete globalThis[x]); } };
+  // the cloud's entry: the same amounts, another ledger (not the salary)
+  const odd = JSON.parse(JSON.stringify(e)); odd.voucher.lines = odd.voucher.lines.map((l) => (l.ledger === "Salary" ? Object.assign({}, l, { ledger: "Salaries" }) : l));
+  const words = "Nov 2026 isn’t over yet. This is made from the salary kept now.";
+  const srv = (x) => async () => x;
+  const s1 = await atA(odd, { payrollNow: srv({ ok: true, kind: "already", id: "e31", state: "ready", words }), entryOf: async () => ({ voucher: odd.voucher }) });
+  ok(s1 === words, "the cloud's entry as here, the difference not the salary: the server's own words, never an update: " + s1);
+  const s2 = await atA(odd, { payrollNow: srv({ ok: true, kind: "updated", id: "e31", state: "ready", words }), entryOf: async () => ({ voucher: odd.voucher }) });
+  ok(s2 === words, "retried, the same mismatch again (made again the same): the server's own words, no loop: " + s2);
+  const s3 = await atA(odd, { payrollNow: srv({ ok: true, kind: "none", nosalary: true, words: "No salary is kept with the books for Nov 2026." }) });
+  ok(s3 === NOT_YET, "no salary in the cloud, the books here have it: " + s3);
+  // 2. the race: after the claim, the entry read again; made again meanwhile: not posted (released by the caller), said
+  ok(await stillAsChecked(e, async () => ({ id: "e31", voucher: JSON.parse(JSON.stringify(e.voucher)) })) === "", "after the claim, the entry as checked: goes on");
+  ok(await stillAsChecked(e, async () => ({ id: "e31", voucher: again.entry.voucher })) === "Updated to the salary kept now; check and approve.", "made again between the second check and the claim: Updated to the salary kept now; check and approve.");
+  ok(/could not read/.test(await stillAsChecked(e, async () => { throw new Error("HTTP 500"); })), "not read: said, not posted");
 }
 
 console.log(fails ? "\n" + fails + " of " + n + " FAILED" : "\nall " + n + " passed");

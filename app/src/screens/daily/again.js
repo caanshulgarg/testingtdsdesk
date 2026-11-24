@@ -19,23 +19,59 @@ export async function sendBooksNow(cid) {
   };
   try { await Promise.race([go(), new Promise((r) => setTimeout(r, 8000))]); } catch (e) { /* the cloud reads what it has */ }
 }
-// "Make the journal now" (assistant-night payroll_now) for a client's month, the books here sent first
-export async function payrollNowCall(cid, ym) {
+// (review 4) the server found no salary for a month this page has salary for: the save has not reached the cloud yet
+export const NOT_YET = "The salary kept here is not in FinCom’s cloud yet. Try again in a minute.";
+const monthOfRow = (r) => String((r && r.month) || String((r && r.date) || "").slice(0, 7).replace("-", ""));
+const hasSalaryHere = (cid, ym) => { try { return S.coId === cid && ((S.books || {}).salary || []).some((r) => monthOfRow(r) === ym); } catch (e) { return false; } };
+const noSalary = (r) => !!r && r.kind === "none" && (r.nosalary === true || /^No salary is kept with the books/.test(String(r.words || "")));
+// "Make the journal now" (assistant-night payroll_now) for a client's month, the books here sent first. extra: {press: true}
+// when a person pressed the button (their new decision on a month set aside); never for the update after a save
+export async function payrollNowCall(cid, ym, extra) {
   await sendBooksNow(cid);
-  try { return await Cloud.fn("assistant-night", { action: "payroll_now", client_id: cid, ym }); }
+  let r;
+  try { r = await Cloud.fn("assistant-night", Object.assign({ action: "payroll_now", client_id: cid, ym }, extra || {})); }
   catch (e) { return { kind: "error", words: String((e && e.message) || e) }; }
+  return noSalary(r) && hasSalaryHere(cid, ym) ? Object.assign({}, r, { words: NOT_YET }) : r;
 }
+// a voucher as text, its keys in order (the cloud's jsonb and the page's copy compared as the same figures)
+const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
+// (review 4) after the claim: the entry read again. Made again meanwhile (the update after a save, on this page or another
+// computer, between the second check and the claim): not what was checked, so not posted: UPDATED (the caller releases
+// the claim). Not read (an error): said, the claim released too. "" goes on (no row given back to compare: as checked).
+// read(id): the row ({voucher}), else the cloud's own
+export async function stillAsChecked(e, read) {
+  let rows;
+  try { rows = read ? [await read(e.id)] : await Cloud.api("night_entries?select=id,voucher&id=eq." + encodeURIComponent(e.id)); }
+  catch (x) { return "FinCom could not read this entry again. Nothing was posted; try again in a minute."; }
+  const row = (Array.isArray(rows) ? rows : []).find((x) => x && "voucher" in x && (!x.id || x.id === e.id));
+  return !row || canon(row.voucher || {}) === canon(e.voucher || {}) ? "" : UPDATED;
+}
+// the salary amounts of a voucher (gross, net and the deductions; a journal: its amounts), whatever the ledgers or the date
+const amounts = (v) => !v ? "" : v.kind === "tallyPayroll" ? [P(v.gross), P(v.net)].concat(["tds", "pt", "pf", "esi", "other"].map((k) => P((v.ded || {})[k]))).join("|")
+  : (v.lines || []).map((l) => (P(l.dr) ? "D" + P(l.dr) : "C" + P(l.cr))).sort().join(";");
+// (review 4) the mismatch said last for each entry: the same one again, not a salary difference, is not said as an update
+// again (no loop): the server's own words are
+const SAID = new Map();
 // the running month's entry no longer what the salary kept makes: made again in the cloud (nothing posted in this press)
-async function remade(e, ym, o) {
-  const r = (await (o.payrollNow || payrollNowCall)(e.client_id, ym)) || {};
-  if (r.kind === "updated" || r.kind === "made") return UPDATED;
-  if (r.kind === "already") {
-    if (r.state === "approved" || r.state === "approving") return "It is already approved.";
-    let v = null;
-    try { v = o.entryOf ? await o.entryOf(r.id) : ((await Cloud.api("night_entries?select=voucher&id=eq." + encodeURIComponent(r.id || e.id))) || [])[0]; } catch (x) { v = null; }
-    return v && !sameJournal(v.voucher, e.voucher) ? UPDATED : "The salary kept on this computer is not in FinCom’s cloud yet. Try again in a minute.";
-  }
-  return String(r.words || "") || "FinCom could not make it again just now. Try again in a minute.";
+async function remade(e, ym, o, now) {
+  let r = (await (o.payrollNow || payrollNowCall)(e.client_id, ym)) || {};
+  if (noSalary(r) && now) r = Object.assign({}, r, { words: NOT_YET });
+  const words = () => String(r.words || "") || "FinCom’s cloud has this entry as it is shown; the books here make it differently. Open the client again and approve.";
+  if (r.kind === "already" && (r.state === "approved" || r.state === "approving")) return "It is already approved.";
+  if (r.kind !== "updated" && r.kind !== "made" && r.kind !== "already") return String(r.words || "") || "FinCom could not make it again just now. Try again in a minute.";
+  let v = null;
+  try { v = o.entryOf ? await o.entryOf(r.id || e.id) : ((await Cloud.api("night_entries?select=voucher&id=eq." + encodeURIComponent(r.id || e.id))) || [])[0]; } catch (x) { v = null; }
+  const cloud = (v && v.voucher) || (r.kind === "already" ? e.voucher : null);
+  // the cloud has what the books here make: the entry shown here is the older one (or, the same, the difference is not
+  // in the figures at all: the server's words, never an update again)
+  if (now && cloud && sameJournal(now.voucher, cloud)) return sameJournal(cloud, e.voucher) ? words() : UPDATED;
+  // what differs is not the salary (the same amounts; a ledger, the date): made again, the same again is no update
+  const salary = !now || !cloud || amounts(now.voucher) !== amounts(cloud);
+  const key = canon(now ? now.voucher : null), again = SAID.get(e.id) === key;
+  SAID.set(e.id, key);
+  if (!salary && (again || r.kind === "already")) return words();
+  if (r.kind !== "already") return UPDATED;
+  return cloud && !sameJournal(cloud, e.voucher) ? UPDATED : NOT_YET;
 }
 const d8 = (v) => { const t = String(v || "").trim(); const m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[1] + m[2] + m[3] : /^\d{8}$/.test(t) ? t : ""; };
 const P = (x) => Math.round((Number(x) || 0) * 100);
@@ -107,6 +143,7 @@ export async function recheck(e, o = {}) {
   const run = /^payroll:(\d{6})$/.exec(String(e.dedupe || "")), cur = String(inp.today || "").slice(0, 6);
   const running = !!run && run[1] === cur;
   const now = running ? (payrollNow(cur, inp) || {}).entry : journals(inp).entries.find((x) => x.dedupe === e.dedupe);
-  if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return running ? remade(e, cur, o) : CHANGED;
+  if (!now || !now.ready || !sameJournal(now.voucher, e.voucher) || voucherId(e.dedupe) !== now.work_ref) return running ? remade(e, cur, o, now) : CHANGED;
+  SAID.delete(e.id);
   return "";
 }

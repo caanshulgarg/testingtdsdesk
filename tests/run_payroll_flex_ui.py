@@ -28,8 +28,11 @@ made-up books and sheets (tests/payroll_sheets.mjs), FinCom's AI mocked (window.
      the new figures, "The journal for <month> is updated with the new figures."; the salary then changed elsewhere:
      Approve calls payroll_now itself, "Updated to the salary kept now; check and approve.", nothing claimed or posted;
      Approve again: claimed, posted once, approved
- 15. (review 3) nothing made: kept (set aside on Daily Check) after a Replace: "Daily Check needs you for <month>", the
-     entry taken back, the Needs you link, no made note; none: said why, taken back; a month that has ended kept: Needs you
+ 15. (review 3, review 4) the server's own code on a stand-in of the cloud's tables: the month set aside ("Not needed") on
+     Daily Check: the update after a save keeps the choice and says nothing; a press is the person's new decision: opened
+     again and made (the entry there, logged with who pressed); undone and asked of no one: the press makes it; a question to
+     the client open: Daily Check needs you, the link, never "Kept. Daily Check makes..." beside it; the salary kept here
+     not in the cloud yet: said so; a month that has ended, set aside: the press makes it
  13. (review B1) a draft per month: rows typed for Oct, Cancel, "Change by hand" on a kept Sep, back to Oct: Oct's rows
      still there; rows typed for Oct, Cancel, the Month picker to Sep, Enter by hand: Sep's rows; Oct's still there; no
      question asked. "Change by hand" on a kept month keeps the employer's PF and ESI. A kept month with its journal made:
@@ -192,7 +195,9 @@ MOCK = """(v) => { window.__ap = {rpc: [], posts: [], order: [], entry: null};
   Cloud.api = async (path) => { path = String(path); const A = window.__ap;
     if (path.startsWith("night_entries")) return A.entry ? [A.entry] : [];
     if (path.startsWith("rpc/")) { const fn = path.slice(4); A.rpc.push(fn); if (fn !== "save_book_items") A.order.push(fn);
-      if (fn === "entry_claim") A.entry = Object.assign({}, A.entry, {state: "approving", updated_at: new Date().toISOString()});
+      if (fn === "entry_claim") A.entry = Object.assign({}, A.entry, {state: "approving", updated_at: new Date().toISOString()}, A.race ? {voucher: Object.assign({}, A.entry.voucher, A.race)} : {});
+      if (fn === "entry_claim" && A.race) A.race = null;
+      if (fn === "entry_release") A.entry = Object.assign({}, A.entry, {state: "ready"});
       if (fn === "entry_approved") A.entry = Object.assign({}, A.entry, {state: "approved"});
       return fn === "save_book_items" ? {ok: true, items: []} : {ok: true}; }
     return []; };
@@ -353,7 +358,7 @@ def now_flow(br, w, kind, nl):
     shot(pg, "14-make-now", kind)
     if mk.count(): mk.click(); pg.wait_for_selector("[data-now-said]", timeout=10000); settle(pg, 400)
     c = N()["calls"]
-    ok(len(c) == 1 and c[0][0] == "assistant-night" and c[0][1] == {"action": "payroll_now", "client_id": "c1", "ym": "202610"}, kind + " 12. one call: assistant-night payroll_now, this client, Oct 2026")
+    ok(len(c) == 1 and c[0][0] == "assistant-night" and c[0][1] == {"action": "payroll_now", "client_id": "c1", "ym": "202610", "press": True}, kind + " 12. one call: assistant-night payroll_now, this client, Oct 2026, a person's press")
     said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
     ok("Made" in said and "Daily Check › Entries" in said and pg.locator("[data-make-now]").count() == 0 and pg.locator("[data-now-open]").count() == 1, kind + " 12. made: said, Open it, no button again")
     shot(pg, "15-made-now", kind)
@@ -584,6 +589,14 @@ def run_now_approve(br, w, kind, tally):
     ma = pg.locator("[data-make-again]")
     ok(ma.count() == 1 and ("Make the %s now again" % what) in ma.inner_text(), kind + " 14. the running month made and still ready: Make the " + what + " now again still offered")
     if w > 600: shot(pg, "23-make-again" + ("-tally" if tally else ""), kind)
+    # (review 4) the race: the entry made again between the second check and the claim (another save's update): read
+    # again after the claim, released, nothing posted, said
+    pg.evaluate("() => { window.__ap.race = {narration: 'Made again meanwhile'}; return true; }")
+    said = approve()
+    a = A()
+    order = [x for x in a["order"] if x == "post" or x.startswith("entry_")]
+    ok("Updated to the salary kept now; check and approve." in said and order == ["entry_claim", "entry_release"] and a["entry"]["state"] == "ready" and a["entry"]["voucher"].get("narration") == "Made again meanwhile", kind + " 14. made again between the check and the claim: " + " > ".join(order) + ", nothing posted: " + said[:160].replace("\n", " "))
+    if w > 600: shot(pg, "23b-race-released" + ("-tally" if tally else ""), kind)
     made2 = made3
     said = approve()
     a = A()
@@ -593,19 +606,76 @@ def run_now_approve(br, w, kind, tally):
     ok(p0.get("id") == (("dc-tp-%s-c1-p1" % YM) if tally else made2["entry"]["work_ref"]), kind + " 14. the voucher posted: " + str(p0.get("id")))
     if w > 600: shot(pg, "24-approved-running" + ("-tally" if tally else ""), kind)
     ctx.close()
-# (review 3) what the server says when nothing is made: kept (the month set aside or undone on Daily Check) and none (no
-# salary for the running month any more): plain words, Needs you, never the note of an entry made; the open entry taken back
-FORCE = """() => { window.__now.flushed = 0; try { BookItems.on = () => true; BookItems.flush = async () => { window.__now.flushed++; }; } catch (e) {}
-  Cloud.fn = async (name, body) => { window.__now.calls.push([name, body]); const r = window.__force || {ok: true, kind: "none", words: "?"};
-    if (r.withdrawn) delete window.__now.entries[body.ym]; return r; };
-  return true; }"""
+# (review 3, review 4) what the server does when the month was set aside or undone on Daily Check, and when it has no salary:
+# the server's own code (payrollNow, paynow.js applyNow / existingNow / withdrawNow, as handler.ts payrollNowFor calls them)
+# on a stand-in of the cloud's tables kept here (DB), the books as the page keeps them; LAG: the salary kept here not in
+# the cloud yet
+DBJS = """
+import { booksOf, gstOf, nightInput } from "../server/assistant-night/nightinput.js";
+import { payrollNow } from "../server/_shared/dailyjournals.js";
+import { applyNow, existingNow, withdrawNow } from "../server/assistant-night/paynow.js";
+import { gstRows } from "./daily2_books.mjs";
+import fs from "node:fs";
+const [st, body, db, lag] = JSON.parse(fs.readFileSync(0, "utf8"));
+const PL = { "Salary": "Indirect Expenses", "TDS on Salary 192": "Duties & Taxes", "Professional Tax Payable": "Duties & Taxes", "Salary Payable": "Provisions", "PF Payable": "Duties & Taxes", "ESI Payable": "Duties & Taxes" };
+const rows = gstRows({ ym: "202610", filed: "", extraLedgers: PL, items: [{ key: "salary", item: "", ord: 0, data: lag ? [] : st.salary, deleted: false }] });
+Object.assign(rows.co, st.co, { id: "c1" });
+const b = booksOf(rows), today = st.today;
+let n = JSON.stringify(db).length;
+const rest = async (path, _t, init = {}) => {
+  const m = (init.method || "GET").toUpperCase(), [t, qs] = path.replace(/^\\/rest\\/v1\\//, "").split("?"), p = new URLSearchParams(qs || ""), body = init.body ? JSON.parse(init.body) : null;
+  if (!db[t]) db[t] = [];
+  const f = []; p.forEach((v, k) => { if (k !== "select" && k !== "on_conflict") f.push([k, v]); });
+  const hit = (r) => f.every(([k, v]) => /^eq\\./.test(v) ? String(r[k]) === v.slice(3) : /^in\\.\\(/.test(v) ? v.slice(4, -1).split(",").includes(String(r[k])) : v === "is.null" ? r[k] == null : /^like\\./.test(v) ? String(r[k] || "").startsWith(v.slice(5).replace(/\\*$/, "")) : true);
+  if (m === "GET") return db[t].filter(hit);
+  if (m === "POST") { const out = [].concat(body).map((r) => Object.assign({ id: "00000000-0000-4000-8000-" + String(++n).padStart(12, "0") }, r));
+    if (t === "night_entries") return out.filter((r) => !db[t].some((x) => x.dedupe === r.dedupe) && db[t].push(r));
+    db[t].push(...out); return out; }
+  if (m === "PATCH") { const hs = db[t].filter(hit); hs.forEach((r) => Object.assign(r, body)); return hs; }
+};
+const ym = body.ym, running = ym === today.slice(0, 6), mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+ym.slice(4) - 1] + " " + ym.slice(0, 4);
+const F = "11111111-1111-4111-8111-111111111111", BACK = " The entry made for it earlier is taken back.";
+let out;
+const ex = await existingNow(rest, F, "c1", ym);
+if (ex && !(running && (ex.state === "ready" || ex.state === "held"))) out = { ok: true, kind: "already", id: ex.id, state: ex.state };
+else {
+  const made = payrollNow(ym, nightInput(rows, b, { today, bankRecs: [], inboxRecs: [], entryRecs: [], twob: [], gst: gstOf(rows, b, today), prior: [], jobs: {}, draftRecs: [], payHeads: st.heads }));
+  if (made.kind !== "made" && made.kind !== "you") {
+    const gone = running && made.kind === "none" && ex ? await withdrawNow(rest, F, "c1", ym, "u-made-up", "none") : "";
+    out = Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {}, made.nosalary ? { nosalary: true } : {});
+  } else {
+    const a = await applyNow({ rest, firm: F, cid: "c1", night: today.slice(0, 4) + "-" + today.slice(4, 6) + "-" + today.slice(6, 8), by: "u-made-up", press: body.press === true }, made);
+    const words = a.kind === "kept" ? "Daily Check needs you for " + mon + "." : made.words || "";
+    out = Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a);
+  }
+}
+process.stdout.write(JSON.stringify({ out, db }));
+"""
+DBMOCK = """() => { window.__now = {calls: [], flushed: 0};
+  try { BookItems.on = () => true; BookItems.flush = async () => { window.__now.flushed++; }; } catch (e) {}
+  Cloud.on = () => true;
+  Cloud.api = async (path) => { path = String(path); if (path.startsWith("night_entries")) return JSON.parse(await window.__dbEntries(path)); if (path.startsWith("rpc/")) return {ok: true}; return []; };
+  Cloud.fn = async (name, body) => { window.__now.calls.push([name, body]); return JSON.parse(await window.__srvDb(JSON.stringify((@STATE@)()), JSON.stringify(body))); };
+  return true; }""".replace("@STATE@", STATE)
 def run_now_words(br, w, kind):
+    DB = {"night_findings": [], "night_entries": [], "daily_log": [], "client_asks": []}; LAG = [False]
+    def srv_db(st, body):
+        r = subprocess.run(["node", "--input-type=module", "-e", DBJS], cwd=HERE, input=json.dumps([json.loads(st), json.loads(body), DB, LAG[0]]), capture_output=True, text=True)
+        if r.returncode: print("DBJS", r.stderr[-800:]); return json.dumps({"ok": False, "kind": "error", "words": "stand-in failed"})
+        res = json.loads(r.stdout); DB.clear(); DB.update(res["db"]); return json.dumps(res["out"])
+    def db_entries(path):
+        import urllib.parse
+        q = urllib.parse.parse_qs(path.split("?", 1)[1]) if "?" in path else {}
+        dd = urllib.parse.unquote((q.get("dedupe") or ["eq."])[0])[3:]
+        sts = ((q.get("state") or ["in.()"])[0])[4:-1].split(",")
+        return json.dumps([e for e in DB["night_entries"] if e.get("dedupe") == dd and e.get("state") in sts])
     ctx = br.new_context(viewport={"width": w, "height": 900 if w > 600 else 844}, device_scale_factor=2)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.expose_function("__srvDb", srv_db); pg.expose_function("__dbEntries", db_entries)
     pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=LATEST))
     pg.goto(URL); pg.wait_for_timeout(1000); pg.evaluate(READY); pg.wait_for_timeout(300)
     pg.evaluate(SEED, [DATA, "owner"]); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
-    pg.evaluate(NOWMOCK); pg.evaluate(FORCE); pg.evaluate("() => { render(); return true; }"); settle(pg, 300)
+    pg.evaluate(DBMOCK); pg.evaluate("() => { render(); return true; }"); settle(pg, 300)
     N = lambda: pg.evaluate("() => window.__now")
     f = lambda i, k, v: pg.fill("[data-entry-row='%d'] input[aria-label='%s row %d']" % (i, k, i + 1), v)
     ym = pg.evaluate("() => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7)"); YM = ym.replace("-", "")
@@ -619,36 +689,68 @@ def run_now_words(br, w, kind):
         f(0, "Employee", "Ravi Kumar"); f(0, "Basic", basic); f(0, "HRA", "10,000"); f(0, "Net", ""); settle(pg, 200)
         pg.click("[data-manual-done]"); settle(pg, 300); pg.click("[data-keep]"); settle(pg, 500)
         if pg.locator("[data-keep-sure]").count(): pg.click("[data-keep-sure]")
-        settle(pg, 900)
-    entry = lambda: pg.evaluate("(ym) => { window.__now.entries[ym] = {id: '00000000-0000-4000-8000-0000000009aa', client_id: 'c1', source: 'payroll', dedupe: 'payroll:' + ym, state: 'ready', voucher: {type: 'Journal', kind: 'payroll', date: ym + '28', lines: []}}; return true; }", YM)
+        settle(pg, 1500)
+    def press():
+        n0 = len(N()["calls"]); pg.click("[data-make-now]")
+        try: pg.wait_for_function("(n) => window.__now.calls.length > n && !document.querySelector('[data-now-busy]') && !/Making/.test((document.querySelector('[data-make-now-card]') || {}).innerText || '')", arg=n0, timeout=15000)
+        except Exception: pass
+        settle(pg, 600)
+        return N()["calls"][n0:]
+    said = lambda: " ".join(pg.locator("[data-now-said]").all_inner_texts())
+    nxt = lambda: " ".join(pg.locator("[data-next]").all_inner_texts())
+    E = lambda m: [e for e in DB["night_entries"] if e.get("dedupe") == "payroll:" + m]
+    Fd = lambda m: ([x for x in DB["night_findings"] if x.get("kind") == "payroll_due" and x.get("key") == "payroll:" + m] or [{}])[0]
+    gross = lambda e: sum(float(l.get("dr") or 0) for l in (e.get("voucher") or {}).get("lines", []) if l.get("ledger") == "Salary")
+    # the running month kept, made with the button (the server's own code): the entry there
     keep_month(ym, "25,000")
-    # kept: the running month's entry ready, the month set aside on Daily Check; replacing its salary makes it by itself
-    entry()
-    pg.evaluate("(w) => { window.__force = {ok: true, kind: 'kept', state: 'dismissed', running: true, withdrawn: '00000000-0000-4000-8000-0000000009aa', words: 'Daily Check needs you for ' + w + '. The entry made for it earlier is taken back.'}; return true; }", mon)
+    c = press()
+    ok(c and c[-1][1] == {"action": "payroll_now", "client_id": "c1", "ym": YM, "press": True} and len(E(YM)) == 1 and E(YM)[0]["state"] == "ready" and "Made" in said(), kind + " 15. Make now: the entry made (ready): " + said()[:120])
+    # set aside on Daily Check ("Not needed"): the update after the next save keeps the person's choice and says nothing
+    fd = Fd(YM); fd.update({"state": "dismissed", "decided_by": "u-other", "decided_at": "2026-11-20T05:00:00Z"})
     keep_month(ym, "26,000")
-    said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
     c = N()["calls"]
-    ok(c and c[-1][1] == {"action": "payroll_now", "client_id": "c1", "ym": YM} and N()["flushed"] >= 1, kind + " 15. kept: Replace called payroll_now by itself, the books sent first")
-    ok(("Daily Check needs you for %s." % mon) in said and "taken back" in said and pg.locator("[data-now-you]").count() == 1 and "Made" not in said and "isn’t over yet" not in said and pg.locator("[data-make-now-card] .pr-warn").count() == 0, kind + " 15. kept: Daily Check needs you, Needs you link, the entry taken back said, no made note: " + said[:200])
+    ok(c and c[-1][1] == {"action": "payroll_now", "client_id": "c1", "ym": YM} and N()["flushed"] >= 1, kind + " 15. set aside, then Replace: payroll_now by itself (no press), the books sent first")
+    ok(Fd(YM).get("state") == "dismissed" and Fd(YM).get("decided_by") == "u-other" and E(YM)[0]["state"] == "withdrawn", kind + " 15. the update after a save: the person's choice stays (dismissed); the old figures' entry taken back")
+    ok(said() == "" and nxt() == "" and pg.locator("[data-now-you]").count() == 0 and pg.locator("[data-make-now]").count() == 1, kind + " 15. the update after a save says nothing; no 'Kept. Daily Check makes...' line; the button offered: " + (said() + nxt())[:160])
     shot(pg, "25-kept-running", kind)
+    # the person presses Make now: their new decision: opened again, made as normal, logged with who pressed
+    c = press()
+    e = E(YM)
+    ok(c and c[-1][1].get("press") is True and len(e) == 1 and e[0]["state"] == "ready" and gross(e[0]) == 36000, kind + " 15. pressed: the entry made again (ready, gross ₹36,000 kept now): " + json.dumps([x.get("state") for x in e]))
+    ok(Fd(YM).get("state") == "resolved" and Fd(YM).get("decided_by") is None and any(l.get("what") == "payroll_now" and (l.get("evidence") or {}).get("kind") == "reopened" and (l.get("evidence") or {}).get("by") == "u-made-up" for l in DB["daily_log"]), kind + " 15. the month opened again (resolved), logged with who pressed")
+    ok("Made" in said() and pg.locator("[data-now-you]").count() == 0 and nxt() == "", kind + " 15. said: " + said()[:160])
+    shot(pg, "25b-pressed-made", kind)
+    # undone on Daily Check, back as a question to no one: the press makes it
+    E(YM)[0]["state"] = "withdrawn"; Fd(YM).update({"state": "ask", "undone_by": "u-other", "undone_at": "2026-11-21T05:00:00Z"})
+    keep_month(ym, "27,000")
+    ok(said() == "" and pg.locator("[data-make-now]").count() == 1, kind + " 15. undone: the update after a save says nothing (nothing live to update)")
+    press()
+    e = E(YM)
+    ok(len(e) == 1 and e[0]["state"] == "ready" and gross(e[0]) == 37000 and Fd(YM).get("state") == "resolved" and Fd(YM).get("undone_at") is None and "Made" in said(), kind + " 15. undone and asked of no one, pressed: the entry made (ready, gross ₹37,000): " + said()[:120])
+    # undone with a question to the client open: Needs you, the link; never the 'Kept. Daily Check makes...' line beside it
+    E(YM)[0]["state"] = "withdrawn"; Fd(YM).update({"state": "ask", "undone_by": "u-other", "undone_at": "2026-11-22T05:00:00Z"})
+    DB["client_asks"].append({"id": "q1", "finding_id": Fd(YM)["id"], "state": "asked"})
+    pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); settle(pg, 300)
+    if pg.locator("[data-kept-open='%s']" % YM).count(): pg.click("[data-kept-open='%s']" % YM); settle(pg, 800)
+    press()
+    ok(("Daily Check needs you for %s." % mon) in said() and pg.locator("[data-now-you]").count() == 1 and nxt() == "" and E(YM)[0]["state"] == "withdrawn", kind + " 15. a question to the client open: Daily Check needs you, the link, and no 'Kept. Daily Check makes...' line: " + (said() + " | " + nxt())[:200])
+    shot(pg, "27-kept-question", kind)
     if pg.locator("[data-now-you]").count(): pg.click("[data-now-you]"); settle(pg, 600)
     ok(pg.evaluate("() => S.view === 'home' && S.homeTab === 'daily'"), kind + " 15. Open Needs you: Daily Check")
     pg.evaluate("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'payroll'; render(); return true; }"); pg.wait_for_selector("[data-payroll]", timeout=15000); settle(pg)
-    # none: no salary for the running month any more on the cloud's books: the open entry taken back, said why
-    entry()
-    pg.evaluate("(w) => { window.__force = {ok: true, kind: 'none', withdrawn: '00000000-0000-4000-8000-0000000009aa', words: 'No salary is kept with the books for ' + w + '. The entry made for it earlier is taken back.'}; return true; }", mon)
-    keep_month(ym, "27,000")
-    said = " ".join(pg.locator("[data-now-said]").all_inner_texts())
-    ok(("No salary is kept with the books for %s. The entry made for it earlier is taken back." % mon) in said and "Made" not in said and pg.locator("[data-now-open]").count() == 0, kind + " 15. none: said why, the entry taken back: " + said[:200])
-    shot(pg, "26-none-running", kind)
-    # a month that has ended, set aside on Daily Check: Make now: Needs you, no made note
-    pg.evaluate("() => { window.__force = {ok: true, kind: 'kept', state: 'dismissed', words: 'Daily Check needs you for Oct 2026.'}; return true; }")
+    # the salary kept here not in FinCom's cloud yet (the server has none for the month): said so, never "No salary is kept"
+    DB["client_asks"].clear(); Fd(YM).update({"state": "resolved", "undone_at": None, "undone_by": None}); E(YM)[0]["state"] = "ready"; LAG[0] = True
+    keep_month(ym, "28,000")
+    ok("The salary kept here is not in FinCom’s cloud yet. Try again in a minute." in said() and "No salary is kept" not in said() and "Made" not in said(), kind + " 15. no salary in the cloud yet: " + said()[:200])
+    shot(pg, "26-not-in-cloud-yet", kind)
+    LAG[0] = False
+    # a month that has ended, set aside: pressed: made
+    DB["night_findings"].append({"id": "f-oct", "firm_id": "11111111-1111-4111-8111-111111111111", "client_id": "c1", "kind": "payroll_due", "key": "payroll:202610", "state": "dismissed", "decided_by": "u-other", "evidence": [], "facts": {}})
     keep_month("2026-10", "25,000")
-    mk = pg.locator("[data-make-now]")
-    if mk.count(): mk.click(); pg.wait_for_selector("[data-now-said]", timeout=10000); settle(pg, 400)
-    said = pg.inner_text("[data-now-said]") if pg.locator("[data-now-said]").count() else ""
-    ok("Daily Check needs you for Oct 2026." in said and pg.locator("[data-now-you]").count() == 1 and "Made" not in said and "tonight" not in said, kind + " 15. a month that has ended, kept: Daily Check needs you, the link, no made note: " + said[:200])
-    shot(pg, "27-kept-ended", kind)
+    press()
+    e = E("202610")
+    ok(len(e) == 1 and e[0]["state"] == "ready" and Fd("202610").get("state") == "resolved" and "Made" in said() and pg.locator("[data-now-you]").count() == 0, kind + " 15. a month that has ended, set aside, pressed: made (ready): " + said()[:160])
+    shot(pg, "27b-ended-pressed-made", kind)
     if w < 600: ok(noside(pg), kind + " 15. no sideways scroll")
     ctx.close()
 with sync_playwright() as p:

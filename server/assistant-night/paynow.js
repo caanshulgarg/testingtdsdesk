@@ -4,8 +4,8 @@
 // dedupe, so never a second one). Plain JavaScript, shared with the Node tests; rest(path, token, init) is the handler's
 // service-role PostgREST call.
 //   existingNow(rest, firm, cid, ym)  the month's entry already made (by the night or this button), or null
-//   applyNow({rest, firm, cid, night, by}, res)  -> {kind: made | updated | already | you | kept | none, id?, state?,
-//     withdrawn?: the running month's open entry taken back (you, kept)}
+//   applyNow({rest, firm, cid, night, by, press}, res)  -> {kind: made | updated | already | you | kept | none, id?, state?,
+//     withdrawn?: the running month's open entry taken back (you, kept), reopened?: dismissed | undone (press only)}
 //   withdrawNow(rest, firm, cid, ym, by, why)  (review 3) the running month's open entry taken back: its id, or ""
 //   keepNow(rest, firm, cid, months, seen)  (review B2, re-review 2) for tonight's run: the entries made now for a month the
 //     night does not make itself (the running month), as dedupes for night_apply to keep, and that month's open findings
@@ -21,10 +21,28 @@ export async function existingNow(rest, firm, cid, ym) {
   return r ? { id: r.id, state: r.state } : null;
 }
 
+// (review 4) a person pressed Make now (press): their new decision on the month. One they set aside ("Not needed",
+// dismissed), or undid and left a question to no one (ask, undone, no question to the client open), is opened again as
+// FinCom finds it now (its old choice and undo cleared), so the entry is made as normal. Never by the update after a save
+// (no press): that keeps the person's choice. Their id: the one opened again, or ""
+async function reopenFinding(rest, firm, cid, cur) {
+  if (cur.state === "dismissed") return cur.id;
+  if (!(cur.undone_at && cur.state === "ask" && !cur.decided_by)) return "";
+  const qs = await rest("/rest/v1/client_asks?select=id,state&finding_id=eq." + enc(cur.id));
+  if (!Array.isArray(qs)) throw new Error("the client's questions could not be read");
+  return qs.some((q) => q && q.state !== "closed") ? "" : cur.id;
+}
 // one finding, by night_apply's rule: a person's choice stays (decided, or dismissed); one undone is never resolved again
-async function putFinding(rest, firm, cid, night, f) {
+async function putFinding(rest, firm, cid, night, f, press) {
   const cur = ((await rest("/rest/v1/night_findings?select=id,state,evidence,decided_by,undone_at,last_seen&" + where(firm, cid) + "&kind=eq." + enc(f.kind) + "&key=eq." + enc(f.key))) || [])[0];
   let st = f.state, ev = st === "resolved" ? (f.evidence || []) : [];
+  const again = cur && press ? await reopenFinding(rest, firm, cid, cur) : "";
+  if (again) {
+    const was = cur.state === "dismissed" ? "dismissed" : "undone";
+    await rest("/rest/v1/night_findings?id=eq." + enc(cur.id), "", { method: "PATCH", body: JSON.stringify({ facts: f.facts || {}, state: st, evidence: ev, candidates: st === "you" ? (f.candidates || []) : [],
+      decided_by: null, decided_at: null, undone_by: null, undone_at: null, last_seen: cur.last_seen && String(cur.last_seen) > night ? cur.last_seen : night }) });
+    return { id: cur.id, state: st, undone: false, reopened: was };
+  }
   if (cur) {
     if (cur.decided_by || cur.state === "dismissed") { st = cur.state; ev = cur.evidence || []; }
     else if (cur.undone_at && st === "resolved") { st = cur.state === "you" ? "you" : "ask"; ev = []; }
@@ -73,7 +91,9 @@ export async function applyNow(ctx, res) {
   if (res.kind === "made") { const ex = await existingNow(rest, firm, cid, ym); if (ex && !open) return Object.assign({ kind: "already" }, ex);
     if (open && sameVoucher(cur.voucher, res.entry.voucher) && cur.state === (res.entry.ready ? "ready" : "held")) return { kind: "already", id: cur.id, state: cur.state }; }
   for (const p of res.picks || []) await putFinding(rest, firm, cid, night, p);
-  const f = await putFinding(rest, firm, cid, night, res.finding);
+  const f = await putFinding(rest, firm, cid, night, res.finding, ctx.press === true);
+  // (review 4) opened again by the person's press: logged, with who pressed
+  if (f.reopened) await log("payroll_now", f.id, { ym, by, kind: "reopened", was: f.reopened, state: f.state });
   if (res.kind === "you" || f.state !== "resolved" || f.undone) {
     // the new figures need a person (or a person set the month aside, or undid it, on Daily Check): the running month's
     // entry made from the old ones is taken back (never approved so), and said (withdrawn: its id)
@@ -94,7 +114,7 @@ export async function applyNow(ctx, res) {
     const done = await rest("/rest/v1/night_entries?id=eq." + enc(cur.id) + "&state=in.(ready,held)&decided_by=is.null", "", { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(Object.assign(upd, { updated_at: new Date().toISOString() })) });
     if (!(Array.isArray(done) && done.length)) { const ex = await existingNow(rest, firm, cid, ym); return Object.assign({ kind: "already" }, ex || {}); }
     await log("payroll_now", cur.id, { ym, by, kind: "updated", ready: !!e.ready });
-    return { kind: "updated", id: cur.id, state: row.state };
+    return Object.assign({ kind: "updated", id: cur.id, state: row.state }, f.reopened ? { reopened: f.reopened } : {});
   }
   if (old && old.state === "withdrawn" && !old.decided_by) {
     const { firm_id, client_id, dedupe, ...upd } = row;
@@ -107,7 +127,7 @@ export async function applyNow(ctx, res) {
     if (!id) { const ex = await existingNow(rest, firm, cid, ym); return Object.assign({ kind: "already" }, ex || {}); }
   }
   await log("payroll_now", id, { ym, by, kind: "made", ready: !!e.ready });
-  return { kind: "made", id, state: row.state };
+  return Object.assign({ kind: "made", id, state: row.state }, f.reopened ? { reopened: f.reopened } : {});
 }
 
 // (review B2) night_apply (migration 207) withdraws, on a complete run, every ready or held entry whose dedupe the run did not

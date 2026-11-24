@@ -214,3 +214,44 @@ Deno.test("payroll now: kept (set aside or undone on Daily Check): Daily Check n
   const ro = await payNow(mk(o), { client_id: "c1", ym: "202610" });
   eq([ro.j.kind, ro.j.words, o.db.night_entries.length], ["kept", "Daily Check needs you for Oct 2026.", 0], "a month that has ended: Needs you, nothing made");
 });
+// (review 4) a person's press on Make now is their new decision: a month set aside ("Not needed", dismissed), or undone
+// and asked of no one, is opened again and its entry made, logged with who pressed. The update after a save (no press)
+// keeps the person's choice: kept, as before
+Deno.test("payroll now: a press on a month set aside or undone: opened again and made, logged; the update after a save keeps it", async () => {
+  const dismissed = () => [{ id: "f1", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "dismissed", decided_by: ME, decided_at: "2026-11-20T05:00:00Z", evidence: [] }];
+  const a = payStand({ findings: dismissed() });
+  const auto = await payNow(mk(a), { client_id: "c1", ym: "202610" });
+  eq([auto.j.kind, a.db.night_entries.length, a.db.night_findings[0].state, a.db.night_findings[0].decided_by], ["kept", 0, "dismissed", ME], "no press (the update after a save): the person's choice stays, nothing made");
+  const s = payStand({ findings: dismissed() });
+  const r = await payNow(mk(s), { client_id: "c1", ym: "202610", press: true });
+  eq([r.j.kind, r.j.reopened, s.db.night_entries.length, s.db.night_entries[0] && s.db.night_entries[0].state, s.db.night_entries[0] && s.db.night_entries[0].finding_id], ["made", "dismissed", 1, "ready", "f1"], "pressed: made, the entry there (ready), tied to the finding");
+  eq([s.db.night_findings[0].state, s.db.night_findings[0].decided_by, s.db.night_findings[0].decided_at], ["resolved", null, null], "the finding opened again, as FinCom finds it now");
+  const lg = s.db.daily_log.find((l: any) => l.evidence && l.evidence.kind === "reopened");
+  eq([lg && lg.what, lg && lg.evidence.by, lg && lg.evidence.was, lg && lg.ref], ["payroll_now", ME, "dismissed", "f1"], "logged in daily_log: opened again, by who pressed");
+  eq(s.db.daily_log.some((l: any) => l.evidence && l.evidence.kind === "made" && l.evidence.by === ME), true, "and the entry made, by them");
+  // undone on Daily Check, back as a question to no one (ask, no question to the client): the press makes it
+  const undone = () => [{ id: "f3", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202610", state: "ask", decided_by: null, undone_by: ME, undone_at: "2026-11-21T05:00:00Z", evidence: [] }];
+  const u0 = payStand({ findings: undone() });
+  eq([(await payNow(mk(u0), { client_id: "c1", ym: "202610" })).j.kind, u0.db.night_entries.length], ["kept", 0], "undone, no press: kept, nothing made");
+  const u = payStand({ findings: undone() });
+  const ru = await payNow(mk(u), { client_id: "c1", ym: "202610", press: true });
+  eq([ru.j.kind, ru.j.reopened, u.db.night_entries.length, u.db.night_findings[0].state, u.db.night_findings[0].undone_at], ["made", "undone", 1, "resolved", null], "undone and asked of no one, pressed: made, the entry there");
+  // undone with a question to the client still open: it is the client's to answer; kept, nothing made
+  const q = payStand({ findings: undone() });
+  q.db.client_asks = [{ id: "q1", finding_id: "f3", state: "asked" }];
+  const rq = await payNow(mk(q), { client_id: "c1", ym: "202610", press: true });
+  eq([rq.j.kind, q.db.night_entries.length, q.db.night_findings[0].state], ["kept", 0, "ask"], "a question to the client open: kept");
+  // the running month set aside, its old entry ready: pressed, the same entry made again from the salary kept now
+  const nov = Object.assign({}, ready, { running: true, words: "Nov 2026 isn’t over yet. This is made from the salary kept now.",
+    finding: { kind: "payroll_due", key: "payroll:202611", state: "resolved", facts: { ym: "202611" }, evidence: [], candidates: [] },
+    entry: Object.assign({}, ready.entry, { dedupe: "payroll:202611", voucher: { type: "Journal", kind: "payroll", date: "20261130", lines: [{ ledger: "Salary", dr: 1 }] } }) });
+  const n = payStand({ entries: [{ id: "e9", firm_id: F, client_id: "c1", dedupe: "payroll:202611", state: "ready", decided_by: null, voucher: { type: "Journal", kind: "payroll", date: "20261130", lines: [] } }],
+    findings: [{ id: "f4", firm_id: F, client_id: "c1", kind: "payroll_due", key: "payroll:202611", state: "dismissed", decided_by: ME, evidence: [] }] });
+  const rn = await payNow(mk(n, nov), { client_id: "c1", ym: "202611", press: true });
+  eq([rn.j.kind, rn.j.id, n.db.night_entries[0].state, n.db.night_entries[0].voucher.lines.length, n.db.night_findings[0].state], ["updated", "e9", "ready", 1, "resolved"], "the running month, pressed: its entry made again (ready), never taken back");
+});
+// (review 4) no salary in the cloud for the month: said so in a way the page can tell (nosalary)
+Deno.test("payroll now: no salary in the cloud: marked for the page", async () => {
+  const r = await payNow(mk(payStand({}), { kind: "none", nosalary: true, words: "No salary is kept with the books for Oct 2026." }), { client_id: "c1", ym: "202610" });
+  eq([r.j.kind, r.j.nosalary], ["none", true], "nosalary passed on");
+});

@@ -263,6 +263,14 @@ const xmlOk = (pl) => pl.vouchers.length === 1 && TP.validatePayrollXml(pl.vouch
   ok(!r.ok && r.why === TPost.CHANGED && !w.log.length, "a net that is not the night's entry's: changed, nothing sent");
   w = world({ claim: { ok: false, why: "On its way to Tally: wait for it to finish." } }); r = await TPost.approveTallyPayroll(E(), w.env);
   ok(!r.ok && /On its way/.test(r.why) && !w.posts.length, "the claim refused (someone else is posting it): nothing sent");
+  // (review 4) the race: made again between the second check and the claim (the running month's update after a save):
+  // the entry read again after the claim, not what was checked: released, nothing posted, said
+  w = world(); w.env.entryOf = async (id) => ({ id, voucher: Object.assign({}, E().voucher, { lines: E().voucher.lines.map((l) => (l.ledger === "Salary" ? { ledger: "Salary", dr: 86838.71 } : l)) }) });
+  r = await TPost.approveTallyPayroll(E(), w.env);
+  ok(!r.ok && r.why === "Updated to the salary kept now; check and approve." && w.log.join(" > ") === "entry_claim > entry_release" && !w.posts.length, "made again after the second check: claimed, read again, released, nothing posted: " + w.log.join(" > ") + " (" + r.why + ")");
+  w = world(); w.env.entryOf = async (id) => ({ id, voucher: JSON.parse(JSON.stringify(E().voucher)) });
+  r = await TPost.approveTallyPayroll(E(), w.env);
+  ok(r.ok && w.posts.length === 1 && !w.log.includes("entry_release"), "read again after the claim, as checked: posted");
 }
 {
   let w = world({ answer: (v) => ({ id: v.id, ok: false, message: "Failed: Employee 'Mehta, Sunil' does not exist!" }) }), r = await TPost.approveTallyPayroll(E(), w.env);

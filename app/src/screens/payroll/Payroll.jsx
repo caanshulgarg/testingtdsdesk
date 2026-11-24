@@ -282,12 +282,16 @@ function MakeNow({ co, ym, tally, onState, saved }) {
   const what = tally ? "Tally Payroll entry" : "journal", label = PS.monLabel(ym), running = ym === nowYm();
   const make = async (by) => {
     setBusy(true); setAuto(by === true);
-    const r = Object.assign({}, await payrollNowCall(co.id, ym), by === true ? { auto: true } : {});
-    setBusy(false); setAuto(false); setSaid(r);
+    // (review 4) a person's press is their new decision (press: a month set aside on Daily Check is made again); the update
+    // after a save is not, and keeps their choice: then nothing is said, the button stays
+    const r = Object.assign({}, await payrollNowCall(co.id, ym, by === true ? null : { press: true }), by === true ? { auto: true } : {});
+    setBusy(false); setAuto(false); setSaid(r.auto && r.kind === "kept" ? null : r);
     if (r.kind === "made" || r.kind === "updated" || r.kind === "already") { setEx({ id: r.id, state: r.state }); onState(true, r.kind !== "already"); }
     // (re-review 1, review 3) the running month's entry taken back (its new figures need a person, the month was set aside
-    // on Daily Check, or there is nothing to make now)
-    else if (r.kind === "you" || r.kind === "kept" || r.withdrawn) { setEx(null); onState(false, !!r.withdrawn); }
+    // on Daily Check, or there is nothing to make now); (review 4) Needs you (or set aside): the "Kept. Daily Check makes
+    // its journal ..." line is not true, so not shown
+    else if (r.kind === "you" || r.kind === "kept") { setEx(null); onState("you", !!r.withdrawn); }
+    else if (r.withdrawn) { setEx(null); onState(false, true); }
   };
   // (review 3) the running month's salary just kept (or replaced) and its entry still ready or held: made again by itself
   useEffect(() => { let on = true; setEx(undefined); setSaid(null); onState(false);

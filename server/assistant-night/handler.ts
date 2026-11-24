@@ -234,9 +234,11 @@ export function handler(deps: Deps) {
     const BACK = " The entry made for it earlier is taken back.";
     if (made.kind !== "made" && made.kind !== "you") {
       const gone = running && made.kind === "none" && ex ? await withdrawNow(rest, firm, cid, ym, String(user.id), "none") : "";
-      return [200, Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {})] as const;
+      return [200, Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {}, made.nosalary ? { nosalary: true } : {})] as const;
     }
-    const a = await applyNow({ rest, firm, cid, night: istDay(now()), by: String(user.id) }, made);
+    // (review 4) press: a person pressed Make now (their new decision: a month set aside, or undone and asked of no one, is
+    // opened again and made); the update after a save and the second check at Approve send none and keep the choice
+    const a = await applyNow({ rest, firm, cid, night: istDay(now()), by: String(user.id), press: body.press === true }, made);
     // (review 3) kept (the month set aside or undone on Daily Check): Needs you, never the note of an entry made
     const words = a.kind === "kept" ? "Daily Check needs you for " + monYear(ym) + "." : a.kind === "you" ? String(made.words || "") : made.words || "";
     return [200, Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a)] as const;
