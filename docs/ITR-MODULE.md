@@ -138,7 +138,11 @@ same without ITR-1; F: ITR-5 (ITR-4 for a partnership firm with presumptive inco
 exemption under section 11); A, B, J, L, G: ITR-5 (ITR-7 when exempt); T: ITR-7 (ITR-5 when not exempt). The page's
 "ITR form" chooser (every step) keeps the person's choice per client per year (b.itr "<ay>|state": form, formSet). A
 form that does not fit the person, or one FinCom's JSON does not cover (ITR-1, ITR-2, ITR-7, ITR-5 for anyone but a
-firm or LLP), is said on the page and no JSON is made.
+firm or LLP), is said on the page and no JSON is made. The review of 24-Nov-2026: with no PAN and no kind of taxpayer,
+no form is recommended or counts as fitting and no JSON is made ("FinCom needs the PAN or the kind of taxpayer to pick
+the form"), the chooser still shown; ITR-1 follows rule 12 (law.js ITR1): never for a director in a company, one who
+held unlisted equity shares in the year, or agricultural income above Rs 5,000. The form box asks these three for an
+individual; any not answered, ITR-2 is recommended and the reason names what is not known.
 
 | Form | Who | Rules |
 |---|---|---|

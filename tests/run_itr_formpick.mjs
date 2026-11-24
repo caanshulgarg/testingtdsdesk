@@ -37,7 +37,8 @@ T("individual", () => {
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-4", "individual, presumptive, income within 50 lakh: ITR-4");
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 6000000 }).form, "ITR-3", "presumptive but income above 50 lakh: ITR-3");
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, audit: true }).form, "ITR-3", "presumptive with a tax audit: ITR-3");
-  eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 }).form, "ITR-1", "salary only, within 50 lakh: ITR-1");
+  eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0 }).form, "ITR-1", "salary only, within 50 lakh, not a director, no unlisted shares or agricultural income: ITR-1");
+  eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 }).form, "ITR-2", "salary only, but whether a director, unlisted shares, agricultural income not known: ITR-2 (never ITR-1 on a guess)");
   eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, capitalGains: true }).form, "ITR-2", "salary and capital gains: ITR-2");
   eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, houses: 3 }).form, "ITR-2", "more than two houses: ITR-2");
   eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 5500000 }).form, "ITR-2", "income above 50 lakh: ITR-2");
@@ -61,7 +62,8 @@ T("others", () => {
   eq(recommendForm({ pan: "ZZZTX1234Z" }).form, "ITR-7", "trust (T): ITR-7");
   eq(recommendForm({ pan: "ZZZTX1234Z", exempt: false }).form, "ITR-5", "a trust not claiming exemption: ITR-5");
   const u = recommendForm({ pan: "" });
-  ok(!!u.form && /PAN/.test(u.why), "no PAN: a form still defaulted and the reason asks for the PAN (" + u.form + ")");
+  ok(!!u.form && /needs the PAN or the kind of taxpayer to pick the form/.test(u.why), "no PAN: a form still in the chooser and the reason says FinCom needs the PAN or the kind of taxpayer: " + u.why);
+  ok(!recommendForm({ pan: "" }).code && !recommendForm({ pan: "", gstin: "" }).code, "no PAN, no GSTIN, no kind: not known");
 });
 
 console.log("3. the person's own choice, kept; an old saved form that does not fit is not kept silently");
@@ -88,6 +90,9 @@ T("status", () => {
   ok(formStatus("ITR-5", recommendForm({ pan: "ZZZFX1234Z" })).json, "ITR-5 for a firm: the JSON is made");
   s = formStatus("ITR-1", recommendForm({ pan: "ZZZPX1234Z", salary: true }));
   ok(s.fits && !s.json, "ITR-1: fits a salaried person, no JSON yet");
+  // the review of 24-Nov-2026: with no PAN and no kind of taxpayer, no form counts as fitting and no JSON is made
+  const u = recommendForm({ pan: "" });
+  ["ITR-3", "ITR-4", "ITR-5", "ITR-6", u.form].forEach((f) => { const z = formStatus(f, u); ok(!z.fits && !z.json && /needs the PAN or the kind of taxpayer to pick the form/.test(z.text), "no PAN, no kind: " + f + " builds no JSON, said plainly: " + z.text); });
 });
 
 console.log("5. the JSON builder refuses a form it has no map for (never another form's JSON)");

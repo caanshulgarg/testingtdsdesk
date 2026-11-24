@@ -395,5 +395,42 @@ T("three losses", () => {
   same(r, "liability", 33800, "three losses, a smaller return: 33,800");
 });
 
+console.log("ITR-1 (Sahaj), AY 2026-27: who may not file it (rule 12(1)(a) proviso; the form's instructions), the review of 24-Nov-2026");
+// rule 12: ITR-1 is not for an individual who is a director in a company, who has held unlisted equity shares at any
+// time during the previous year, or whose agricultural income is more than Rs 5,000. A fact FinCom does not have is never
+// guessed: ITR-2 (which fits either way) is recommended and the reason says what is not known.
+let PK = null; try { PK = await import(new URL("pick.js", LIB)); } catch (e) { ok(false, "pick.js loads: " + String(e && e.message).slice(0, 100)); }
+let LW = {}; try { LW = await import(new URL("law.js", LIB)); } catch (e) { /* checked below */ }
+T("ITR-1 rule 12", () => {
+  const R1 = LW.ITR1 || {};
+  ok(R1.agriMax === 5000 && R1.maxIncome === 5000000 && /rule 12/i.test(R1.src || ""), "law.js: ITR-1's limits with their source (agricultural income Rs 5,000, total income Rs 50 lakh): " + JSON.stringify(R1).slice(0, 80));
+  const base = { pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0 };
+  const rf = (o) => PK.recommendForm(Object.assign({}, base, o));
+  eq(rf({}).form, "ITR-1", "salary 9,00,000, not a director, no unlisted shares, no agricultural income: ITR-1");
+  eq(rf({ agriIncome: 5000 }).form, "ITR-1", "agricultural income of exactly Rs 5,000: ITR-1 still (more than 5,000 is excluded)");
+  let r = rf({ director: true });
+  ok(r.form === "ITR-2" && /director/i.test(r.why), "a director of a company: ITR-2, and the reason says so: " + r.why);
+  r = rf({ unlisted: true });
+  ok(r.form === "ITR-2" && /unlisted/i.test(r.why), "held unlisted equity shares in the year: ITR-2: " + r.why);
+  r = rf({ agriIncome: 5001 });
+  ok(r.form === "ITR-2" && /agricultural/i.test(r.why) && /5,000/.test(r.why), "agricultural income Rs 5,001: ITR-2: " + r.why);
+  r = rf({ agriIncome: undefined, agriOver: true });
+  ok(r.form === "ITR-2" && /agricultural/i.test(r.why), "agricultural income said to be over Rs 5,000 (a Yes, no figure): ITR-2");
+  eq(rf({ agriIncome: undefined, agriOver: false }).form, "ITR-1", "agricultural income said to be Rs 5,000 or less: ITR-1");
+  // not known: never ITR-1 on a guess
+  r = rf({ director: undefined });
+  ok(r.form === "ITR-2" && /director/i.test(r.why) && /not know|not known|not said/i.test(r.why), "whether a director is not known: ITR-2, and the reason says what is not known: " + r.why);
+  r = rf({ unlisted: undefined, agriIncome: undefined });
+  ok(r.form === "ITR-2" && /unlisted/i.test(r.why) && /agricultural/i.test(r.why) && !/director/i.test(r.why), "two facts not known: both named, the known one not: " + r.why);
+  r = PK.recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 });
+  ok(r.form === "ITR-2" && /ITR-1/.test(r.why), "nothing asked yet: ITR-2, and the reason says what would let ITR-1 fit: " + r.why);
+  // an unlisted share sold in the year: held during the year, so known
+  eq(rf({ unlisted: undefined, unlistedSold: true }).form, "ITR-2", "an unlisted share among the capital gains: held in the year: ITR-2");
+  // the rest of ITR-1's rules stay as they were
+  eq(rf({ ti: 5500000 }).form, "ITR-2", "total income above Rs 50 lakh: ITR-2");
+  eq(rf({ resident: false }).form, "ITR-2", "a non-resident: ITR-2");
+  eq(PK.recommendForm(Object.assign({}, base, { business: true })).form, "ITR-3", "business income (the books): ITR-3, whatever the rest");
+});
+
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

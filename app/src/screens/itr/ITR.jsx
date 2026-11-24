@@ -92,7 +92,9 @@ function factsOf(client, st, books) {
   const presumptive = st.presumptiveOpt === true || (st.presumptiveOpt == null && figs);
   return { entity: client.entity, pan: client.pan, gstin: client.gstin, llp: st.llp === true || st.llp === false ? st.llp : client.llp, exempt: st.exempt11, audit: !!st.audit, resident: st.resident !== false,
     business: !!(books && books.ok) || presumptive, presumptive, salary: !!((st.salaries || []).length || (st.salary && +st.salary.gross)), houses: (st.houses || []).length,
-    capitalGains: !!((st.cgRows || []).length || st.cg), foreign: (st.profile || {}).foreignAssets === "YES" };
+    capitalGains: !!((st.cgRows || []).length || st.cg), foreign: (st.profile || {}).foreignAssets === "YES",
+    // ITR-1's rule 12 (law.js ITR1): asked on the form box, never taken as No when not answered
+    director: st.director, unlisted: st.unlisted, unlistedSold: (st.cgRows || []).some((r) => r && r.kind === "unlisted"), agriOver: st.agriOver };
 }
 // capital gains other than 112A up to Rs 1.25 lakh (ITR-1 and ITR-4 take only those)
 function gainsOf(M) { const g = M.cg; return !!g && !!(+g.s111A || +g.s112 || +g.other || +g.s112A > 125000); }
@@ -114,7 +116,7 @@ export default function ITR() {
     <header className="itr-head">
       <div>
         <div className="itr-eyebrow">AY 2026-27 · FY 2025-26</div>
-        <h1>{X.form}<span className="itr-sub">{" " + ent + (X.client.pan ? " · " + X.client.pan : "")}</span></h1>
+        <h1>{X.rec.code || X.state.formSet ? X.form : "ITR form not picked"}<span className="itr-sub">{" " + ent + (X.client.pan ? " · " + X.client.pan : "")}</span></h1>
       </div>
       <div className="itr-head-r">
         {g.ok ? <span className="itr-chip" data-tone="ok" data-itr-ready="">JSON ready</span> : <span className="itr-chip" data-tone="warn" data-itr-open={open.length}>{open.length ? open.length + " to look at" : "Not ready"}</span>}
@@ -143,20 +145,24 @@ const ny = (v) => (v === "y" ? true : v === "n" ? false : undefined);
 function FormPick({ X, refresh }) {
   const rec = X.rec, fs = X.fstat, code = rec.code, set = (p) => { X.store.setState(p); refresh(); };
   const exemptQ = "CTABJLG".includes(code || "-"), presQ = (code === "P" || code === "H" || (code === "F" && X.state.llp !== true));
-  const tag = (f) => (f === rec.form ? " (recommended)" : code && !rec.allowed.includes(f) ? " (not for this client)" : !JSON_FORMS.includes(f) ? " (no JSON yet)" : "");
+  // ITR-1's rule 12 (pick.js): an individual is asked what rules ITR-1 out; unanswered, ITR-2 is recommended
+  const q1 = code === "P" ? [["director", "A director in a company at any time in the year"], ["unlisted", "Held unlisted equity shares at any time in the year"], ["agriOver", "Agricultural income above Rs 5,000"]] : [];
+  const tag = (f) => (code && f === rec.form ? " (recommended)" : code && !rec.allowed.includes(f) ? " (not for this client)" : !JSON_FORMS.includes(f) ? " (no JSON yet)" : "");
   return <section className="itr-pick" data-itr-pick="" data-fits={fs.fits ? "1" : "0"} data-json={fs.json ? "1" : "0"}>
     <div className="itr-pick-row">
       <label className="itr-pick-f"><span>ITR form</span>
-        <select data-itr-form="" value={X.form} onChange={(e) => set({ form: e.target.value, formSet: true })}>{ALL_FORMS.map((f) => <option key={f} value={f}>{f + tag(f)}</option>)}</select></label>
-      <p className="itr-pick-why" data-itr-why=""><b>{"Recommended: " + rec.form + "."}</b>{" " + rec.why}</p>
-      {X.form !== rec.form && <button className="linkbtn" data-itr-use-rec="" onClick={() => set({ form: "", formSet: false })}>{"Use " + rec.form}</button>}
+        <select data-itr-form="" value={code || X.state.formSet ? X.form : ""} onChange={(e) => set({ form: e.target.value, formSet: true })}>{!code && !X.state.formSet && <option value="" disabled>Choose a form</option>}{ALL_FORMS.map((f) => <option key={f} value={f}>{f + tag(f)}</option>)}</select></label>
+      {code ? <p className="itr-pick-why" data-itr-why=""><b>{"Recommended: " + rec.form + "."}</b>{" " + rec.why}</p> : <p className="itr-pick-why" data-itr-why=""><b>No form recommended yet.</b></p>}
+      {code && X.form !== rec.form && <button className="linkbtn" data-itr-use-rec="" onClick={() => set({ form: "", formSet: false })}>{"Use " + rec.form}</button>}
     </div>
     {fs.text && <p className="itr-pick-warn" data-itr-form-warn="" role="status">{fs.text}</p>}
-    {(exemptQ || presQ) && <div className="itr-pick-row itr-pick-qs">
+    {(exemptQ || presQ || q1.length > 0) && <div className="itr-pick-row itr-pick-qs">
       {exemptQ && <label className="itr-pick-f"><span>Claims exemption under section 11 or 10 (a charitable trust, a section 8 company)</span>
         <select data-itr-exempt="" value={yn(X.state.exempt11)} onChange={(e) => set({ exempt11: ny(e.target.value) })}><option value="">Choose</option><option value="y">Yes</option><option value="n">No</option></select></label>}
       {presQ && <label className="itr-pick-f"><span>Business income on a presumptive basis (44AD, 44ADA, 44AE)</span>
         <select data-itr-presq="" value={yn(X.state.presumptiveOpt)} onChange={(e) => set({ presumptiveOpt: ny(e.target.value) })}><option value="">Choose</option><option value="y">Yes</option><option value="n">No</option></select></label>}
+      {q1.map(([k, label]) => <label key={k} className="itr-pick-f"><span>{label}</span>
+        <select data-itr-q1={k} value={yn(X.state[k])} onChange={(e) => set({ [k]: ny(e.target.value) })}><option value="">Choose</option><option value="y">Yes</option><option value="n">No</option></select></label>)}
     </div>}
   </section>;
 }
@@ -449,7 +455,7 @@ function JsonStep({ X, json, sch, g, refresh }) {
   }
   if (!X.fstat.json) return <section className="itr-card" data-itr-json="unsupported"><div className="itr-card-head"><h2>{"No JSON for " + X.form}</h2></div>
     <p className="itr-note" data-itr-json-why="">{X.fstat.text}</p>
-    {X.form !== X.rec.form && <button className="linkbtn" onClick={() => { X.store.setState({ form: "", formSet: false }); refresh(); }}>{"Use " + X.rec.form + " (recommended)"}</button>}</section>;
+    {X.rec.code && X.form !== X.rec.form && <button className="linkbtn" onClick={() => { X.store.setState({ form: "", formSet: false }); refresh(); }}>{"Use " + X.rec.form + " (recommended)"}</button>}</section>;
   if (sch.error) return <section className="itr-card" data-itr-json="noschema"><div className="itr-card-head"><h2>JSON</h2></div><p className="itr-note">The official schema could not be loaded ({sch.error}). The JSON is not offered without it.</p></section>;
   if (!json) return <section className="itr-card" data-itr-json="loading"><p className="itr-note">Loading the official schema…</p></section>;
   const vs = X.state.versions || [];
