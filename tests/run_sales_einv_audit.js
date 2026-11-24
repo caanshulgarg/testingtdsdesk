@@ -30,7 +30,7 @@ const MH = mk("27AAACZ1234Q1Z"), KA = mk("29AAACZ1234Q1Z"), CMH = mk("27AAACK567
 const co = {id: "c1", name: "Zeta Made Up Pvt Ltd", gstin: MH, otherGstins: ""};
 const s = {cid: "c1", list: [], cfg: {auto: true, address: "1 Test Road, Pune 411001", items: {}, series: "INV/{FY}/", next: 1, pad: 3}, hist: {}};
 let calls = [], toasts = [], jobs = {};
-Object.assign(ctx, {SL: () => s, CO: () => co, salesOld: () => false, saveSales(){}, render(){}, toast: t => toasts.push(t), hasLedgerList: () => true, exactLedger: n => n || "",
+Object.assign(ctx, {SL: () => s, CO: () => co, saveSales(){}, render(){}, toast: t => toasts.push(t), hasLedgerList: () => true, exactLedger: n => n || "",
   taxLedgerPick: (kind) => ({ledger: "Output " + kind.toUpperCase()}), salesLedgerFor: () => "Sales", roundOffLedger: () => "Round Off",
   customerLedgerFor: () => ({ledger: "Made Up Customer", sure: true, label: "test"}), salesDupOf: () => null, salesOfNo: () => s.list,
   B: () => ({ledgers: {list: [{name: "Customer A", gstin: CMH, state: "Maharashtra"}, {name: "Customer B", gstin: CKA, state: "Karnataka"}]}}), salesSetUndo(){}, Cloud: {delete(){}},
