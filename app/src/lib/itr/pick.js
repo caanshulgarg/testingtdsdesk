@@ -4,8 +4,8 @@
 // form + formSet). A form FinCom's JSON does not cover (forms.js ROOT) is said plainly, never built as another form.
 // Pure: the tests give it the facts (tests/run_itr_formpick.mjs).
 import { ROOT } from "./forms.js";
-import { ITR1, ITR4, AY, itr4Houses, itr1Houses, resStatus, RES_PATH } from "./law.js";
-export { resStatus };
+import { ITR1, ITR4, AY, itr4Houses, itr1Houses, resStatus, resOf, RES_PATH } from "./law.js";
+export { resStatus, resOf };
 
 export const ALL_FORMS = ["ITR-1", "ITR-2", "ITR-3", "ITR-4", "ITR-5", "ITR-6", "ITR-7"];
 // the forms whose official JSON FinCom makes (forms.js maps them, the schemas are in itr-schema/)
@@ -120,7 +120,9 @@ export function recommendForm(f) {
           const no = barred["ITR-4"];
           if (no) return out("ITR-3", "Business income is declared on a presumptive basis, but " + notFor("ITR-4", code, no) + ", so ITR-3 for the income from business or profession.");
           if (!bf.unknown["ITR-4"]) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh; a resident, " + (code === "H" ? "" : "not a director in a company, ") + "no unlisted shares, agricultural income Rs 5,000 or less: ITR-4.");
-          return out("ITR-3", "There is income from business or profession, so ITR-3. " + askWhy("ITR-4", code, f, ITR4.agriMax));
+          // only a rule 12 answer missing: ITR-4 for the computation (ITR-3 without books would drop the income), its
+          // JSON held until answered (formStatus; the review of the ITR follow-ups, B1)
+          return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh: ITR-4, if it fits. " + askWhy("ITR-4", code, f, ITR4.agriMax));
         }
         return out("ITR-3", "There is income from business or profession (the books), so ITR-3." + (f.presumptive ? " ITR-4 does not fit: " + (f.audit ? "a tax audit applies." : !within ? "the total income is above Rs 50 lakh." : "there are capital gains.") : ""));
       }
@@ -139,7 +141,7 @@ export function recommendForm(f) {
         const no = barred["ITR-4"];
         if (no) return out("ITR-5", "A partnership firm with presumptive income, but " + notFor("ITR-4", "F", no) + ": ITR-5.");
         if (!bf.unknown["ITR-4"]) return out("ITR-4", "A partnership firm with presumptive income (44AD, 44ADA, 44AE), total income within Rs 50 lakh, no unlisted shares and agricultural income Rs 5,000 or less: ITR-4.");
-        return out("ITR-5", "A firm files ITR-5. " + askWhy("ITR-4", code, f, ITR4.agriMax));
+        return out("ITR-4", "A firm with presumptive income (44AD, 44ADA, 44AE), total income within Rs 50 lakh: ITR-4, if it fits. " + askWhy("ITR-4", code, f, ITR4.agriMax));
       }
       return out("ITR-5", "A firm files ITR-5" + (f.llp == null ? " (ITR-4 only for a partnership firm, not an LLP, with presumptive income)." : "."));
     case "C":
@@ -187,6 +189,26 @@ export function formStatus(form, rec) {
   return { fits, json, text: say.join(" "), tone: fits || !rec.code ? "info" : "bad" };
 }
 
+// the residential status read from the older ITR-3 answer (state.resident not set) as a non-resident: the page works the
+// tax as before the box (a resident) too, and where the two differ says so in the info tone (the review of the ITR
+// follow-ups, B2). st: the return's state; comp: the computation; alt: the one worked as a resident (or null)
+export const RES_NOTE = "Tax worked out for a non-resident, as this return's residential status says.";
+export const resFromAnswer = (st) => { const r = resOf(st); return r.from === "answer" && r.status === "NRI"; };
+export function resNote(st, comp, alt) {
+  if (!resFromAnswer(st) || !comp || !alt) return "";
+  const pay = (c) => (c.tax && c.tax.payable) || 0;
+  return alt.ti !== comp.ti || pay(alt) !== pay(comp) ? RES_NOTE : "";
+}
+// the form box's residential status changed (or cleared with Choose): kept as the return's own, and the older ITR-3
+// answer dropped, so the box, the computation and the JSON never read two (the review of the ITR follow-ups, B2)
+export function setResident(st, v) {
+  st = st || {};
+  const a3 = Object.assign({}, (st.answers || {})["ITR-3"] || {});
+  const patch = { resident: resStatus(v) || undefined };
+  if (RES_PATH in a3) { delete a3[RES_PATH]; patch.answers = Object.assign({}, st.answers, { "ITR-3": a3 }); }
+  return patch;
+}
+
 // what the recommendation needs to know, from the client, the return's state (b.itr "<ay>|state"), the books and the
 // files brought in (the page asks it before the computation; tests/run_itr_formpick.mjs gives it made-up state)
 export function factsOf(client, st, books, im) {
@@ -203,7 +225,7 @@ export function factsOf(client, st, books, im) {
   const L = st.losses || {}, live = (k, x) => x && +x.amt > 0 && !(x.inTime === false && k !== "hp" && k !== "ud");
   const bfLoss = +L.unabsorbedDep > 0 || ["business", "hp", "stcl", "ltcl", "ud"].some((k) => (L[k] || []).some((x) => live(k, x)));
   // the residential status: the return's own (state.resident), else the ITR-3 answer given before; not set: not known
-  const resident = resStatus(st.resident) || resStatus(((st.answers || {})["ITR-3"] || {})[RES_PATH]);
+  const resident = resOf(st).status;
   return { entity: client.entitySet || client.entity, pan: client.pan, gstin: client.gstin, llp: st.llp === true || st.llp === false ? st.llp : client.llp, exempt: st.exempt11, audit: !!st.audit, resident,
     business: !!(books && books.ok) || presumptive, presumptive, salary: !!((st.salaries || []).length || (st.salary && +st.salary.gross)), houses: (st.houses || []).length,
     capitalGains: !!((st.cgRows || []).length || st.cg), foreign: (st.profile || {}).foreignAssets === "YES", faRows: fa, tds194N, bfLoss,

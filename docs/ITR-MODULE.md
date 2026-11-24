@@ -161,14 +161,25 @@ The review of 24-Nov-2026 (3): the form box asks an individual or HUF the reside
 resident / Non-resident, kept as the return's own, b.itr state.resident, the schemas' codes RES / NOR / NRI; the ITR-3
 JSON takes it and no longer asks it; an ITR-3 answer given before is read back). ITR-1 and ITR-4 need Resident; NOR or
 NRI rules both out; not set, it is not known (not a bar), and their JSON waits for it as for the other rule 12 answers.
-A firm PAN: ITR-4 is not recommended until firm or LLP is answered (asked on the form box too, kept where Data keeps
-it), ITR-5 until then. A loss of earlier years marked "No: the loss is lost" (section 80; not a house property loss or
+A firm PAN: the ITR-4 JSON waits until firm or LLP is answered (asked on the form box too, kept where Data keeps
+it). A loss of earlier years marked "No: the loss is lost" (section 80; not a house property loss or
 unabsorbed depreciation) is not brought forward. Rows left in Schedule FA after its answer is changed to No bar ITR-1 and
 ITR-4 only while they are there, and the form box offers "Remove these rows". The Losses card stays on Schedules for
 ITR-4 while there is an entry, so a wrong one can be removed. ITR-1's houses follow the year as ITR-4's do (law.js
 itr1Houses: two for AY 2026-27, one for an earlier year). The director bar is for an individual only: rule 12 speaks of "a
 person who is a director in a company", a HUF cannot be one, and its karta's directorship is his own, not the HUF's; a
 HUF is asked only the unlisted shares, agricultural income and residential status. The no-PAN note is in the info tone.
+The review of the ITR follow-ups (B1, B2): while the only thing missing is a rule 12 answer (director, unlisted shares,
+agricultural income, residential status, firm or LLP), the recommendation stays on what the facts otherwise give, ITR-4
+for presumptive income, so the computation keeps the income; only its JSON is held, with "Before FinCom makes the ITR-4
+JSON, answer the questions below". (ITR-3 / ITR-5 without books carried no presumptive income: a saved return moved there
+showed a total income of 0.) A known Yes still moves the form; model.js now carries the presumptive income into ITR-3 /
+ITR-5 when there are no books, and the JSON of such a return is held (forms.js coverage pres_nobooks: their no-books
+P&L lines are not filled yet). The computation, the form box and the ITR-3 JSON read one residential status (law.js
+resOf: the return's own, else the older ITR-3 answer); where reading a non-resident from that older answer changes the
+tax, the form box says "Tax worked out for a non-resident, as this return's residential status says." (info tone).
+Changing the box, or Choose, drops the older answer, so Choose leaves it empty. Schedule FA rows for a not ordinarily
+resident are flagged as for a non-resident (fa_nr).
 Not modelled, FinCom has no data for them: income
 from outside India without an asset abroad, signing authority in an account outside India, tax deferred on ESOPs of an
 eligible start-up, relief claimed under 90 / 90A / 91, and (ITR-1) income of the kinds in 115BBDA / 115BBE, winnings

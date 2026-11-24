@@ -39,7 +39,8 @@ T("individual", () => {
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true }).form, "ITR-3", "individual with business income (the books): ITR-3");
   const r12 = { director: false, unlisted: false, agriOver: false, resident: "RES" };
   eq(recommendForm(Object.assign({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }, r12)).form, "ITR-4", "individual, presumptive, income within 50 lakh, rule 12 answered No: ITR-4");
-  eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-3", "individual, presumptive, but rule 12 not answered: ITR-3 (never ITR-4 on a guess)");
+  eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-4", "individual, presumptive, rule 12 not answered: ITR-4 for the computation, its JSON held (B1: ITR-3 without books would drop the income)");
+  ok(!formStatus("ITR-4", recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 1800000 })).json, "and no ITR-4 JSON on a guess");
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, ti: 6000000 }).form, "ITR-3", "presumptive but income above 50 lakh: ITR-3");
   eq(recommendForm({ pan: "ZZZPX1234Z", business: true, presumptive: true, audit: true }).form, "ITR-3", "presumptive with a tax audit: ITR-3");
   eq(recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0, resident: "RES" }).form, "ITR-1", "salary only, within 50 lakh, not a director, no unlisted shares or agricultural income: ITR-1");
@@ -53,7 +54,7 @@ T("individual", () => {
 T("HUF", () => {
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true }).form, "ITR-3", "HUF with business: ITR-3");
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriOver: false, resident: "RES" }).form, "ITR-4", "HUF, presumptive, rule 12 answered No: ITR-4");
-  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-3", "HUF, presumptive, rule 12 not answered: ITR-3");
+  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-4", "HUF, presumptive, rule 12 not answered: ITR-4, its JSON held");
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: true, unlisted: false, agriOver: false, resident: "RES" }).form, "ITR-4", "HUF, presumptive: a HUF cannot be a director, so no director bar (its karta's directorship is his own): ITR-4");
   eq(recommendForm({ pan: "ZZZHX1234Z", salary: false }).form, "ITR-2", "HUF without business: ITR-2 (ITR-1 is for individuals only)");
   ok(!allowedForms("H").includes("ITR-1"), "ITR-1 not right for a HUF");
@@ -61,7 +62,7 @@ T("HUF", () => {
 T("firm", () => {
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true }).form, "ITR-5", "firm: ITR-5");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, unlisted: false, agriOver: false }).form, "ITR-4", "a partnership firm, presumptive, within 50 lakh, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4");
-  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000 }).form, "ITR-5", "a partnership firm, presumptive, agricultural income not answered: ITR-5");
+  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000 }).form, "ITR-4", "a partnership firm, presumptive, agricultural income not answered: ITR-4, its JSON held");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, agriOver: true }).form, "ITR-5", "a partnership firm with agricultural income above Rs 5,000: ITR-5");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: true }).form, "ITR-5", "an LLP is never ITR-4: ITR-5");
   ok(!allowedForms("F", true).includes("ITR-4"), "ITR-4 not right for an LLP");
@@ -148,7 +149,7 @@ T("firm unlisted", () => {
   ok(r.form === "ITR-5" && /firm that held unlisted shares/.test(r.why), "a firm that held unlisted equity shares: ITR-5, said: " + r.why);
   ok(r.barred["ITR-4"] && !r.allowed.includes("ITR-4"), "and ITR-4 is not for it");
   r = F({ agriOver: false });
-  ok(r.form === "ITR-5" && /unlisted/.test(r.why) && !/director/.test(r.why), "a firm, unlisted shares not answered: ITR-5, the firm is asked about unlisted shares (never director): " + r.why);
+  ok(r.form === "ITR-4" && !formStatus("ITR-4", r).json && /unlisted/.test(r.why) && !/director/.test(r.why), "a firm, unlisted shares not answered: ITR-4, JSON held, the firm is asked about unlisted shares (never director): " + r.why);
   eq(F({ director: true, unlisted: false, agriOver: false }).form, "ITR-4", "a firm: the director question is for individuals and HUFs only");
   const s = formStatus("ITR-4", F({ unlisted: true, agriOver: false }));
   ok(!s.fits && !s.json && /ITR-4 is not for a firm that held unlisted shares/.test(s.text), "ITR-4 chosen by hand for a firm with unlisted shares: no JSON, said: " + s.text);
@@ -233,7 +234,7 @@ try { LW = await import(new URL("law.js", LIB)); } catch (e) { ok(false, "law.js
 T("firm or LLP not answered", () => {
   const F = (o) => recommendForm(Object.assign({ pan: "ZZZFX1234Z" }, PRES, { unlisted: false, agriOver: false }, o));
   let r = F({});
-  ok(r.form === "ITR-5", "a firm PAN, presumptive, firm or LLP not answered: ITR-5, never ITR-4 on a guess (" + r.form + ")");
+  ok(r.form === "ITR-4" && !formStatus("ITR-4", r).json, "a firm PAN, presumptive, firm or LLP not answered: ITR-4 for the computation, never its JSON on a guess (" + r.form + ")");
   ok(/partnership firm or an LLP/.test((r.unknown["ITR-4"] || []).join(" ")), "ITR-4 still needs the firm-or-LLP answer (" + r.unknown["ITR-4"] + ")");
   ok(/LLP/.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), "the reason says so: " + r.why);
   const s = formStatus("ITR-4", r);
@@ -248,7 +249,7 @@ T("residential status", () => {
   eq(resStatus && resStatus("RES"), "RES", "resStatus: RES"); eq(resStatus && resStatus("NOR"), "NOR", "resStatus: NOR"); eq(resStatus && resStatus("NRI"), "NRI", "resStatus: NRI");
   eq(resStatus && resStatus(undefined), "", "resStatus: not set is not known"); eq(resStatus && resStatus(null), "", "resStatus: null is not known"); eq(resStatus && resStatus(false), "NRI", "resStatus: the old false (not a resident) stays a non-resident");
   let r = P4({});
-  ok(r.form === "ITR-3" && !r.barred["ITR-4"] && /residential status/.test((r.unknown["ITR-4"] || []).join(" ")), "presumptive, residential status not set: not barred, but ITR-4 waits for it: ITR-3 (" + r.form + ", " + r.unknown["ITR-4"] + ")");
+  ok(r.form === "ITR-4" && !r.barred["ITR-4"] && /residential status/.test((r.unknown["ITR-4"] || []).join(" ")), "presumptive, residential status not set: not barred, ITR-4 (its JSON waits for it) (" + r.form + ", " + r.unknown["ITR-4"] + ")");
   let s = formStatus("ITR-4", r);
   ok(s.fits && !s.json && s.tone === "info" && /residential status/.test(s.text), "ITR-4 by hand, residential status not set: no JSON, asked in the info tone: " + s.text);
   r = P1({});
@@ -264,7 +265,7 @@ T("residential status", () => {
     ok(!formStatus("ITR-4", P4({ resident: code })).fits, code + ": ITR-4 by hand does not fit");
   }
   r = recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES, { director: false, unlisted: false, agriOver: false }));
-  ok(r.form === "ITR-3" && /residential status/.test((r.unknown["ITR-4"] || []).join(" ")), "a HUF is asked the residential status too");
+  ok(r.form === "ITR-4" && /residential status/.test((r.unknown["ITR-4"] || []).join(" ")), "a HUF is asked the residential status too");
   eq(recommendForm(Object.assign({ pan: "ZZZHX1234Z", resident: "NOR" }, PRES, { director: false, unlisted: false, agriOver: false })).form, "ITR-3", "a HUF not ordinarily resident: ITR-3");
   r = recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false }, PRES, { unlisted: false, agriOver: false }));
   ok(r.form === "ITR-4" && !/residential/.test((r.unknown["ITR-4"] || []).join(" ")), "a firm is not asked it (" + r.form + ")");
@@ -317,12 +318,84 @@ T("wording", () => {
   let s = formStatus("ITR-4", r);
   ok(s.json && !/director|karta/.test(s.text), "the HUF's ITR-4 JSON waits for no director answer: " + s.text);
   r = recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES, { resident: "RES" }));
-  ok(r.form === "ITR-3" && !/director|karta/.test(r.why) && /unlisted/.test(r.why) && /agricultural/.test(r.why), "a HUF, nothing answered: asked only unlisted shares, agricultural income: " + r.why);
+  ok(r.form === "ITR-4" && !/director|karta/.test(r.why) && /unlisted/.test(r.why) && /agricultural/.test(r.why), "a HUF, nothing answered: asked only unlisted shares, agricultural income: " + r.why);
   ok(!/director|karta/.test((r.unknown["ITR-4"] || []).join(" ")), "and its questions name no director (" + r.unknown["ITR-4"] + ")");
   s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, PRES, N3, { director: undefined })));
   ok(/whether the person is a director in a company/.test(s.text) && !/whether a director/.test(s.text), "an individual's question: " + s.text);
   const u = recommendForm({ pan: "" });
   ["ITR-3", "ITR-4", "ITR-6"].forEach((f) => { const z = formStatus(f, u); ok(z.tone === "info" && !z.json, "no PAN, " + f + ": the note in the info tone, not red (" + z.tone + ")"); });
+});
+
+console.log("9. the review of the ITR follow-ups (B1, B2): a Rule 12 answer missing keeps the computation on ITR-4; one residential status");
+let MO = {}, TX = {};
+try { MO = await import(new URL("model.js", LIB)); TX = await import(new URL("tax.js", LIB)); } catch (e) { ok(false, "model.js and tax.js load"); }
+// the page's own steps (ITR.jsx useItr): the facts, the recommendation, the model and the computation, asked again with the TI
+function page(client, state) {
+  const imports = MO.importsOf([]), f = factsOf(client, state, null, imports);
+  const make = (form) => { const m = MO.buildModel({ entity: client.entity, client, state: Object.assign({}, state, { form }), books: null, imports, due: "20260831" }); return { form, model: m, comp: TX.compute(m) }; };
+  let rec = recommendForm(f), w = make(chosenForm(state, rec));
+  rec = recommendForm(Object.assign({}, f, { ti: w.comp.ti }));
+  const form = chosenForm(state, rec); if (form !== w.form) w = make(form);
+  return { form, rec, ti: w.comp.ti, payable: w.comp.tax.payable, model: w.model, st: formStatus(form, rec) };
+}
+const AD = { presumptive: { ad: { digital: 20000000, other: 5000000 } }, regime: "new", age: 40 };
+const ADA = { presumptive: { ada: { receipts: 4000000 } }, regime: "new", age: 40 };
+T("B1: only a Rule 12 answer missing", () => {
+  // the reviewer's cases: the figures as before the upgrade (staging before f0149996c: ITR-4, TI 16,00,000)
+  let r = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({ director: false, unlisted: false, agriOver: false }, AD));
+  ok(r.form === "ITR-4" && r.ti === 1600000 && r.payable === 124800, "individual, 2.5 Cr presumptive, residential status not answered: ITR-4, TI 16,00,000, tax 1,24,800 as before (" + r.form + ", " + r.ti + ", " + r.payable + ")");
+  ok(!r.st.json && r.st.tone === "info" && /answer the questions below/i.test(r.st.text) && /residential status/.test(r.st.text), "its JSON waits, with the plain note: " + r.st.text);
+  r = page({ entity: "F", pan: "ZZZFZ9999Z" }, Object.assign({ unlisted: false, agriOver: false }, AD));
+  ok(r.form === "ITR-4" && r.ti === 1600000 && r.payable === 499200, "firm, firm or LLP not answered: ITR-4, TI 16,00,000, tax 4,99,200 as before (" + r.form + ", " + r.ti + ", " + r.payable + ")");
+  ok(!r.st.json && /answer the questions below/i.test(r.st.text) && /partnership firm or an LLP/.test(r.st.text), "its JSON waits for the answer: " + r.st.text);
+  // nothing answered at all
+  for (const [who, c, st, ti] of [["individual 44AD", { entity: "P", pan: "ZZZPZ9999Z" }, { presumptive: { ad: { digital: 3000000, other: 500000 } }, regime: "new", age: 40 }, 220000],
+    ["individual 44ADA", { entity: "P", pan: "ZZZPZ9999Z" }, ADA, 2000000], ["HUF 44AD", { entity: "H", pan: "ZZZHZ9999Z" }, { presumptive: { ad: { digital: 3000000, other: 500000 } }, regime: "new" }, 220000],
+    ["firm 44AD", { entity: "F", pan: "ZZZFZ9999Z" }, { presumptive: { ad: { digital: 3000000, other: 500000 } } }, 220000]]) {
+    r = page(c, st);
+    ok(r.form === "ITR-4" && r.ti === ti && !r.st.json && /answer the questions below/i.test(r.st.text), who + ", nothing answered: ITR-4 with TI " + ti + ", no JSON until answered (" + r.form + ", " + r.ti + ", " + r.st.json + ")");
+  }
+  r = page({ entity: "P", pan: "ZZZPZ9999Z" }, ADA);
+  ok(/answer the questions below/i.test(r.rec.why) || /questions below/i.test(r.st.text), "the reason says the questions are still to answer: " + r.rec.why);
+  // once answered: the JSON
+  r = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({ director: false, unlisted: false, agriOver: false, resident: "RES" }, AD));
+  ok(r.form === "ITR-4" && r.st.json, "all answered: ITR-4 and its JSON");
+  // an answer that rules ITR-4 out still moves the form, and the income goes with it (no books: presumptive on ITR-3 / ITR-5)
+  r = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({ director: true, unlisted: false, agriOver: false, resident: "RES" }, AD));
+  ok(r.form === "ITR-3" && r.ti === 1600000, "a director: ITR-3, the presumptive income carried (TI " + r.ti + ")");
+  r = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({ director: false, unlisted: false, agriOver: false, resident: "NRI" }, AD));
+  ok(r.form === "ITR-3" && r.ti === 1600000, "a non-resident: ITR-3, the presumptive income carried (TI " + r.ti + ")");
+  r = page({ entity: "F", pan: "ZZZFZ9999Z" }, Object.assign({ unlisted: true, agriOver: false, llp: false }, AD));
+  ok(r.form === "ITR-5" && r.ti === 1600000 && r.payable === 499200, "a firm with unlisted shares: ITR-5, the presumptive income carried (TI " + r.ti + ", tax " + r.payable + ")");
+  // a deliberate move to ITR-3 never shows TI 0
+  r = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({ form: "ITR-3", formSet: true }, ADA));
+  ok(r.form === "ITR-3" && r.ti === 2000000, "ITR-3 chosen by hand, no books: the 44ADA income carried (TI " + r.ti + ")");
+  r = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({ form: "ITR-3", formSet: true, presumptiveOpt: false }, ADA));
+  eq(r.ti, 0, "presumptive answered No: nothing carried");
+});
+T("B2: one residential status for the computation and the box", () => {
+  const RP = "/ITR3/PartA_GEN1/FilingStatus/ResidentialStatus";
+  const st = { form: "ITR-3", formSet: true, age: 65, regime: "old", salaries: [{ id: "s", s171: 450000 }], answers: { "ITR-3": { [RP]: "NRI" } } };
+  let r = page({ entity: "P", pan: "ZZZPZ9999Z" }, st);
+  const f = factsOf({ entity: "P", pan: "ZZZPZ9999Z" }, st, null, {});
+  ok(f.resident === "NRI" && r.model.resStatus === "NRI" && r.model.resident === false, "state.resident unset, the older ITR-3 answer NRI: the box and the model both read NRI (" + f.resident + ", " + r.model.resStatus + ")");
+  const r2 = page({ entity: "P", pan: "ZZZPZ9999Z" }, Object.assign({}, st, { answers: {}, resident: "NRI" }));
+  eq(r.payable, r2.payable, "the tax is the non-resident's, as with the box set to Non-resident");
+  ok(LW.resOf && LW.resOf(st).from === "answer" && LW.resOf({ resident: "RES", answers: st.answers }).from === "state", "law.js resOf: where it was read from (the return's own first)");
+  eq(LW.resOf && LW.resOf({ resident: "RES", answers: st.answers }).status, "RES", "the return's own status wins over the older answer");
+  // where it changes the tax: a plain note in the info tone
+  const make = (s2) => TX.compute(MO.buildModel({ entity: "P", client: { entity: "P", pan: "ZZZPZ9999Z" }, state: s2, books: null, imports: MO.importsOf([]) }));
+  const cNow = make(st), cWas = make(Object.assign({}, st, { resident: "RES" }));
+  eq(P.resNote && P.resNote(st, cNow, cWas), "Tax worked out for a non-resident, as this return's residential status says.", "the tax differs from a resident's: the note");
+  eq(P.resNote && P.resNote(st, cNow, cNow), "", "the same tax: no note");
+  eq(P.resNote && P.resNote(Object.assign({}, st, { resident: "NRI" }), cNow, cWas), "", "the box itself says Non-resident: no note");
+  // Choose clears the box: the older answer goes too, so the box shows Choose
+  const cl = P.setResident ? P.setResident(st, "") : {};
+  const after = Object.assign({}, st, cl);
+  ok(cl.resident === undefined && "resident" in cl && factsOf({ pan: "ZZZPZ9999Z" }, after, null, {}).resident === "", "Choose: the box is empty (" + JSON.stringify(cl) + ")");
+  ok(MO.buildModel({ entity: "P", client: {}, state: after, books: null, imports: {} }).resStatus === "", "and the model reads it as not known too");
+  const set = P.setResident ? Object.assign({}, st, P.setResident(st, "RES")) : {};
+  ok(set.resident === "RES" && factsOf({ pan: "ZZZPZ9999Z" }, set, null, {}).resident === "RES" && !((set.answers || {})["ITR-3"] || {})[RP], "Resident chosen: kept as the return's own, the older answer dropped");
 });
 
 console.log(fails ? fails + " FAILED" : "all passed");

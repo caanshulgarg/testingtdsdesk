@@ -11,7 +11,7 @@ import "../../../../src/js/77-audit.js";
 import { makeStore, appDeps, fileIn, AY_KEY } from "../../lib/itr/store.js";
 import { LABEL } from "../../lib/itr/imports.js";
 import { importsOf, buildModel, buildProfile } from "../../lib/itr/model.js";
-import { ALL_FORMS, JSON_FORMS, recommendForm, chosenForm, formStatus, factsOf } from "../../lib/itr/pick.js";
+import { ALL_FORMS, JSON_FORMS, recommendForm, chosenForm, formStatus, factsOf, resFromAnswer, resNote, setResident } from "../../lib/itr/pick.js";
 import { compute, compareRegimes, fmtDate } from "../../lib/itr/tax.js";
 import { check, differences } from "../../lib/itr/check.js";
 import { verify, gate, GROUPS, isOpen } from "../../lib/itr/verify.js";
@@ -73,6 +73,8 @@ function useItr() {
   const form = chosenForm(state, rec);
   if (form !== w.form) w = make(form);
   const model = w.model, comp = w.comp, second = check(model), fstat = formStatus(form, rec);
+  // the residential status read from the older ITR-3 answer as a non-resident: said where it changes the tax (pick.js resNote)
+  const resSaid = resFromAnswer(state) ? resNote(state, comp, compute(buildModel({ entity, client, state: Object.assign({}, state, { form, resident: "RES" }), books, imports, due, prevState: prev }))) : "";
   const profile = buildProfile({ entity, client, state, imports });
   const sch = useSchema(fstat.json ? form : "");
   const gst = D ? D.gst : gstData(String(+AY_KEY - 1), books);
@@ -84,7 +86,7 @@ function useItr() {
   const checks = verify({ model, main: comp, imports, books, gst, tds: bk ? bk.tds : null, form3cd: bk ? bk.form3cd : null, pfBooks: pfBooks(books), esiBooks: bk ? bk.esiBooks : null, pfAdminCharges: state.pfAdmin,
     pf36va: model.pf36va, dues43B: bk ? model.dues43B : null, msme: bk ? model.msme : null, prior43B: model.prior43B, pfProof: bk ? bk.pfProof : null, due, answers: state.paidOn || {},
     nrAsk: bk ? bk.nrAsk : [], coverage: json ? json.coverage : [], accepted: state.accepted || {} });
-  return { D, store, client, files, state, imports, books, facts, form, rec, fstat, model, profile, comp, second, checks, sch, json };
+  return { D, store, client, files, state, imports, books, facts, form, rec, fstat, resSaid, model, profile, comp, second, checks, sch, json };
 }
 // what the recommendation needs to know (pick.js factsOf), before the computation
 // capital gains other than 112A up to Rs 1.25 lakh (ITR-1 and ITR-4 take only those)
@@ -138,9 +140,9 @@ const ny = (v) => (v === "y" ? true : v === "n" ? false : undefined);
 function FormPick({ X, refresh }) {
   const rec = X.rec, fs = X.fstat, code = rec.code, set = (p) => { X.store.setState(p); refresh(); };
   const exemptQ = "CTABJLG".includes(code || "-"), presQ = (code === "P" || code === "H" || (code === "F" && X.state.llp !== true));
-  // rule 12 (pick.js): an individual is asked what rules ITR-1 and ITR-4 out (unanswered: ITR-2, or ITR-3 for business
-  // income); a HUF with presumptive income the same for ITR-4; a firm (not an LLP) with it the unlisted shares and the
-  // agricultural income (unanswered: ITR-5)
+  // rule 12 (pick.js): an individual is asked what rules ITR-1 and ITR-4 out (unanswered: ITR-2; presumptive income
+  // stays on ITR-4 with its JSON held); a HUF with presumptive income the same for ITR-4; a firm (not an LLP) with it
+  // the unlisted shares and the agricultural income (unanswered: ITR-4, its JSON held)
   const Q12 = [["director", "A director in a company at any time in the year"], ["unlisted", "Held unlisted equity shares at any time in the year"], ["agriOver", "Agricultural income above Rs 5,000"]];
   // the residential status (individuals and HUFs; ITR-1 and ITR-4 need Resident), kept as the return's own
   // (state.resident); firm or LLP (a firm PAN: ITR-4 only for a partnership firm), kept where Data keeps it (state.llp)
@@ -162,6 +164,7 @@ function FormPick({ X, refresh }) {
       {code && X.form !== rec.form && <button className="linkbtn" data-itr-use-rec="" onClick={() => set({ form: "", formSet: false })}>{"Use " + rec.form}</button>}
     </div>
     {fs.text && <p className="itr-pick-warn" data-itr-form-warn="" data-tone={fs.tone} role="status">{fs.text}</p>}
+    {X.resSaid && <p className="itr-pick-warn" data-itr-res-note="" data-tone="info" role="status">{X.resSaid}</p>}
     {faLeft && <p className="itr-pick-warn" data-itr-fa-left="" data-tone="info" role="status">{"Schedule FA has " + X.facts.faRows + (X.facts.faRows === 1 ? " row" : " rows") + ", but assets outside India is not answered Yes. While " + (X.facts.faRows === 1 ? "it is" : "they are") + " there, ITR-1 and ITR-4 do not fit. "}
       <button className="linkbtn" data-itr-fa-remove="" onClick={() => set({ fa: {} })}>Remove these rows</button></p>}
     {(exemptQ || presQ || q1.length > 0 || resQ || llpQ) && <div className="itr-pick-row itr-pick-qs">
@@ -174,7 +177,7 @@ function FormPick({ X, refresh }) {
       {q1.map(([k, label]) => <label key={k} className="itr-pick-f"><span>{label}</span>
         <select data-itr-q1={k} value={yn(X.state[k])} onChange={(e) => set({ [k]: ny(e.target.value) })}><option value="">Choose</option><option value="y">Yes</option><option value="n">No</option></select></label>)}
       {resQ && <label className="itr-pick-f"><span>Residential status</span>
-        <select data-itr-res="" value={X.facts.resident || ""} onChange={(e) => set({ resident: e.target.value || undefined })}><option value="">Choose</option><option value="RES">Resident</option><option value="NOR">Not ordinarily resident</option><option value="NRI">Non-resident</option></select></label>}
+        <select data-itr-res="" value={X.facts.resident || ""} onChange={(e) => set(setResident(X.state, e.target.value))}><option value="">Choose</option><option value="RES">Resident</option><option value="NOR">Not ordinarily resident</option><option value="NRI">Non-resident</option></select></label>}
     </div>}
   </section>;
 }

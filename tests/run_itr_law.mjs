@@ -458,14 +458,14 @@ T("ITR-4 rule 12", () => {
     eq(rf(pan, { agriIncome: undefined, agriOver: true }).form, "ITR-3", who + ", agricultural income said to be over Rs 5,000: ITR-3");
     eq(rf(pan, { agriIncome: undefined, agriOver: false }).form, "ITR-4", who + ", agricultural income said to be Rs 5,000 or less: ITR-4");
     eq(rf(pan, { unlisted: undefined, unlistedSold: true }).form, "ITR-3", who + ", an unlisted share among the gains: held in the year: ITR-3");
-    // not known: never ITR-4 on a guess
+    // not known: never the ITR-4 JSON on a guess; the computation stays on ITR-4 (B1)
     r = rf(pan, { director: undefined });
     if (pan[3] === "H") ok(r.form === "ITR-4", who + ", director not answered: not asked of a HUF: ITR-4 (" + r.form + ")");
-    else ok(r.form === "ITR-3" && /director/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why) && /ITR-4/.test(r.why), who + ", whether a director not known: ITR-3, and the reason asks for what is not known: " + r.why);
+    else ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /director/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), who + ", whether a director not known: ITR-4 for the computation, its JSON held, and the reason asks for what is not known: " + r.why);
     r = rf(pan, { unlisted: undefined, agriIncome: undefined });
-    ok(r.form === "ITR-3" && /unlisted/i.test(r.why) && /agricultural/i.test(r.why) && !/director/i.test(r.why), who + ", two facts not known: both named, the known one not: " + r.why);
+    ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /unlisted/i.test(r.why) && /agricultural/i.test(r.why) && !/director/i.test(r.why), who + ", two facts not known (ITR-4, JSON held): both named, the known one not: " + r.why);
     r = PK.recommendForm({ pan, business: true, presumptive: true, ti: 1800000 });
-    ok(r.form === "ITR-3" && /business or profession/i.test(r.why) && /ITR-4/.test(r.why), who + ", nothing asked yet: ITR-3 for the business income, and why ITR-4 is not picked: " + r.why);
+    ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /presumptive/i.test(r.why) && /Answer the questions below/.test(r.why), who + ", nothing asked yet: ITR-4 for the presumptive income (its JSON held), and what to answer: " + r.why);
     // a known bar: ITR-4 does not fit when chosen by hand (no JSON for a form the person may not file)
     const s = PK.formStatus("ITR-4", rf(pan, { director: true }));
     if (pan[3] === "H") ok(s.fits && s.json, who + ", director Yes: ITR-4 fits, its JSON is made"); else ok(!s.fits && !s.json && /ITR-4 is not for/.test(s.text) && /director/.test(s.text) && /ITR-3/.test(s.text), who + ", a director, ITR-4 chosen by hand: does not fit, no JSON, said: " + s.text);
@@ -484,7 +484,7 @@ T("ITR-4 rule 12", () => {
   let r = F({ agriIncome: 9000 });
   ok(r.form === "ITR-5" && /agricultural/i.test(r.why), "a firm with agricultural income Rs 9,000: ITR-5: " + r.why);
   r = F({ agriIncome: undefined });
-  ok(r.form === "ITR-5" && /agricultural/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), "a firm, agricultural income not known: ITR-5, said: " + r.why);
+  ok(r.form === "ITR-4" && !PK.formStatus("ITR-4", r).json && /agricultural/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why), "a firm, agricultural income not known: ITR-4, its JSON held, said: " + r.why);
   eq(F({ llp: true }).form, "ITR-5", "an LLP: ITR-5 whatever the rest");
   // the rest of ITR-4's rules stay as they were
   eq(rf("ZZZPX1234Z", { ti: 6000000 }).form, "ITR-3", "total income above Rs 50 lakh: ITR-3");

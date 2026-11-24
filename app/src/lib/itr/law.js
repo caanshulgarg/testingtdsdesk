@@ -89,6 +89,15 @@ export function resStatus(v) {
   const s = String(v == null ? "" : v).toUpperCase();
   return s === "RES" || s === "NOR" || s === "NRI" ? s : "";
 }
+// the one residential status the computation, the form box and the JSON all read (the review of the ITR follow-ups,
+// B2): the return's own (state.resident), else the ITR-3 answer given before the box; {status, from: "state" | "answer" | ""}
+export function resOf(st) {
+  st = st || {};
+  const own = resStatus(st.resident);
+  if (own) return { status: own, from: "state" };
+  const ans = resStatus(((st.answers || {})["ITR-3"] || {})[RES_PATH]);
+  return ans ? { status: ans, from: "answer" } : { status: "", from: "" };
+}
 export const ITR4_MAX_INCOME = ITR4.maxIncome; // total income not more than Rs 50 lakh (schema maximum 51,25,000 with 112A)
 
 // Section 40(b): partners' remuneration and interest (Finance (No. 2) Act 2024, from AY 2025-26)

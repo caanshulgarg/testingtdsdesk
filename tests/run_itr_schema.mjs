@@ -112,6 +112,19 @@ console.log("coverage: a schedule with figures FinCom does not fill blocks the J
     const k4 = coverage({ form: "ITR-4", model, comp, profile: {} }, {}).map((x) => x.key);
     ok(k4.includes("cf_itr4"), "ITR-4 with a loss to carry forward: blocked"); }
 }
+console.log("presumptive income on ITR-3 / ITR-5 without books: computed, the JSON held (its no-books lines are not filled yet)");
+{
+  for (const [form, entity, pan] of [["ITR-3", "P", "ZZZPZ9999Z"], ["ITR-5", "F", "ZZZFZ9999Z"]]) {
+    const st = { form, presumptive: { ad: { digital: 3000000, other: 500000 } }, regime: "new", llp: false };
+    const model = buildModel({ entity, client: { entity, pan }, state: st, books: null, imports: importsOf([]) }), comp = compute(model);
+    ok(comp.ti === 220000, form + ", no books, 44AD: the presumptive income is computed (TI " + comp.ti + ")");
+    const keys = coverage({ form, model, comp, profile: {} }, {}).map((x) => x.key);
+    ok(keys.includes("pres_nobooks"), form + ": the JSON is held, said (" + keys.join(",") + ")");
+  }
+  const st4 = { form: "ITR-4", presumptive: { ad: { digital: 3000000, other: 500000 } }, regime: "new" };
+  const m4 = buildModel({ entity: "P", client: { entity: "P", pan: "ZZZPZ9999Z" }, state: st4, books: null, imports: importsOf([]) });
+  ok(!coverage({ form: "ITR-4", model: m4, comp: compute(m4), profile: {} }, {}).some((x) => x.key === "pres_nobooks"), "ITR-4: not held");
+}
 console.log("ITR-4 houses: up to the schema's own limit (the review of 24-Nov-2026 (2))");
 {
   const LW = await import("../app/src/lib/itr/law.js");
