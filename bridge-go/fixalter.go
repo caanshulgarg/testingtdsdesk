@@ -24,10 +24,16 @@
 //
 // The review of 595554fbe (24-Nov-2026): the entry's date and type FinCom sends must be the ones just read, else
 // "changed since" and nothing is sent; the typing gate is looked at again right before the send; what Tally changed
-// beyond what was asked is said in the answer (alsoChanged); a ledger fix needs the ledger's AlterID; /fix never
-// changes a voucher's PARTYGSTIN (decision 5: the ledger only; the approved form keeps the field, unused); the
+// beyond what was asked is said in the answer (alsoChanged); a ledger fix needs the ledger's AlterID; the
 // registration type goes as read (Regular only when there is none); the recorder line's source is "fix"; an ACTION
 // with '&' in its value is refused by the posting rule (post.go cannotSend)
+//
+// The owner's decision of 24-Nov-2026 (amends decision 5, "ledger only"): a GSTIN fix corrects the party ledger AND that
+// party's invoices carrying the wrong GSTIN. Each invoice is one /fix of target "voucher" with fields {gstin} only
+// through shape A's PARTYGSTIN, a 15-character GSTIN whose check digit holds, and every check of a voucher fix (this
+// user's Tally open, the AlterID unchanged, the date and type as read, the typing gate before the read and the send).
+// A ledger FinCom has no AlterID for is read first in the same Save ({readFirst: true}: FinComLedgerByName under every
+// gate, nothing sent, the ledger and its AlterID given back); the fix itself still goes only with that AlterID.
 package main
 
 import (
@@ -354,19 +360,26 @@ func runFix(p M) M {
 	f := obj(p["fields"])
 	switch str(p["target"]) {
 	case "voucher":
-		for k := range f {
-			if k == "gstin" {
-				// decision 5 (23-Nov-2026): a GSTIN is changed on the party ledger only, never on an entry
-				return M{"ok": false, "message": "Not sent: a GSTIN is changed on the party ledger, not on an entry."}
+		for k, v := range f {
+			if k != "number" && k != "pos" && k != "gstin" {
+				return M{"ok": false, "message": "Only an entry's number, place of supply or party GSTIN is changed here."}
 			}
-			if k != "number" && k != "pos" {
-				return M{"ok": false, "message": "Only an entry's number or place of supply is changed here."}
+			if _, ok := v.(string); !ok {
+				return M{"ok": false, "message": "Not sent: the " + k + " is not a text."}
 			}
 		}
 		if strings.TrimSpace(str(p["alterId"])) == "" {
 			return M{"ok": false, "message": "Open the entry again: FinCom needs its change number from Tally first."}
 		}
 		ff := fixFields{number: strings.TrimSpace(str(f["number"])), pos: strings.TrimSpace(str(f["pos"]))}
+		if g, asked := f["gstin"]; asked {
+			// the owner's decision of 24-Nov-2026: the party's invoices carrying the wrong GSTIN are corrected too, by the
+			// approved shape A's PARTYGSTIN; only a 15-character GSTIN whose check digit holds, else nothing is read or sent
+			ff.gstin = strings.ToUpper(strings.TrimSpace(str(g)))
+			if !fixGSTINOK(ff.gstin) {
+				return M{"ok": false, "message": "Not sent: the GSTIN is not valid (15 characters, its check digit right)."}
+			}
+		}
 		if n, ok := fixStates[ff.pos]; ok { // FinCom names the state by its GST code; Tally's spelling is the bridge's
 			ff.pos = n
 		}
@@ -380,17 +393,22 @@ func runFix(p M) M {
 				return M{"ok": false, "message": "Only a party's GSTIN or PAN is changed here."}
 			}
 		}
-		if onlyDigits(strings.TrimSpace(str(p["alterId"]))) == "" {
-			// the plan's AlterID check for a ledger (section 2.4 step 3): FinCom sends the ledger's ALTERID
-			return M{"ok": false, "message": "Open the party again: FinCom needs its change number from Tally first."}
-		}
 		g, pan := strings.ToUpper(strings.TrimSpace(str(f["gstin"]))), strings.ToUpper(strings.TrimSpace(str(f["pan"])))
 		if (g == "") == (pan == "") || (g != "" && !fixGSTINOK(g)) || (pan != "" && !reFixPAN.MatchString(pan)) {
 			return M{"ok": false, "message": "Not sent: give one valid GSTIN or one valid PAN."}
 		}
+		if onlyDigits(strings.TrimSpace(str(p["alterId"]))) == "" {
+			if p["readFirst"] == true {
+				// the owner's decision of 24-Nov-2026: FinCom holds no AlterID for this ledger, so the same Save reads it
+				// first (FinComLedgerByName, every gate of a fix); nothing is sent, FinCom sends the fix with this AlterID
+				return fixOne(p, func(port int, company string) M { return fixLedgerReadOnly(p, port, company) })
+			}
+			// the plan's AlterID check for a ledger (section 2.4 step 3): FinCom sends the ledger's ALTERID
+			return M{"ok": false, "message": "Open the party again: FinCom needs its change number from Tally first."}
+		}
 		return fixOne(p, func(port int, company string) M { return fixLedger(p, g, pan, port, company) })
 	}
-	return M{"ok": false, "message": "Only an entry's number or place of supply, or a party's GSTIN or PAN, is changed here."}
+	return M{"ok": false, "message": "Only an entry's number, place of supply or party GSTIN, or a party's GSTIN or PAN, is changed here."}
 }
 
 // the gates every fix passes: typing, postings first, this user's own Tally and the linked company, one at a time
@@ -586,6 +604,27 @@ func fixLedgerReg(raw, name string) (from, regType string) {
 		return "", ""
 	}
 	return regs[len(regs)-1].from, regs[len(regs)-1].typ
+}
+
+// the ledger as Tally holds it now, read by its name, nothing sent (a fix's read first, when FinCom has no AlterID)
+func fixLedgerReadOnly(p M, port int, company string) M {
+	name := strings.TrimSpace(str(p["ledger"]))
+	bf, err := fixBooksFromFn(company)
+	if err != nil {
+		return fixHeldWhy(err)
+	}
+	raw, err := fixReadLedgerFn(port, company, bf, name)
+	if err != nil {
+		return fixHeldWhy(err)
+	}
+	rows, _ := ledRowsOf(raw)
+	for _, r := range rows {
+		if strings.EqualFold(r.name, name) {
+			now := M{"gstin": r.gstin, "pan": r.pan, "alterId": fmt.Sprint(r.alter), "state": r.state}
+			return M{"ok": false, "read": true, "now": now, "alterNow": now["alterId"], "ledger": r.name, "message": "Read from Tally."}
+		}
+	}
+	return M{"ok": false, "gone": true, "message": "Tally has no ledger named " + name + "."}
 }
 
 func fixLedger(p M, gstin, pan string, port int, company string) M {

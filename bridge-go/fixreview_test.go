@@ -1,8 +1,7 @@
 package main
 
 // Fix in place, the review of 595554fbe (24-Nov-2026): the entry's date and type as read, the typing gate just before
-// the send, what Tally changed beyond what was asked, a ledger's AlterID, an encoded ACTION, no PARTYGSTIN on a voucher
-// (decision 5), the registration type as read, the recorder line's source. Made-up data only.
+// the send, what Tally changed beyond what was asked, a ledger's AlterID, an encoded ACTION, the registration type as read, the recorder line's source. Made-up data only.
 
 import (
 	"strings"
@@ -117,19 +116,6 @@ func TestImportRefusesEncodedAction(t *testing.T) {
 	// a plain Create still goes
 	if cannotSend(base) != "" || checkAllowed(importEnvelope("Vouchers", zz, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+base+"</TALLYMESSAGE>")) != nil {
 		t.Fatal("a plain posting is refused")
-	}
-}
-
-// decision 5: a GSTIN is changed on the party ledger only, never on a voucher through /fix
-func TestFixRefusesVoucherGSTIN(t *testing.T) {
-	s := &fixStand{alter: "57", number: "A", reply: "<RESPONSE><ALTERED>1</ALTERED></RESPONSE>"}
-	s.install(t)
-	for _, f := range []M{{"gstin": "27AAPFU0939F1ZV"}, {"number": "INV-2", "gstin": "27AAPFU0939F1ZV"}} {
-		a := fixAsk("57")
-		a["fields"] = f
-		if r := runFix(a); r["ok"] != false || s.reads != 0 || len(s.sent) != 0 || !strings.Contains(str(r["message"]), "party ledger") {
-			t.Fatalf("a voucher's GSTIN: %v (reads %d, sent %d)", r, s.reads, len(s.sent))
-		}
 	}
 }
 

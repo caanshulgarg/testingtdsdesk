@@ -193,6 +193,8 @@ type fixStand struct {
 	typing   bool
 	readErr  error
 	afterNum string // the number Tally holds after the import ("" : the one sent)
+	gstin    string // the entry's PARTYGSTIN in Tally ("" : none on the entry)
+	keepGST  bool   // Tally keeps its own PARTYGSTIN after the import
 }
 
 func (s *fixStand) install(t *testing.T) {
@@ -209,18 +211,28 @@ func (s *fixStand) install(t *testing.T) {
 			return "", s.readErr
 		}
 		return `<VOUCHER REMOTEID="` + fxGUID + `" VCHTYPE="Sales"><GUID>` + fxGUID + `</GUID><MASTERID>42</MASTERID><ALTERID>` + s.alter +
-			`</ALTERID><DATE>20260525</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>` + s.number + `</VOUCHERNUMBER><NARRATION>made up</NARRATION>` +
+			`</ALTERID><DATE>20260525</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>` + s.number + `</VOUCHERNUMBER>` + gstTag(s.gstin) + `<NARRATION>made up</NARRATION>` +
 			`<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sample Buyer</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>`, nil
 	}
 	fixSendFn = func(port int, x string) (string, error) {
 		s.sent = append(s.sent, x)
 		if strings.Contains(s.reply, "<ALTERED>1") {
 			s.alter = "99"
-			s.number = or(s.afterNum, group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1))
+			s.number = or(s.afterNum, or(group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1), s.number))
+			if g := group(`<PARTYGSTIN>([^<]*)</PARTYGSTIN>`, x, 1); g != "" && !s.keepGST {
+				s.gstin = g
+			}
 		}
 		return s.reply, nil
 	}
 	fixQueueFn = func(c *change) { s.queued = append(s.queued, c) }
+}
+
+func gstTag(g string) string {
+	if g == "" {
+		return ""
+	}
+	return "<PARTYGSTIN>" + g + "</PARTYGSTIN>"
 }
 
 func fixAsk(alter string) M {

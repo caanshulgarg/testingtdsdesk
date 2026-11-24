@@ -36,8 +36,12 @@ Before you start
    Expect: Saved. In Tally: Alter > Ledger > ZZ Buyer > GST registration details: GSTIN 27AAPFU0939F1ZV, registration
    type as it was before (Regular only if the ledger had none), state Maharashtra, the date it applies from unchanged (or the books' first day if there was none);
    the ledger's name, group, opening balance and bank details unchanged.
-   Note: the invoice itself keeps the GSTIN Tally stored on it when it was entered (decision 5: the ledger only). Note
-   on each version whether the What to fix row leaves the list (it does only when the invoice has no GSTIN of its own).
+   Then (the owner's decision of 24-Nov-2026: the ledger AND its invoices) FinCom lists ZZ Buyer's invoices of that
+   month with another GSTIN or none, all ticked > Save. Expect: each invoice in Tally shows GSTIN 27AAPFU0939F1ZV in
+   Party details; its lines, bill-wise details, narration and IRN unchanged (screenshots against step 1's); each sent on
+   its own (FinComFixVoucher with PARTYGSTIN only), each row leaving What to fix once its own invoice is done.
+   Also: a ledger FinCom has no change number for (books read before the ledger list was read): Save reads that one
+   ledger first (FinComLedgerByName), then saves, in the same press. Time each read and each Alter against 2 s.
 
 5. PAN on the ledger (FinComFixLedger)
    Not yet on a screen: skip until the TDS screens offer it.
