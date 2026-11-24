@@ -46,25 +46,12 @@ const NAMED = [
   [/^Queued: posts by itself when (.+) is opened in Tally on .+? with FinCom Bridge\.?$/s, (m) => "Queued: posts by itself when " + m[1] + " is opened in Tally on a computer with FinCom Bridge"],
   [/^Held: .+? was posting this and can no longer post/s, () => "Held: the FinCom Bridge that was posting this can no longer post; how far it got is not known. Check in Tally: Mark posted what is there, release the rest (Not in Tally)"],
 ];
-// (whole words only, and never a common word a computer or a Windows user may be called: "Admin", "Tally", "PC", …,
-// which ordinary posting words also use; a Windows user "DOMAIN\\name" also by its name alone, a "computer · user" by each)
-const COMMON = new Set(["admin", "administrator", "tally", "user", "users", "owner", "pc", "desktop", "laptop", "office", "accounts", "account", "guest", "server", "home", "default", "public", "computer", "system", "staff", "fincom", "bridge", "windows"]);
-function namesOf(devs) {
-  const out = new Set(), one = (x) => { const t = String(x || "").trim().toLowerCase(); if (t.length >= 3 && !COMMON.has(t)) out.add(t); };
-  const add = (x) => { const s = String(x || ""); one(s); for (const p of s.split(" \u00b7 ")) { one(p); if (p.includes("\\")) one(p.split("\\").pop()); } };
-  for (const d of devs || []) {
-    add(d && d.name); const i = (d && d.info) || {}; add(i.computer); add(i.user);
-    for (const b of Object.values(i.bridges || {})) { add(b && b.computer); add(b && b.user); }
-  }
-  return out;
-}
 export function postWaitMsg(job, devs) {
   const m = String((job && job.message) || "");
   for (const [re, f] of NAMED) { const x = m.match(re); if (x) return f(x); }
-  const lc = m.toLowerCase(), word = (n) => { let i = lc.indexOf(n); const w = (c) => /[\p{L}\p{N}_]/u.test(c || "");
-    for (; i >= 0; i = lc.indexOf(n, i + 1)) if (!w(lc[i - 1]) && !w(lc[i + n.length])) return true; return false; };
-  for (const n of namesOf(devs || tallyDevs())) if (word(n)) return "";
-  return m;
+  // (any other words: the names left out, the rest kept: src/js/62 postNameScrub, which every page loads; the company's
+  // own name never cut, even when a computer key is called so; review of bb00ebcee)
+  return postNameScrub(m, [job && job.company], devs || tallyDevs());
 }
 if (typeof window === "object") window.postWaitMsg = (job) => { try { return postWaitMsg(job); } catch (e) { return ""; } };
 if (typeof window === "object") window.postWaitWhy = (job) => { try { return postWaitWhy(job); } catch (e) { return ""; } };

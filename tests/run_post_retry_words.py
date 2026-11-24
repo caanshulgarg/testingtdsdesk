@@ -111,6 +111,30 @@ with sync_playwright() as p:
         pg.evaluate(js % ("Not queued again for " + CO + ": " + STARTED)); pg.wait_for_timeout(300)
         t = " | ".join(pg.evaluate("() => window.__t"))
         ok(t and not named(t), label + ": %s" % t)
+    print("5. the Sales page: an invoice whose posting the cloud failed (reroute 174/185) names no computer or Windows user")
+    BK = "Builders"   # a computer key named like a word of the client's name
+    pg.evaluate("""(bk) => { TLight.st.devs = TLight.st.devs.concat([{id: "dev-bk", name: bk, info: {computer: bk, beat: {at: new Date().toISOString()}, bridges: {}}}]); }""", BK)
+    SALES = """async ([n, m]) => { const cid = S.coId; S.tab = "sales"; S.step = null; await loadSales(cid);
+      const v = newInvoice({number: n, date: "2026-11-02", customerName: "Kappa Retail", customerGstin: "", pos: "07", taxable: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, total: 1180, items: []}, "upload");
+      SL().list.push(v); mapInvoice(v); v.status = "ready"; v.postJob = "22222222-2222-4222-8222-22222222222" + n.slice(-1);
+      const row0 = CloudPost.row; CloudPost.row = async (id) => ({id, status: "failed", done: 0, n: 1, message: m, results: []});
+      try { await salesQueuedSync(); } finally { CloudPost.row = row0; }
+      SL().filter = "all"; SL().openId = v.id; render(); await new Promise(r => setTimeout(r, 600));
+      return [v.postError || "", [...document.querySelectorAll("[data-sales-posterr]")].map(e => e.innerText + " " + (e.title || "")).join(" | "), document.querySelector("#app").innerText]; }"""
+    for k, (label, m, want) in enumerate([
+        ("185 the link", "Not posted into " + CO + ": " + NOLINK, LINK),
+        ("54/185 stranded", "Not posted into " + CO + ": " + STR54("is set to Changes only"), ELSE),
+        ("174 held", "Held: " + W + " was posting this and can no longer post (not the main bridge any more, or Changes only); how far it got is not known.", START),
+        ("other words naming the computer", "Waiting at PC-DEMO1 for DEMO\\asha to open Tally; then post again.", "then post again"),
+        ("a computer key named like the client", "Ledger “" + CO + "” is not in Tally — create it, then post again.", "Ledger “" + CO + "” is not in Tally — create it, then post again.")]):
+        pe, shown, page = pg.evaluate(SALES, ["SQ/%d" % k, m])
+        ok(want in pe and not named(pe), label + ": the invoice's error (%s)" % pe)
+        ok(shown and want in shown and not named(shown) and not named(page), label + ": on the page (%s)" % shown[:300])
+    s1 = pg.evaluate("(m) => postCloudSay(m)", "Ask " + BK + " to open " + CO + " in Tally (PC-DEMO1 · DEMO\\asha), then post again.")
+    ok(CO in s1 and "then post again" in s1 and not named(s1), "postCloudSay keeps the advice and the client's name, the names left out (%s)" % s1)
+    s2 = pg.evaluate("(m) => postWaitMsg({company: %r, status: 'waiting', message: m})" % CO, "Ledger \u201c" + CO + "\u201d is not in Tally \u2014 create it, then post again.")
+    ok(s2.startswith("Ledger") and CO in s2, "a posting's own words with a computer key named like the client: kept, not left blank (%r)" % s2)
+    if os.environ.get("TDSDESK_SHOTS"): pg.screenshot(path=os.environ["TDSDESK_SHOTS"] + "/sales-posterror-plain.png")
     ok(not errors, "no page errors (%s)" % errors[:2])
     br.close()
 srv.shutdown()

@@ -152,7 +152,33 @@ function postCloudSay(m){
   const s = postReasonText(m), r = POST_REASONS.find(x => /^(elsewhere|startedelsewhere|nolink)$/.test(x.id) && x.re.test(s));
   if (r) return r.reason + ". " + r.fix;
   const t = s.replace(/(that (?:has|have) it open|a computer that may post|your FinCom Bridge) \([^)]*\)/g, "$1");
-  return (typeof postWaitMsg === "function" ? postWaitMsg({message: t}) : t) || "FinCom\u2019s cloud did not do it. Open the company in Tally on a computer with FinCom Bridge, then try again.";
+  return postNameScrub(t) || "FinCom\u2019s cloud did not do it. Open the company in Tally on a computer with FinCom Bridge, then try again.";
+}
+// the firm's computers' and Windows users' names (the computer keys, TLight and the Tally page's beats), whole words only,
+// never a common word ("Admin", "Tally", "PC", …, which ordinary posting words also use): {name (lower case): "pc"|"user"}
+const POST_COMMON = new Set("admin administrator tally user users owner pc desktop laptop office accounts account guest server home default public computer system staff fincom bridge windows the and for not you your this that with from".split(" "));
+function postNamesKnown(devs){
+  const out = new Map(), one = (x, k) => { const t = String(x || "").trim().toLowerCase(); if (t.length >= 3 && !POST_COMMON.has(t) && !out.has(t)) out.set(t, k); };
+  const add = (x, k) => { const s = String(x || ""); one(s, k); s.split(" \u00b7 ").forEach((p, i) => { one(p, i ? "user" : k); if (p.includes("\\")) one(p.split("\\").pop(), "user"); }); };
+  (devs || [].concat((typeof TLight === "object" && TLight.st && TLight.st.devs) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices) || [])).forEach(d => {
+    if (!d) return; const i = d.info || {}; add(d.name, "pc"); add(i.computer, "pc"); add(i.user, "user");
+    Object.values(i.bridges || {}).forEach(b => { add(b && b.computer, "pc"); add(b && b.user, "user"); }); });
+  return out;
+}
+// a message with no computer or Windows user named in it, the rest of its words kept (review of bb00ebcee): a bracket
+// naming one ("(PC · DOMAIN\\user)", "(D:\\TallyData)") left out, a name the app knows said "the Tally computer" or "the
+// Windows user". The companies' own names (keep, and the firm's clients) are never cut, even when a computer is called so
+function postNameScrub(m, keep, devs){
+  let s = String(m == null ? "" : m); if (!s) return "";
+  const names = postNamesKnown(devs), lc = () => s.toLowerCase(), w = c => /[\p{L}\p{N}_]/u.test(c || ""), hold = [];
+  const cos = [].concat(keep || [], Object.values((typeof S === "object" && S && S.companies) || {}).flatMap(c => [c && c.name, c && c.tallyName])).map(x => String(x || "").trim()).filter(x => x.length >= 3).sort((a, b) => b.length - a.length);
+  // (each name put in a mark first, so no word put in is looked at again)
+  const mark = t => { hold.push(t); return "\u0001" + (hold.length - 1) + "\u0002"; };
+  cos.forEach(c => { for (let i = lc().indexOf(c.toLowerCase()); i >= 0; i = lc().indexOf(c.toLowerCase(), i + 1)){ const k = mark(s.slice(i, i + c.length)); s = s.slice(0, i) + k + s.slice(i + c.length); } });
+  const has = (t, n, f) => { const l = t.toLowerCase(); for (let i = l.indexOf(n, f || 0); i >= 0; i = l.indexOf(n, i + 1)) if (!w(l[i - 1]) && !w(l[i + n.length])) return i; return -1; };
+  s = s.replace(/ ?\(([^()]*)\)/g, (a, x) => / \u00b7 |\\|[A-Z]:\\/.test(x) || [...names.keys()].some(n => has(x, n) >= 0) ? "" : a);
+  [...names.keys()].sort((a, b) => b.length - a.length).forEach(n => { for (let i = has(s, n); i >= 0; i = has(s, n, i + 1)){ const k = mark(names.get(n) === "user" ? "the Windows user" : "the Tally computer"); s = s.slice(0, i) + k + s.slice(i + n.length); } });
+  return s.replace(/\u0001(\d+)\u0002/g, (a, i) => hold[+i]).replace(/\s+([,.;:])/g, "$1").replace(/\s{2,}/g, " ").trim();
 }
 // HTML entities in a message (the bridge's XML words) without the page (plainMsg needs a document)
 function postReasonText(m){
