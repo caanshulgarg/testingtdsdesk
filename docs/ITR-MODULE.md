@@ -144,10 +144,10 @@ no form is recommended or counts as fitting and no JSON is made ("FinCom needs t
 the form"), the chooser still shown; ITR-1 follows rule 12 (law.js ITR1): never for a director in a company, one who
 held unlisted equity shares in the year, or agricultural income above Rs 5,000. The form box asks these three for an
 individual; any not answered, ITR-2 is recommended and the reason names what is not known. ITR-4 follows rule 12(1)(b)
-and its proviso the same way (law.js ITR4): never for an individual or HUF who is a director in a company, nor for an
+and its proviso the same way (law.js ITR4): never for an individual who is a director in a company (no director bar for a HUF), nor for an
 individual, HUF or firm that held unlisted equity shares in the year (the portal's ITR-4 FAQ), nor for agricultural income
-above Rs 5,000. The form box asks the three of an individual, and of a HUF with presumptive income, and the unlisted
-shares and agricultural income of a firm (not an LLP) with it (and whenever ITR-4 is the form in use); any not answered,
+above Rs 5,000. The form box asks the three of an individual, the unlisted shares and agricultural income of a HUF with
+presumptive income and of a firm (not an LLP) with it (and whenever ITR-4 is the form in use); any not answered,
 ITR-3 is recommended for the business or profession income (ITR-5 for a firm), and the reason says "ITR-4 is not for
 someone who is a director in a company, held unlisted shares or has agricultural income above Rs 5,000. Answer the
 questions below to see if it fits." (naming only what is not answered). A Yes known rules the form out: chosen by hand,
@@ -166,8 +166,9 @@ it), ITR-5 until then. A loss of earlier years marked "No: the loss is lost" (se
 unabsorbed depreciation) is not brought forward. Rows left in Schedule FA after its answer is changed to No bar ITR-1 and
 ITR-4 only while they are there, and the form box offers "Remove these rows". The Losses card stays on Schedules for
 ITR-4 while there is an entry, so a wrong one can be removed. ITR-1's houses follow the year as ITR-4's do (law.js
-itr1Houses: two for AY 2026-27, one for an earlier year). A HUF itself cannot be a director: it is asked whether its
-karta is one ("ITR-4 is not for a HUF whose karta is a director in a company"). The no-PAN note is in the info tone.
+itr1Houses: two for AY 2026-27, one for an earlier year). The director bar is for an individual only: rule 12 speaks of "a
+person who is a director in a company", a HUF cannot be one, and its karta's directorship is his own, not the HUF's; a
+HUF is asked only the unlisted shares, agricultural income and residential status. The no-PAN note is in the info tone.
 Not modelled, FinCom has no data for them: income
 from outside India without an asset abroad, signing authority in an account outside India, tax deferred on ESOPs of an
 eligible start-up, relief claimed under 90 / 90A / 91, and (ITR-1) income of the kinds in 115BBDA / 115BBE, winnings
@@ -177,7 +178,7 @@ taxpayer until it is known.
 | Form | Who | Rules |
 |---|---|---|
 | ITR-3 | Individual / HUF with books | Slabs: new regime 0-4L nil, 5/10/15/20/25/30% to 24L+ (115BAC(1A)); old 2.5L (3L at 60, 5L at 80) 5/20/30%. 87A (the reading the owner confirms, below): new regime, eligibility on TOTAL income (special-rate income included) up to Rs 12 lakh, up to Rs 60,000, the rebate and its marginal relief above 12 lakh only ever against the tax on normal income; old regime, total income up to Rs 5 lakh, up to Rs 12,500 against the tax on normal income, 111A and 112 (never 112A). Any rebate with special-rate income is shown on Checks. Surcharge 10/15/25/37% above 50L/1Cr/2Cr/5Cr, 25% cap in the new regime, 15% cap on 111A/112/112A, marginal relief at each band. Special rates 111A 20%, 112A 12.5% above 1.25L, 112 12.5%; the unused basic exemption set first against 111A (20%), then 112, then 112A. Chapter VI-A, each section's limit: 80C + 80CCC + 80CCD(1) 1.5L (80CCE); 80CCD(1B) 50k; 80CCD(2) 14% of salary in the new regime, 10% in the old (14% for a government employer); 80D 25k / 50k (senior) for self and family plus 25k / 50k (senior parents); 80DD 75k / 1.25L severe; 80DDB 40k / 1L senior patient; 80U 75k / 1.25L severe; 80TTA 10k (not seniors), 80TTB 50k (seniors only); 80GG 60k; 80EE 50k; 80EEA / 80EEB 1.5L; 80G 100% / 50% with qualifying donations within 10% of the adjusted gross total income and no cash above Rs 2,000. New regime: 80CCD(2), 80CCH and 80JJAA only. Regime: both worked out and shown; the owner chooses; old needs Form 10-IEA (asked) |
-| ITR-4 | Resident individual / HUF / firm (not LLP), presumptive, TI up to 50L; not an individual who is a director in a company (a HUF: its karta), not an individual / HUF / firm that held unlisted equity shares, not agricultural income above Rs 5,000, no assets outside India, no TDS under 194N, no loss brought forward, up to two houses for AY 2026-27 (rule 12) | 44AD 6% of digital receipts + 8% of others (limit 2 Cr, 3 Cr if cash up to 5%); 44ADA 50% (50L, 75L if cash up to 5%; not HUF); 44AE Rs 1,000 a ton a month (heavy) / Rs 7,500 a month, at most 10 vehicles. Declared below the minimum, above the limit, wrong entity, TI above 50L, a tax audit or capital gains beyond 112A 1.25L: Needs you (ITR-3 / ITR-5) |
+| ITR-4 | Resident individual / HUF / firm (not LLP), presumptive, TI up to 50L; not an individual who is a director in a company (no director bar for a HUF), not an individual / HUF / firm that held unlisted equity shares, not agricultural income above Rs 5,000, no assets outside India, no TDS under 194N, no loss brought forward, up to two houses for AY 2026-27 (rule 12) | 44AD 6% of digital receipts + 8% of others (limit 2 Cr, 3 Cr if cash up to 5%); 44ADA 50% (50L, 75L if cash up to 5%; not HUF); 44AE Rs 1,000 a ton a month (heavy) / Rs 7,500 a month, at most 10 vehicles. Declared below the minimum, above the limit, wrong entity, TI above 50L, a tax audit or capital gains beyond 112A 1.25L: Needs you (ITR-3 / ITR-5) |
 | ITR-5 | Firm / LLP | 30%, surcharge 12% above 1 Cr with marginal relief, no 87A. 40(b): interest to partners at most 12% simple; working partners' remuneration up to Rs 3 lakh or 90% of book profit on the first Rs 6 lakh (or a loss), 60% on the rest; book profit = business income before the remuneration (Explanation 3); a sleeping partner's remuneration not allowed |
 | ITR-6 | Company | 25% if FY 2023-24 turnover up to Rs 400 crore, else 30%: asked, and the JSON is blocked until answered; surcharge 7% / 12% above 1 / 10 Cr with marginal relief. 115BAA: 22% + 10% + 4% (25.168%), no MAT, no MAT credit, Chapter VI-A only 80JJAA and 80M (115BAA(2)(ii); 80IAC and 80G not allowed). MAT 15% of book profit (+ surcharge, marginal relief, cess) when higher; else MAT credit set off down to the MAT (115JAA). The book profit must be entered with the 115JB Explanation 1 adjustments and confirmed (Needs you until then) |
 

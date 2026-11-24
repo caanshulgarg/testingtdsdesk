@@ -141,8 +141,7 @@ function FormPick({ X, refresh }) {
   // rule 12 (pick.js): an individual is asked what rules ITR-1 and ITR-4 out (unanswered: ITR-2, or ITR-3 for business
   // income); a HUF with presumptive income the same for ITR-4; a firm (not an LLP) with it the unlisted shares and the
   // agricultural income (unanswered: ITR-5)
-  // a HUF cannot itself be a director: it is asked about its karta (the review of 24-Nov-2026 (3))
-  const Q12 = [["director", code === "H" ? "The karta is a director in a company at any time in the year" : "A director in a company at any time in the year"], ["unlisted", "Held unlisted equity shares at any time in the year"], ["agriOver", "Agricultural income above Rs 5,000"]];
+  const Q12 = [["director", "A director in a company at any time in the year"], ["unlisted", "Held unlisted equity shares at any time in the year"], ["agriOver", "Agricultural income above Rs 5,000"]];
   // the residential status (individuals and HUFs; ITR-1 and ITR-4 need Resident), kept as the return's own
   // (state.resident); firm or LLP (a firm PAN: ITR-4 only for a partnership firm), kept where Data keeps it (state.llp)
   const resQ = code === "P" || code === "H", llpQ = code === "F";
@@ -151,7 +150,9 @@ function FormPick({ X, refresh }) {
   const faLeft = rec.faLeft && "PHF".includes(code || "-");
   // asked too when ITR-4 is chosen by hand: its JSON waits for the answers (formStatus)
   const pres = !!(X.facts && X.facts.presumptive) || X.form === "ITR-4";
-  const q1 = code === "P" || (code === "H" && pres) ? Q12 : code === "F" && X.facts.llp !== true && pres ? Q12.slice(1) : [];
+  // a HUF and a firm are not asked about a director (rule 12: "a person who is a director"; a HUF cannot be one, the
+  // review of 24-Nov-2026 (3))
+  const q1 = code === "P" ? Q12 : (code === "H" || (code === "F" && X.facts.llp !== true)) && pres ? Q12.slice(1) : [];
   const tag = (f) => (code && f === rec.form ? " (recommended)" : code && !rec.allowed.includes(f) ? " (not for this client)" : !JSON_FORMS.includes(f) ? " (no JSON yet)" : "");
   return <section className="itr-pick" data-itr-pick="" data-fits={fs.fits ? "1" : "0"} data-json={fs.json ? "1" : "0"}>
     <div className="itr-pick-row">

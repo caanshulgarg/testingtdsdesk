@@ -449,7 +449,8 @@ T("ITR-4 rule 12", () => {
     eq(rf(pan, {}).form, "ITR-4", who + ", presumptive, within Rs 50 lakh, not a director, no unlisted shares, no agricultural income: ITR-4");
     eq(rf(pan, { agriIncome: 5000 }).form, "ITR-4", who + ", agricultural income of exactly Rs 5,000: ITR-4 still");
     let r = rf(pan, { director: true });
-    ok(r.form === "ITR-3" && /director/i.test(r.why) && /ITR-4/.test(r.why), who + " who is a director in a company: ITR-3, and the reason says so: " + r.why);
+    if (pan[3] === "H") ok(r.form === "ITR-4" && !/director|karta/i.test(r.why), who + ": a HUF cannot be a director; the director bar is not for it: ITR-4: " + r.why);
+    else ok(r.form === "ITR-3" && /director/i.test(r.why) && /ITR-4/.test(r.why), who + " who is a director in a company: ITR-3, and the reason says so: " + r.why);
     r = rf(pan, { unlisted: true });
     ok(r.form === "ITR-3" && /unlisted/i.test(r.why), who + " who held unlisted equity shares in the year: ITR-3: " + r.why);
     r = rf(pan, { agriIncome: 5001 });
@@ -459,17 +460,18 @@ T("ITR-4 rule 12", () => {
     eq(rf(pan, { unlisted: undefined, unlistedSold: true }).form, "ITR-3", who + ", an unlisted share among the gains: held in the year: ITR-3");
     // not known: never ITR-4 on a guess
     r = rf(pan, { director: undefined });
-    ok(r.form === "ITR-3" && /director/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why) && /ITR-4/.test(r.why), who + ", whether a director not known: ITR-3, and the reason asks for what is not known: " + r.why);
+    if (pan[3] === "H") ok(r.form === "ITR-4", who + ", director not answered: not asked of a HUF: ITR-4 (" + r.form + ")");
+    else ok(r.form === "ITR-3" && /director/i.test(r.why) && /Answer the questions below to see if it fits/.test(r.why) && /ITR-4/.test(r.why), who + ", whether a director not known: ITR-3, and the reason asks for what is not known: " + r.why);
     r = rf(pan, { unlisted: undefined, agriIncome: undefined });
     ok(r.form === "ITR-3" && /unlisted/i.test(r.why) && /agricultural/i.test(r.why) && !/director/i.test(r.why), who + ", two facts not known: both named, the known one not: " + r.why);
     r = PK.recommendForm({ pan, business: true, presumptive: true, ti: 1800000 });
     ok(r.form === "ITR-3" && /business or profession/i.test(r.why) && /ITR-4/.test(r.why), who + ", nothing asked yet: ITR-3 for the business income, and why ITR-4 is not picked: " + r.why);
     // a known bar: ITR-4 does not fit when chosen by hand (no JSON for a form the person may not file)
     const s = PK.formStatus("ITR-4", rf(pan, { director: true }));
-    ok(!s.fits && !s.json && /ITR-4 is not for/.test(s.text) && /director/.test(s.text) && /ITR-3/.test(s.text), who + ", a director, ITR-4 chosen by hand: does not fit, no JSON, said: " + s.text);
+    if (pan[3] === "H") ok(s.fits && s.json, who + ", director Yes: ITR-4 fits, its JSON is made"); else ok(!s.fits && !s.json && /ITR-4 is not for/.test(s.text) && /director/.test(s.text) && /ITR-3/.test(s.text), who + ", a director, ITR-4 chosen by hand: does not fit, no JSON, said: " + s.text);
     // the review of 24-Nov-2026 (2): a blank answer blocks the ITR-4 JSON until it is given, said in the info tone
     const s0 = PK.formStatus("ITR-4", rf(pan, { director: undefined }));
-    ok(s0.fits && !s0.json && s0.tone === "info" && /director/.test(s0.text) && /answer the questions below/i.test(s0.text), who + ", whether a director not known, ITR-4 chosen by hand: it may fit, but no JSON until answered: " + s0.text);
+    if (pan[3] === "H") ok(s0.json, who + ", director not answered: the ITR-4 JSON does not wait for it"); else ok(s0.fits && !s0.json && s0.tone === "info" && /director/.test(s0.text) && /answer the questions below/i.test(s0.text), who + ", whether a director not known, ITR-4 chosen by hand: it may fit, but no JSON until answered: " + s0.text);
   }
   // the director bar is for individuals and HUFs; the unlisted-share and agricultural income ones for a firm too (rule
   // 12(1)(b) proviso; the portal's ITR-4 FAQ: not for a firm that held unlisted equity shares)

@@ -18,8 +18,8 @@ const LIMIT = ITR1.maxIncome; // ITR-1 and ITR-4: total income up to Rs 50 lakh
 export const NO_KIND = "FinCom needs the PAN or the kind of taxpayer to pick the form. Add the PAN, or choose the kind of taxpayer, in Client setup; until then no JSON is made.";
 const orList = (a, w) => (a.length > 1 ? a.slice(0, -1).join(", ") + " " + (w || "or") + " " + a[a.length - 1] : a[0] || "");
 // rule 12's facts for ITR-1 and ITR-4 (law.js ITR1, ITR4), asked on the form box: what rules the form out, and what is
-// not known yet (never taken as No). The director question is for an individual (for a HUF, its karta: a HUF itself
-// cannot be a director); the unlisted-share and the agricultural income ones for a firm (not an LLP) too (rule 12(1)(b)
+// not known yet (never taken as No). The director question is for an individual only (rule 12: "a person who is a
+// director in a company"; a HUF cannot be one, and its karta's directorship is his own, not the HUF's); the unlisted-share and the agricultural income ones for a firm (not an LLP) too (rule 12(1)(b)
 // proviso; the portal's ITR-4 FAQ); the residential status for an individual or HUF (RES only; not set: not known); a
 // firm whether it is a partnership firm or an LLP (the review of 24-Nov-2026 (3)).
 // [fact, said of the person, the question]
@@ -29,7 +29,6 @@ function rule12(f, agriMax, code) {
   const facts = [];
   if (code === "F" && f.llp !== true && f.llp !== false) facts.push([undefined, "is an LLP", "whether it is a partnership firm or an LLP"]);
   if (code === "P") facts.push([f.director, "is a director in a company", "whether the person is a director in a company"]);
-  if (code === "H") facts.push([f.director, "whose karta is a director in a company", "whether the karta is a director in a company"]);
   facts.push([unl, "held unlisted shares", "whether unlisted shares were held in the year"], [agri, "has agricultural income above Rs 5,000", "whether agricultural income is above Rs 5,000"]);
   if (code === "P" || code === "H") {
     const r = resStatus(f.resident);
@@ -52,10 +51,9 @@ function otherBars(f, form, code) {
   if (f.houses > maxH) out.push("has more than " + (maxH === 2 ? "two house properties" : "one house property"));
   return out;
 }
-// who a rule 12 bar is said of: "ITR-4 is not for someone who ...", "... a firm that ...", "... a HUF whose karta ..., that ..."
+// who a rule 12 bar is said of: "ITR-4 is not for someone who ...", "... a HUF that ...", "... a firm that ..."
 const BARRED_WHO = { P: "someone who", H: "a HUF that", F: "a firm that" };
 function notFor(form, code, items) {
-  if (code === "H") return form + " is not for a HUF " + orList(items.map((x) => (/^whose /.test(x) ? x : "that " + x)));
   return form + " is not for " + (BARRED_WHO[code] || SHORT[code] || "this client") + " " + orList(items);
 }
 // the forms rule 12 rules out on what is known ({form: [what rules it out]}), and the answers each still needs
@@ -121,7 +119,7 @@ export function recommendForm(f) {
           // rule 12 (law.js ITR4): never ITR-4 on a guess; ITR-3 fits either way
           const no = barred["ITR-4"];
           if (no) return out("ITR-3", "Business income is declared on a presumptive basis, but " + notFor("ITR-4", code, no) + ", so ITR-3 for the income from business or profession.");
-          if (!bf.unknown["ITR-4"]) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh; a resident, " + (code === "H" ? "the karta not a director" : "not a director") + " in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4.");
+          if (!bf.unknown["ITR-4"]) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh; a resident, " + (code === "H" ? "" : "not a director in a company, ") + "no unlisted shares, agricultural income Rs 5,000 or less: ITR-4.");
           return out("ITR-3", "There is income from business or profession, so ITR-3. " + askWhy("ITR-4", code, f, ITR4.agriMax));
         }
         return out("ITR-3", "There is income from business or profession (the books), so ITR-3." + (f.presumptive ? " ITR-4 does not fit: " + (f.audit ? "a tax audit applies." : !within ? "the total income is above Rs 50 lakh." : "there are capital gains.") : ""));

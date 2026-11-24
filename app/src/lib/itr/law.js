@@ -62,12 +62,13 @@ export const P44AE = { heavyKg: 12000, perTonMonth: 1000, perVehicleMonth: 7500,
 export const ITR1 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(a) of the Income-tax Rules and its proviso (AY 2026-27 ITR-1 instructions): not for a director in a company, one who held unlisted equity shares at any time in the previous year, or agricultural income above Rs 5,000" };
 // ITR-4 (Sugam): who may file it (pick.js). Rule 12(1)(b) and its proviso, as in the AY 2026-27 form's instructions and
 // the portal's ITR-4 FAQ: a resident individual, HUF or firm (other than an LLP) with business or professional income on
-// a presumptive basis (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not an individual or HUF who is a director
+// a presumptive basis (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not an individual who is a director (rule 12's "a person who is a director in a company": a HUF cannot be one, and its
+// karta's directorship is his own, not the HUF's, so no director bar for a HUF)
 // in a company; not an individual, HUF or firm that has held unlisted equity shares at any time during the previous
 // year; not one with agricultural income above Rs 5,000. The proviso's other bars for ITR-1 and ITR-4 (pick.js models
 // those FinCom has data for): not ordinarily resident or non-resident, assets (or income) outside India, TDS under
 // section 194N, a loss brought forward or to be carried forward
-export const ITR4 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(b) of the Income-tax Rules and its proviso (AY 2026-27 ITR-4 instructions; the portal's ITR-4 FAQ): for a resident individual, HUF or firm other than an LLP with presumptive income (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not for an individual or HUF who is a director in a company, nor for an individual, HUF or firm that held unlisted equity shares at any time in the previous year, nor for agricultural income above Rs 5,000; nor for assets outside India, TDS under section 194N or a loss brought forward" };
+export const ITR4 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(b) of the Income-tax Rules and its proviso (AY 2026-27 ITR-4 instructions; the portal's ITR-4 FAQ): for a resident individual, HUF or firm other than an LLP with presumptive income (44AD, 44ADA, 44AE) and total income up to Rs 50 lakh; not for an individual who is a director in a company (a HUF cannot be one), nor for an individual, HUF or firm that held unlisted equity shares at any time in the previous year, nor for agricultural income above Rs 5,000; nor for assets outside India, TDS under section 194N or a loss brought forward" };
 // ITR-4's house properties, by assessment year, as each year's schema allows them (IncomeDeductions/PropertyDetails
 // maxItems): AY 2026-27 (ITR-4_2026_Main_V1.1) two, the portal's FAQ the same; the years before took one (a year whose
 // schema is not checked here: one, the stricter)

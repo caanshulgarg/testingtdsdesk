@@ -54,7 +54,7 @@ T("HUF", () => {
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true }).form, "ITR-3", "HUF with business: ITR-3");
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriOver: false, resident: "RES" }).form, "ITR-4", "HUF, presumptive, rule 12 answered No: ITR-4");
   eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000 }).form, "ITR-3", "HUF, presumptive, rule 12 not answered: ITR-3");
-  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: true, unlisted: false, agriOver: false }).form, "ITR-3", "HUF, presumptive, a director (its karta): ITR-3");
+  eq(recommendForm({ pan: "ZZZHX1234Z", business: true, presumptive: true, ti: 1800000, director: true, unlisted: false, agriOver: false, resident: "RES" }).form, "ITR-4", "HUF, presumptive: a HUF cannot be a director, so no director bar (its karta's directorship is his own): ITR-4");
   eq(recommendForm({ pan: "ZZZHX1234Z", salary: false }).form, "ITR-2", "HUF without business: ITR-2 (ITR-1 is for individuals only)");
   ok(!allowedForms("H").includes("ITR-1"), "ITR-1 not right for a HUF");
 });
@@ -165,7 +165,7 @@ T("blank answers", () => {
   s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false }, PRES, { agriOver: false })));
   ok(!s.json && /unlisted/.test(s.text) && !/director/.test(s.text), "a firm, unlisted not answered: no ITR-4 JSON, asked: " + s.text);
   s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES)));
-  ok(!s.json && /director/.test(s.text), "a HUF, not answered: no ITR-4 JSON: " + s.text);
+  ok(!s.json && /unlisted/.test(s.text) && !/director/.test(s.text), "a HUF, not answered: no ITR-4 JSON, never asked about a director: " + s.text);
   s = formStatus("ITR-1", recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 }));
   ok(s.fits && !s.json && s.tone === "info" && /answer the questions below/i.test(s.text) && /director/.test(s.text), "ITR-1 chosen by hand, not answered: the questions named the same way: " + s.text);
   s = formStatus("ITR-1", recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, ...N3 }));
@@ -309,12 +309,16 @@ T("ITR-1's houses by the year's schema", () => {
   ok(r.form === "ITR-2" && /two house properties/.test(r.why), "three houses: ITR-2: " + r.why);
 });
 T("wording", () => {
+  // a HUF cannot be a director, and its karta's directorship is his own: no director bar, question or wording for a HUF
   let r = recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES, N3, { director: true }));
-  ok(r.form === "ITR-3" && !/HUF that is a director/.test(r.why) && /karta is a director in a company/.test(r.why), "a HUF: never 'a HUF that is a director': " + r.why);
+  ok(r.form === "ITR-4" && !r.barred["ITR-4"] && !/director|karta/.test(r.why), "a HUF: never barred as a director: " + r.form + ": " + r.why);
   r = recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES, N3, { director: undefined }));
-  ok(!/HUF that is a director/.test(r.why) && /karta/.test(r.why), "a HUF, not answered: " + r.why);
+  ok(r.form === "ITR-4" && !/director|karta/.test(r.why), "a HUF, director not answered: ITR-4 all the same: " + r.why);
   let s = formStatus("ITR-4", r);
-  ok(/whether the karta is a director in a company/.test(s.text), "the HUF's question: " + s.text);
+  ok(s.json && !/director|karta/.test(s.text), "the HUF's ITR-4 JSON waits for no director answer: " + s.text);
+  r = recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES, { resident: "RES" }));
+  ok(r.form === "ITR-3" && !/director|karta/.test(r.why) && /unlisted/.test(r.why) && /agricultural/.test(r.why), "a HUF, nothing answered: asked only unlisted shares, agricultural income: " + r.why);
+  ok(!/director|karta/.test((r.unknown["ITR-4"] || []).join(" ")), "and its questions name no director (" + r.unknown["ITR-4"] + ")");
   s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, PRES, N3, { director: undefined })));
   ok(/whether the person is a director in a company/.test(s.text) && !/whether a director/.test(s.text), "an individual's question: " + s.text);
   const u = recommendForm({ pan: "" });
