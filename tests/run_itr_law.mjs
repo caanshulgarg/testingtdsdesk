@@ -404,7 +404,7 @@ let LW = {}; try { LW = await import(new URL("law.js", LIB)); } catch (e) { /* c
 T("ITR-1 rule 12", () => {
   const R1 = LW.ITR1 || {};
   ok(R1.agriMax === 5000 && R1.maxIncome === 5000000 && /rule 12/i.test(R1.src || ""), "law.js: ITR-1's limits with their source (agricultural income Rs 5,000, total income Rs 50 lakh): " + JSON.stringify(R1).slice(0, 80));
-  const base = { pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0 };
+  const base = { pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriIncome: 0, resident: "RES" };
   const rf = (o) => PK.recommendForm(Object.assign({}, base, o));
   eq(rf({}).form, "ITR-1", "salary 9,00,000, not a director, no unlisted shares, no agricultural income: ITR-1");
   eq(rf({ agriIncome: 5000 }).form, "ITR-1", "agricultural income of exactly Rs 5,000: ITR-1 still (more than 5,000 is excluded)");
@@ -443,7 +443,7 @@ T("ITR-4 rule 12", () => {
   ok(R4.agriMax === 5000 && R4.maxIncome === 5000000 && /rule 12/i.test(R4.src || "") && /director/i.test(R4.src || "") && /unlisted/i.test(R4.src || "") && /agricultural/i.test(R4.src || "") && /LLP/.test(R4.src || ""),
     "law.js: ITR-4's limits with their source (rule 12; director, unlisted shares, agricultural income Rs 5,000; not an LLP): " + JSON.stringify(R4).slice(0, 80));
   eq(LW.ITR4_MAX_INCOME, 5000000, "ITR4_MAX_INCOME still Rs 50 lakh");
-  const pres = { business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriIncome: 0 };
+  const pres = { business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriIncome: 0, resident: "RES" };
   const rf = (pan, o) => PK.recommendForm(Object.assign({ pan }, pres, o));
   for (const [pan, who] of [["ZZZPX1234Z", "an individual"], ["ZZZHX1234Z", "a HUF"]]) {
     eq(rf(pan, {}).form, "ITR-4", who + ", presumptive, within Rs 50 lakh, not a director, no unlisted shares, no agricultural income: ITR-4");
@@ -491,7 +491,7 @@ T("ITR-4 rule 12", () => {
 
 console.log("ITR-1 and ITR-4, the review of 24-Nov-2026 (2): the PAN settles the kind; assets abroad, two houses, the other rule 12 bars");
 T("rule 12 more", () => {
-  const pres = { business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriOver: false };
+  const pres = { business: true, presumptive: true, ti: 1800000, director: false, unlisted: false, agriOver: false, resident: "RES" };
   // section 139A / rule 114: the PAN's fourth letter is the status; Client setup's kind is used only without a PAN
   let r = PK.recommendForm(Object.assign({ entity: "F", pan: "ZZZCX1234Z", llp: false }, pres));
   ok(r.form === "ITR-6" && !r.allowed.includes("ITR-4") && !r.allowed.includes("ITR-5") && /follows the PAN/.test(r.why), "Client setup a firm, the PAN a company: ITR-6, never ITR-4 or ITR-5: " + r.why);
@@ -504,7 +504,7 @@ T("rule 12 more", () => {
   eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", houses: 2 }, pres)).form, "ITR-4", "two houses: ITR-4");
   eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", houses: 3 }, pres)).form, "ITR-3", "three houses: ITR-3");
   // rule 12 proviso: not for a non-resident, TDS under 194N, a loss brought forward
-  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", resident: false }, pres)).form, "ITR-3", "a non-resident: ITR-3");
+  eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, pres, { resident: false })).form, "ITR-3", "a non-resident: ITR-3");
   eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", tds194N: true }, pres)).form, "ITR-3", "TDS under 194N: ITR-3");
   eq(PK.recommendForm(Object.assign({ pan: "ZZZPX1234Z", bfLoss: true }, pres)).form, "ITR-3", "a loss of earlier years brought forward: ITR-3");
   eq(PK.recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, director: false, unlisted: false, agriOver: false, tds194N: true }).form, "ITR-2", "salary with TDS under 194N: ITR-2");

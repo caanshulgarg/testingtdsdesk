@@ -124,5 +124,18 @@ console.log("ITR-4 houses: up to the schema's own limit (the review of 24-Nov-20
   ok(!keys(2).includes("hp_itr4"), "ITR-4 with two houses: not blocked");
   ok(keys(3).includes("hp_itr4"), "ITR-4 with three houses: blocked");
 }
+console.log("the residential status chosen on the form box (the review of 24-Nov-2026 (3)): the computation and ITR-3 take it");
+{
+  const D = await demo("ITR-3"), schema = schemaOf("ITR-3");
+  const files = Object.entries(D.booksObj.itr).filter(([, v]) => v && v.kind).map(([k, v]) => Object.assign({ id: k }, v)), imports = importsOf(files);
+  const mod = (res) => buildModel({ entity: "P", client: D.client, imports, state: Object.assign({}, D.booksObj.itr["2026|state"], { resident: res }), books: D.books });
+  ok(mod("NRI").resident === false && mod("NOR").resident === true && mod("RES").resident === true && mod(undefined).resident === true && mod(false).resident === false,
+    "the computation: a non-resident is not a resident; not ordinarily resident is (section 6); not set as before (" + ["NRI", "NOR", "RES", undefined, false].map((x) => mod(x).resident) + ")");
+  for (const res of ["RES", "NOR"]) {
+    const model = mod(res), comp = compute(model), st = Object.assign({}, D.booksObj.itr["2026|state"], { resident: res });
+    const j = makeJson({ form: "ITR-3", schema, model, comp, sched: D.books.sched, profile: buildProfile({ entity: "P", client: D.client, imports, state: st }), answers: {}, today: "2026-11-22" });
+    ok(!j.asks.some((q) => /ResidentialStatus/.test(q.path)) && at(j.doc, "ITR/ITR3/PartA_GEN1/FilingStatus/ResidentialStatus") === res, "ITR-3 with " + res + " chosen: filled, not asked again (" + at(j.doc, "ITR/ITR3/PartA_GEN1/FilingStatus/ResidentialStatus") + ")");
+  }
+}
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

@@ -4,7 +4,8 @@
 // form + formSet). A form FinCom's JSON does not cover (forms.js ROOT) is said plainly, never built as another form.
 // Pure: the tests give it the facts (tests/run_itr_formpick.mjs).
 import { ROOT } from "./forms.js";
-import { ITR1, ITR4, AY, itr4Houses } from "./law.js";
+import { ITR1, ITR4, AY, itr4Houses, itr1Houses, resStatus, RES_PATH } from "./law.js";
+export { resStatus };
 
 export const ALL_FORMS = ["ITR-1", "ITR-2", "ITR-3", "ITR-4", "ITR-5", "ITR-6", "ITR-7"];
 // the forms whose official JSON FinCom makes (forms.js maps them, the schemas are in itr-schema/)
@@ -17,36 +18,51 @@ const LIMIT = ITR1.maxIncome; // ITR-1 and ITR-4: total income up to Rs 50 lakh
 export const NO_KIND = "FinCom needs the PAN or the kind of taxpayer to pick the form. Add the PAN, or choose the kind of taxpayer, in Client setup; until then no JSON is made.";
 const orList = (a, w) => (a.length > 1 ? a.slice(0, -1).join(", ") + " " + (w || "or") + " " + a[a.length - 1] : a[0] || "");
 // rule 12's facts for ITR-1 and ITR-4 (law.js ITR1, ITR4), asked on the form box: what rules the form out, and what is
-// not known yet (never taken as No). The director question is for an individual or HUF; the unlisted-share and the
-// agricultural income ones for a firm (not an LLP) too (rule 12(1)(b) proviso; the portal's ITR-4 FAQ).
+// not known yet (never taken as No). The director question is for an individual (for a HUF, its karta: a HUF itself
+// cannot be a director); the unlisted-share and the agricultural income ones for a firm (not an LLP) too (rule 12(1)(b)
+// proviso; the portal's ITR-4 FAQ); the residential status for an individual or HUF (RES only; not set: not known); a
+// firm whether it is a partnership firm or an LLP (the review of 24-Nov-2026 (3)).
 // [fact, said of the person, the question]
 function rule12(f, agriMax, code) {
   const agri = f.agriIncome != null && f.agriIncome !== "" ? +f.agriIncome > agriMax : f.agriOver;
   const unl = f.unlistedSold === true ? true : f.unlisted;
-  const facts = (code === "F" ? [] : [[f.director, "is a director in a company", "whether a director in a company"]])
-    .concat([[unl, "held unlisted shares", "whether unlisted shares were held in the year"], [agri, "has agricultural income above Rs 5,000", "whether agricultural income is above Rs 5,000"]]);
+  const facts = [];
+  if (code === "F" && f.llp !== true && f.llp !== false) facts.push([undefined, "is an LLP", "whether it is a partnership firm or an LLP"]);
+  if (code === "P") facts.push([f.director, "is a director in a company", "whether the person is a director in a company"]);
+  if (code === "H") facts.push([f.director, "whose karta is a director in a company", "whether the karta is a director in a company"]);
+  facts.push([unl, "held unlisted shares", "whether unlisted shares were held in the year"], [agri, "has agricultural income above Rs 5,000", "whether agricultural income is above Rs 5,000"]);
+  if (code === "P" || code === "H") {
+    const r = resStatus(f.resident);
+    facts.push([r ? r !== "RES" : undefined, r === "NOR" ? "is not ordinarily resident" : r === "NRI" ? "is a non-resident" : "is a non-resident or not ordinarily resident", "the residential status"]);
+  }
   return { no: facts.filter((x) => x[0] === true).map((x) => x[1]), unknown: facts.filter((x) => x[0] !== true && x[0] !== false), facts };
 }
-// the proviso's other bars for ITR-1 and ITR-4 that FinCom has the data for (no question asked): the residential status,
-// assets outside India (ITR-1 and ITR-4 have no Schedule FA), TDS under 194N (26AS / AIS), a loss of earlier years
-// brought forward, and more houses than the form takes (ITR-4: law.js itr4Houses, by the year's schema)
-function otherBars(f, form) {
+// the proviso's other bars for ITR-1 and ITR-4 that FinCom has the data for (no question asked): a firm said not to be
+// resident, assets outside India (ITR-1 and ITR-4 have no Schedule FA; rows left in Schedule FA after a No bar it only
+// while they are there), TDS under 194N (26AS / AIS), a loss of earlier years brought forward, and more houses than the
+// form takes (law.js itr4Houses and itr1Houses, by the year's schema)
+function otherBars(f, form, code) {
   const out = [];
-  if (f.resident === false) out.push("is not a resident");
-  if (f.foreign || f.faRows > 0) out.push("has assets outside India");
+  if (code !== "P" && code !== "H" && resStatus(f.resident) && resStatus(f.resident) !== "RES") out.push("is not a resident");
+  if (f.foreign) out.push("has assets outside India");
+  else if (f.faRows > 0) out.push("has rows in Schedule FA (assets outside India)");
   if (f.tds194N) out.push("had tax deducted under section 194N (cash withdrawn)");
   if (f.bfLoss) out.push("has a loss of earlier years brought forward");
-  const maxH = form === "ITR-4" ? itr4Houses(f.ay || AY) : 2;
+  const maxH = form === "ITR-4" ? itr4Houses(f.ay || AY) : itr1Houses(f.ay || AY);
   if (f.houses > maxH) out.push("has more than " + (maxH === 2 ? "two house properties" : "one house property"));
   return out;
 }
-// who a rule 12 bar is said of
+// who a rule 12 bar is said of: "ITR-4 is not for someone who ...", "... a firm that ...", "... a HUF whose karta ..., that ..."
 const BARRED_WHO = { P: "someone who", H: "a HUF that", F: "a firm that" };
+function notFor(form, code, items) {
+  if (code === "H") return form + " is not for a HUF " + orList(items.map((x) => (/^whose /.test(x) ? x : "that " + x)));
+  return form + " is not for " + (BARRED_WHO[code] || SHORT[code] || "this client") + " " + orList(items);
+}
 // the forms rule 12 rules out on what is known ({form: [what rules it out]}), and the answers each still needs
 // ({form: [questions]}: no JSON for it until they are given)
 function barredForms(f, code) {
   const b = {}, q = {};
-  const one = (form, max) => { const r = rule12(f, max, code), n = r.no.concat(otherBars(f, form)); if (n.length) b[form] = n; if (r.unknown.length) q[form] = r.unknown.map((x) => x[2]); };
+  const one = (form, max) => { const r = rule12(f, max, code), n = r.no.concat(otherBars(f, form, code)); if (n.length) b[form] = n; if (r.unknown.length) q[form] = r.unknown.map((x) => x[2]); };
   if (code === "P") one("ITR-1", ITR1.agriMax);
   if (code === "P" || code === "H" || (code === "F" && f.llp !== true)) one("ITR-4", ITR4.agriMax);
   return { barred: b, unknown: q };
@@ -55,7 +71,7 @@ function barredForms(f, code) {
 // Rs 5,000. Answer the questions below to see if it fits." (the owner's words, 24-Nov-2026: never as if ruled out)
 function askWhy(form, code, f, agriMax) {
   const u = rule12(f, agriMax, code).unknown.map((x) => x[1]);
-  return form + " is not for " + BARRED_WHO[code] + " " + orList(u) + ". Answer the questions below to see if it fits.";
+  return notFor(form, code, u) + ". Answer the questions below to see if it fits.";
 }
 
 // the kind of person: the PAN's fourth letter settles it (the GSTIN carries the PAN); Client setup's choice only when
@@ -93,7 +109,8 @@ export function recommendForm(f) {
   f = f || {};
   const e = entityFrom(f.entity, f.pan, f.gstin), code = e.code, bf = barredForms(f, code), barred = bf.barred, allowed = allowedForms(code, f.llp).filter((x) => !barred[x]);
   const who = e.by === "set" ? "Client setup says this is " + KIND[code] + "." : e.by === "pan" ? "The PAN's fourth letter is " + code + ": " + KIND[code] + "." + (e.set ? " Client setup says " + KIND[e.set] + "; FinCom follows the PAN (correct the kind in Client setup if the PAN is right)." : "") : "";
-  const out = (form, why) => ({ form, why: (who ? who + " " : "") + why, code, by: e.by, allowed, barred, unknown: bf.unknown });
+  // faLeft: Schedule FA has rows though assets outside India is not answered Yes (the page offers to remove them)
+  const out = (form, why) => ({ form, why: (who ? who + " " : "") + why, code, by: e.by, allowed, barred, unknown: bf.unknown, faLeft: !f.foreign && f.faRows > 0 });
   const within = !(f.ti > LIMIT);
   // presumptive income within the limits ITR-4 has besides rule 12's (a tax audit, the total income, capital gains)
   const presOk = f.presumptive && !f.audit && within && !f.capitalGains;
@@ -103,16 +120,16 @@ export function recommendForm(f) {
         if (presOk) {
           // rule 12 (law.js ITR4): never ITR-4 on a guess; ITR-3 fits either way
           const no = barred["ITR-4"];
-          if (no) return out("ITR-3", "Business income is declared on a presumptive basis, but ITR-4 is not for " + BARRED_WHO[code] + " " + orList(no) + ", so ITR-3 for the income from business or profession.");
-          if (!bf.unknown["ITR-4"]) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh; not a director in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4.");
+          if (no) return out("ITR-3", "Business income is declared on a presumptive basis, but " + notFor("ITR-4", code, no) + ", so ITR-3 for the income from business or profession.");
+          if (!bf.unknown["ITR-4"]) return out("ITR-4", "Business income is declared on a presumptive basis (44AD, 44ADA, 44AE) and the total income is within Rs 50 lakh; a resident, " + (code === "H" ? "the karta not a director" : "not a director") + " in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4.");
           return out("ITR-3", "There is income from business or profession, so ITR-3. " + askWhy("ITR-4", code, f, ITR4.agriMax));
         }
         return out("ITR-3", "There is income from business or profession (the books), so ITR-3." + (f.presumptive ? " ITR-4 does not fit: " + (f.audit ? "a tax audit applies." : !within ? "the total income is above Rs 50 lakh." : "there are capital gains.") : ""));
       }
       if (code === "P" && within && !f.capitalGains) {
         const no = barred["ITR-1"];
-        if (no) return out("ITR-2", "No business income, but ITR-1 is not for " + BARRED_WHO.P + " " + orList(no) + ": ITR-2.");
-        if (!bf.unknown["ITR-1"]) return out("ITR-1", "No business income: salary, up to two houses and other sources, total income within Rs 50 lakh; not a director in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-1.");
+        if (no) return out("ITR-2", "No business income, but " + notFor("ITR-1", "P", no) + ": ITR-2.");
+        if (!bf.unknown["ITR-1"]) return out("ITR-1", "No business income: salary, up to " + (itr1Houses(f.ay || AY) === 2 ? "two houses" : "one house") + " and other sources, total income within Rs 50 lakh; a resident, not a director in a company, no unlisted shares, agricultural income Rs 5,000 or less: ITR-1.");
         return out("ITR-2", "No business income, so ITR-2. " + askWhy("ITR-1", code, f, ITR1.agriMax));
       }
       return out("ITR-2", "No business income" + (code === "H" ? " (ITR-1 is for individuals only)" : "") + ": " + (code === "H" ? "ITR-2." : f.capitalGains ? "there are capital gains, so ITR-2." : "the total income is above Rs 50 lakh, so ITR-2."));
@@ -122,7 +139,7 @@ export function recommendForm(f) {
         // rule 12 (law.js ITR4): a firm that held unlisted shares or has agricultural income above Rs 5,000 is not on
         // ITR-4; not known, ITR-5
         const no = barred["ITR-4"];
-        if (no) return out("ITR-5", "A partnership firm with presumptive income, but ITR-4 is not for " + BARRED_WHO.F + " " + orList(no) + ": ITR-5.");
+        if (no) return out("ITR-5", "A partnership firm with presumptive income, but " + notFor("ITR-4", "F", no) + ": ITR-5.");
         if (!bf.unknown["ITR-4"]) return out("ITR-4", "A partnership firm with presumptive income (44AD, 44ADA, 44AE), total income within Rs 50 lakh, no unlisted shares and agricultural income Rs 5,000 or less: ITR-4.");
         return out("ITR-5", "A firm files ITR-5. " + askWhy("ITR-4", code, f, ITR4.agriMax));
       }
@@ -161,12 +178,37 @@ export function formStatus(form, rec) {
   const say = [];
   const bar = !fits && rec.code && rec.barred && rec.barred[form];
   if (!rec.code) say.push(NO_KIND);
-  else if (bar) say.push(form + " is not for " + BARRED_WHO[rec.code] + " " + orList(bar) + ". Use " + rec.allowed.join(" or ") + " (recommended: " + rec.form + "). FinCom makes no JSON for a form that does not fit.");
+  else if (bar) say.push(notFor(form, rec.code, bar) + ". Use " + rec.allowed.join(" or ") + " (recommended: " + rec.form + "). FinCom makes no JSON for a form that does not fit.");
   else if (!fits) say.push(form + " is not for " + SHORT[rec.code] + ". Use " + rec.allowed.join(" or ") + " (recommended: " + rec.form + "). FinCom makes no JSON for a form that does not fit.");
   else {
     if (ask) say.push(JSON_FORMS.includes(form) ? "Before FinCom makes the " + form + " JSON, answer the questions below: " + orList(ask, "and") + "." : "Answer the questions below to see if " + form + " fits: " + orList(ask, "and") + ".");
     if (!JSON_FORMS.includes(form)) say.push("FinCom cannot make the JSON for " + form + " yet (it makes " + JSON_FORMS.join(", ") + "). The computation and the checks are shown; prepare this return in Winman.");
     else if (notFirm) say.push("FinCom's ITR-5 JSON is made for firms and LLPs only; for " + SHORT[rec.code] + " it cannot make it yet. The computation and the checks are shown; prepare this return in Winman.");
   }
-  return { fits, json, text: say.join(" "), tone: fits ? "info" : "bad" };
+  // no PAN and no kind: a note in the info tone, not red (the review of 24-Nov-2026 (3))
+  return { fits, json, text: say.join(" "), tone: fits || !rec.code ? "info" : "bad" };
+}
+
+// what the recommendation needs to know, from the client, the return's state (b.itr "<ay>|state"), the books and the
+// files brought in (the page asks it before the computation; tests/run_itr_formpick.mjs gives it made-up state)
+export function factsOf(client, st, books, im) {
+  client = client || {}; st = st || {};
+  const p = st.presumptive || {}, figs = !!((p.ad && (+p.ad.digital || +p.ad.other)) || (p.ada && +p.ada.receipts) || (p.ae && (p.ae.vehicles || []).length));
+  const presumptive = st.presumptiveOpt === true || (st.presumptiveOpt == null && figs);
+  // rule 12's other bars from what FinCom holds: Schedule FA's rows, TDS under 194N (26AS, AIS), losses of earlier years
+  const fa = st.fa ? Object.values(st.fa).filter(Array.isArray).reduce((a, v) => a + v.filter((r) => r && Object.keys(r).length).length, 0) : 0;
+  const is194N = (r) => r && /^194N/.test(String(r.sec || "").toUpperCase()) && +r.tax > 0;
+  const as26 = im && im.as26 && im.as26.data, ais = im && im.ais && im.ais.data;
+  const tds194N = !!((as26 && (as26.tds || []).some(is194N)) || (ais && (ais.rows || []).some(is194N)));
+  // a loss marked "No: the loss is lost" (its return was late, section 80) is not brought forward; section 80 is not for
+  // a house property loss (71B) or unabsorbed depreciation (32(2))
+  const L = st.losses || {}, live = (k, x) => x && +x.amt > 0 && !(x.inTime === false && k !== "hp" && k !== "ud");
+  const bfLoss = +L.unabsorbedDep > 0 || ["business", "hp", "stcl", "ltcl", "ud"].some((k) => (L[k] || []).some((x) => live(k, x)));
+  // the residential status: the return's own (state.resident), else the ITR-3 answer given before; not set: not known
+  const resident = resStatus(st.resident) || resStatus(((st.answers || {})["ITR-3"] || {})[RES_PATH]);
+  return { entity: client.entitySet || client.entity, pan: client.pan, gstin: client.gstin, llp: st.llp === true || st.llp === false ? st.llp : client.llp, exempt: st.exempt11, audit: !!st.audit, resident,
+    business: !!(books && books.ok) || presumptive, presumptive, salary: !!((st.salaries || []).length || (st.salary && +st.salary.gross)), houses: (st.houses || []).length,
+    capitalGains: !!((st.cgRows || []).length || st.cg), foreign: (st.profile || {}).foreignAssets === "YES", faRows: fa, tds194N, bfLoss,
+    // rule 12 for ITR-1 and ITR-4 (law.js ITR1, ITR4): asked on the form box, never taken as No when not answered
+    director: st.director, unlisted: st.unlisted, unlistedSold: (st.cgRows || []).some((r) => r && r.kind === "unlisted"), agriOver: st.agriOver };
 }

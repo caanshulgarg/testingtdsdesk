@@ -73,6 +73,21 @@ export const ITR4 = { maxIncome: 5000000, agriMax: 5000, src: "Rule 12(1)(b) of 
 // schema is not checked here: one, the stricter)
 export const ITR4_HOUSES = { "2026-27": 2 };
 export const itr4Houses = (ay) => ITR4_HOUSES[ay || AY] || 1;
+// ITR-1's house properties, by assessment year, the same way: AY 2026-27's ITR-1 takes two (its instructions and the
+// portal's FAQ; FinCom makes no ITR-1 JSON, so its schema is not kept here); the years before took one, and a year not
+// checked here one, the stricter
+export const ITR1_HOUSES = { "2026-27": 2 };
+export const itr1Houses = (ay) => ITR1_HOUSES[ay || AY] || 1;
+// The residential status (section 6), as the schemas code it (ITR-3 PartA_GEN1/FilingStatus/ResidentialStatus): RES a
+// resident, NOR resident but not ordinarily resident, NRI a non-resident; "" not known. ITR-1 and ITR-4 are for RES only
+// (rule 12). Kept as the return's own residential status (b.itr state.resident); an old false (not a resident) reads NRI
+export const RES_PATH = "/ITR3/PartA_GEN1/FilingStatus/ResidentialStatus";
+export function resStatus(v) {
+  if (v === true) return "RES";
+  if (v === false) return "NRI";
+  const s = String(v == null ? "" : v).toUpperCase();
+  return s === "RES" || s === "NOR" || s === "NRI" ? s : "";
+}
 export const ITR4_MAX_INCOME = ITR4.maxIncome; // total income not more than Rs 50 lakh (schema maximum 51,25,000 with 112A)
 
 // Section 40(b): partners' remuneration and interest (Finance (No. 2) Act 2024, from AY 2025-26)

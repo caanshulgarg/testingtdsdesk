@@ -545,6 +545,8 @@ function itr3(X) {
   put(o, "PartA_GEN1/FilingStatus/IncFrmBusOrProf", "Y");
   put(o, "PartA_GEN1/FilingStatus/ItrFilingDueDate", M.tp ? "2026-11-30" : M.audit ? "2026-10-31" : "2026-08-31");
   put(o, "PartA_GEN1/FilingStatus/OptOldRegimeCurrAY", M.regime === "old" ? "Y" : "N");
+  // the residential status chosen on the form box (RES, NOR, NRI); not chosen: asked with the JSON, as before
+  if (M.resStatus) put(o, "PartA_GEN1/FilingStatus/ResidentialStatus", M.resStatus);
   put(o, "PartA_GEN2/AuditInfo/LiableSec44AAflg", "Y");
   put(o, "PartA_GEN2/AuditInfo/LiableSec44ABflg", M.audit ? "Y" : "N");
   put(o, "PartA_GEN2/AuditInfo/LiableSec92Eflg", M.tp ? "Y" : "N");

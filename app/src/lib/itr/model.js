@@ -1,7 +1,7 @@
 // The return model: what the two computations take (tax.js, check.js), put together from the books (books.js), the
 // files brought in (imports.js) and the owner's answers (b.itr "<ay>|state"). Pure. Every figure says where it came
 // from; what is not known stays empty and the checks say so.
-import { FORM_OF, DUE } from "./law.js";
+import { FORM_OF, DUE, resStatus } from "./law.js";
 import { pf36va, settle36va, settle43B, settleMsme, adjustments } from "./books.js";
 import { salaryHead, houseHead, capitalGains } from "./heads.js";
 
@@ -28,7 +28,9 @@ export function buildModel(c) {
   const st = c.state || {}, im = c.imports || {}, bk = c.books && c.books.ok ? c.books : null;
   const entity = c.entity, form = st.form || formsFor(entity, c.llp)[0];
   // LLP or firm: asked in the return (Client setup has "Firm or LLP" as one choice); never read from the name
-  const M = { form, entity, llp: entity === "F" ? (st.llp === true || st.llp === false ? st.llp : (c.llp === true || c.llp === false ? c.llp : undefined)) : false, regime: st.regime || (entity === "C" ? "" : entity === "F" ? "firm" : ""), age: N(st.age), resident: st.resident !== false,
+  const M = { form, entity, llp: entity === "F" ? (st.llp === true || st.llp === false ? st.llp : (c.llp === true || c.llp === false ? c.llp : undefined)) : false, regime: st.regime || (entity === "C" ? "" : entity === "F" ? "firm" : ""), age: N(st.age),
+    // the residential status (law.js resStatus): a non-resident is not a resident; RES and NOR are (section 6); not set as before
+    resident: resStatus(st.resident) !== "NRI", resStatus: resStatus(st.resident),
     audit: !!st.audit, tp: !!st.tp, filingDate: st.filingDate || "", smallCo: st.smallCo, bookProfitOk: !!st.bookProfitOk, form10iea: st.form10iea || "", deductions: st.deductions || {}, losses: st.losses || {}, matCredit: N(st.matCredit) };
   if (entity === "F") M.regime = "firm";
   // business income
