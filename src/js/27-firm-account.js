@@ -628,7 +628,10 @@ async function cloudApplyNow(rows){
     else if (r.kind === "inbox"){ if (r.deleted) delete S.docq[r.id]; else S.docq[r.id] = Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}); }
     else if (r.kind === "bank_meta"){ await cloudApplyBankMeta(cid, r); touchedBank.add(cid); }
     else if (r.kind === "bank_stmt" || r.kind === "bank_rows"){ await cloudApplyBankPart(r); touchedBank.add(cid); }
-    else if (r.kind === "sales" || r.kind === "sales_cfg"){ await cloudApplySales(r); touchedSales.add(cid); }
+    // (a removal of an invoice no longer here, this computer's own delete coming back from Realtime one row at a time,
+    // changes nothing on screen: the list is not read again for it. next-fix-sales-delete-shake: 22 invoices deleted
+    // read the list again 22 times, the page shaking)
+    else if (r.kind === "sales" || r.kind === "sales_cfg"){ await cloudApplySales(r); if (!(r.deleted && !mine.has(k))) touchedSales.add(cid); }
   }
   keepMark.forEach((was, k) => { marks[k] = was; });
   Cloud.setMarks(marks);
@@ -645,9 +648,8 @@ async function cloudApplyNow(rows){
     }
   }
   if (S.sales && touchedSales.has(S.sales.cid)){
-    const o = S.sales, keep = {filter: o.filter, q: o.q, sel: o.sel, openId: o.openId, view: o.view};
-    await loadSales(o.cid);
-    if (S.sales && S.sales.cid === o.cid) Object.assign(S.sales, {filter: keep.filter, q: keep.q, openId: keep.openId, view: keep.view, sel: new Set([...keep.sel].filter(id => S.sales.list.some(v => v.id === id)))});
+    // (read again in place: the page as it is stays drawn, src/js/25 loadSales)
+    await loadSales(S.sales.cid, S.sales);
   }
   if (took) Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
   // how many rows changed something here (this computer's own saves coming back are not counted): the page is drawn again

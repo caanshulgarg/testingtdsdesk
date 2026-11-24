@@ -45,12 +45,16 @@ function fyLabel(iso){ const d = iso ? new Date(iso + "T00:00:00") : new Date();
 function SL(){ return S.sales; }
 const SALES_CFG_DEFAULT = {voucherType: "Sales", series: "INV/{FY}/", next: 1, pad: 4, address: "", phone: "", email: "", bankName: "", bankAc: "", bankIfsc: "", bankBranch: "",
   terms: "Goods once sold will not be taken back. Interest at 18% p.a. will be charged on payments made after the due date. Subject to local jurisdiction.", signatory: "", ledgers: {}, auto: true, items: {}};
-async function loadSales(cid){
-  S.sales = {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
-  render();
+// (old: the list open on screen, read again after a change from the cloud, next-fix-sales-delete-shake: the owner,
+// 24-Nov-2026 "the window was shaking". It stays as it is drawn while the copy is read, with its tab, search, ticks,
+// open invoice, Undo and bar: never the loading page in between)
+async function loadSales(cid, old){
+  old = old && old === S.sales && old.cid === cid && !old.loading ? old : null;
+  if (!old){ S.sales = {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}}; render(); }
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
   const [list, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
-  if (!S.sales || S.sales.cid !== cid) return;
+  if (!S.sales || S.sales.cid !== cid || (old && S.sales !== old)) return;
+  if (old) [...old.sel].forEach(id => { if (!(list || []).some(v => v.id === id)) old.sel.delete(id); });
   SALES_REV++; Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
   salesCfgTook(S.sales);
   // next-fix-sales-sync: with the ledger list here, every invoice waiting is mapped again on this computer
