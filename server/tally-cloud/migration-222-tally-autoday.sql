@@ -26,9 +26,22 @@
 -- tally_recorder_fetching_sweep (196's: a line goes 'stale' only once its day was listed after it came),
 -- tally_held_status (196's) and tally_check_status_of (182's): their words never ask for an upload; tally_period_day_stop
 -- (197's): a slow day waits 1 h, 3 h, then 24 h, and its 3rd try no longer marks it "to upload".
--- ADD-ONLY: six columns added, no table made, no row deleted, nothing dropped. A name guard stops the file when a name it
+-- ADD-ONLY: seven columns added, no table made, no row deleted, nothing dropped; one data step (1b) opens the days given
+-- up to an upload again. A name guard stops the file when a name it
 -- makes is used by something that is not this migration's. One transaction, lock_timeout 10 s, safe twice. Tested by
 -- tests/run_migration222.py (on tests/tell_stand.py).
+-- APPLIED TOGETHER: 221 then 222 at once, and only with the tally-ingest deploy that hands the days FinCom queues by
+-- itself only to bridges of 2.5.16 or later (next-tally-tell-ingest). Never 222 alone.
+-- Contract for a heavy day read in MasterID bands (bridge 2.5.19+): the bridge sends bands: [[from, to | null], ...]
+-- with its period_heads; tally-ingest calls the 5-argument tally_check_heads(..., 'bands', p_bands) only when the bands
+-- are there, and keeps today's 'day' mapping for an older bridge. A 'bands' list without its bands is taken as today
+-- (a whole list), so a heavy day is never held for ever; with its bands, a hole means no delete.
+-- Review of 24-Nov-2026 (NOT READY, fixed here): days given up to an upload opened again once (a data step) and the
+-- period's 'slow3' days retried; a hand-out never counted as a try; the night job at 00:07 India time (pg_cron is UTC);
+-- days before the book: only into a LINKED earlier book, the book's own closed ('before_book'); no delete of an entry
+-- with a recorder line still being brought, nor from an empty list before a third one 10 minutes on; the sweep 5 s a run;
+-- 31 days for the daily re-check; the period's auto_tries reset once it reads again; no word asks for an upload;
+-- the fetching sweep needs a whole ('day') list; the types of existing columns and the job names guarded.
 begin;
 set local lock_timeout = '10s';
 
@@ -48,7 +61,9 @@ begin
                                  ('tally_recorder_fetching_sweep(integer)', '162277df8a310baca3c012c242879014'),
                                  ('tally_held_status(text)', '2d2abcd9dcbd0c738553d72f176f4e0c'),
                                  ('tally_check_status_of(uuid)', 'a42410209eda217c9713d61ede864027'),
-                                 ('tally_period_day_stop(uuid,date,text)', '4a6af131af1ea7b85fa489971ce24f53')) v(sig, h) loop
+                                 ('tally_period_day_stop(uuid,date,text)', '4a6af131af1ea7b85fa489971ce24f53'),
+                                 ('tally_check_entries(uuid,date,jsonb,jsonb,jsonb)', 'ecf3e93ef5c2b0247c76057d8eb15f79'),
+                                 ('tally_period_upload(uuid,date,text,text,text)', 'b2fb148cbf59ea6e8b8cb2da7d98af6f')) v(sig, h) loop
     if to_regprocedure('public.' || x.sig) is null then bad := bad || ('function ' || x.sig || ' (missing)');
     elsif not exists (select 1 from pg_proc p where p.oid = to_regprocedure('public.' || x.sig)
                        and (md5(p.prosrc) = x.h or coalesce(obj_description(p.oid, 'pg_proc'), '') = 'tally autoday (migration 222)')) then
@@ -64,8 +79,23 @@ begin
      and coalesce(obj_description(to_regprocedure('public.tally_check_heads(uuid,date,jsonb,text,jsonb)'), 'pg_proc'), '') <> 'tally autoday (migration 222)' then
     bad := bad || 'function tally_check_heads(uuid,date,jsonb,text,jsonb)'::text;
   end if;
-  if to_regprocedure('public.tally_held_queue_of(uuid,date[])') is null or to_regclass('public.tally_period_pulls') is null or to_regclass('public.tally_check_runs') is null then
-    bad := bad || 'tally_held_queue_of / tally_period_pulls / tally_check_runs (missing: run 98, 133 and 196 first)'::text;
+  if to_regprocedure('public.tally_held_queue_of(uuid,date[])') is null or to_regclass('public.tally_period_pulls') is null or to_regclass('public.tally_check_runs') is null
+     or to_regclass('public.tally_period_day_retry') is null then
+    bad := bad || 'tally_held_queue_of / tally_period_pulls / tally_check_runs / tally_period_day_retry (missing: run 98, 133, 196 and 197 first)'::text;
+  end if;
+  -- a column this file adds that is there already must be of its type
+  for x in select * from (values ('tally_check_days', 'prio', 'smallint'), ('tally_check_days', 'tries', 'integer'), ('tally_check_days', 'next_at', 'timestamp with time zone'),
+                                 ('tally_check_days', 'last_why', 'text'), ('tally_check_days', 'parked_at', 'timestamp with time zone'), ('tally_check_days', 'empty_lists', 'smallint'),
+                                 ('tally_period_pulls', 'auto_tries', 'integer')) v(tb, col, ty) loop
+    if exists (select 1 from information_schema.columns c where c.table_schema = 'public' and c.table_name = x.tb and c.column_name = x.col and c.data_type <> x.ty) then
+      bad := bad || ('column ' || x.tb || '.' || x.col || ' (not ' || x.ty || ')');
+    end if;
+  end loop;
+  -- the cron jobs' names: absent, or this migration's own command
+  if to_regclass('cron.job') is not null then
+    if exists (select 1 from cron.job j where j.jobname in ('tally-autoday', 'tally-autoday-night') and j.command <> 'select public.tally_autoday_sweep()') then
+      bad := bad || 'cron job tally-autoday / tally-autoday-night (another command)'::text;
+    end if;
   end if;
   if array_length(bad, 1) > 0 then
     raise exception 'migration 222: these names are already used by something else: %. Nothing was changed.', array_to_string(bad, ', ');
@@ -78,7 +108,17 @@ alter table public.tally_check_days add column if not exists tries int not null 
 alter table public.tally_check_days add column if not exists next_at timestamptz;                -- null: now
 alter table public.tally_check_days add column if not exists last_why text check (last_why is null or length(last_why) <= 40);
 alter table public.tally_check_days add column if not exists parked_at timestamptz;              -- the book no longer linked
+alter table public.tally_check_days add column if not exists empty_lists smallint not null default 0 check (empty_lists >= 0);   -- whole lists in a row that listed nothing
 alter table public.tally_period_pulls add column if not exists auto_tries int not null default 0 check (auto_tries >= 0);
+
+-- ---------------------------------------------------------------- 1b. once: the days given up to an upload before 222
+-- every check day marked "upload the Day Book" (not for a locked month) is opened again, to be read by itself now; the
+-- period's days a slow Tally gave up on ('slow3', 197) lose that mark and are retried now. Safe twice (none left after)
+update public.tally_check_days set upload_at = null, upload_words = null, lists = 0, gone1 = null, gone1_at = null, done_at = null, tries = 1, next_at = now(), last_why = 'reopened'
+ where upload_at is not null and coalesce(upload_words, '') !~* 'month is locked';
+update public.tally_period_day_retry r set retry_at = now()
+  from public.tally_period_days d where d.book_id = r.book_id and d.day = r.day and d.upload_why = 'slow3' and d.upload_at is not null;
+update public.tally_period_days set upload_at = null, upload_why = null, upload_type = null, upload_words = null where upload_why = 'slow3' and upload_at is not null;
 
 -- ---------------------------------------------------------------- 2. helpers (granted to nobody)
 -- B.5: after a 2 s stop the day waits 1 h, then 3 h, then 24 h, and every 24 h after
@@ -192,7 +232,9 @@ begin
     for rw in select r.vch_date as day, max(r.received_at) as mx from tally_recorder_lines r
               where r.book_id = p_book and r.state in ('held', 'fetching') and r.vch_date < b.from_date and r.vch_date >= date '2000-04-01'
               group by r.vch_date order by r.vch_date desc limit 400 loop
+      -- the client's book of that year, only when it is linked (else it could never be read: closed as no year kept)
       select k2.book_id into eb from tally_books k2 where k2.firm_id = f and k2.client_id = b.client_id and k2.book_id <> p_book and k2.from_date is not null and k2.from_date <= rw.day
+         and exists (select 1 from tally_links x2 where x2.book_id = k2.book_id and x2.firm_id = f and x2.state = 'linked')
        order by k2.from_date desc limit 1;
       if eb is null then
         update tally_recorder_lines set state = 'stale', held_why = left(format('Made in Tally in %s, a year FinCom does not keep.', tally_autoday_fy(rw.day)), 600)
@@ -207,6 +249,8 @@ begin
         end if;
       end if;
     end loop;
+    -- the book's own days before its first day: closed (never read into this book, never counted as waiting)
+    update tally_check_days set done_at = now(), last_why = 'before_book' where book_id = p_book and day < b.from_date and done_at is null and upload_at is null;
   end if;
 
   -- (3) a line dated after the day it came: its day queued on its own date (India's), not before
@@ -220,6 +264,11 @@ begin
   n := n + coalesce(tally_held_queue_of(p_book, (select array_agg(distinct r.vch_date) from tally_recorder_lines r
                                                   where r.book_id = p_book and r.state in ('held', 'fetching') and r.vch_date is not null
                                                     and (b.from_date is null or r.vch_date >= b.from_date))), 0);
+  -- the days held_queue_of opened again (here, or by the lines' own trigger before) start afresh: never handed since,
+  -- so no tries and no wait carried over from an earlier read
+  update tally_check_days set tries = 0, next_at = null, last_why = null, empty_lists = 0
+   where book_id = p_book and source = 'held' and asked_at is null and listed_at is null and lists = 0 and done_at is null and upload_at is null
+     and (tries > 0 or next_at is not null or last_why is not null);
   update tally_check_days set prio = 1 where book_id = p_book and source = 'held' and prio > 1 and done_at is null and upload_at is null;
   update tally_check_days set prio = 3 where book_id = p_book and source = 'gap' and prio > 3 and done_at is null and upload_at is null;
   -- (2) possible deletes, prio 2: (a) a delete or cancel line with no GUID; (b) the day's first whole list lacked an entry
@@ -232,13 +281,14 @@ begin
   end loop;
   update tally_check_days set prio = 2 where book_id = p_book and gone1 is not null and prio > 2 and done_at is null and upload_at is null;
   -- (c) a book read on the AlterID path only (its computer set so, or the add-on silent): every day with an entry created or
-  -- altered in the last 7 days, once a day (not listed in the last 20 hours), at most 7 days a book
+  -- altered in the last 7 days, once a day (not listed in the last 20 hours), at most 31 dates a book, the latest edits first
+  -- (the owner's YES of 24-Nov-2026)
   quiet := exists (select 1 from tally_devices d where d.id = l.device_id and d.recorder_source = 'alterid')
            or (to_regprocedure('public.tally_tell_of(uuid)') is not null and tally_tell_of(p_book) -> 'changes' ->> 'code' = 'addon_silent');
   if quiet then
     for rw in select v.day from tally_voucher_versions w join tally_vouchers v on v.book_id = w.book_id and v.guid = w.tally_guid
               where w.book_id = p_book and w.seen_at > now() - interval '7 days' and v.day <= today and (b.from_date is null or v.day >= b.from_date)
-              group by v.day order by v.day desc limit 7 loop
+              group by v.day order by max(w.seen_at) desc, v.day desc limit 31 loop
       n := n + tally_autoday_put(p_book, f, rw.day, 'delete', 2, now() - interval '20 hours');
     end loop;
   end if;
@@ -266,6 +316,8 @@ begin
     values (p_book, f, make_date((extract(year from coalesce(b.from_date, today)) - case when extract(month from coalesce(b.from_date, today)) < 4 then 1 else 0 end)::int, 4, 1),
             'year', 'going', coalesce(l.linked_at, now()))
     on conflict (book_id) do nothing;
+  elsif p.state = 'going' and p.auto_tries > 0 and exists (select 1 from tally_period_days pdd where pdd.book_id = p_book and pdd.counted_at > p.chosen_at) then
+    update tally_period_pulls set auto_tries = 0 where book_id = p_book;          -- it reads again: the next stop waits an hour again
   elsif p.state = 'stopped' and p.stop_why is distinct from 'person' and coalesce(p.stopped_at, '-infinity') <= now() - tally_autoday_backoff(p.auto_tries + 1) then
     update tally_period_pulls set state = 'going', chosen_at = now(), stopped_at = null, stop_day = null, stop_why = null, stop_words = null, auto_tries = auto_tries + 1
      where book_id = p_book and state = 'stopped';
@@ -283,7 +335,8 @@ begin
 end $function$;
 comment on function public.tally_autoday_queue(uuid) is 'tally autoday (migration 222)';
 
--- the sweep: every book linked, or with days open or parked, or lines being fetched; each in its own block; 20 s a run
+-- the sweep: every book linked, or with days open or parked, or lines being fetched; each in its own block; 5 s a run
+-- (one transaction: the books not reached go first next time, in random order)
 create or replace function public.tally_autoday_sweep() returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare t0 timestamptz := clock_timestamp(); bk uuid; nb int := 0; nd int := 0; bad int := 0; left_n int := 0;
@@ -293,7 +346,7 @@ begin
                 or exists (select 1 from tally_check_days x where x.book_id = b.book_id and x.done_at is null and x.upload_at is null)
                 or exists (select 1 from tally_recorder_lines r where r.book_id = b.book_id and r.state in ('held', 'fetching'))
              order by random() loop
-    if clock_timestamp() - t0 > interval '20 seconds' then left_n := left_n + 1; continue; end if;
+    if clock_timestamp() - t0 > interval '5 seconds' then left_n := left_n + 1; continue; end if;
     begin
       nd := nd + tally_autoday_queue_of(bk); nb := nb + 1;
     exception when others then
@@ -360,8 +413,7 @@ begin
       end loop;
     end if;
   end if;
-  update tally_check_days x set asked_at = now(), first_asked_at = coalesce(x.first_asked_at, now()),     -- 222
-         tries = x.tries + case when x.asked_at < now() - interval '10 minutes' and (x.listed_at is null or x.listed_at < x.asked_at) then 1 else 0 end     -- 222: handed, never answered
+  update tally_check_days x set asked_at = now(), first_asked_at = coalesce(x.first_asked_at, now())
    where x.book_id = p_book and x.day in (select to_date(e->>'day', 'YYYYMMDD') from jsonb_array_elements(out) e);
   return out;
 end $function$;
@@ -397,7 +449,7 @@ comment on function public.tally_check_stop(uuid, date, text, text, timestamptz)
 -- ---------------------------------------------------------------- 5. the day's list (133's text, lines marked 222; B.6)
 create or replace function public.tally_check_heads(p_book uuid, p_day date, p_heads jsonb, p_via text) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
-declare d tally_check_days%rowtype; f uuid; n int; w jsonb; cand jsonb := '[]'::jsonb; g1 jsonb; g1at timestamptz; g text; res jsonb; rem int := 0; done boolean; whole boolean := coalesce(p_via, 'day') not in ('split', 'bands');     -- 222: a band list is whole only through the 5-argument check (every band, no hole)
+declare d tally_check_days%rowtype; f uuid; n int; w jsonb; cand jsonb := '[]'::jsonb; g1 jsonb; g1at timestamptz; g text; res jsonb; rem int := 0; done boolean; whole boolean := coalesce(p_via, 'day') <> 'split';
   sn jsonb; locked boolean := false;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
@@ -417,6 +469,8 @@ begin
     if jsonb_array_length(cand) > 0 and d.gone1 is not null and d.gone1_at <= now() - interval '60 seconds' then
       for g in select jsonb_array_elements_text(cand) intersect select jsonb_array_elements_text(d.gone1) loop
         if tally_autoday_fresh_post(p_book, g) then continue; end if;     -- 222: never a FinCom posting not settled, or settled under 10 minutes ago (the next list)
+        if exists (select 1 from tally_recorder_lines rl where rl.book_id = p_book and rl.object_guid = g and rl.state in ('held', 'fetching')) then continue; end if;     -- 222: never one with a line still being brought
+        if n = 0 and not (d.empty_lists >= 2 and d.gone1_at <= now() - interval '10 minutes') then continue; end if;     -- 222: an empty list: only on a third, 10 minutes after the first
         res := tally_ingest_delete(p_book, g, null, false, 'upload check: deleted in Tally');
         if res->>'state' = 'applied' and not coalesce((res->>'already')::boolean, false) then
           rem := rem + 1;
@@ -439,10 +493,11 @@ begin
          removed = removed + rem, done_at = case when done then now() end,
          same = case when done then added + updated + removed + rem = 0 end,
          upload_at = case when locked then now() end,     -- 222: an unfinished day is never given up to an upload: it waits and is read again by itself
-         upload_words = case when locked then 'FinCom could not correct ' || to_char(p_day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month, then upload that day''s Day Book again.' end,     -- 222
+         upload_words = case when locked then 'FinCom could not correct ' || to_char(p_day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month, and FinCom reads the day again.' end,     -- 222
          tries = tries + case when not done and not locked and lists + 1 >= 6 then 1 else 0 end,     -- 222
          next_at = case when not done and not locked and lists + 1 >= 6 then now() + tally_autoday_backoff(tries + 1) else next_at end,     -- 222
-         last_why = case when not done and not locked and lists + 1 >= 6 then 'unfinished' else last_why end     -- 222
+         last_why = case when not done and not locked and lists + 1 >= 6 then 'unfinished' else last_why end,     -- 222
+         empty_lists = case when not whole then empty_lists when n = 0 then empty_lists + 1 else 0 end     -- 222
    where book_id = p_book and day = p_day;
   return jsonb_build_object('ok', true, 'mine', true, 'n', n, 'want', w, 'done', done, 'removed', rem);
 end $function$;
@@ -450,13 +505,13 @@ comment on function public.tally_check_heads(uuid, date, jsonb, text) is 'tally 
 
 -- a heavy day read in MasterID bands (FinComDayHeadsPart; tally-ingest passes via 'bands' and the bands as the bridge read
 -- them): the day's whole list only when every band came back and they join with no hole; else taken as a partial list
--- (no delete, the day not closed). Any other via: as the 4-argument one
+-- (no delete, the day not closed). Any other via, or no bands: as the 4-argument one (a 'bands' list there is whole, as today)
 create or replace function public.tally_check_heads(p_book uuid, p_day date, p_heads jsonb, p_via text, p_bands jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
 declare whole boolean;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
-  if coalesce(p_via, 'day') <> 'bands' then return tally_check_heads(p_book, p_day, p_heads, p_via); end if;
+  if coalesce(p_via, 'day') <> 'bands' or jsonb_typeof(p_bands) is distinct from 'array' then return tally_check_heads(p_book, p_day, p_heads, p_via); end if;     -- no bands: as today
   whole := tally_autoday_bands_whole(p_bands, p_heads);
   return tally_check_heads(p_book, p_day, p_heads, case when whole then 'day' else 'split' end) || jsonb_build_object('bandsWhole', whole);
 end $function$;
@@ -472,7 +527,7 @@ begin
      where l.state in ('held', 'fetching')
        and ((t.line_row is not null and t.first_at < now() - interval '7 days') or (t.line_row is null and l.received_at < now() - interval '14 days'))
        and (l.vch_date is null     -- 222: a line of no day (a ledger's) as 196; one of a day only once that day was listed by a bridge after the line came
-            or exists (select 1 from tally_check_days k where k.book_id = l.book_id and k.day = l.vch_date and k.listed_at > l.received_at)     -- 222
+            or exists (select 1 from tally_check_days k where k.book_id = l.book_id and k.day = l.vch_date and k.listed_at > l.received_at and k.via = 'day')     -- 222
             or exists (select 1 from tally_period_days k where k.book_id = l.book_id and k.day = l.vch_date and k.counted_at > l.received_at))     -- 222
        and not exists (select 1 from tally_books b where b.book_id = l.book_id and b.from_date is not null and l.vch_date < b.from_date)     -- 222: before the book's first day: B.8 (tally_autoday_queue)
      order by l.id limit mx) x;
@@ -592,6 +647,67 @@ begin
 end $function$;
 comment on function public.tally_period_day_stop(uuid, date, text) is 'tally autoday (migration 222)';
 
+-- the entries of a day being checked (133's text, one line marked 222): the month-locked words never ask for an upload
+create or replace function public.tally_check_entries(p_book uuid, p_day date, p_vouchers jsonb, p_lines jsonb, p_seen jsonb) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare d tally_check_days%rowtype; vs jsonb := case when jsonb_typeof(p_vouchers) = 'array' then p_vouchers else '[]'::jsonb end; bf jsonb; res jsonb; x record; a int := 0; u int := 0;
+  sn jsonb := '{}'::jsonb; k text; w jsonb; done boolean; wl text;
+begin
+  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  select * into d from tally_check_days where book_id = p_book and day = p_day and done_at is null and upload_at is null for update;
+  if not found then return jsonb_build_object('ok', true, 'mine', false); end if;
+  if exists (select 1 from jsonb_array_elements(vs) v where coalesce(v->>'day', '') <> to_char(p_day, 'YYYY-MM-DD')) then
+    return jsonb_build_object('ok', false, 'mine', true, 'error', 'an entry of another date');
+  end if;
+  if tally_month_locked(p_book, array[p_day]) is not null then
+    wl := 'FinCom could not correct ' || to_char(p_day, 'DD-Mon-YYYY') || ': its month is locked in FinCom. Unlock the month, and FinCom reads the day again.';     -- 222
+    update tally_check_days set upload_at = now(), upload_words = wl where book_id = p_book and day = p_day;
+    return jsonb_build_object('ok', true, 'mine', true, 'locked', true, 'upload', wl, 'stored', 0);
+  end if;
+  for k in select jsonb_object_keys(case when jsonb_typeof(p_seen) = 'object' then p_seen else '{}'::jsonb end) loop
+    if length(k) between 1 and 100 and coalesce(p_seen->>k, '') ~ '^[0-9]{1,15}$' then sn := sn || jsonb_build_object(k, (p_seen->>k)::bigint); end if;
+  end loop;
+  select coalesce(jsonb_object_agg(v.guid, jsonb_build_object('a', coalesce(v.alter_id, 0), 'live', v.deleted_at is null)), '{}'::jsonb) into bf
+    from tally_vouchers v where v.book_id = p_book and v.guid in (select y->>'guid' from jsonb_array_elements(vs) y);
+  if jsonb_array_length(vs) > 0 then
+    res := tally_ingest_entries(p_book, vs, coalesce(p_lines, '[]'::jsonb), true, false);
+    if not coalesce((res->>'ok')::boolean, false) then
+      return jsonb_build_object('ok', false, 'mine', true, 'error', coalesce(res->>'error', res->>'refused', 'not stored'), 'locked', coalesce((res->>'locked')::boolean, false));
+    end if;
+    for x in select distinct v.guid, coalesce(v.alter_id, 0) as alt from tally_vouchers v
+              where v.book_id = p_book and v.deleted_at is null and v.guid in (select y->>'guid' from jsonb_array_elements(vs) y) loop
+      if bf->x.guid is null or not coalesce((bf->x.guid->>'live')::boolean, false) then
+        a := a + 1; insert into tally_fetch_log (book_id, firm_id, via, what, guid, day) values (p_book, d.firm_id, 'check', 'added', x.guid, p_day);
+      elsif (bf->x.guid->>'a')::bigint <> x.alt then
+        u := u + 1; insert into tally_fetch_log (book_id, firm_id, via, what, guid, day) values (p_book, d.firm_id, 'check', 'changed', x.guid, p_day);
+      end if;
+    end loop;
+  end if;
+  w := tally_check_want(p_book, d.heads, d.seen || sn || coalesce((select z.seen from tally_period_days z where z.book_id = p_book and z.day = p_day), '{}'::jsonb));
+  done := jsonb_array_length(w) = 0 and d.gone1 is null;
+  update tally_check_days set seen = seen || sn, added = added + a, updated = updated + u, done_at = case when done then now() end,
+         same = case when done then added + a + updated + u + removed = 0 end
+   where book_id = p_book and day = p_day;
+  return jsonb_build_object('ok', true, 'mine', true, 'stored', jsonb_array_length(vs), 'added', a, 'updated', u, 'done', done, 'want', w);
+end $function$;
+comment on function public.tally_check_entries(uuid, date, jsonb, jsonb, jsonb) is 'tally autoday (migration 222)';
+
+-- a period day the bridge cannot read (98's text, one line marked 222): its words never ask for an upload
+create or replace function public.tally_period_upload(p_book uuid, p_day date, p_why text, p_type text, p_words text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $function$
+declare f uuid;
+begin
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  select firm_id into f from tally_period_pulls where book_id = p_book;
+  if f is null or p_day is null then return jsonb_build_object('ok', false, 'error', 'FinCom did not ask for this day'); end if;
+  insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_type, upload_words)
+  values (p_book, f, p_day, now(), left(coalesce(p_why, ''), 40), nullif(left(coalesce(p_type, ''), 100), ''),
+          left(case when coalesce(p_words, '') = '' or p_words ~* 'upload' then 'FinCom could not read ' || to_char(p_day, 'DD-Mon-YYYY') || ' from Tally by itself.' else p_words end, 300))     -- 222: never an ask to upload
+  on conflict (book_id, day) do update set upload_at = coalesce(tally_period_days.upload_at, now()), upload_why = excluded.upload_why, upload_type = excluded.upload_type, upload_words = excluded.upload_words;
+  return jsonb_build_object('ok', true);
+end $function$;
+comment on function public.tally_period_upload(uuid, date, text, text, text) is 'tally autoday (migration 222)';
+
 -- ---------------------------------------------------------------- 8. grants (explicit)
 revoke all on function public.tally_autoday_backoff(integer), public.tally_autoday_prio(text), public.tally_autoday_fy(date), public.tally_autoday_words(text, date),
   public.tally_autoday_fresh_post(uuid, text), public.tally_autoday_bands_whole(jsonb, jsonb), public.tally_autoday_put(uuid, uuid, date, text, integer, timestamptz),
@@ -616,6 +732,10 @@ grant execute on function public.tally_held_status(text) to authenticated, servi
 revoke all on function public.tally_check_status_of(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.tally_period_day_stop(uuid, date, text) from public, anon, authenticated;
 grant execute on function public.tally_period_day_stop(uuid, date, text) to service_role;
+revoke all on function public.tally_check_entries(uuid, date, jsonb, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.tally_check_entries(uuid, date, jsonb, jsonb, jsonb) to service_role;
+revoke all on function public.tally_period_upload(uuid, date, text, text, text) from public, anon, authenticated;
+grant execute on function public.tally_period_upload(uuid, date, text, text, text) to service_role;
 
 -- ---------------------------------------------------------------- 9. the jobs (pg_cron where it is there)
 do $cron$
@@ -624,7 +744,7 @@ begin
     raise notice 'migration 222: pg_cron is not here: the autoday sweep is not scheduled (call tally_autoday_sweep yourself)';
   else
     perform cron.schedule('tally-autoday', '3-59/15 * * * *', 'select public.tally_autoday_sweep()');           -- every 15 minutes
-    perform cron.schedule('tally-autoday-night', '7 18 * * *', 'select public.tally_autoday_sweep()');          -- 00:07 India time: the new day's future lines
+    perform cron.schedule('tally-autoday-night', '37 18 * * *', 'select public.tally_autoday_sweep()');         -- 18:37 UTC = 00:07 India time: the new day's future lines
   end if;
 end $cron$;
 

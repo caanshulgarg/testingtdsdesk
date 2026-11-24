@@ -14,13 +14,20 @@
 -- Reads only what FinCom already holds: tally_links, tally_devices (info.beat, info.bridges[].tell as tally-ingest keeps
 -- it: {skip, numbersWhy, addonSilent, unstarted, at}, version, last_seen), tally_read_serving, tally_fetch_on, tally_sync_cursor,
 -- tally_check_days, tally_recorder_lines and tally_post_jobs. Nothing is sent to Tally; no bridge is asked anything.
--- 222's columns of tally_check_days (parked_at, next_at, last_why) are read through to_jsonb, so this file runs with or
--- without 222.
+-- 221 and 222 are applied TOGETHER, 222 right after 221 (222 parks an unlinked book's days; 221 shows such a book only
+-- while it has days open and not parked, and never rings for it). 222's columns of tally_check_days (parked_at,
+-- next_at, last_why) are read through to_jsonb, so this file runs (and its tests pass) before 222 is there.
 -- ADD-ONLY: one new table (tally_tell_state, row security on, no grants), one column added (tally_alerts.cleared_at), the
 -- tally_alerts kind CHECK swapped in one ALTER for the same name with 'tell' added (only while it is exactly 47's), six new
 -- functions, one function replaced (tally_alert_scan_silent, only while its text is 47's). No row deleted, nothing dropped.
 -- A name guard stops the file when a name it makes is used by something that is not this migration's. One transaction,
 -- lock_timeout 10 s, safe twice. Tested by tests/run_migration221.py (on tests/tell_stand.py).
+-- Review of 24-Nov-2026 (NOT READY, fixed here): run_as_admin only for an open Tally whose owner Windows cannot tell
+-- (owners told, none of the user's own open); the add-on line never over an 'already' tally.ini or a company already
+-- recording; one action a computer line; the bell keeps fault_since, clears only after 2 scans or 20 minutes gone, keeps
+-- read_at in place (unread again only for a new button that lasted 30 working minutes), never for causes 1-3 (the firm's
+-- own alert says 2 and 3), 2 working hours for 5 and 6; one bad book never breaks the view; postings by the book's own
+-- company; the cron job's name guarded.
 begin;
 set local lock_timeout = '10s';
 
@@ -31,7 +38,7 @@ begin
   foreach t in array array['tally_tell_state'] loop
     if to_regclass('public.' || t) is not null and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'tally tell (migration 221)' then bad := bad || ('table ' || t); end if;
   end loop;
-  foreach fn in array array['tally_tell_of', 'tally_tell_device', 'tally_tell_view', 'tally_tell_scan', 'tally_tell_old', 'tally_tell_pc'] loop
+  foreach fn in array array['tally_tell_of', 'tally_tell_device', 'tally_tell_view', 'tally_tell_scan', 'tally_tell_old', 'tally_tell_pc', 'tally_tell_of_safe'] loop
     if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = fn
                 and coalesce(obj_description(p.oid, 'pg_proc'), '') <> 'tally tell (migration 221)') then bad := bad || ('function ' || fn); end if;
   end loop;
@@ -42,6 +49,12 @@ begin
     bad := bad || 'function tally_alert_scan_silent (not 47''s text)'::text;
   end if;
   if to_regprocedure('public.tally_alert_scan_silent()') is null then bad := bad || 'function tally_alert_scan_silent (missing: run 47 first)'::text; end if;
+  -- the cron job's name: absent, or this migration's own command
+  if to_regclass('cron.job') is not null then
+    if exists (select 1 from cron.job j where j.jobname = 'tally-tell-scan' and j.command <> 'select public.tally_tell_scan()') then
+      bad := bad || 'cron job tally-tell-scan (another command)'::text;
+    end if;
+  end if;
   if array_length(bad, 1) > 0 then
     raise exception 'migration 221: these names are already used by something else: %. Nothing was changed.', array_to_string(bad, ', ');
   end if;
@@ -53,9 +66,15 @@ create table if not exists public.tally_tell_state (
   firm_id uuid not null,
   code    text check (code is null or length(code) <= 40),      -- the book's cause now (null: nothing to say)
   words   text check (words is null or length(words) <= 300),
-  since   timestamptz,                                          -- when this cause began (the bell waits 30 working minutes)
+  since   timestamptz,                                          -- when this cause began
+  fault_since timestamptz,                                      -- when the book became faulty (kept while it stays so; the bell waits from it)
+  gone_at timestamptz,                                          -- the fault first seen gone (cleared after 2 scans or 20 minutes)
+  gone_n  integer not null default 0,
   at      timestamptz not null default now()                    -- last scanned
 );
+alter table public.tally_tell_state add column if not exists fault_since timestamptz;
+alter table public.tally_tell_state add column if not exists gone_at timestamptz;
+alter table public.tally_tell_state add column if not exists gone_n integer not null default 0;
 comment on table public.tally_tell_state is 'tally tell (migration 221)';
 alter table public.tally_tell_state enable row level security;
 revoke all on table public.tally_tell_state from public, anon, authenticated, service_role;
@@ -134,7 +153,11 @@ begin
    where x.book_id = p_book and x.done_at is null and x.upload_at is null and to_jsonb(x) ->> 'parked_at' is null
      and x.day <= today and (b.from_date is null or x.day >= b.from_date);
   select count(*)::int into fetching from tally_recorder_lines r where r.book_id = p_book and r.state = 'fetching';
-  select count(*)::int into posting from tally_post_jobs j where j.firm_id = f and j.client_id = b.client_id and j.status in ('waiting', 'taken', 'running');
+  -- a posting of this book: by its book_id where the posting row has one, else the client's posting to this company
+  select count(*)::int into posting from tally_post_jobs j
+   where j.firm_id = f and j.status in ('waiting', 'taken', 'running')
+     and case when to_jsonb(j) ->> 'book_id' is not null then to_jsonb(j) ->> 'book_id' = p_book::text
+              else j.client_id = b.client_id and lower(tally_nm(j.company)) = lower(tally_nm(co)) end;
   -- the last pickup refusal of an open day of the book in the last day (222's last_why)
   select to_jsonb(x) ->> 'last_why' into pick from tally_check_days x
    where x.book_id = p_book and x.done_at is null and x.upload_at is null and to_jsonb(x) ->> 'last_why' in ('otherLogin', 'otherCompany') and x.asked_at > now() - interval '1 day'
@@ -303,31 +326,42 @@ comment on function public.tally_tell_of(uuid) is 'tally tell (migration 221)';
 -- ---------------------------------------------------------------- 4. the computer's line (A.2), from its own beat
 create or replace function public.tally_tell_device(p_device uuid) returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $function$
-declare d tally_devices%rowtype; bt jsonb; pc text; code text; words text; fix text; guids text[]; names text[];
+declare d tally_devices%rowtype; bt jsonb; pc text; code text; words text; fix text; guids text[]; names text[]; pts jsonb; ini jsonb; tp text;
 begin
   select * into d from tally_devices where id = p_device and not coalesce(revoked, false);
   if not found then return null; end if;
   bt := case when jsonb_typeof(d.info -> 'beat') = 'object' then d.info -> 'beat' else '{}'::jsonb end;
   pc := tally_tell_pc(coalesce(nullif(btrim(d.info ->> 'computer'), ''), d.name));
+  select coalesce(jsonb_agg(p), '[]'::jsonb) into pts from jsonb_array_elements(case when jsonb_typeof(bt -> 'ports') = 'array' then bt -> 'ports' else '[]'::jsonb end) p where jsonb_typeof(p) = 'object';
+  select coalesce(jsonb_agg(i), '[]'::jsonb) into ini from jsonb_array_elements(case when jsonb_typeof(bt -> 'tallyIni') = 'array' then bt -> 'tallyIni' else '[]'::jsonb end) i where jsonb_typeof(i) = 'object';
+  tp := nullif(nullif(btrim(coalesce(bt ->> 'tallyPort', '')), ''), '0');
   select array_agg(lower(btrim(x.company_guid))) filter (where x.company_guid is not null), array_agg(lower(tally_nm(x.company_name))) filter (where x.company_name is not null)
     into guids, names from tally_links x where x.firm_id = d.firm_id and x.state = 'linked';
   if d.last_seen is null or d.last_seen < now() - interval '3 minutes' then
-    code := 'bridge_off'; words := format('FinCom Bridge is not running on %s.', pc);
+    code := 'bridge_off'; words := format('Start FinCom Bridge on %s.', pc);
   elsif tally_tell_old(coalesce(nullif(bt ->> 'version', ''), d.version)) then
     code := 'old_bridge'; words := format('Update FinCom Bridge on %s.', pc); fix := 'update';
   elsif coalesce(bt ->> 'tallyState', '') = 'closed' or coalesce(bt ->> 'tallyWhy', '') = 'no Tally running in this login' then
-    code := 'tally_closed'; words := format('Tally is closed on %s.', pc);
-  elsif exists (select 1 from jsonb_array_elements(case when jsonb_typeof(bt -> 'ports') = 'array' then bt -> 'ports' else '[]'::jsonb end) p where jsonb_typeof(p) = 'object' and p ->> 'owner' = 'unknown')
+    code := 'tally_closed'; words := format('Open Tally on %s.', pc);
+  -- run as administrator: an OPEN Tally whose owner Windows cannot tell, while the bridge tells the owner of another
+  -- Tally (the app's ownRule: else an owner-unknown Tally is this user's own) and none of the user's own Tallys is open.
+  -- Staging: every closed port says owner unknown, so a closed one never counts
+  elsif (exists (select 1 from jsonb_array_elements(pts) p where p ->> 'reason' = 'open' and p ->> 'owner' = 'unknown' and coalesce(p ->> 'skipped', '') <> 'true')
+         and exists (select 1 from jsonb_array_elements(pts) p where coalesce(p ->> 'owner', '') <> 'unknown')
+         and not exists (select 1 from jsonb_array_elements(pts) p where p ->> 'reason' = 'open' and coalesce(p ->> 'owner', '') <> 'unknown' and coalesce(p ->> 'skipped', '') <> 'true'))
      or exists (select 1 from jsonb_each(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k,
                        jsonb_each_text(case when jsonb_typeof(k.value -> 'tell' -> 'skip') = 'object' then k.value -> 'tell' -> 'skip' else '{}'::jsonb end) s where s.value = 'ownerUnknown') then
     code := 'run_as_admin'; words := format('Tally on %s runs as administrator. Open it normally.', pc);
-  elsif exists (select 1 from jsonb_array_elements(case when jsonb_typeof(bt -> 'tallyIni') = 'array' then bt -> 'tallyIni' else '[]'::jsonb end) i where jsonb_typeof(i) = 'object' and i ->> 'state' = 'shared')
+  -- the add-on not loaded: a 'shared' tally.ini for this Tally (its port, or any when the port is not known), no
+  -- 'already' one for it, and a company of the firm open whose add-on lines have not been seen
+  elsif exists (select 1 from jsonb_array_elements(ini) i where i ->> 'state' = 'shared' and (tp is null or coalesce(i ->> 'serverPort', '') in ('', tp)))
+    and not exists (select 1 from jsonb_array_elements(ini) i where i ->> 'state' = 'already' and (tp is null or coalesce(i ->> 'serverPort', '') in ('', tp)))
     and exists (select 1 from jsonb_array_elements(case when jsonb_typeof(bt -> 'companies') = 'array' then bt -> 'companies' else '[]'::jsonb end) c
-                 where jsonb_typeof(c) = 'object' and coalesce(c ->> 'open', '') = 'true'
+                 where jsonb_typeof(c) = 'object' and coalesce(c ->> 'open', '') = 'true' and coalesce(c ->> 'recorderSeen', '') <> 'true'
                    and (lower(btrim(coalesce(c ->> 'guid', ''))) = any (coalesce(guids, '{}')) or lower(tally_nm(c ->> 'name')) = any (coalesce(names, '{}')))) then
     code := 'addon'; words := format('Load the FinCom add-on in Tally on %s (F1 › TDLs & Add-ons).', pc);
   elsif coalesce(bt ->> 'paused', '') = 'true' then
-    code := 'paused'; words := format('Reading is paused on %s.', pc);
+    code := 'paused'; words := format('Reading is paused on %s. Click Resume in the tray icon.', pc);
   else
     code := 'working'; words := 'Working.';
   end if;
@@ -336,6 +370,19 @@ end $function$;
 comment on function public.tally_tell_device(uuid) is 'tally tell (migration 221)';
 
 -- ---------------------------------------------------------------- 5. the app: every book's sentence, the computers' lines
+-- one book whose sentence cannot be worked out never breaks the view (or the scan): {book, cause: {code: null}}
+create or replace function public.tally_tell_of_safe(p_book uuid) returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $function$
+begin
+  return tally_tell_of(p_book);
+exception when others then
+  raise log 'tally_tell_of: book %: % %', p_book, sqlstate, sqlerrm;
+  return jsonb_build_object('book', p_book, 'cause', jsonb_build_object('code', null, 'words', null, 'fix', null),
+                            'read', jsonb_build_object('code', null, 'words', null, 'fix', null), 'post', jsonb_build_object('code', null, 'words', null, 'fix', null),
+                            'changes', jsonb_build_object('code', null, 'words', null, 'fix', null), 'unsure', true);
+end $function$;
+comment on function public.tally_tell_of_safe(uuid) is 'tally tell (migration 221)';
+
 create or replace function public.tally_tell_view() returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); own boolean; bks jsonb; pcs jsonb;
@@ -344,13 +391,13 @@ begin
     raise exception 'not allowed' using errcode = '42501';
   end if;
   own := exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and coalesce(m.active, true) and m.role = 'owner');
-  -- every linked book; a book no longer linked only while it has days waiting or lines being fetched (cause 1)
-  select coalesce(jsonb_agg(tally_tell_of(b.book_id) order by b.company, b.from_date desc, b.book_id), '[]'::jsonb) into bks
+  -- every linked book; a book no longer linked only while it has days open and not parked (cause 1, said once: 222
+  -- parks its days at its next run)
+  select coalesce(jsonb_agg(tally_tell_of_safe(b.book_id) order by b.company, b.from_date desc, b.book_id), '[]'::jsonb) into bks
     from tally_books b
    where b.firm_id = f
      and (exists (select 1 from tally_links x where x.book_id = b.book_id and x.firm_id = f and x.state = 'linked')
-          or exists (select 1 from tally_check_days x where x.book_id = b.book_id and x.done_at is null and x.upload_at is null)
-          or exists (select 1 from tally_recorder_lines r where r.book_id = b.book_id and r.state = 'fetching'));
+          or exists (select 1 from tally_check_days x where x.book_id = b.book_id and x.done_at is null and x.upload_at is null and to_jsonb(x) ->> 'parked_at' is null));
   select coalesce(jsonb_agg(tally_tell_device(d.id) || jsonb_build_object('mine', d.created_by = auth.uid()
                      or exists (select 1 from tally_member_bridges mb where mb.firm_id = f and mb.user_id = auth.uid() and mb.device_id = d.id))
                    order by d.last_seen desc nulls last, d.id), '[]'::jsonb) into pcs
@@ -362,41 +409,57 @@ end $function$;
 comment on function public.tally_tell_view() is 'tally tell (migration 221)';
 
 -- ---------------------------------------------------------------- 6. the scan: the cause's since, the bell (A.3.4)
--- One 'tell' row a book (open while cleared_at is null): raised only after the cause (1-14) has lasted 30 working minutes
--- and something is affected (days waiting, lines fetching, a posting waiting, Tally's number moving); written in place
--- when the cause changes; cleared_at when it goes. 15 and 16 are not faults: never a bell. At most 20 s a run.
+-- One 'tell' row a book (open while cleared_at is null). A fault is a cause 4-14 (1 an unlinked book: said in the view
+-- only; 2 and 3 the firm's own: its alert says them; 15 and 16 are not faults). The fault's time (fault_since) is kept
+-- while the book stays faulty, whatever the cause; the bell is raised once the fault has lasted 30 working minutes (2
+-- working hours for 5 Tally closed and 6 not open) and something is affected (days waiting, lines fetching, a posting of
+-- the book waiting, Tally's number moving). A cause that changes is written in place, read kept; it is made unread again
+-- only when its button changes and the new cause has lasted 30 working minutes. Cleared only after the fault has been
+-- gone 2 scans or 20 minutes (then marked read). At most 20 s a run.
 create or replace function public.tally_tell_scan() returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $function$
-declare t0 timestamptz := clock_timestamp(); today date := (now() at time zone 'Asia/Kolkata')::date; bk record; t jsonb; c text; w text; st tally_tell_state%rowtype;
-  a tally_alerts%rowtype; nb int := 0; nr int := 0; nu int := 0; nc int := 0; bad int := 0; left_n int := 0; fault boolean;
+declare t0 timestamptz := clock_timestamp(); today date := (now() at time zone 'Asia/Kolkata')::date; bk record; t jsonb; c text; w text; fx text; st tally_tell_state%rowtype;
+  a tally_alerts%rowtype; nb int := 0; nr int := 0; nu int := 0; nc int := 0; bad int := 0; left_n int := 0; fault boolean; need numeric; linked boolean; gone boolean;
 begin
   for bk in select b.book_id, b.firm_id, b.client_id from tally_books b
              where exists (select 1 from tally_links x where x.book_id = b.book_id and x.firm_id = b.firm_id and x.state = 'linked')
-                or exists (select 1 from tally_check_days x where x.book_id = b.book_id and x.done_at is null and x.upload_at is null)
                 or exists (select 1 from tally_alerts x where x.book_id = b.book_id and x.kind = 'tell' and x.cleared_at is null)
-                or exists (select 1 from tally_tell_state x where x.book_id = b.book_id and x.code is not null)
+                or exists (select 1 from tally_tell_state x where x.book_id = b.book_id and (x.code is not null or x.fault_since is not null))
              order by (select x.at from tally_tell_state x where x.book_id = b.book_id) nulls first, b.book_id loop
     if clock_timestamp() - t0 > interval '20 seconds' then left_n := left_n + 1; continue; end if;
     begin
-      t := tally_tell_of(bk.book_id);
-      c := t -> 'cause' ->> 'code'; w := t -> 'cause' ->> 'words';
+      linked := exists (select 1 from tally_links x where x.book_id = bk.book_id and x.firm_id = bk.firm_id and x.state = 'linked');
+      t := case when linked then tally_tell_of(bk.book_id) end;
+      c := t -> 'cause' ->> 'code'; w := t -> 'cause' ->> 'words'; fx := t -> 'cause' ->> 'fix';
+      fault := linked and c is not null and c not in ('not_linked', 'no_bridge', 'bridge_off', 'days_waiting', 'slow_day');
       select * into st from tally_tell_state where book_id = bk.book_id;
-      insert into tally_tell_state as s (book_id, firm_id, code, words, since, at) values (bk.book_id, bk.firm_id, c, w, case when c is not null then now() end, now())
+      gone := not fault and st.fault_since is not null
+              and (coalesce(st.gone_n, 0) + 1 >= 2 or coalesce(st.gone_at, now()) <= now() - interval '20 minutes');
+      insert into tally_tell_state as s (book_id, firm_id, code, words, since, fault_since, gone_at, gone_n, at)
+      values (bk.book_id, bk.firm_id, c, w, case when c is not null then now() end, case when fault then now() end, case when not fault then now() end, case when fault then 0 else 1 end, now())
       on conflict (book_id) do update set code = excluded.code, words = excluded.words, at = now(),
-        since = case when s.code is not distinct from excluded.code then s.since else excluded.since end;
+        since = case when s.code is not distinct from excluded.code then s.since else excluded.since end,
+        fault_since = case when fault then coalesce(s.fault_since, now()) when gone then null else s.fault_since end,
+        gone_at = case when fault or gone then null else coalesce(s.gone_at, now()) end,
+        gone_n = case when fault or gone then 0 else coalesce(s.gone_n, 0) + 1 end;
       select * into st from tally_tell_state where book_id = bk.book_id;
-      fault := c is not null and c not in ('days_waiting', 'slow_day');
       select * into a from tally_alerts x where x.firm_id = bk.firm_id and x.kind = 'tell' and x.book_id = bk.book_id and x.cleared_at is null order by x.id desc limit 1;
+      need := case when c in ('tally_closed', 'not_open') then 2 else 0.5 end;
       if a.id is not null then
-        if not fault then
-          update tally_alerts set cleared_at = now() where id = a.id; nc := nc + 1;
-        elsif a.words is distinct from w then
-          update tally_alerts set words = w, data = jsonb_build_object('code', c, 'fix', t -> 'cause' ->> 'fix', 'since', st.since), at = now(), read_at = null, read_by = null where id = a.id;
+        if gone or (not fault and st.fault_since is null) then
+          update tally_alerts set cleared_at = now(), read_at = coalesce(read_at, now()) where id = a.id; nc := nc + 1;
+        elsif fault and (a.words is distinct from w or (a.data ->> 'readFix' is distinct from fx and tally_working_hours(st.since, now()) >= 0.5)) then
+          update tally_alerts set words = w, at = now(),
+                 data = jsonb_build_object('code', c, 'fix', fx, 'since', st.fault_since,
+                                           'readFix', case when a.data ->> 'readFix' is distinct from fx and tally_working_hours(st.since, now()) >= 0.5 then fx else a.data ->> 'readFix' end),
+                 read_at = case when a.data ->> 'readFix' is distinct from fx and tally_working_hours(st.since, now()) >= 0.5 then null else read_at end,
+                 read_by = case when a.data ->> 'readFix' is distinct from fx and tally_working_hours(st.since, now()) >= 0.5 then null else read_by end
+           where id = a.id;
           nu := nu + 1;
         end if;
-      elsif fault and coalesce((t ->> 'affected')::boolean, false) and st.since is not null and tally_working_hours(st.since, now()) >= 0.5 then
+      elsif fault and coalesce((t ->> 'affected')::boolean, false) and tally_working_hours(st.fault_since, now()) >= need then
         insert into tally_alerts (firm_id, client_id, book_id, device_id, kind, day, words, data)
-        values (bk.firm_id, bk.client_id, bk.book_id, null, 'tell', today, w, jsonb_build_object('code', c, 'fix', t -> 'cause' ->> 'fix', 'since', st.since))
+        values (bk.firm_id, bk.client_id, bk.book_id, null, 'tell', today, w, jsonb_build_object('code', c, 'fix', fx, 'since', st.fault_since, 'readFix', fx))
         on conflict (firm_id, kind, (coalesce(book_id, '00000000-0000-0000-0000-000000000000'::uuid)), (coalesce(device_id, '00000000-0000-0000-0000-000000000000'::uuid)), day)
         do update set words = excluded.words, data = excluded.data, at = now(), cleared_at = null, read_at = null, read_by = null;
         nr := nr + 1;
@@ -425,6 +488,7 @@ comment on function public.tally_alert_scan_silent() is 'tally tell (migration 2
 revoke all on function public.tally_tell_old(text) from public, anon, authenticated, service_role;
 revoke all on function public.tally_tell_pc(text) from public, anon, authenticated, service_role;
 revoke all on function public.tally_tell_of(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.tally_tell_of_safe(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.tally_tell_device(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.tally_tell_scan() from public, anon, authenticated, service_role;
 revoke all on function public.tally_alert_scan_silent() from public, anon, authenticated, service_role;
