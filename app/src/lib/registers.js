@@ -727,7 +727,7 @@ const SheetPost = {
         delete heldE.hold; heldE.readNote = ""; heldE.uncertain = []; Store.saveEntry(cid, heldE); res.fixed++; res.ids.push(heldE.id); return;
       }
       const e = newEntry(fileName), ab = x => d.hold ? x : Math.abs(x);   // (a held document keeps the sheet's own figures)
-      Object.assign(e.x, {vendorName: d.party, vendorGstin: d.gstin, vendorPan: d.gstin ? d.gstin.slice(2, 12) : "", invoiceNo: d.no, invoiceDate: d.date,
+      Object.assign(e.x, {vendorName: d.party, vendorGstin: d.gstin, vendorPan: d.gstin && !(typeof gstinOnTan === "function" && gstinOnTan(d.gstin)) ? d.gstin.slice(2, 12) : "", invoiceNo: d.no, invoiceDate: d.date,
         taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total), hsn: d.hsn});
       // a negative bill in a sheet whose Type column does not call it a return: held, said on the bill, its total to check
       if (d.hold){ e.readNote = d.hold + "."; e.uncertain = ["total"]; e.hold = d.hold; }
@@ -914,10 +914,11 @@ const SheetPost = {
   },
   // next-fix-sheetgst: the same party on two invoices: by the GSTIN when both carry a good one (its check character,
   // gstinValid) or the very same one; else by the name (an invoice with no GSTIN, or one that fails its check)
-  goodGstin(g){ g = String(g || "").toUpperCase(); return GSTIN_RE.test(g) && (typeof gstinValid !== "function" || gstinValid(g)); },
+  // (the shared gstinValid, so a government office's TAN-based GSTIN is good here too, as in GST's checks)
+  goodGstin(g){ g = String(g || "").toUpperCase(); return typeof gstinValid === "function" ? gstinValid(g) : GSTIN_RE.test(g); },
   sameParty(g1, n1, g2, n2){
     const a = String(g1 || "").toUpperCase(), b = String(g2 || "").toUpperCase();
-    if (a && a === b && GSTIN_RE.test(a)) return true;
+    if (a && a === b && (GSTIN_RE.test(a) || this.goodGstin(a))) return true;
     if (this.goodGstin(a) && this.goodGstin(b)) return false;
     const na = normName(n1 || ""), nb = normName(n2 || "");
     return !!na && na === nb;   // (two blank names are no match)

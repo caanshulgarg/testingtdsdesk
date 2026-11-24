@@ -30,11 +30,19 @@ PostgreSQL (pg_stand), with made-up books from tests/fbooks_fixture.mjs (node) l
      behind a sweep under way is not lost; if even the miss cannot be written, a sequence tick starts a sweep; the copy's
      write never waits for the catch-up; a note made again during the catch-up is kept; a no-change update notes nothing;
      the actor label does not leak
+ 13. migration 218: "Set up" on a 10,000-entry book returns at once under the 8 s limit; the 3-minute catch-up builds it
+     in chunks; fb_status gives build {done, of} between runs
+ 14. the review of 24-Nov-2026 (218): a book being built is never tied out (nightly, fb_tieout_all, or asked through
+     fb_tieout_ask: "being built", nothing stored, nothing built inside the click); build.done and build.of count alike;
+     a build that fails shows build.failed (the last try) in fb_status, keeps the masters it wrote and does not redo
+     them on the retry; once the cause is gone it finishes, and a check stored while half built is not kept
 PG_PORT (55620). FB_BIG=n also mirrors a book of n made-up vouchers and times it."""
 import os, sys, json, time, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 MIG = os.path.join(HERE, "..", "server", "fincom-books", "migration-220-fincom-books.sql")
+# migration 218 (after 220): "Set up" only enrols the book; the 3-minute catch-up builds it (section 13)
+MIG218 = os.path.join(HERE, "..", "server", "fincom-books", "migration-218-fbooks-setup-fast.sql")
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
@@ -71,6 +79,24 @@ try:
     db.sql("drop index fb_tieouts_book")
     db.sql(mig); db.sql(mig)
     ok(True, "1. runs, and runs again")
+    m218 = open(MIG218).read() if os.path.exists(MIG218) else ""
+    if m218:
+        # 218 replaces fb_enroll, fb_mirror_catchup and fb_status only when they are 220's own text (or already 218's)
+        src0 = db.one("select md5(string_agg(prosrc, '' order by proname)) from pg_proc where proname in ('fb_enroll', 'fb_mirror_catchup', 'fb_status')")
+        db.sql("create or replace function fb_enroll(p_client text) returns jsonb language sql as $f$ select '{}'::jsonb $f$")
+        e = err(lambda: db.sql(m218))
+        ok("fb_enroll" in e and "Nothing was changed" in e, "1. 218: fb_enroll changed by someone else since 220: stops, naming it (%s)" % e.strip().splitlines()[-1][:90])
+        db.sql(mig)
+        ok(db.one("select md5(string_agg(prosrc, '' order by proname)) from pg_proc where proname in ('fb_enroll', 'fb_mirror_catchup', 'fb_status')") == src0, "1. 218: ... nothing changed (220's text back)")
+        # 24-Nov-2026: 218 also replaces fb_tieout, fb_tieout_all and fb_mirror_run_failed, each only when it is 220's text
+        for f in ("fb_tieout(uuid,text,uuid)", "fb_tieout_all()", "fb_mirror_run_failed(uuid,text)"):
+            d0 = db.one("select pg_get_functiondef('public.%s'::regprocedure)" % f)
+            db.sql(d0.replace("\nbegin\n", "\nbegin\n  -- changed by something else\n", 1))
+            e = err(lambda: db.sql(m218))
+            ok(f.split("(")[0] in e and "Nothing was changed" in e, "1. 218: %s changed by someone else since 220: stops, naming it (%s)" % (f, (e.strip().splitlines() or [""])[-1][:90]))
+            db.sql(d0)
+    try: db.sql(m218); db.sql(m218); ok(bool(m218), "1. migration 218 runs after 220, and runs again")
+    except RuntimeError as e: ok(False, "1. migration 218 runs after 220 (%s)" % str(e)[-200:])
     db.sql(open(MIG.replace("fincom-books.sql", "cron.sql")).read())
     ok(True, "1. the cron part runs where pg_cron is not there (it schedules nothing and says so)")
     n_tables = int(db.one("select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and obj_description(oid, 'pg_class') = 'fincom books (migration 220)'"))
@@ -106,9 +132,13 @@ try:
     e = err(lambda: as_(OTHER, "select fb_enroll('c1')"))
     ok("no books" in e, "3. another firm's owner finds no such client's books")
     t0 = time.time()
-    r = json.loads(one(STAFF, "select fb_enroll('c1')"))
-    BK = r["books"][0]["book"]
-    ok(r["books"][0]["built"]["left"] == 0, "3. staff set it up (owner decision 23-Nov-2026); %d entries built in %.1f s, none left" % (r["books"][0]["built"]["done"], time.time() - t0))
+    r = json.loads(one(STAFF, "set statement_timeout = '8s'; select fb_enroll('c1')"))
+    BK = r["books"][0]["book"]; dt = time.time() - t0
+    ok(r["books"][0].get("state") == "setting_up" and db.one("select count(*) from fb_vouchers where book_id = '%s'" % BK) == "0" and dt < 1,
+       "3. staff set it up (owner decision 23-Nov-2026): enrolled and 'being built' in %.2f s; nothing built during the click" % dt)
+    db.sql("call fb_mirror_catchup_run(5000)")   # the timer's next run builds it
+    ok(db.one("select state from fb_books where book_id = '%s'" % BK) == "live" and int(db.one("select count(*) from fb_vouchers where book_id = '%s'" % BK)) > 100,
+       "3. the catch-up's next run builds it (masters, openings, every entry) and the book is live")
     q = lambda s: db.rows(s.replace("BK", BK))
     g = {x["name"]: x for x in q("select name, reserved, primary_name, nature, sch3_code, is_system from fb_groups where book_id = 'BK'")}
     ok(len([x for x in g.values() if x["is_system"] == "t"]) == 28 and g["Sundry Debtors"]["sch3_code"] == "CA.TR" and g["Debtors - North"]["reserved"] == "Sundry Debtors"
@@ -443,6 +473,7 @@ try:
     heavy = db.rows("select c.relname, l.mode from pg_locks l join pg_class c on c.oid = l.relation where l.granted and l.pid <> pg_backend_pid() and l.mode in ('AccessExclusiveLock', 'ExclusiveLock', 'ShareRowExclusiveLock', 'ShareLock') and (c.relname like 'fb\\_%' or c.relname like 'tally\\_%')")
     t = time.time(); b = bg("set lock_timeout = '1s'; begin; " + vsql("RR-1") + " commit;"); out_b = b.stdout.read(); b.wait(); dt = time.time() - t
     out_a = a.stdout.read(); a.wait()
+    if m218: db.sql(m218)   # a re-run of 220 puts 220's fb_enroll / catch-up / fb_status back: 218 runs again after it
     ok(not heavy, "12. a re-run of 220 holds no lock that blocks the copy's writes (%s)" % heavy)
     ok(b.returncode == 0 and has("RR-1") and noted("RR-1") and dt < 2.5 and a.returncode == 0, "12. ... a copy write during it commits at once (%.1f s) and is noted (%s)" % (dt, (out_b + out_a).strip()[-160:]))
     run()
@@ -600,6 +631,106 @@ try:
     ok(True, "12. fb_mirror_catchup_run runs (a procedure: one transaction per book and chunk)")
     ok(json.loads(one(OWN, "select fb_audit_client_info('%s', 0, 5)" % BK)) is not None and "Only the firm's owner" in err(lambda: one(STAFF, "select fb_audit_client_info('%s', 0, 5)" % BK)),
        "12. the edit log's client_info: the owner reads it, staff cannot")
+
+    # 13. "Set up FinCom Books" on a big book (23-Nov-2026: ~7,300 entries on staging, "canceling statement due to
+    # statement timeout"): the click only enrols; the 3-minute catch-up builds it in chunks, the page shows how far
+    TB5 = "bbbbbbbb-0000-0000-0000-000000000005"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('%s', '%s', 'c5', 'Large Demo Traders (made up)', '2024-04-01')" % (TB5, F1))
+    B5 = books(10000, 13)
+    B5["ledgers"] += [{"name": "Made-up Party %04d" % i, "parent": "Sundry Debtors" if i % 2 else "Sundry Creditors", "open": (i % 7) * 100 - 300, "gstin": "", "state": ""} for i in range(2500)]
+    db.sql(load_sql(TB5, F1, B5))
+    want = int(db.one("select count(*) from tally_vouchers where book_id = '%s' and day >= '2025-04-01' and deleted_at is null and not cancelled" % TB5))
+    TO = "set role authenticated; set statement_timeout = '8s';\n"   # as PostgREST calls it on staging (authenticated: statement_timeout 8s)
+    t0 = time.time(); e = err(lambda: db.one(TO + "select fb_enroll('c5')", STAFF)); dt = time.time() - t0
+    ok(not e and dt < 1, "13. a book of %d entries (%d in the window) and %d ledgers: Set up returns in %.2f s under the 8 s limit, no error (%s)" % (len(B5["vouchers"]), want, len(B5["ledgers"]), dt, e.strip()[-120:]))
+    bk5 = db.one("select book_id from fb_books where source_book_id = '%s'" % TB5)
+    s5 = lambda: [b for b in json.loads(db.one(TO + "select fb_status('c5')", STAFF))["books"] if b["book"] == bk5][0]
+    b5 = s5() if bk5 else {}
+    ok(b5.get("state") == "setting_up" and (b5.get("build") or {}).get("of") == want and (b5.get("build") or {}).get("done") == 0 and not b5.get("late"),
+       "13. fb_status: 'being built', 0 of %d entries, no warning (%s)" % (want, {k: b5.get(k) for k in ("state", "build", "late")}))
+    prog, runs = [], 0
+    while bk5 and runs < 6 and s5()["state"] == "setting_up":
+        t0 = time.time(); db.sql("call fb_mirror_catchup_run(5000)"); runs += 1
+        t1 = time.time(); b5 = s5(); t2 = time.time()
+        prog.append(((b5.get("build") or {}).get("done", b5["counts"]["posted"]), round(t1 - t0, 1), round(t2 - t1, 2)))
+    print("  ..   13. timer runs (entries built, run s, fb_status s): %s" % prog)
+    ok(bk5 and s5()["state"] == "live" and runs <= 3 and all(p[1] < 120 for p in prog) and all(p[2] < 1 for p in prog),
+       "13. the 3-minute catch-up builds it in %d runs (each well inside 3 minutes; fb_status stays quick), then the book is live" % runs)
+    ok(len(prog) >= 2 and prog[0][0] > 0 and prog[0][0] < want, "13. the page can show progress between runs (%s of %d after the first)" % (prog[0][0] if prog else "-", want))
+    if bk5:
+        b5 = s5()
+        c5 = db.rows("""with c as (select l.ledger, -sum(l.amount) a from tally_vouchers v join tally_lines l on l.book_id = v.book_id and l.guid = v.guid
+                 where v.book_id = '%s' and v.day >= '2025-04-01' and not v.cancelled and not v.optional and v.deleted_at is null and v.vno <> 'J/ODD-1' group by 1),
+               f as (select g.name ledger, sum(l.amount) a from fb_lines l join fb_vouchers v on v.id = l.voucher_id and v.version = l.version join fb_ledgers g on g.id = l.ledger_id
+                 where v.book_id = '%s' and v.status = 'posted' and not v.memo group by 1)
+               select count(*) filter (where coalesce(c.a, 0) <> coalesce(f.a, 0)) bad from c full join f on f.ledger = c.ledger""" % (TB5, bk5))[0]
+        nl = db.one("select count(*) from fb_ledgers where book_id = '%s'" % bk5); no = db.one("select count(*) from fb_openings where book_id = '%s' and amount <> 0" % bk5)
+        ok(c5["bad"] == "0" and int(nl) >= 2522 and int(no) > 2000 and not b5.get("late") and b5.get("behind_since") is None
+           and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % bk5) == "0",
+           "13. built: every ledger's movement equals the copy, %s ledgers, %s openings; no error, not behind, no warning" % (nl, no))
+
+    # 14. the review of 24-Nov-2026 (migration 218): a book being built is never tied out (by night or when asked) and
+    # nothing is built inside the person's click; a build that fails says so in fb_status, keeps what it wrote, and is
+    # tried again; build.done and build.of count the same entries (cancelled and deleted ones out of both)
+    TB6, TB7 = "bbbbbbbb-0000-0000-0000-000000000006", "bbbbbbbb-0000-0000-0000-000000000007"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('%s', '%s', 'c6', 'Half Built Demo (made up)', '2024-04-01'), ('%s', '%s', 'c7', 'Stopped Build Demo (made up)', '2024-04-01')" % (TB6, F1, TB7, F1))
+    db.sql(load_sql(TB6, F1, books(300, 17))); db.sql(load_sql(TB7, F1, books(200, 19)))
+    one(STAFF, "select fb_enroll('c6')")
+    bk6 = db.one("select book_id from fb_books where source_book_id = '%s'" % TB6)
+    cnt = lambda t, bk: int(db.one("select count(*) from %s where book_id = '%s'" % (t, bk)))
+    st6 = lambda: db.rows("select state, in_step, last_tieout_id from fb_books where book_id = '%s'" % bk6)[0]
+    t0 = time.time(); r = json.loads(one(STAFF, "set statement_timeout = '8s'; select fb_tieout_ask('%s')" % bk6)); dt = time.time() - t0
+    ok(r.get("building") is True and r.get("in_step") is None and cnt("fb_tieouts", bk6) == 0 and cnt("fb_groups", bk6) == 0 and cnt("fb_vouchers", bk6) == 0 and dt < 1,
+       "14. 'Check now' on a book just set up: 'being built' (%s), nothing stored, nothing built inside the click (%.2f s)" % (r.get("words"), dt))
+    db.sql("set role service_role; select fb_mirror_catchup('%s', 40); select fb_mirror_catchup('%s', 40);" % (bk6, bk6))
+    nv = cnt("fb_vouchers", bk6)
+    ok(st6()["state"] == "setting_up" and 0 < nv < 300, "14. half built: %d entries in, still being built" % nv)
+    r = json.loads(db.one("set role service_role; select fb_tieout('%s', 'nightly')" % bk6))
+    ok(r.get("building") is True and cnt("fb_tieouts", bk6) == 0 and st6()["in_step"] == "" and cnt("fb_vouchers", bk6) == nv,
+       "14. the nightly tie-out of a half-built book: 'being built', stores nothing (no false 'Not in step'), builds nothing (%s)" % r)
+    r = json.loads(db.one("set role service_role; select fb_tieout_all()"))
+    ok(cnt("fb_tieouts", bk6) == 0 and st6()["in_step"] == "" and cnt("fb_vouchers", bk6) == nv, "14. fb_tieout_all passes over it (%s)" % r)
+    r = json.loads(one(STAFF, "set statement_timeout = '8s'; select fb_tieout_ask('%s')" % bk6))
+    ok(r.get("building") is True and cnt("fb_tieouts", bk6) == 0 and st6()["in_step"] == "" and cnt("fb_vouchers", bk6) == nv,
+       "14. fb_tieout_ask (the API) on the half-built book: 'being built', nothing stored, nothing built in the click")
+    db.sql("call fb_mirror_catchup_run(5000)")
+    r = json.loads(db.one("set role service_role; select fb_tieout('%s', 'nightly')" % bk6))
+    ok(st6()["state"] == "live" and cnt("fb_tieouts", bk6) == 1 and st6()["in_step"] in ("t", "f") and r.get("building") is None, "14. built: now it is tied out (%s)" % r.get("words"))
+    # build.done and build.of: an entry deleted in the copy (kept here as cancelled) and one cancelled in Tally count in neither
+    g6 = db.one("select guid from tally_vouchers where book_id = '%s' and day >= '2025-04-01' and not cancelled and deleted_at is null order by guid limit 1" % TB6)
+    db.sql("update tally_vouchers set deleted_at = now() where book_id = '%s' and guid = '%s'" % (TB6, g6)); db.sql("call fb_mirror_catchup_run(5000)")
+    db.sql("update fb_books set state = 'setting_up' where book_id = '%s'" % bk6)   # (a superuser's test edit: how the counts read while being built)
+    b6 = [b for b in json.loads(one(STAFF, "select fb_status('c6')"))["books"] if b["book"] == bk6][0]
+    db.sql("update fb_books set state = 'live' where book_id = '%s'" % bk6)
+    want6 = int(db.one("select count(*) from tally_vouchers where book_id = '%s' and day >= '2025-04-01' and deleted_at is null and not cancelled" % TB6))
+    ok(db.one("select source_gone from fb_vouchers where book_id = '%s' and source_ref = '%s'" % (bk6, g6)) == "t" and (b6.get("build") or {}).get("done") == want6 and (b6.get("build") or {}).get("of") == want6,
+       "14. build.done and build.of count alike (cancelled and deleted out of both): %s, %d in the copy" % (b6.get("build"), want6))
+    # a build that fails as a whole: said in fb_status (build.failed, with the last try); what it wrote is kept and not redone
+    one(STAFF, "select fb_enroll('c7')")
+    bk7 = db.one("select book_id from fb_books where source_book_id = '%s'" % TB7)
+    db.sql("""create function zz_fail_trg() returns trigger language plpgsql as $z$ begin raise exception 'made-up failure for the test'; end $z$;
+      create trigger zz_fail before update on fb_mirror_state for each row when (new.book_id = '%s') execute function zz_fail_trg();""" % bk7)
+    s7 = lambda: [b for b in json.loads(one(STAFF, "select fb_status('c7')"))["books"] if b["book"] == bk7][0]
+    db.sql("alter system set track_functions = 'all'; select pg_reload_conf();"); time.sleep(0.3)
+    masters = lambda: int(db.one("select coalesce(sum(calls), 0) from pg_stat_user_functions where funcname = 'fb_mirror_masters'") or 0)
+    db.sql("call fb_mirror_catchup_run(5000)")
+    b7 = s7(); f7 = (b7.get("build") or {}).get("failed") or {}
+    ng = cnt("fb_groups", bk7); nl = cnt("fb_ledgers", bk7)
+    ok(b7["state"] == "setting_up" and "made-up failure" in (f7.get("why") or "") and f7.get("at") and not b7.get("late"),
+       "14. a build that stops: fb_status says build.failed (%s)" % f7)
+    ok(ng > 28 and nl > 10, "14. ... the groups and ledgers written before it stopped are kept (%d groups, %d ledgers)" % (ng, nl))
+    m0 = masters(); db.sql("call fb_mirror_catchup_run(5000)"); time.sleep(0.6); m1 = masters()
+    f7b = ((s7().get("build") or {}).get("failed") or {})
+    ok(m1 == m0 and cnt("fb_groups", bk7) == ng and f7b.get("tries") == 2 and f7b.get("at") >= f7.get("at"),
+       "14. ... tried again by the next run without redoing the groups and ledgers (fb_mirror_masters calls %d -> %d); the last try is given (%s)" % (m0, m1, f7b))
+    db.sql("drop trigger zz_fail on fb_mirror_state; drop function zz_fail_trg(); alter system reset track_functions; select pg_reload_conf();")
+    # (a check stored while half built, as 220's fb_tieout did before 218: a superuser's test edit)
+    db.sql("update fb_books set in_step = false, in_step_at = now(), not_in_step_since = now(), not_in_step_why = 'Cash differs by Rs 1.00' where book_id = '%s'" % bk7)
+    db.sql("call fb_mirror_catchup_run(5000)")
+    b7 = s7()
+    ok(b7["state"] == "live" and not b7.get("build") and db.one("select count(*) from fb_mirror_errors where book_id = '%s' and resolved_at is null" % bk7) == "0",
+       "14. once the cause is gone the next run finishes it: live, no error left")
+    ok(b7.get("in_step") is None and not b7.get("why") and not b7.get("since"), "14. ... and a check made while it was half built is not kept ('Not checked yet' until the next one)")
 
     if os.environ.get("FB_BIG"):
         nbig = int(os.environ["FB_BIG"]); TB2 = "bbbbbbbb-0000-0000-0000-000000000002"

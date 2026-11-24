@@ -3,6 +3,8 @@
 import os, json, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIG = os.path.join(HERE, "..", "server", "fincom-books", "migration-220-fincom-books.sql")
+# 218 (after 220): Set up only enrols; the 3-minute catch-up builds the book
+MIG218 = os.path.join(HERE, "..", "server", "fincom-books", "migration-218-fbooks-setup-fast.sql")
 F1, F2 = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 OWN, STAFF, OTHER = "aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002", "aaaaaaaa-0000-0000-0000-000000000003"
 TB1 = "bbbbbbbb-0000-0000-0000-000000000001"   # the copy's book (tally_books) of client c1
