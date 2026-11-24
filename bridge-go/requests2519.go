@@ -191,7 +191,7 @@ func init() {
 	requestClass[billOpenID] = "ledgerPeriod"
 	requestClass[vchTypesID], requestClass[costCentresID], requestClass[costCatsID], requestClass[gstRegsID] = "undated", "undated", "undated", "undated"
 	requestClass[groupClosingID] = "exception"
-	const nm = "; allowed for 2.5.19 by the owner's decision of 2026-11-23, NOT yet measured"
+	const nm = "; as allowed in 2.5.19 by the owner's decision of 2026-11-23, NOT yet measured"
 	// C5 and C7 change four requests' FETCH (at the end): their rows say so; the worst case shown stays 2.5.18's shape's
 	// until ZZ BIG TEST times the new one
 	for id, add := range allowChanged2519 {

@@ -146,7 +146,7 @@ func TestR2519Pinned(t *testing.T) {
 func TestR2519OnTheList(t *testing.T) {
 	for _, id := range []string{dayPartID, billOpenID, vchTypesID, costCentresID, costCatsID, gstRegsID, groupClosingID} {
 		a, ok := tallyAllowList[id]
-		if !ok || a.maxSec != 0 || a.measuredOn != "" || a.measureOnly || !strings.Contains(a.purpose, "allowed for 2.5.19 by the owner's decision of 2026-11-23, NOT yet measured") {
+		if !ok || a.maxSec != 0 || a.measuredOn != "" || a.measureOnly || !strings.Contains(a.purpose, "as allowed in 2.5.19 by the owner's decision of 2026-11-23, NOT yet measured") {
 			t.Errorf("%s: %+v %v", id, a, ok)
 		}
 		if !strings.Contains(allowListRows(), "| "+id+" |") || requestClass[id] == "" {

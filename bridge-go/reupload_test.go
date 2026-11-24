@@ -2,7 +2,7 @@ package main
 
 // next-bridge-reupload (24-Nov-2026, the owner's rule: an entry that is not really in the books never counts as posted;
 // and "dont read from tally" for it). A sales invoice FinCom posted as an Optional voucher was deleted in Tally and posted
-// again. FinCom now decides from its own copy of Tally (migration 218, tally_post_copy_resend): the id is released as an
+// again. FinCom now decides from its own copy of Tally (migration 219, tally_post_copy_resend): the id is released as an
 // owner's release and the earlier posting handed back for that entry alone. This bridge already lets such an entry go once
 // (the release travels with the posting: releaseFor) and looks for it first (2.5.19's look before a re-sent entry); that
 // look took an Optional or cancelled voucher carrying FinCom's mark for the entry. It no longer does. An ordinary new
@@ -51,7 +51,7 @@ func TestReupResentOptionalNotAlready(t *testing.T) {
 }
 
 // the live case end to end on the bridge: posted by this computer from FinCom's queue, left in Tally only as an Optional
-// voucher; an ordinary new posting is refused on the record; the earlier posting handed back by FinCom (218: released as an
+// voucher; an ordinary new posting is refused on the record; the earlier posting handed back by FinCom (219: released as an
 // owner's release, resendOnly that entry) sends it once
 func TestReupHandedBackAfterCopyRelease(t *testing.T) {
 	td := today()

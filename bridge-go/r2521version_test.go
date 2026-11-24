@@ -28,7 +28,7 @@ func TestR2521Version(t *testing.T) {
 		t.Error("no dated line for 2.5.21")
 	}
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.21 by the owner's standing decision of 2026-11-23 (2.5.21: no request added or changed", "as for 2.5.20 by the owner's decision of 2026-11-23"} {
+	for _, w := range []string{"allowed for 2.5.21 by the owner's standing decision of 2026-10-06 (2.5.21: no request added or changed", "as for 2.5.20 by the owner's decision of 2026-11-23"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}

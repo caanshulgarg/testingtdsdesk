@@ -2,15 +2,15 @@
 
 The version is 2.5.21 (util.go). **No new request to Tally**: the allow-list holds the same 54 requests as 2.5.20; only
 the stock row's version word ("unchanged in 2.5.21") and the decision and dated lines name 2.5.21, so the table hash is
-now 8f54e1a2... (docs/tally-allowlist.md; the beat fixture with it). The same rules as before: a request at most 2 s, one in flight, postings
+now 86bfeef4... (docs/tally-allowlist.md; the beat fixture with it; 2.5.19's and 2.5.20's rows and dated line now say "as allowed in", so the decision line names one version, release-check.sh step 4). The same rules as before: a request at most 2 s, one in flight, postings
 first, the typing gate. Use a test company with made-up entries only.
 
 ## What changes
 
 1. **An Optional or cancelled voucher is not "already posted" (the owner's rule of 24-Nov-2026: an entry that is not
    really in the books never counts as posted).** When FinCom hands an entry back to be sent again (a release with the
-   posting; since migration 219 also when FinCom's own copy of Tally shows the earlier voucher deleted, only Optional or
-   only cancelled), the bridge looks for FinCom's mark on that date first (2.5.19's look: FinComTag, already approved).
+   posting; since migration 219 also when FinCom's own copy of Tally shows the earlier voucher deleted in Tally; a copy
+   with only an Optional or a cancelled voucher of an entry Tally accepted is "unsure" there and nothing is handed back), the bridge looks for FinCom's mark on that date first (2.5.19's look: FinComTag, already approved).
    Up to 2.5.20 an Optional voucher carrying the mark made the entry "Already in Tally", so it was never sent again.
    Now an Optional or cancelled voucher does not count, and the entry goes. (resent2519.go resentLookFirst.)
 2. **Except for a client that posts Optional vouchers by its setting.** When the entry FinCom sends is itself Optional

@@ -29,7 +29,7 @@ func TestR2520Version(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !regexp.MustCompile(`\(re-measured on 2026-11-24 for 2\.5\.20: [^\n]*FinComFixVoucher and FinComFixLedger[^\n]*NOT yet measured[^\n]*allowed for 2\.5\.20 by the owner's decision of 2026-11-23\)`).MatchString(al) {
+	if !regexp.MustCompile(`\(re-measured on 2026-11-24 for 2\.5\.20: [^\n]*FinComFixVoucher and FinComFixLedger[^\n]*NOT yet measured[^\n]*as allowed in 2\.5\.20 by the owner's decision of 2026-11-23\)`).MatchString(al) {
 		t.Error("no dated line for 2.5.20")
 	}
 	if strings.Contains(line, "allowed for 2.5.19 by") || strings.Contains(al, "for the release after 2.5.20") {
