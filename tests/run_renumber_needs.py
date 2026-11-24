@@ -59,8 +59,9 @@ with sync_playwright() as p:
     # ---- 2. the bell: one amber item, the same action
     b = E(BELL) or []
     rn = [x for x in b if x["key"].startswith("renumber:")]
-    ok(len(rn) == 1 and rn[0]["sev"] == "warn" and "renumbered" in rn[0]["text"] and rn[0]["act"] == "" and rn[0]["fix"].startswith("FinCom brings the days from 05-Oct-2026"),
-       "the bell: one amber item, no upload asked (%s)" % rn)
+    ok(len(rn) == 1 and rn[0]["sev"] == "warn" and "renumbered" in rn[0]["text"] and rn[0]["act"] == "" and rn[0]["fix"].startswith("FinCom brings the days from 05-Oct-2026")
+       and rn[0]["text"].endswith("could not be read again yet.") and "FinCom brings" not in rn[0]["text"],
+       "the bell: one amber item, no upload asked, said once (the words, then what FinCom does) (%s)" % rn)
     E(CLOSE)
     # ---- 3. (Tally tell, 24-Nov-2026: no upload action; a Day Book file can still be uploaded from Books -> From Tally)
     ok(pg.locator('#app [data-needs-group^="renumber|"] button[data-needs-act]').count() == 0, "no button asks for the Day Book")

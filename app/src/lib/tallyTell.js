@@ -10,7 +10,7 @@
 //   icon(co)            the header's Tally sign for a fault: {icon, word, line, tell} (A.3.2), else null
 //   chip(co)            the client chip's title: the sentence, else ""
 //   bell(unread)        the bell's items for the open 'tell' rows (unread: the tally_alerts rows the bell already read)
-const T = { v: null, at: 0, busy: false, wait: 60000, open: null, openAt: 0, openBusy: false };
+const T = { firm: "", v: null, at: 0, busy: false, wait: 60000, open: null, openAt: 0, openWait: 0, openBusy: false };
 const FAIL_MS = 600000;
 const live = () => typeof TCloud === "object" && TCloud.on && TCloud.on() && typeof Cloud === "object" && !!(Cloud.st && Cloud.st.firm);
 const visible = () => typeof document !== "object" || document.visibilityState !== "hidden";
@@ -18,25 +18,33 @@ const firm = () => { const f = Cloud.st.firm; return f && typeof f === "object" 
 const redraw = () => { if (typeof soonRender === "function") soonRender(); else if (typeof render === "function") render(); };
 const norm = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
 
+// (the review of 25-Nov-2026) the cache is the firm's: another firm signed in starts afresh, its first firm's words never shown
+function sameFirm() { if (!live()) return false; const f = firm(); if (f !== T.firm) { forget(); T.firm = f; } return true; }
 export function load(force) {
-  if (!live() || T.busy || (!force && (Date.now() - T.at < T.wait || !visible()))) return;
+  if (!sameFirm() || T.busy || (!force && (Date.now() - T.at < T.wait || !visible()))) return;
   T.busy = true; T.at = Date.now();
+  const f = T.firm;
   Promise.resolve().then(() => TCloud.rpc("tally_tell_view", {})).then((j) => {
+    if (f !== T.firm) return;
     const ok = !!(j && j.ok && Array.isArray(j.books));
     T.v = ok ? { books: j.books, computers: Array.isArray(j.computers) ? j.computers : [], at: j.at } : null; T.wait = ok ? 60000 : FAIL_MS;
-  }, () => { T.v = null; T.wait = FAIL_MS; }).finally(() => { T.busy = false; redraw(); });
+  }, () => { if (f === T.firm) { T.v = null; T.wait = FAIL_MS; } }).finally(() => { T.busy = false; redraw(); });
   loadOpen();
 }
 // the bell's 'tell' rows not cleared yet (only their ids: the rest is in the rows the bell reads already)
 function loadOpen() {
-  if (!live() || T.openBusy || Date.now() - T.openAt < (T.open ? 60000 : FAIL_MS / 10)) return;
-  T.openBusy = true; T.openAt = Date.now();
+  if (!live() || T.openBusy || Date.now() - T.openAt < T.openWait) return;
+  T.openBusy = true; T.openAt = Date.now(); const f = T.firm;
   Promise.resolve().then(() => Cloud.api("tally_alerts?select=id,client_id,book_id,kind,words,data,at,read_at,cleared_at&firm_id=eq." + encodeURIComponent(firm()) + "&kind=eq.tell&cleared_at=is.null&order=at.desc&limit=100"))
-    .then((r) => { T.open = [].concat(r || []).filter((x) => x && x.kind === "tell" && !x.cleared_at); }, () => { T.open = null; T.openAt = Date.now() + FAIL_MS; })
+    // (a failure, e.g. a cloud without 221's cleared_at: asked again after 10 minutes)
+    .then((r) => { if (f !== T.firm) return; T.open = [].concat(r || []).filter((x) => x && x.kind === "tell" && !x.cleared_at); T.openWait = 60000; },
+      () => { if (f !== T.firm) return; T.open = null; T.openAt = Date.now(); T.openWait = FAIL_MS; })
     .finally(() => { T.openBusy = false; redraw(); });
 }
-export const view = () => { load(); return T.v; };
-export function forget() { T.v = null; T.at = 0; T.open = null; T.openAt = 0; T.wait = 60000; }
+export const view = () => { load(); return sameFirm() ? T.v : null; };
+export function forget() { T.v = null; T.at = 0; T.open = null; T.openAt = 0; T.openWait = 0; T.wait = 60000; }
+// ms until the bell's open rows are asked again (tests)
+export const nextOpen = () => Math.max(0, T.openAt + T.openWait - Date.now());
 
 export function book(cid, company) {
   const v = view(); if (!v || !cid) return null;
@@ -73,4 +81,4 @@ export function bell(unread) {
   });
 }
 
-if (typeof globalThis === "object") globalThis.FCTell = { load, view, book, device, computers, icon, chip, bell, forget };
+if (typeof globalThis === "object") globalThis.FCTell = { load, view, book, device, computers, icon, chip, bell, forget, nextOpen };

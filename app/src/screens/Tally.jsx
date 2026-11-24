@@ -306,7 +306,7 @@ function SlowCompanies({ r }) {
   if (!names.length) return null;
   return <div data-slow-companies="" style={{ marginLeft: 16 }}>{names.map((co) => { const s = sinceWords(bodies[co].at);
     return <div key={co} className="note" data-slow-company={co}>{co + ": FinCom has stopped asking Tally for this company's entries, because finding one entry took Tally longer than 2 seconds" +
-      (s ? " (since " + s + ")" : "") + ". New entries wait as held lines; upload that day's Day Book to settle them. This lifts when a faster FinCom Bridge is installed."}</div>; })}</div>;
+      (s ? " (since " + s + ")" : "") + ". New entries wait as held lines; FinCom tries again by itself, a day at a time. This lifts when a faster FinCom Bridge is installed."}</div>; })}</div>;
 }
 // FinCom Bridge 2.3.0 (one bridge for each Windows user on a shared server): where this bridge reads and posts: its
 // Tally's port, the companies open there and the data folder, as its heartbeat says them (nothing when it says none)

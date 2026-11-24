@@ -162,8 +162,8 @@ const Rec = {
   // Sync activity, the books' held banner and the bell (AlertHub.oursHeld), so they never disagree (review of f0f1531f).
   //   "" = being fetched: FinCom Bridge or the cloud settles it by itself (said quietly);
   //   any other kind = Needs you: nothing happens until a person acts, with ONE action:
-  //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
-  //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
+  //     daybook  - FinCom brings that day from Tally by itself (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
+  //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then FinCom brings the day by itself
   //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
   //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines) (2.4.1:
   //                ONLY these words; "Tally's voucher with that MasterID is not a change after the starting point" is daybook)
@@ -190,7 +190,7 @@ const Rec = {
     if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
     if (/no MasterID or no date/i.test(why)) return "daybook";
     if (this.FETCHED.some(x => x.test(why))) return "";
-    if (/Day Book|could not tell which entry|cannot tell which entry|cannot be asked for its entry/i.test(why)) return "daybook";
+    if (/Day Book|could not be stored in FinCom|could not tell which entry|cannot tell which entry|cannot be asked for its entry/i.test(why)) return "daybook";
     if (/^no GUID on the line/i.test(why)) return "masters";
     if (/^month locked/i.test(why)) return "locked";
     if (!why && /-0{8}$/.test(String(r.object_guid || ""))) return "";     // the add-on's placeholder, no words yet: the bridge asks for it
@@ -281,7 +281,7 @@ const Rec = {
     return out;
   },
   // a stuck group as a held row in the bridge's words, so the one classifier (needKind) decides it
-  stuckRow(x){ return {state: "held", object_guid: "", stuck: x, held_why: "could not be stored in FinCom; FinCom Bridge keeps it and sends it again every 30 minutes; if it continues, upload that day's Day Book"}; },
+  stuckRow(x){ return {state: "held", object_guid: "", stuck: x, held_why: "could not be stored in FinCom; FinCom Bridge keeps it and sends it again every 30 minutes"}; },
   // the FinCom client a Tally company is linked to (its Tally name, else its name), "" when none here
   clientOf(company){
     const k = String(company || "").trim().toLowerCase(), c = Object.values(S.companies || {}).find(x => x && String(x.tallyName || "").trim().toLowerCase() === k)

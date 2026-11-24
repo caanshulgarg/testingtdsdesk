@@ -10,9 +10,9 @@
 //             each person their own computer, owners every one (the cloud's own rule)
 // A cloud without 221: nothing at all, and no error.
 import { useEffect, useState } from "react";
-import { book as tellBook, computers, view } from "../lib/tallyTell.js";
-import { TurnOn, bookSum, summary, askYear, fyLabel } from "./TallyFetch.jsx";
-import { press, busyOf, Said, useSaid } from "./TallyBtn.jsx";
+import { book as tellBook, computers, view, icon as tellIcon } from "../lib/tallyTell.js";
+import { TurnOn, bookSum, summary, askYear, fyLabel, partWords, pullWords } from "./TallyFetch.jsx";
+import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";
 
 const isOwner = () => !!(typeof S === "object" && S.account && S.account.me && S.account.me.role === "owner");
 const mayWrite = () => (typeof S === "object" && S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
@@ -35,38 +35,58 @@ export function TellFix({ fix, cid, b }) {
   if (!fix) return null;
   if (fix === "link") return mayWrite() && cid ? <button type="button" className="btn small primary" data-tell-fix="link" onClick={() => { if (typeof openConnectTally === "function") openConnectTally(4, cid); }}>Link</button> : null;
   if (fix === "download") return <SetupLink hook="download" label={() => "Download FinCom Bridge"} />;
-  if (fix === "update") return isOwner() ? <SetupLink hook="update" label={(s) => "Update to " + s.version} /> : ownerOnly;
+  // (the review of 25-Nov-2026: the newer setup is a download, for anyone, as Download FinCom Bridge is)
+  if (fix === "update") return <SetupLink hook="update" label={(s) => "Update to " + s.version} />;
   if (fix === "turn_on") { const bs = cid ? bookSum(cid) : null; if (!bs) summary(); return bs ? <span data-tell-fix="turn_on"><TurnOn b={bs} /></span> : null; }
   if (fix === "resume") {
     if (!isOwner()) return ownerOnly;
     const co = cid && S.companies ? S.companies[cid] : null, l = co && typeof tallyLine === "function" ? tallyLine(co) : null, st = l && l.stop;
     const k = "tellresume:" + (cid || "");
+    // (the review of 25-Nov-2026: tally_read_resume asked directly, so a refusal is said; one message, here only)
+    const not = (w) => ({ text: "Not resumed: " + String(w || "FinCom did not take it").replace(/^ERROR:\s*/i, "").replace(/[.\s]+$/, "") + ".", bad: true });
     return <><button type="button" className="btn small primary" data-tell-fix="resume" disabled={busyOf(k)} onClick={() => press(k, async () => {
-      await TCloud.readResume(st && !st.all && st.deviceId ? { device: { id: st.deviceId }, computer: st.computer || l.computer } : null);
+      let r; try { r = await TCloud.rpc("tally_read_resume", { p_device: st && !st.all && st.deviceId ? st.deviceId : null }); } catch (e) { return not(errWords(e)); }
+      if (r && r.ok === false) return not(r.error);
+      try { TCloud.refreshPane(); } catch (e) { /* the page reads it again by itself */ }
       return "Reading from Tally starts again within a minute."; })}>Resume reading</button><Said k={k} hook="tell-resume" className="note" /></>;
   }
   if (fix === "add_year") {
     const e = b && b.earlier, y = e && /^(\d{4})-\d{2}$/.exec(String(e.fy || ""));
     if (!y || !b.book) return null;
     if (!mayWrite()) return <span className="note">{" A member of the firm who may make changes adds it."}</span>;
-    const k = "addyear:" + b.book;
-    return <><button type="button" className="btn small primary" data-tell-fix="add_year" data-tell-fy={e.fy} disabled={busyOf(k)}
+    const k = "addyear:" + b.book, lk = "choose:" + b.book;
+    // (the review of 25-Nov-2026) a year of this book being brought, or paused: its progress, never a second ask; the same
+    // lock as Bring another year's Start
+    const bs = cid ? bookSum(cid) : null, p = bs && bs.pull && !bs.pull.done && (bs.pull.state === "going" || bs.pull.state === "paused") ? bs.pull : null;
+    if (!bs) summary();
+    if (p) return <><span className="note" data-tell-progress={p.state}>{partWords(p) + ": " + pullWords(p) + (p.state === "paused" ? " · paused" : "")}</span><Said k={k} hook="tell-add-year" className="note" /></>;
+    return <><button type="button" className="btn small primary" data-tell-fix="add_year" data-tell-fy={e.fy} disabled={busyOf(k) || lockOf(lk)}
       onClick={() => press(k, () => askYear({ p_book: b.book, p_fy_start: y[1] + "-04-01", p_part: "year" }).then((r) => {
         summary(true);
         if (r && r.ok === false) return { text: "Not added: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
-        return "Asked: FinCom brings " + fyLabel(Number(y[1])) + " from Tally, while nobody is working in Tally."; }))}>{busyOf(k) ? "Adding…" : "Add " + e.fy}</button>
+        return "Asked: FinCom brings " + fyLabel(Number(y[1])) + " from Tally, while nobody is working in Tally."; }), undefined, lk)}>{busyOf(k) ? "Adding…" : "Add " + e.fy}</button>
       <Said k={k} hook="tell-add-year" className="note" /></>;
   }
   return null;
 }
 
+// a Tally page row's view of the sentence: null when the cloud says none; else {word, icon (A.3.2 for a fault), away (the
+// company is not open in this person's reach, so the row never says Open)}
+const AWAY = ["no_bridge", "bridge_off", "tally_closed", "not_open", "run_as_admin", "other_login", "other_copy"];
+export function tellRow(cid, company) {
+  if (!view()) return null;
+  const b = tellBook(cid, company), c = b && b.cause;
+  if (!b || !((c && c.code && c.words) || (b.earlier && b.earlier.words))) return null;
+  const ic = c && c.code ? tellIcon({ id: cid, tallyName: company }) : null;
+  return { word: ic ? ic.word : "", icon: ic ? ic.icon : "", away: !!(c && AWAY.includes(c.code)) };
+}
 // the lines of a book: [{code, words, fix, what}] (A.1 "the three lines")
 export function linesOf(b) {
   if (!b || !b.cause || !b.cause.words) return [];
-  const r = b.read || {}, c = b.changes || {}, p = b.post || {}, out = [];
+  const r = b.read || {}, c = b.changes || {}, out = [];
   if (r.code && c.code && r.code !== c.code && r.words && c.words) out.push({ ...r, what: "read" }, { ...c, what: "changes" });
   else out.push({ ...b.cause, what: "cause" });
-  if (p.code && p.words && out.length < 2 && p.words !== out[0].words) out.push({ ...p, what: "post" });
+  // (the review of 25-Nov-2026: the posting line only repeated the cause: one sentence a cause)
   return out;
 }
 export function TellLine({ cid, company = "", where = "row" }) {

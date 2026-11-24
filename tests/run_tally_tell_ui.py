@@ -58,14 +58,14 @@ def book(cid, code, words, fix, read=None, post=None, changes=None, earlier=None
     return b
 PCS = [{"device": D1, "computer": "Hemant's computer", "code": "old_bridge", "words": "Update FinCom Bridge on Hemant's computer.", "fix": "update", "at": "2026-11-24T10:00:00Z", "mine": True},
        {"device": D2, "computer": "Office computer", "code": "working", "words": "Working.", "fix": None, "at": "2026-11-24T10:00:00Z", "mine": False}]
-MOCK = """([v, alerts, missing, sum]) => { window.__tell = v; window.__tellAlerts = alerts; window.__tellMissing = missing; window.__tellCalls = window.__tellCalls || []; window.__tellAsked = [];
+MOCK = """([v, alerts, missing, sum]) => { window.__tell = v; window.__tellAlerts = alerts; window.__tellMissing = missing; window.__tellCalls = window.__tellCalls || []; window.__tellAsked = []; window.__tellSum = sum; window.__resumeAns = {ok: true};
   const rpc0 = window.__rpc0 || (window.__rpc0 = TCloud.rpc), api0 = window.__api0 || (window.__api0 = Cloud.api);
   TCloud.rpc = async (fn, a) => { window.__tellCalls.push([fn, JSON.parse(JSON.stringify(a || {}))]);
     if (fn === 'tally_tell_view') { if (window.__tellMissing) throw new Error('Could not find the function public.tally_tell_view without parameters in the schema cache (PGRST202)'); return JSON.parse(JSON.stringify(window.__tell)); }
-    if (fn === 'tally_fetch_summary') return {ok: true, books: sum ? JSON.parse(JSON.stringify(sum)) : []};
+    if (fn === 'tally_fetch_summary') return {ok: true, books: window.__tellSum ? JSON.parse(JSON.stringify(window.__tellSum)) : []};
     if (fn === 'tally_period_choose_lean') return {ok: true};
     if (fn === 'tally_device_period_fetch') return {ok: true};
-    if (fn === 'tally_read_resume') return {ok: true};
+    if (fn === 'tally_read_resume') { if (window.__resumeAns === 'throw') throw new Error('permission denied for function tally_read_resume (42501)'); return window.__resumeAns; }
     return rpc0(fn, a); };
   TCloud.control = async (fn, args) => { window.__tellCalls.push([fn, args || {}]); };
   Cloud.api = async (p, o) => { if (/^tally_alerts\\?/.test(p) && /kind=eq\\.tell/.test(p)) { window.__tellAsked.push(p);
@@ -106,6 +106,15 @@ with sync_playwright() as p:
     scene(view([book(cid, "read_stopped", CASES[12][1], "resume")]))
     pg.click('#app [data-tsm-row] [data-tell-fix="resume"]'); pg.wait_for_timeout(900)
     ok(any(c[0] == "tally_read_resume" for c in E("window.__tellCalls")), "Resume reading: the existing tally_read_resume (%s)" % [c[0] for c in E("window.__tellCalls")][-3:])
+    RES = "() => [...document.querySelectorAll('#app [data-tsm-row] [data-tell-line=read_stopped] [data-said]')].map(e => [e.innerText.trim(), e.className])"
+    r = E(RES)
+    ok(len(r) == 1 and r[0][0] == "Reading from Tally starts again within a minute." and "bad" not in r[0][1], "Resume reading: one message, what came of it (%s)" % r)
+    for ans, what in (({"ok": False, "error": "Only an owner can resume reading."}, "refused (ok false)"), ("throw", "refused (an error)")):
+        scene(view([book(cid, "read_stopped", CASES[12][1], "resume")]))
+        E("(a) => { window.__resumeAns = a; }", ans)
+        pg.click('#app [data-tsm-row] [data-tell-fix="resume"]'); pg.wait_for_timeout(900)
+        r = E(RES)
+        ok(len(r) == 1 and r[0][0].startswith("Not resumed: ") and "bad" in r[0][1], "Resume reading %s: “Not resumed: …”, one message (%s)" % (what, r))
     scene(view([book(cid, "reading_off", CASES[10][1], "turn_on")]), summ=summ)
     pg.click('#app [data-tsm-row] [data-tell-fix="turn_on"] button'); pg.wait_for_timeout(900)
     ok(["tally_device_period_fetch", {"p_device": D1, "p_on": True}] in E("window.__tellCalls"), "Turn on for this computer: the existing tally_device_period_fetch")
@@ -116,7 +125,7 @@ with sync_playwright() as p:
     pg.click('#app [data-tsm-row] [data-tell-fix="link"]'); pg.wait_for_timeout(900)
     ok(E("() => !!(S.tallyGuide && S.tallyGuide.step === 4 && S.tallyGuide.cid)") , "Link: the link list for the client (openConnectTally 4) (%s)" % E("() => JSON.stringify(S.tallyGuide)"))
     scene(view([book(cid, "old_bridge", CASES[3][1], "update")]), role="staff")
-    ok([x["fix"] for x in TELL(pg, cid)] == [[]] and "An owner of the firm does this." in pg.inner_text("#app [data-tsm-row] [data-tell-of]"), "staff: Update is the owner's (said so, no button)")
+    ok([x["fix"] for x in TELL(pg, cid)] == [[["update", "Update to 2.5.22"]]] and "An owner of the firm does this." not in pg.inner_text("#app [data-tsm-row] [data-tell-of]"), "staff: Update to 2.5.22 too (anyone can download it) (%s)" % [x["fix"] for x in TELL(pg, cid)])
 
     print("2. the three lines")
     tc, ad = CASES[4], CASES[14]
@@ -128,8 +137,27 @@ with sync_playwright() as p:
     post = {"code": "tally_closed", "words": "Entries go to Tally when %s is open in Tally." % CO, "fix": None}
     scene(view([book(cid, "tally_closed", tc[1], None, post=post)]))
     ls = TELL(pg, cid)
-    ok([x["what"] for x in ls] == ["cause", "post"] and ls[1]["text"] == post["words"], "posting waits: “Entries go to Tally when … is open in Tally.” (%s)" % ls)
+    ok([x["what"] for x in ls] == ["cause"], "posting waits for the same cause: one sentence, not repeated (%s)" % ls)
     ok(not re.search(r"\b(warning|error)\b", " ".join(x["text"] for x in ls), re.I), "plain words: no warning, no error")
+
+    print("2b. the State column: the dot and word, the cloud's one line, nothing that says otherwise")
+    STATE = """(c) => { const r = document.querySelector('#app [data-tsm-row][data-tsm-cid="' + c + '"]'); if (!r) return null; const st = r.querySelector('td[data-tsm-col=state]');
+      return {word: (st.querySelector('[data-tpt-state]') || {}).innerText || '', own: [...st.querySelectorAll('.tpt-why:not(.tpt-tell-line), [data-tpt-held], [data-tpt-where]')].length,
+        tell: [...st.querySelectorAll('[data-tell-line]')].map(e => e.getAttribute('data-tell-line')), io: (r.querySelector('[data-tpt-intally]') || {innerText: ''}).innerText.replace(/\\s+/g, ' ').trim()}; }"""
+    scene(view([book(cid, "tally_closed", tc[1], None)]))
+    st = E(STATE, cid)
+    ok(st and st["own"] == 0 and st["tell"] == ["tally_closed"], "a sentence from the cloud: the row's own why, held and where lines hidden; one line (%s)" % st)
+    ok(st and st["word"].strip() == "Waiting for Tally", "the word agrees with the sentence: Waiting for Tally, never Connected (%s)" % (st and st["word"]))
+    ok(st and not st["io"].startswith("Open"), "In Tally never says Open while the sentence says Tally is closed (%s)" % (st and st["io"]))
+    chips = E("() => (document.querySelector('#app [data-tpf-chips]') || {innerText: ''}).innerText.replace(/\\s+/g, ' ')")
+    ok("Open in Tally now 0" in chips and "Not open in Tally 1" in chips, "the chips agree: not counted as open in Tally (%s)" % chips)
+    scene(view([book(cid, "reading_off", CASES[10][1], "turn_on")]))
+    st = E(STATE, cid)
+    ok(st and st["word"].strip() == "Needs you" and st["own"] == 0, "a cause that needs a person: Needs you (%s)" % st)
+    ew0 = "%s has changes in Tally for 2025-26. Add 2025-26 to bring them." % CO
+    scene(view([book(cid, "days_waiting", CASES[15][1], None, earlier={"fy": "2025-26", "n": 308, "words": ew0, "fix": "add_year"})]))
+    st = E(STATE, cid)
+    ok(st and st["tell"] == ["days_waiting", "earlier"] and st["own"] == 0, "the earlier year on its own line under the sentence (%s)" % st)
 
     print("3. the header's Tally sign, its popover, the client chip")
     def at_client():
@@ -159,7 +187,7 @@ with sync_playwright() as p:
     ok("Update to 2.5.22" in (pcs[0][1] if pcs else ""), "the owner's Update: the newer setup (%s)" % (pcs[0][1] if pcs else ""))
     scene(view([book(cid, "days_waiting", CASES[15][1], None)], pcs=PCS[:1]), role="staff")
     one = E("() => [...document.querySelectorAll('#app [data-tell-pcs] [data-tell-pc]')].map(e => e.innerText.replace(/\\s+/g, ' ').trim())")
-    ok(len(one) == 1 and "An owner of the firm does this." in one[0], "staff: their own computer only (the cloud's list), Update is the owner's (%s)" % one)
+    ok(len(one) == 1 and "Update to 2.5.22" in one[0] and "An owner" not in one[0], "staff: their own computer only (the cloud's list), Update for them too (%s)" % one)
     head = E("() => (document.querySelector('header.top') || {}).innerText || ''")
     ok("Hemant" not in head, "the header never names a computer")
 
@@ -188,6 +216,16 @@ with sync_playwright() as p:
     ok(ch == [["tally_period_choose_lean", {"p_book": "b1", "p_fy_start": "2025-04-01", "p_part": "year"}]], "pressed: the existing Bring another year (tally_period_choose_lean, 1-Apr-2025) (%s)" % ch)
     said = E("() => (document.querySelector('#app [data-tell-line=earlier]') || {}).innerText || ''")
     ok("FinCom brings FY 2025-26 from Tally" in said, "what came of it is said beside it (%s)" % said.replace("\n", " "))
+    # the year now being brought: its progress instead of the button (the same lock as Bring another year's Start)
+    going = [dict(SUMM[0], pull={"fy": "20250401", "part": "year", "state": "going", "x": 100, "y": 400, "chosenAt": "2026-11-24T10:00:00Z"})]
+    E("(s) => { window.__tellSum = s; window.tfxRefresh && window.tfxRefresh(); }", going); pg.wait_for_timeout(1500)
+    el = E("() => { const e = document.querySelector('#app [data-tell-line=earlier]'); return e ? [e.querySelectorAll('[data-tell-fix=add_year]').length, (e.querySelector('[data-tell-progress]') || {innerText: ''}).innerText] : null; }")
+    ok(el and el[0] == 0 and "100 of 400 entries" in el[1] and "FY 2025-26" in el[1], "once pressed, the year's progress instead of the button (%s)" % el)
+    scene(view([book(cid, "days_waiting", CASES[15][1], None, earlier={"fy": "2025-26", "n": 308, "words": ew, "fix": "add_year"})]),
+          summ=[dict(SUMM[0], pull={"fy": "20250401", "part": "year", "state": "paused", "x": 50, "y": 400})])
+    E("() => window.tfxRefresh && window.tfxRefresh()"); pg.wait_for_timeout(1500)
+    el = E("() => { const e = document.querySelector('#app [data-tell-line=earlier]'); return e ? [e.querySelectorAll('[data-tell-fix=add_year]').length, (e.querySelector('[data-tell-progress]') || {innerText: ''}).innerText] : null; }")
+    ok(el and el[0] == 0 and "50 of 400 entries" in el[1], "a pull of the book paused: its words, no Add (%s)" % el)
 
     print("7. a cloud without migration 221: nothing new, no error")
     E("() => { window.__w.alerts = []; }")
@@ -197,7 +235,20 @@ with sync_playwright() as p:
     ok(E("() => (document.querySelector('header.top [data-tally-icon]') || {}).getAttribute && document.querySelector('header.top [data-tally-icon]').getAttribute('data-tally-cause')") != "tell", "the Tally sign as before")
     ok(not re.search(r"PGRST|schema cache|42703|tally_tell", pg.inner_text("body")), "no error words")
 
+    print("7b. the cache follows the firm; a failed bell query asked again after 10 minutes")
+    scene(view([book(cid, "tally_closed", tc[1], None)]))
+    E("() => { window.__f0 = Cloud.st.firm; Cloud.st.firm = 'f-2'; }")
+    ok(E("() => FCTell.view()") is None, "another firm: the first firm's sentences are never shown")
+    pg.wait_for_timeout(800)
+    ok(E("() => !!FCTell.view()"), "the new firm's view asked at once")
+    E("() => { Cloud.st.firm = window.__f0; }")
+    scene(view([book(cid, "tally_closed", tc[1], None)]), missing=True); pg.wait_for_timeout(800)
+    nx = E("() => FCTell.nextOpen()")
+    ok(590000 <= nx <= 600000, "the bell's query failed: asked again in 10 minutes (%s ms)" % nx)
+
     print("8. the Day Book is never asked for")
+    src = open(os.path.join(HERE, "..", "app", "src", "screens", "Tally.jsx")).read() + open(os.path.join(HERE, "..", "src", "js", "61-recorder.js")).read()
+    ok(not re.search(r"upload (that|this) day.s Day Book", src), "no 'upload that day's Day Book' left in the Tally page or the recorder's words")
     held = dict(HELD_OURS, id=778, line_id="L778", held_why="is an older entry, not this save: Tally could not tell which entry")
     held["client_id"] = cid
     E("(l) => { window.__w.lines = [l]; Rec.flowAt = 0; }", held)

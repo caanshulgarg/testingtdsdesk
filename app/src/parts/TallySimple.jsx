@@ -26,7 +26,7 @@ import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, compa
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
 import OlderEntries, { TurnOn, owner, TURN_FROM } from "./TallyFetch.jsx";
-import { TellLine, TellPcs } from "./TallyTell.jsx";   // Tally tell (migration 221): the one sentence a company, the computers' lines
+import { TellLine, TellPcs, tellRow } from "./TallyTell.jsx";   // Tally tell (migration 221): the one sentence a company, the computers' lines
 import { PostingWait } from "./StuckJobs.jsx";
 import { press, say, busyOf, saidOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
@@ -621,6 +621,10 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const why = rw && (rw.phase === "done" || rw.phase === "why") ? rw.text : rw ? "" : aw ? aw.text : pg.kind === "reading" ? "" : pg.why;
   // (held lines or a held day: what to do about them stays in view while a read runs, and after it)
   const held = row.act && row.act.held && row.todo && row.todo !== why ? row.todo : "";
+  // Tally tell (the review of 25-Nov-2026): when FinCom's cloud says a sentence for this company, the State column is the
+  // dot and word, that one line and its button, the earlier year on its own line; the row's own lines are left out, and a
+  // fault's word (Waiting for Tally / Needs you) replaces Connected; In Tally never says Open over "Tally is closed"
+  const tr = row.cid ? tellRow(row.cid, row.company) : null;
   const co = shown(row.company), io = inTally(row, pg, seen);
   const toggle = () => set(more ? { more: "", details: ui.details === "all" ? "all" : Object.assign({}, ui.details || {}, { [key]: false }) } : { more: key, details: ui.details === "all" ? "all" : {} });
   return <><tr className={"tsm-tr tpt-tr" + (pg.need ? " tpt-need" : "") + (more ? " tpt-open" : "") + (row.focus ? " tsm-focus" : "")} data-tsm-row={name} data-tsm-kind={row.kind} data-tsm-cid={row.cid || undefined}
@@ -633,18 +637,19 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
     <td className="tpt-td tpt-st" data-tsm-col="state" data-label="State">
       <span className="tpt-state">
         {/* (not linked: the client line says so; the state line only when it adds to it) */}
-        {pg.kind !== "free" && <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>}
-        {why && <span title={typeof why === "string" ? why : undefined} className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
+        {pg.kind !== "free" && (tr && tr.word ? <span className="tpt-say warn" data-tpt-state={pg.kind} data-tpt-tell-word={tr.icon}><Dot k="warn" />{tr.word}</span>
+          : <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>)}
+        {!tr && why && <span title={typeof why === "string" ? why : undefined} className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
-        {held && <span className="tpt-why" title={held} data-tpt-held="">{held}</span>}
+        {!tr && held && <span className="tpt-why" title={held} data-tpt-held="">{held}</span>}
         {/* Tally tell (migration 221): the cloud's one sentence for this company, and its one button */}
         {row.cid && <TellLine cid={row.cid} company={row.company} />}
         {/* next-bell-tally: opened for a control only Advanced has (the bell's lines waiting, a company in two places): "More settings" to it */}
         {row.focus && S.tallyAdv && S.tallyAdv.cid === row.cid && <span className="tpt-why"><button type="button" className="linkbtn" data-tally-more-go={S.tallyAdv.to}
           onClick={() => moreGo(S.tallyAdv)}>More settings</button></span>}
         {/* next-link-follow (migration 146): where the book is read from, or the linked computer offline with the company open nowhere */}
-        {row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
-        {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
+        {!tr && row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
+        {!tr && near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
           <NearPick row={row} /></span>}
       </span>
     </td>
@@ -706,7 +711,8 @@ const fOf = (ui) => ({ chip: ui.chip || "all", fma: arr(ui.fma), fen: arr(ui.fen
 const viewSig = (f) => JSON.stringify([f.chip || "all", [...arr(f.fma)].sort(), [...arr(f.fen)].sort(), f.flast || "any", f.fopen || "any", [...arr(f.fpc)].sort(), f.sort || "need", f.dir === -1 ? -1 : 1]);
 // "open" | "away" (linked, its company open nowhere FinCom hears) | "" (not linked); the row's own test (pageOf)
 function inTally(r, p, seen) {
-  if (isLinked(r)) return r.o.w === YES || seen.has(coKey(r.company)) ? "open" : "away";
+  // (Tally tell: the cloud says the company is not open where FinCom can read it: never "Open", in the cell or its chip)
+  if (isLinked(r)) { const t = r.cid ? tellRow(r.cid, r.company) : null; return !(t && t.away) && (r.o.w === YES || seen.has(coKey(r.company))) ? "open" : "away"; }
   return p.kind === "open" || p.kind === "company" ? "open" : "";
 }
 // the computer's name only (never its Windows login): "NAME · DOMAIN\user" → "NAME"

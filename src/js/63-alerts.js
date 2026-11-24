@@ -215,7 +215,7 @@ const AlertHub = {
       // ---- 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that FinCom Bridge could not read again
       // (Rec.renumberNeeds: one a company, from every computer's beat): Needs you, the Day Book from that day
       if (Rec.renumberNeeds) Rec.renumberNeeds().forEach(g => out.push({key: "renumber:" + g.company, sev: "warn", cid: g.cid, selfClear: true, details: g.pc,
-        text: g.text.replace(/ \u2014 upload the Day Book from .*$/, "."),
+        text: g.text.replace(/ \u2014 FinCom brings the days from .*$/, "."),
         fix: "FinCom brings the days from " + fmtDate(g.day) + " from Tally by itself."}));
       // ---- the ledgers a client's entries use that FinCom does not have yet (the owner, 15-Oct-2026: "there should be some
       // smart way to show it"): one item a client, the count only (Rec.unkGroups, settled ones left out); the client's Books
