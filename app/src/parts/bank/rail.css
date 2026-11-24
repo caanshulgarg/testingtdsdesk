@@ -33,3 +33,10 @@
 }
 @media (max-width: 600px) { .bkr-menuhead, .bkr-unpin { display: none; } }
 @media (min-width: 601px) and (max-width: 900px) { html.bk-rail .shell > .mainwrap { margin-left: 72px; } }
+/* the message at the bottom beside the rail (from 901px wide it sits in the sidebar's corner, styles/arc-look.css; the
+   sidebar is hidden while the rail shows, so it went under the 72px rail, cut off): right of the rail */
+@media (min-width: 901px) {
+  /* (the second selector outweighs arc-look.css's body:has(.side:not(.hidden):not(.side-folded)) #toast.toast: the
+     sidebar is only hidden by this file, so that rule still applies) */
+  html.bk-rail #toast.toast, html.bk-rail body:has(.side:not(.hidden):not(.side-folded)) #toast.toast { left: 84px; }
+}
