@@ -25,6 +25,15 @@ first, the typing gate. Use a test company with made-up entries only.
      approved company check (FinComCompany, at most 2 s). A check that gives no numbers leaves the counter not known.
      An older entry that carries the same mark is not counted as found and never makes an entry "posted" (review of
      383aef7c9: counted, it could hide an entry Tally made without its mark, which would then go twice).
+   - **Design rule b.4 is replaced.** Up to 2.5.19 the rule (plan round 20, b.4) was one company check per job: once
+     before the job and once after its last import, none between the imports. From 2.5.20 that rule no longer holds.
+     There is one company check (FinComCompany) right before each part of vouchers, as well as the one before the job
+     and the one after it. There is still no other request between the imports. (post.go partCounter; round15_test.go
+     partChecksOnly.)
+   - **A part check can hold its part for up to 60 s.** The check before a part is stopped at 2 s. But if Tally closes
+     the connection on that check, or the check times out, the bridge waits until Tally is free again before it sends
+     anything else (one request in flight). That part can then be held for up to 60 s before it goes. Nothing is sent
+     twice, and the counter is then not known (the part, if Tally makes it only partly, needs review whole).
    - An entry that is not found is "refused by Tally" only when all of these hold: Tally's reply gave errors or line
      errors, no exception and no ignored entry, and every entry Tally says it made (CREATED + ALTERED) was found. It is
      then taken off this computer's record of sent entries, so Retry in FinCom sends it again.
