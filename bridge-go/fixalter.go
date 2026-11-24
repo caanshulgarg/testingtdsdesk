@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -288,7 +289,60 @@ var (
 		return ledSend(company, guid, bf, rows, "fix", 0, 0)
 	}
 	fixBooksFromFn = func(company string) (string, error) { return booksFromForRead(fixTC(), company) }
+	// review of cd7b81337: the company's groups as this computer last read them from Tally (FinComGroupList's
+	// group-list.json; nothing is asked for a fix)
+	fixGroupsFn = func(company string) [][2]string { return heldGroupList(syncFolder(company)) }
 )
+
+// the group list held in dir (group-list.json: [name, parent] rows; a primary group's parent is empty); nil when none
+func heldGroupList(dir string) [][2]string {
+	var out [][2]string
+	for _, x := range arr(readJSONFile(filepath.Join(dir, "group-list.json"))) {
+		a := arr(x)
+		if n := strings.TrimSpace(str(at(a, 0))); n != "" {
+			out = append(out, [2]string{n, strings.TrimSpace(str(at(a, 1)))})
+		}
+	}
+	return out
+}
+
+// review of cd7b81337: a ledger is a party when its group (PARENT as read) is Sundry Debtors or Sundry Creditors, or a
+// group under one of them by the group list held (party); known is false when that cannot be told (no parent read, a
+// group not in the list, a loop), and then the fix is refused too
+func fixPartyGroup(parent string, groups [][2]string) (party, known bool) {
+	up := map[string]string{}
+	for _, g := range groups {
+		up[foldName(g[0])] = g[1]
+	}
+	seen := map[string]bool{}
+	for g := strings.TrimSpace(parent); g != ""; {
+		f := foldName(g)
+		if f == "SUNDRY DEBTORS" || f == "SUNDRY CREDITORS" {
+			return true, true
+		}
+		p, ok := up[f]
+		if !ok || seen[f] {
+			return false, false
+		}
+		seen[f] = true
+		g = strings.TrimSpace(re(`^\W*Primary$`).ReplaceAllString(p, ""))
+	}
+	return false, strings.TrimSpace(parent) != ""
+}
+
+// the refusal's words when the ledger is not a party ("" when it is one)
+func fixNotPartyWords(parent string, groups [][2]string, what string) string {
+	party, known := fixPartyGroup(parent, groups)
+	switch {
+	case party:
+		return ""
+	case known:
+		return "This ledger is not a party (it is under " + parent + "), so its " + what + " is not changed."
+	case strings.TrimSpace(parent) == "":
+		return "Tally did not say which group this ledger is under, so its " + what + " is not changed."
+	}
+	return "FinCom cannot tell that this ledger is a party (it is under " + parent + "), so its " + what + " is not changed."
+}
 
 // a person's request (the person pressed Save): sent at once, never on the background schedule
 func fixTC() *TC { return &TC{person: true, limitMs: fixSec * 1000} }
@@ -652,6 +706,16 @@ func fixLedger(p M, gstin, pan string, port int, company string) M {
 	}
 	if row == nil {
 		return M{"ok": false, "gone": true, "message": "Tally has no ledger named " + name + "."}
+	}
+	// review of cd7b81337: only a party's GSTIN or PAN (a ledger under Sundry Debtors or Sundry Creditors, or a group
+	// under them); never Cash, a bank or any other ledger; its group not known: refused too. Nothing is sent
+	what := "GSTIN"
+	if pan != "" {
+		what = "PAN"
+	}
+	if why := fixNotPartyWords(row.parent, fixGroupsFn(company), what); why != "" {
+		writeLog("Fix in place: " + row.name + " is not changed: not a party ledger (its group: " + or(row.parent, "not read") + ")")
+		return M{"ok": false, "notParty": true, "message": why}
 	}
 	was := M{"gstin": row.gstin, "pan": row.pan, "alterId": fmt.Sprint(row.alter)}
 	// the AlterID check of a ledger: the value FinCom showed (and its AlterID, when FinCom has one) is Tally's now
