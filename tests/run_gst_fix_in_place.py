@@ -32,6 +32,8 @@ bridge-go/fixalter.go does), so the real Bridge.call is what FinCom's /fix goes 
      one not valid or the ledger's old one (a branch's and an old registration's never), keeps the GSTIN box (a wrong
      valid GSTIN on the ledger typed over: the ledger, then the invoices), retries only the one refused, a cash sale's
      buyer gets only its invoices fixed, and another client opened mid-loop stops it; FixQ.mine by state code.
+ 14. Ledger groups never read: Save reads them from Tally (the bridge's /ledgers), then goes on in the same press;
+     Tally closed: only the invoice opened, as before.
  13. The review of 24-Nov-2026 (rev-fip4): the party is a ledger only under Sundry Debtors or Sundry Creditors (a
      sub-group too); Cash, a bank, or a group not known: only the invoice opened, no GSTIN written for that ledger; a
      waiting change with no Tally company is refused ("Open this entry again to save the change."); the ledger held
@@ -83,6 +85,7 @@ STUB = """(c) => { window.__calls = []; window.__live = true; window.bridgeLive 
     if (path.startsWith('/fix')) { const body = JSON.parse(o.body); window.__calls.push(['/fix', body, (o.headers || {})['X-Bridge-Key']]);
       const a = await window.__fix(body); if (a === 'net') throw new TypeError('Failed to fetch'); return J(a.body, a.status); }
     if (path.startsWith('/status')) return J({ok: true, linkGuid: true, sessions: []});
+    if (path.startsWith('/ledgers')) { (window.__reads = window.__reads || []).push(path); return window.__ledgers ? J(window.__ledgers) : J({ok: false, error: 'Tally is not open.'}, 503); }
     return J({ok: false, error: 'Unknown address ' + path.split('?')[0]}, 404); }; }"""
 # Tally's entry as the bridge reads it back: FinCom's own entry with the number and change number given
 XML = """(a) => { const v = S.books.vouchers.find(x => x.id === a[0]), e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -516,6 +519,38 @@ def review5(pg, A, vid, gid, led):
        "the page drawn (once a minute) sends a colleague's waiting change; the history shows who saved it and who sent it (%d calls)" % len(calls(pg)))
     pg.evaluate("() => { FixQ.who = window.__who0; S.books.vouchers = S.books.vouchers.filter(v => !/9\\d\\d$/.test(v.id.slice(-3)) || !v.id.startsWith('" + base + "')); BOOKS_REV++; render(); }")
 
+def review6(pg, gid, led):
+    """14. the ledger groups never read: Save reads them from Tally (the bridge's /ledgers, as Read ledgers from Tally
+    does), then goes on in the same press; Tally closed: only the invoice opened, as before"""
+    what2, goodN = "Buyer GSTINs that are not valid", valid_for(pg, "07AAJFQ3156R1Z")
+    saved = pg.evaluate("() => JSON.stringify([S.books.under, S.books.groups])")
+    def fresh():
+        bad_again(pg, gid, BADG)
+        pg.evaluate("(a) => { S.books.under = {}; S.books.groups = {}; S.books.gstins[a[0]] = a[1]; S.books.ledInfo[a[0]] = {alt: 33}; BOOKS_REV++; render(); }", [led, BADG])
+        month(pg, "202504"); group(pg, what2); open_entry(pg, what2, gid); typein(pg, goodN)
+    # Tally closed: the read fails, only the invoice opened is fixed
+    fresh(); s = inv_state(pg)
+    ok(s["step"] == "invoices" and s["led"] is None, "groups never read: the window starts with the invoice only (%s)" % {k: s[k] for k in ("step", "led")})
+    pg.evaluate("() => { window.__calls = []; window.__reads = []; window.__ledgers = null; window.__fix = " + GSTFIX + "; }")
+    pg.click("[data-fix-entry] [data-fix-save]"); settle(pg, 400)
+    c = calls(pg); r = pg.evaluate("() => window.__reads")
+    ok(len(r) == 1 and r[0].startswith("/ledgers?company=") and len(c) == 1 and c[0][1].get("target") == "voucher" and c[0][1].get("guid") == gid
+       and not pg.evaluate("() => /Tally is not open/.test(document.body.innerText)"),
+       "groups never read, Tally closed: Save tried the read once, then fixed only the invoice opened, nothing more said (%s, %s)" % (r, [x[1].get("target") for x in c]))
+    pg.wait_for_timeout(1400); cancel(pg)
+    # Tally open: Save reads the groups, sees the party under Sundry Debtors, and fixes the ledger then its invoices
+    fresh()
+    pg.evaluate("""(l) => { window.__calls = []; window.__reads = []; window.__ledgers = {ok: true, ledgers: [{name: l, group: 'Debtors - Delhi', gstin: '', pan: ''}, {name: 'Cash', group: 'Cash-in-Hand'}],
+      groups: [{name: 'Debtors - Delhi', parent: 'Sundry Debtors'}, {name: 'Sundry Debtors', parent: 'Current Assets'}, {name: 'Cash-in-Hand', parent: 'Current Assets'}, {name: 'Current Assets', parent: ''}]}; }""", led)
+    pg.click("[data-fix-entry] [data-fix-save]"); settle(pg, 600); settle(pg, 300)
+    c = calls(pg); r = pg.evaluate("() => window.__reads")
+    g = pg.evaluate("(l) => [S.books.groups['Debtors - Delhi'], S.books.under[l], S.books.under['Cash'], S.books.gstins[l]]", led)
+    ok(len(r) == 1 and [x[1].get("target") for x in c][:2] == ["ledger", "voucher"] and c[0][1].get("fields") == {"gstin": goodN} and any(x[1].get("guid") == gid for x in c[1:]),
+       "groups never read, Tally open: one Save reads them, then fixes the ledger and its invoices (%s, %s)" % (r, [(x[1].get("target"), x[1].get("guid", "")[-3:]) for x in c]))
+    ok(g == ["Sundry Debtors", "Debtors - Delhi", "Cash-in-Hand", goodN], "the groups read are kept in FinCom Books (b.groups, b.under) as Read ledgers from Tally keeps them (%s)" % g)
+    pg.wait_for_timeout(1400); cancel(pg)
+    pg.evaluate("(j) => { const a = JSON.parse(j); S.books.under = Object.assign(S.books.under || {}, a[0]); S.books.groups = Object.assign(S.books.groups || {}, a[1]); window.__ledgers = null; BOOKS_REV++; render(); }", saved)
+
 def should_fix(pg, vid):
     """11. the review's should-fix items"""
     b0 = pg.evaluate("() => S.books.fixq.length")
@@ -792,6 +827,7 @@ try:
         should_fix(pg, vid)
         review4(pg, A, vid, gid, led, good)
         review5(pg, A, vid, gid, led)
+        review6(pg, gid, led)
 
         # the invoices step and the ledger read first, in New look, dark
         pg.evaluate("() => { window.FCNewLook.set(true); }"); pg.emulate_media(color_scheme="dark"); pg.wait_for_timeout(800)

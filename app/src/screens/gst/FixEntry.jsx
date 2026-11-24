@@ -21,7 +21,7 @@
 //     the client (who saved it and who sent it are both kept: by and dev, sentBy and sentDev).
 //   - Every change is kept in Changes made here, with Undo where the earlier value is one Tally can be given again.
 // Anyone who can post to Tally may fix (decision 6). Plain words only, no warnings.
-/* global ledGroupPath, GST_STATE_ALIAS, S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
+/* global TallyRead, ledGroupPath, GST_STATE_ALIAS, S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
 import { useState, useEffect, useRef } from "react";
 import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 
@@ -81,6 +81,24 @@ export function partyGroupOk(b, name) {
 export const FixQ = {
   list(bk) { const b = bk || S.books || {}, l = (b.fixq = Array.isArray(b.fixq) ? b.fixq : []); l.forEach((x) => { if (!x.cid) x.cid = b.cid; }); return l; },
   busy: false, last: 0, flying: new Set(), undoing: new Set(),
+  // the client's ledger groups read from Tally (the owner: FinCom does what is needed on the press), with the bridge's
+  // own ledger read that Read ledgers from Tally uses (GET /ledgers: each ledger's group, and every group's parent),
+  // kept as that read keeps them: b.under for each ledger, b.groups. False when Tally did not give them.
+  async groups(cid) {
+    const co = CO(cid);
+    if (!co || typeof bridgeLive !== "function" || !bridgeLive(co)) return false;
+    let j = null;
+    try { j = await Bridge.call("/ledgers?company=" + encodeURIComponent(Bridge.tallyName ? Bridge.tallyName(co) : tallyCoName(co)) + (Bridge.pinQ ? Bridge.pinQ() : ""), null, 180000); } catch (e) { return false; }
+    const groups = {};
+    [].concat((j && j.groups) || []).forEach((g) => { if (g && g.name) groups[g.name] = g.parent || ""; });
+    const bk = Object.keys(groups).length ? await FixQ.books(cid) : null;
+    if (!bk) return false;
+    [].concat(j.ledgers || []).forEach((l) => { if (l && l.name && l.group) (bk.under = bk.under || {})[l.name] = l.group; });
+    bk.groups = groups;
+    if (typeof TallyRead === "object" && TallyRead && typeof TallyRead.yearOpen === "function") TallyRead.yearOpen(bk);
+    if (typeof saveBooks === "function") await saveBooks({}, bk);
+    return true;
+  },
   // the books of a client: the ones open, else as kept in this browser
   async books(cid) {
     const b = S.books;
@@ -284,10 +302,14 @@ const up = (g) => String(g || "").trim().toUpperCase();
 // lines, so the party is its ledger when it is one of them and its group is under Sundry Debtors or Sundry Creditors.
 // Anything else (a cash sale with the buyer's details, Cash or a bank as the party, a group not known): no ledger step,
 // and only the invoice opened is corrected.
-export function partyLedgerOf(v, party) {
+export function partyLine(v, party) {
   const p = String(party || ""), u = (x) => (Books && Books.unesc ? Books.unesc(x) : String(x || ""));
-  if (!p || (v && Array.isArray(v.ent) && v.ent.length && !v.ent.some((e) => e && (e.l === p || u(e.l) === u(p))))) return "";
-  return partyGroupOk(S.books, p) ? p : "";
+  return !!p && !(v && Array.isArray(v.ent) && v.ent.length && !v.ent.some((e) => e && (e.l === p || u(e.l) === u(p))));
+}
+export function partyLedgerOf(v, party) { return partyLine(v, party) && partyGroupOk(S.books, party) ? String(party) : ""; }
+// the ledger groups never read for this party (none kept, or the party not under any): Save reads them first
+export function groupsUnknown(b, v, party) {
+  try { return partyLine(v, party) && (!Object.keys((b && b.groups) || {}).length || !(typeof ledGroupPath === "function" && ledGroupPath(b, party).length)); } catch (e) { return false; }
 }
 // a party's invoices of the month that the GSTIN fix corrects: no GSTIN, one that is not valid (its check digit), or one
 // of `wrong` (the ledger's old wrong GSTIN). Never one with another valid GSTIN: another address, a branch, or a
@@ -317,7 +339,7 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
   // each went (with the GSTIN it was sent), the ledger's GSTINs this window replaced, the ledger saved here
   const [inv, setInv] = useState(null), [off, setOff] = useState(() => new Set()), [invSt, setInvSt] = useState({});
   const [olds, setOlds] = useState([]), [ledSaved, setLedSaved] = useState(false);
-  const inStep = useRef(false);
+  const inStep = useRef(false), groupsTried = useRef(false), [goOn, setGoOn] = useState(0);
   // the entry as it is now: after "changed since" (or kept) the list's own row of Tally's entry, else the one opened
   const fresh = st && (st.state === "changed" || st.state === "kept") && kind !== "gstin" ? rowNow(c.what, ym, reg, d0.id) : null;
   const d = fresh || d0;
@@ -352,6 +374,8 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
   const ledAlt = (((S.books || {}).ledInfo || {})[led] || {}).alt;
   const ledState = ledNeeds ? "change" : ledSaved ? "done" : "has";
   const later = (f) => setTimeout(f, 1200);
+  // the same press goes on once the groups read made the party a ledger (the window drawn again with it)
+  useEffect(() => { if (goOn) save(); }, [goOn]);
   // the ticked invoices, one at a time, each read back (Tally closed: that one waits, the rest are not sent now). Another
   // client opened meanwhile: stopped; the rest stay to be fixed for their own client.
   // one invoice's GSTIN fix (each with its own change number), sent now, or queued as waiting (words) after `after`
@@ -385,6 +409,15 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
     const cid = (S.books || {}).cid, fromStep = step === "invoices", seen = invList;
     setBusy(true);
     try {
+      // the ledger groups never read: read from Tally first, in this same press. The party under Sundry Debtors or
+      // Sundry Creditors: drawn again as a ledger and saved from there (goOn). Tally closed: only the invoice opened.
+      if (kind === "gstin" && !led && !groupsTried.current && groupsUnknown(S.books, v, party)) {
+        groupsTried.current = true;
+        setSt({ state: "waiting", words: "Reading the ledger groups from Tally…" });
+        const got = await FixQ.groups(cid);
+        setSt(null);
+        if (got && S.books && S.books.cid === cid && partyLedgerOf(v, party)) { setGoOn((n) => n + 1); return; }
+      }
       if (kind === "gstin" && !ledNeeds) { await sendInvoices(seen, cid); return; }
       // the entry's own fix, or the party ledger first. A ledger with no change number in FinCom Books is read from Tally
       // first, in this same Save (FixQ.ask)
