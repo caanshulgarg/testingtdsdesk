@@ -39,7 +39,9 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
  19. next-fix-zoho-sales-sheet (24-Nov-2026): Zoho Books' invoice export (no "Taxable value" column) by rules, no AI:
      Item Total added up an invoice, the taxes far to the right, Draft and Void invoices left out and counted.
  20. next-zoho-sheet-followups: Zoho's shipping charge with its tax, an invoice discount before tax, tax-inclusive
-     prices and the Adjustment (to Round Off, posting) taken once an invoice (sales_zoho_more.csv).
+     prices and the Adjustment (to Round Off, posting) taken once an invoice (sales_zoho_more.csv): Z-208 (+25) and
+     Z-209 (-10.50) have no problem at all, are Ready and post with it in Round Off.
+ 21. a client's own saved Zoho mapping, made before FinCom read the status: Draft and Void invoices still left out.
  17. the owner (16-Nov-2026): a number already in Tally or posted from FinCom is never posted without "Post duplicate
      anyway", confirmed twice (bulk Post skips and lists it); the client's own sales voucher type from its books.
  18. the owner (16-Nov-2026): every ledger of an invoice changed on it (a box of the client's Tally ledgers, kept as
@@ -964,6 +966,7 @@ with sync_playwright() as p:
     E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
 
     print("20. next-zoho-sheet-followups: Zoho's shipping, invoice discount, tax-inclusive prices and Adjustment, once an invoice")
+    E("() => { const l = S.bank.ledgers.list; if (!l.some(x => x.name === 'ZZ Round Off')) l.push({name: 'ZZ Round Off', group: 'Indirect Expenses'}); }")
     upload("sales_zoho_more.csv", "#salesIn")
     zm = E("Object.fromEntries((SheetImport.st() && SheetImport.st().docs || []).map(d => [d.no, [d.taxable, r2(d.igst + d.cgst + d.sgst), d.total, d.check.ok, d.roundOff || 0]]))")
     ok(step() == "check" and E("SheetImport.st().how") == "builtin", "the more cases: Zoho's rule, no AI (%s)" % step())
@@ -976,7 +979,39 @@ with sync_playwright() as p:
     z8 = E("""(() => { const v = SL().list.find(v => v.x.number === 'Z-208'); if (!v) return null; const l = hasLedgerList() ? salesLines(v) : [];
       return {ro: num(v.x.roundOff), lines: l.filter(x => x.role === 'roundoff').map(x => x.side + ' ' + x.amt), held: salesProblemsNow(v).filter(p => /Round Off/.test(p)).length, list: hasLedgerList()}; })()""")
     ok(z8 and z8["ro"] == 25 and z8["held"] == 0 and (not z8["list"] or z8["lines"] == ["Cr 25"]), "Z-208 in To review with 25 in Round Off, not held for it (%s)" % z8)
-    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
+    # (review of 4bd26c5e9, the owner: a Zoho Adjustment that explains the gap exactly goes to Round Off and posts, with
+    # no hold): Z-208 (+25) and Z-209 (-10.50) have no problem at all, are Ready, and post with it in Round Off
+    E("() => { SheetImport.close(); SL().filter = 'all'; render(); }"); W(400)
+    zz = E("""(() => SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => { const l = hasLedgerList() ? salesLines(v) : [];
+      return {no: v.x.number, st: v.status, ro: num(v.x.roundOff), probs: salesProblemsNow(v), lines: l.filter(x => x.role === 'roundoff').map(x => x.side + ' ' + x.amt + ' ' + x.ledger)}; }).sort((a, b) => a.no < b.no ? -1 : 1))()""")
+    ok(len(zz) == 2 and zz[0]["probs"] == [] and zz[1]["probs"] == [], "Z-208 and Z-209: no problem at all, not one (%s)" % [(z["no"], z["probs"]) for z in zz])
+    ok([z["st"] for z in zz] == ["ready", "ready"], "both Ready to post (%s)" % [(z["no"], z["st"]) for z in zz])
+    ok([z["lines"] for z in zz] == [["Cr 25 ZZ Round Off"], ["Dr 10.5 ZZ Round Off"]], "Round Off: Cr 25 on Z-208, Dr 10.50 on Z-209 (%s)" % [z["lines"] for z in zz])
+    n0 = len(E("window.__enq") or [])
+    E("() => { SL().filter = 'ready'; SL().sel = new Set(SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => v.id)); render(); }"); W(500)
+    post()
+    en = (E("window.__enq") or [])[n0:]
+    xs = [x for e in en for x in (v["xml"] for v in e.get("vouchers", []))]
+    x8 = next((x for x in xs if "Z-208" in x), ""); x9 = next((x for x in xs if "Z-209" in x), "")
+    ro8 = re.search(r"<LEDGERNAME>ZZ Round Off</LEDGERNAME>.*?<AMOUNT>([^<]*)</AMOUNT>", x8, re.S); ro9 = re.search(r"<LEDGERNAME>ZZ Round Off</LEDGERNAME>.*?<AMOUNT>([^<]*)</AMOUNT>", x9, re.S)
+    ok(ro8 and ro9 and float(ro8.group(1)) == 25 and float(ro9.group(1)) == -10.5, "posted: Z-208 with Round Off Cr 25, Z-209 with Round Off Dr 10.50 (%s, %s)" % (ro8 and ro8.group(1), ro9 and ro9.group(1)))
+    ok(E("SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => v.status)") == ["posted", "posted"], "both Posted (%s)" % E("SL().list.filter(v => ['Z-208', 'Z-209'].includes(v.x.number)).map(v => v.status)"))
+    E("() => { SheetImport.close(); SL().list = []; SL().sel = new Set(); saveSales(); render(); }")
+
+    print("21. review of 4bd26c5e9: a client's own saved Zoho mapping, made before FinCom read the status: Draft and Void still left out")
+    upload("sales_zoho_invoice.xlsx", "#salesIn")
+    E("""(() => { const st = SheetImport.st(); const fp = SheetFmt.fingerprint(st.head, st.read.sheet); const co = CO(); co.sheetFormats = (co.sheetFormats || []).concat([{id: 'sf-old-zoho', name: 'Our Zoho (old)', side: 'sales', fp, cols: st.head.length,
+      headers: st.head.map(h => SheetFmt.norm(h)), map: {date: 'invoicedate', no: 'invoicenumber', party: 'customername', gstin: 'gstidentificationnumbergstin', taxable: 'subtotal', igst: 'igst', cgst: 'cgst', sgst: 'sgst', total: 'total'},
+      transforms: {date: 'dmy', groupByNo: true}, at: new Date().toISOString(), v: 2}]); return fp; })()""")
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }"); W(300)
+    upload("sales_zoho_invoice.xlsx", "#salesIn")
+    zs = E("(SheetImport.st() && SheetImport.st().docs || []).map(d => [d.no, d.taxable, d.total, d.check.ok])")
+    ok(E("SheetImport.st().how") == "known" and E("SheetImport.st().fmt.id") == "sf-old-zoho", "the client's own saved mapping is used (%s)" % E("[SheetImport.st().how, SheetImport.st().fmt && SheetImport.st().fmt.id]"))
+    ok(zs == [["INV-000101", 15000, 17700, True], ["INV-000102", 2000, 2360, True], ["INV-000106", 8000, 8000, True], ["INV-000107", 3500, 4000, True]],
+       "four issued invoices, SubTotal taken once each; the Draft INV-000103 / 104 and the Void INV-000105 left out (%s)" % zs)
+    note = pg.inner_text("#app [data-sheet-status-skipped]") if pg.locator("#app [data-sheet-status-skipped]").count() else ""
+    ok(note == "2 draft invoices and 1 void invoice left out: only issued invoices are read.", "and said (%r)" % note)
+    E("() => { SheetImport.close(); SL().list = []; const co = CO(); co.sheetFormats = (co.sheetFormats || []).filter(f => f.id !== 'sf-old-zoho'); saveSales(); render(); }")
 
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

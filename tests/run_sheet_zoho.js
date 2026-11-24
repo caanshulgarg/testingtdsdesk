@@ -13,7 +13,7 @@ const {load, HTML} = require("./harness");
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const FX = path.join(__dirname, "fixtures", "sheets");
-const NAMES = ["num", "r2", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "money", "INR", "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"];
+const NAMES = ["num", "r2", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "money", "INR", "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile", "GST_CHARS", "gstinCheckChar", "gstinValid"];
 const h = load(HTML, NAMES);
 h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8").replace(/^import .*$/gm, ""), h.ctx);
 const F = h.ctx.SheetFmt, co = {id: "c1", name: "ZZ Up Client", gstin: "09AANFG3202D1ZR", sheetFormats: []};
@@ -91,7 +91,20 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   ok(z.taxable === 2200 && z.igst === 396 && z.cgst === 0 && z.total === 2596 && z.check.ok, "Z-202: shipping 200 at 18% with no amount: IGST 36 worked out, Delhi (" + fig(z) + ")");
   ok((z.items || []).length === 0 || (z.items || []).every((x) => x.rate === 18), "Z-202: one rate, 18% (" + JSON.stringify(z.items || []) + ")");
   z = M("Z-203");
-  ok(z.taxable === 1300 && z.cgst === 90 && z.sgst === 90 && z.igst === 54 && z.total === 1534 && z.check.ok, "Z-203: its tax type IGST: IGST, though the place of supply is the client's state (" + fig(z) + ")");
+  // (review of 4bd26c5e9: one invoice is CGST + SGST or IGST, never both: the shipping tax goes as the items' tax does)
+  ok(z.taxable === 1300 && z.cgst === 117 && z.sgst === 117 && z.igst === 0 && z.total === 1534 && z.check.ok, "Z-203: its items carry CGST + SGST: the shipping tax 54 split 27 + 27 too, its tax type “IGST” not followed (" + fig(z) + ")");
+  ok(md.every((x) => !(x.igst && (x.cgst || x.sgst))), "no invoice carries both IGST and CGST / SGST (" + md.filter((x) => x.igst && (x.cgst || x.sgst)).map((x) => x.no) + ")");
+  // the items carry no tax (nil-rated): the tax type, else the place of supply
+  const nilShip = (type, cust) => { const H = gm[hm].map((x) => F.norm(x)), c = (n) => H.indexOf(n), rows = gm.filter((r, i) => i > hm && r[c("invoicenumber")] === "Z-203").map((r) => r.slice());
+    rows.forEach((r) => { ["cgst", "sgst", "igst"].forEach((n) => { r[c(n)] = "0.00"; }); r[c("shippingchargetaxtype")] = type; r[c("total")] = "1354.00"; if (cust) r[c("placeofsupply")] = cust; });
+    return F.apply(fm.fmt, [gm[hm]].concat(rows), 0, co, "sales")[0] || {}; };
+  let n1 = nilShip("IGST"), n2 = nilShip(""), n3 = nilShip("", "DL");
+  ok(n1.igst === 54 && !n1.cgst && n1.total === 1354 && n1.check.ok, "no tax on the items, its tax type IGST: IGST 54 (" + fig(n1) + ")");
+  ok(n2.cgst === 27 && n2.sgst === 27 && !n2.igst && n3.igst === 54 && !n3.cgst, "no tax on the items, no tax type: by the place of supply (UP: 27 + 27; DL: IGST 54) (" + fig(n2) + fig(n3) + ")");
+  // the items carry IGST: the shipping tax IGST, whatever its tax type says
+  const H0 = gm[hm].map((x) => F.norm(x)), z2rows = gm.filter((r, i) => i > hm && r[H0.indexOf("invoicenumber")] === "Z-202").map((r) => { r = r.slice(); r[H0.indexOf("shippingchargetaxtype")] = "GST"; return r; });
+  const z2 = F.apply(fm.fmt, [gm[hm]].concat(z2rows), 0, co, "sales")[0] || {};
+  ok(z2.igst === 396 && !z2.cgst && !z2.sgst, "Z-202 with its tax type “GST”: its items carry IGST, so IGST (" + fig(z2) + ")");
   z = M("Z-204");
   ok(z.taxable === 1000 && z.cgst === 90 && z.total === 1280 && !z.check.ok && z.check.diff === 100, "Z-204: shipping with no tax amount or rate: not added, left to the sum check (" + fig(z) + ")");
   console.log("5. an invoice discount before tax, taken once");
@@ -110,6 +123,15 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   z = M("Z-210");
   ok(z.total === 1230 && !z.check.ok && !z.roundOff, "Z-210: Adjustment 25 that does not explain the total: no round off, does not add up (" + fig(z) + ")");
   ok(!md.filter((x) => !["Z-208", "Z-209"].includes(x.no)).some((x) => x.roundOff), "no round off on the others");
+  ok(md.every((x) => x.gstin && h.ctx.gstinValid(x.gstin)), "the made-up GSTINs of the sheet pass the check character (" + md.map((x) => x.gstin).filter((g, i, a) => a.indexOf(g) === i) + ")");
+  console.log("7b. tax-inclusive with no Item Total column: the invoice's whole tax taken off once");
+  const noIt = gm.map((r, i) => i === hm ? r.map((x) => x === "Item Total" ? "Line Note" : x) : r.slice()), fn = F.find(noIt[hm], "Invoice", "c1", "sales");
+  ok(fn && fn.fmt.builtin === "zoho-invoice" && fn.fmt.transforms.docTaxable === true, "no Item Total: SubTotal, taken once");
+  const ni = fn ? F.apply(fn.fmt, noIt, hm, co, "sales") : [], n7 = ni.find((x) => x.no === "Z-207") || {};
+  ok(n7.taxable === 2000 && n7.cgst === 115 && n7.sgst === 115 && n7.total === 2230 && n7.check.ok, "Z-207: SubTotal 2,230 less its whole tax 230 = 2,000 (" + fig(n7) + ")");
+  ok(!(n7.items || []).some((x) => x.taxable < 0 || (x.tax && !x.taxable)), "no item line with a negative taxable value or tax on nothing (" + JSON.stringify(n7.items || []) + ")");
+  const n8 = ni.find((x) => x.no === "Z-205") || {};
+  ok(n8.taxable === 4500 && n8.check.ok, "Z-205 with SubTotal: 5,000 less the invoice's 500, once (" + fig(n8) + ")");
   ok(docs.every((x) => !x.roundOff) && docs.map((x) => x.taxable).join() === "15000,2000,8000,3500", "the first sheet as before");
 
   console.log("8. the AI mapped one tax column: CGST, SGST and IGST are not added by name");
@@ -123,6 +145,29 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   co.sheetFormats.push({id: "sf-own", name: "Our Zoho", side: "sales", fp: zfp, cols: head.length, headers: head.map((x) => F.norm(x)), map: {no: "invoicenumber", date: "invoicedate", taxable: "subtotal", total: "total"}, transforms: {date: "dmy", groupByNo: true}});
   const mine = F.find(head, "Invoice", "c1", "sales");
   ok(mine && mine.how === "known" && mine.fmt.id === "sf-own", "the client's own saved one, first (" + JSON.stringify(mine && [mine.how, mine.fmt.id]) + ")");
+  // (review of 4bd26c5e9) a mapping saved before FinCom read Zoho's status (15d4414a0) has no status column, and none
+  // of the rule's once-an-invoice transforms: the rule's essentials are laid on it, its own column choices kept
+  ok(mine && mine.fmt.map.status === "invoicestatus" && mine.fmt.transforms.groupByNo === true && mine.fmt.transforms.docTotal === true && mine.fmt.transforms.docTaxable === true && mine.fmt.transforms.zoho && mine.fmt.transforms.zoho.adj === "adjustment",
+    "the rule's status column and transforms laid on it (" + JSON.stringify(mine && [mine.fmt.map, mine.fmt.transforms]) + ")");
+  const od = mine ? F.apply(mine.fmt, g, hi, co, "sales") : [];
+  ok(od.map((x) => x.no).join() === "INV-000101,INV-000102,INV-000106,INV-000107", "with the saved mapping: Draft INV-000103 / 104 and Void INV-000105 still left out (" + od.map((x) => x.no) + ")");
+  ok((od.skipped || []).filter((x) => x.status === "draft").length === 3 && (od.skipped || []).filter((x) => x.status === "void").length === 1, "… and counted as Draft and Void");
+  ok(od.map((x) => x.taxable).join() === "15000,2000,8000,3500" && od.every((x) => x.check.ok), "its SubTotal taken once an invoice: taxable 15,000 / 2,000 / 8,000 / 3,500 (" + JSON.stringify(od.map((x) => [x.taxable, x.total, x.check])) + ")");
+  ok(co.sheetFormats.find((x) => x.id === "sf-own").map.status === undefined, "the saved mapping itself is not changed");
+  // a stale mapping (taxable = SubTotal, no docTaxable / docTotal) on a nil-rated invoice of two rows: 8,000, not 16,000
+  const HZ = head.map((x) => F.norm(x)), cz = (n) => HZ.indexOf(n), tpl = g.find((r, i) => i > hi && r[cz("invoicenumber")] === "INV-000106");
+  const nil = [5000, 3000].map((it) => { const r = tpl.slice(); r[cz("invoicenumber")] = "INV-000301"; r[cz("itemtotal")] = it.toFixed(2); r[cz("subtotal")] = "8000.00"; r[cz("total")] = "8000.00"; return r; });
+  co.sheetFormats.push({id: "sf-stale", name: "Old Zoho", side: "sales", fp: zfp, cols: head.length, headers: HZ, map: {no: "invoicenumber", date: "invoicedate", party: "customername", taxable: "subtotal", total: "total"}, transforms: {date: "dmy", groupByNo: true}, at: "2026-11-01"});
+  co.sheetFormats = co.sheetFormats.filter((x) => x.id !== "sf-own");
+  const st2 = F.find(head, "Invoice", "c1", "sales"), nd = st2 ? F.apply(st2.fmt, [head].concat(nil), 0, co, "sales") : [];
+  ok(st2 && st2.how === "known" && nd.length === 1 && nd[0].taxable === 8000 && nd[0].total === 8000 && nd[0].check.ok, "a stale saved mapping: SubTotal 8,000 on each of two rows is 8,000 once, not 16,000 (" + JSON.stringify(nd.map((x) => [x.no, x.taxable, x.total])) + ")");
+  // a saved mapping that chose Item Total: added up (its own column choice kept)
+  co.sheetFormats = co.sheetFormats.filter((x) => x.id !== "sf-stale");
+  co.sheetFormats.push({id: "sf-it", name: "Zoho lines", side: "sales", fp: zfp, cols: head.length, headers: HZ, map: {no: "invoicenumber", date: "invoicedate", party: "customername", taxable: "itemtotal", total: "total", hsn: "itemname"}, transforms: {date: "ymd", groupByNo: true}});
+  const st3 = F.find(head, "Invoice", "c1", "sales"), nd3 = st3 ? F.apply(st3.fmt, [head].concat(nil), 0, co, "sales") : [];
+  ok(st3 && st3.fmt.map.hsn === "itemname" && st3.fmt.transforms.date === "ymd" && st3.fmt.transforms.docTaxable === false && nd3.length === 1 && nd3[0].taxable === 8000, "a saved mapping's own column choices kept (HSN, the date order), Item Total added up: 8,000 (" + JSON.stringify(nd3.map((x) => x.taxable)) + ")");
+  co.sheetFormats = co.sheetFormats.filter((x) => x.id !== "sf-it");
+  co.sheetFormats.push({id: "sf-own", name: "Our Zoho", side: "sales", fp: zfp, cols: head.length, headers: HZ, map: {no: "invoicenumber"}, transforms: {}});
   const CO0 = h.ctx.CO; h.ctx.CO = (id) => id === "c2" ? {id: "c2", sheetFormats: []} : co;
   const other = F.find(head, "Invoice", "c2", "sales"); h.ctx.CO = CO0;
   ok(other && other.how === "builtin" && other.fmt.builtin === "zoho-invoice", "another client: the Zoho rule (" + JSON.stringify(other && [other.how, other.fmt.id]) + ")");

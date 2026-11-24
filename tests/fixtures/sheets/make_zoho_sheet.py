@@ -88,6 +88,8 @@ print(len(rows), "rows")
 #  Z-208 Adjustment 25 on 2 lines: Total 1,205 (1,000 + 180 + 25): round off 25
 #  Z-209 Adjustment -10.50: Total 1,169.50: round off -10.50
 #  Z-210 Adjustment 25 but Total 1,230: not explained, no round off
+# (made-up GSTINs whose check character is right, so the invoices can go all the way to Ready and post)
+CUST_MORE = {"Dhruv Office Supplies": ("07AAACD4444H1ZV", "DL", "07-Delhi", "business_gst"), "Ujala Lamps": ("09AAACU5555J1ZZ", "UP", "09-Uttar Pradesh", "business_gst")}
 def more_rows():
     out = []
     MORE = [("Z-201", "Ujala Lamps", [("Lamp", 1, 600, 18), ("Shade", 1, 400, 18)], {"Shipping Charge": "500.00", "Shipping Charge Tax Amount": "90.00", "Shipping Charge Tax %": "18.00"}),
@@ -101,7 +103,7 @@ def more_rows():
             ("Z-209", "Ujala Lamps", [("Lamp", 1, 1000, 18)], {"Adjustment": "-10.50"}),
             ("Z-210", "Ujala Lamps", [("Lamp", 1, 1000, 18)], {"Adjustment": "25.00", "_total": 1230})]
     for k, (no, cust, lines, inv) in enumerate(MORE):
-        g, code, pos2, treat = CUST[cust]
+        g, code, pos2, treat = CUST_MORE[cust]
         inter, incl = code != "UP", inv.get("Is Inclusive Tax") == "true"
         disc = float(inv.get("Entity Discount Amount", 0)) if inv.get("Is Discount Before Tax") == "true" else 0
         gross = sum(q * p for _, q, p, _ in lines)
