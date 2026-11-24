@@ -18,12 +18,16 @@ removed after; never a real database), with 221 applied first, made-up firm, boo
      that day was read after it); without one, 'stale' with "Made in Tally in 2025-26, a year FinCom does not keep." and
      never queued or retried
   6. the daily fetching sweep never makes a line stale whose day was never listed after it came; once listed: stale
-  7. delete guards: a list in bands with a hole deletes nothing (nor 'bands' without its bands); whole bands delete on the
+  7. delete guards: a list in bands with a hole deletes nothing; whole bands delete on the
      second list a minute later; a FinCom posting settled under 10 minutes ago is not deleted, and is once settled 10
      minutes; a plain entry: deleted on the second list; an unfinished day (6 lists) waits, never "upload the Day Book"
   8. the words: tally_check_status_of and tally_held_status never ask for an upload; the sweep answers, each book in turn
   9. 197's tally_period_day_stop: a slow day waits 1 h, 3 h, then 24 h; its 3rd try no longer marks it to upload (plain
      words instead), its check day waits too; two stops while it waits are one try
+ 10. the review of 24-Nov-2026: the days given up to an upload opened again once, 'slow3' retried, tally_period_upload's
+     words; a hand-out never a try, a reopened day afresh; an earlier book only when linked, the book's own pre-start
+     days closed; no delete of an entry with a line being brought, an empty list deletes only on a third 10 minutes on;
+     'bands' without bands as today; 31 dates re-checked; auto_tries reset; the jobs in UTC; types and job names guarded
 RED_WITHOUT_222=1: the same checks without the file (they fail)."""
 import os, re, sys, json, hashlib, datetime, difflib
 os.environ["TMPDIR"] = os.environ.get("PG222_DIR") or "/tmp/tell222"
@@ -46,16 +50,16 @@ if text: print("  md5 of %s: %s (%d bytes)" % (os.path.basename(T.M222), hashlib
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "one transaction, lock_timeout 10 s")
 body = re.sub(r"\$function\$.*?\$function\$", "", code, flags=re.S)
 alters = re.findall(r"\balter\s+table\s+(public\.\w+)\s+add column if not exists (\w+)", body)
-ok(bool(text) and "delete from" not in body and not re.search(r"\b(truncate|drop)\b", body) and "create table" not in body and len(re.findall(r"\balter\s+table\b", body)) == 6
-   and sorted(alters) == [("public.tally_check_days", c) for c in ("last_why", "next_at", "parked_at", "prio", "tries")] + [("public.tally_period_pulls", "auto_tries")],
-   "add-only: six columns added, nothing else changed in a table (%s)" % alters)
+ok(bool(text) and "delete from" not in body and not re.search(r"\b(truncate|drop)\b", body) and "create table" not in body and len(re.findall(r"\balter\s+table\b", body)) == 7
+   and sorted(alters) == [("public.tally_check_days", c) for c in ("empty_lists", "last_why", "next_at", "parked_at", "prio", "tries")] + [("public.tally_period_pulls", "auto_tries")],
+   "add-only: seven columns added, nothing else changed in a table (%s)" % alters)
 ok(not re.search(r"supabase\.co|\.supabase\.|qbocskaiewaxqcvaunzc|https?://|project[_ ]ref", low), "names no real database")
 nfn = len(re.findall(r"create or replace function public\.", text))
 ok(bool(text) and low.count("security definer set search_path = public, pg_temp") == nfn, "every function: security definer, search_path public, pg_temp (%d of %d)" % (low.count("security definer set search_path = public, pg_temp"), nfn))
 for g in ("grant execute on function public.tally_autoday_queue(uuid) to service_role;", "revoke all on function public.tally_autoday_queue(uuid) from public, anon, authenticated;",
           "grant execute on function public.tally_autoday_pickup(uuid, date, text) to service_role;", "grant execute on function public.tally_check_heads(uuid, date, jsonb, text, jsonb) to service_role;",
           "public.tally_autoday_queue_of(uuid), public.tally_autoday_sweep() from public, anon, authenticated, service_role;",
-          "perform cron.schedule('tally-autoday', '3-59/15 * * * *', 'select public.tally_autoday_sweep()');", "perform cron.schedule('tally-autoday-night', '7 18 * * *', 'select public.tally_autoday_sweep()');"):
+          "perform cron.schedule('tally-autoday', '3-59/15 * * * *', 'select public.tally_autoday_sweep()');", "perform cron.schedule('tally-autoday-night', '37 18 * * *', 'select public.tally_autoday_sweep()');"):
     ok(g in text, "explicit: " + g[:100])
 ok(not re.search(r"grant execute on function public\.tally_autoday_sweep", text), "the sweep: granted to nobody (cron only)")
 def block(t, name, args=None):
@@ -102,6 +106,19 @@ try:
         cl = "c8" if k == 9 else "c%d" % k
         db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, %s, %s, %s, %s)" % (q(b), q(F), q(cl), q(CO(k)), q(fd.isoformat()), q((fd - datetime.timedelta(days=1)).isoformat())))
         db.sql("insert into tally_links (firm_id, book_id, client_id, company_guid, company_name, state, linked_at, device_id) values (%s, %s, %s, %s, %s, 'linked', now() - interval '3 days', %s)" % (q(F), q(b), q(cl), q(CG[k]), q(CO(k)), q(DA)))
+    # (review 1) days given up to an upload before 222, a locked month's, and a period day 'slow3' (197's third slow day)
+    UPD, LKD, S3 = D(40), D(41), D(42)
+    db.sql("""insert into tally_check_days (book_id, firm_id, day, source, lists, upload_at, upload_words, gone1, gone1_at) values
+              (%(B)s, %(F)s, %(U)s, 'held', 6, now() - interval '2 days', 'FinCom could not finish checking this day against Tally. Please upload that day''s Day Book again.', '["x"]'::jsonb, now() - interval '2 days'),
+              (%(B)s, %(F)s, %(L)s, 'held', 1, now() - interval '2 days', 'FinCom could not correct it: its month is locked in FinCom. Unlock the month, then upload that day''s Day Book again.', null, null);
+              insert into tally_period_pulls (book_id, firm_id, fy_start, state) values (%(B6)s, %(F)s, %(FY)s, 'going');
+              insert into tally_period_days (book_id, firm_id, day, upload_at, upload_why, upload_words) values (%(B6)s, %(F)s, %(S3)s, now() - interval '1 day', 'slow3', 'Tally could not send it in time on 3 days. Upload that day''s Day Book to finish it.');
+              insert into tally_period_day_retry (book_id, firm_id, day, fails, first_at, last_at, retry_at, why) values (%(B6)s, %(F)s, %(S3)s, 3, now() - interval '3 days', now() - interval '1 day', now() + interval '20 hours', 'over2s')"""
+           % {"B": q(BK[6]), "B6": q(BK[6]), "F": q(F), "U": q(UPD.isoformat()), "L": q(LKD.isoformat()), "S3": q(S3.isoformat()), "FY": q(FY.isoformat())})
+    if text:
+        db.sql("alter table tally_check_days add column prio text")
+        r = st.psql_text(text); ok(r.returncode != 0 and "column tally_check_days.prio (not smallint)" in r.stderr, "the guard stops it over an existing column of another type (%s)" % r.stderr.strip()[-100:])
+        db.sql("alter table tally_check_days drop column prio")
     if text:
         h = {fn: db.one("select md5(prosrc) from pg_proc where oid = 'public.%s'::regprocedure" % fn) for fn in ("tally_check_next_open(uuid,integer)", "tally_check_heads(uuid,date,jsonb,text)", "tally_recorder_fetching_sweep(integer)")}
         ok(all(v in text for v in h.values()), "the guard knows the md5s the stand runs (staging's, read 24-Nov-2026) (%s)" % h)
@@ -113,6 +130,10 @@ try:
         db.sql("create function public.tally_autoday_fy(p_x int) returns int language sql as 'select 1'")
         r = st.psql_text(text); ok(r.returncode != 0 and "function tally_autoday_fy" in r.stderr, "the name guard stops it over another tally_autoday_fy")
         db.sql("drop function public.tally_autoday_fy(int)")
+        ok(db.one("select string_agg(jobname || ' ' || schedule, ', ' order by jobname) from cron.job where jobname like 'tally-autoday%'") == "tally-autoday 3-59/15 * * * *, tally-autoday-night 37 18 * * *", "the jobs (pg_cron runs in UTC: 18:37 is 00:07 India time)")
+        db.sql("update cron.job set command = 'select something_else()' where jobname = 'tally-autoday-night'")
+        r = st.psql_text(text); ok(r.returncode != 0 and "cron job tally-autoday" in r.stderr, "the guard stops it over a job of its name that runs something else")
+        db.sql("update cron.job set command = 'select public.tally_autoday_sweep()' where jobname = 'tally-autoday-night'")
     def can(fn, role):
         try: return db.one("select has_function_privilege(%s, %s, 'execute')" % (q(role), q(fn)))
         except RuntimeError: return None
@@ -263,7 +284,7 @@ try:
     db.sql("insert into tally_recorder_tries (line_row, book_id, first_at) values (%s, %s, now() - interval '8 days')" % (old, q(BK[k])))
     j("select tally_recorder_fetching_sweep(100)::text")
     ok(db.one("select state from tally_recorder_lines where id = %s" % old) == "fetching", "7 days of tries, its day never listed: stays 'fetching'")
-    db.sql("insert into tally_check_days (book_id, firm_id, day, source, listed_at, lists, via) values (%s, %s, %s, 'held', now() - interval '1 day', 1, 'day') on conflict (book_id, day) do update set listed_at = excluded.listed_at" % (q(BK[k]), q(F), q(D(9).isoformat())))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source, listed_at, lists, via) values (%s, %s, %s, 'held', now() - interval '1 day', 1, 'day') on conflict (book_id, day) do update set listed_at = excluded.listed_at, via = 'day'" % (q(BK[k]), q(F), q(D(9).isoformat())))
     j("select tally_recorder_fetching_sweep(100)::text")
     ok(db.one("select state from tally_recorder_lines where id = %s" % old) == "stale", "its day listed after it came: closed as 196 does")
 
@@ -289,8 +310,6 @@ try:
     hole = [[1, 100], [150, None]]
     for i in range(3): heads5([101], hole); age()
     ok(live() == ["065", "066", "067", "068"], "a list in bands with a hole: nothing deleted, three lists on (%s)" % live())
-    for i in range(2): j("select tally_check_heads(%s, %s, %s, 'bands')::text" % (q(BK[k]), q(DD.isoformat()), js(H([101])))); age()
-    ok(live() == ["065", "066", "067", "068"], "'bands' without its bands: nothing deleted (%s)" % live())
     ok(cday(k, DD).get("up") == "false", "and never given up to an upload")
     # whole bands: the first list marks, the second a minute later deletes, but not FinCom's posting settled 2 minutes ago
     whole = [[1, 100], [101, 300], [301, None]]
@@ -338,6 +357,82 @@ try:
     ok(a9.get("fails") == a10.get("fails") == 5, "two stops while it still waits: one try (%s, %s)" % (a9.get("fails"), a10.get("fails")))
     r9 = j("set fincom.role = 'anon'; select tally_period_day_stop(%s, %s, 'over2s')::text" % (q(BK[k]), q(SD.isoformat())))
     ok("_error" in r9, "anyone but the service role or an owner: refused, as 197")
+
+    print("== 10. the review of 24-Nov-2026")
+    c = cday(6, UPD); cl = cday(6, LKD)
+    ok(c.get("up") == "false" and c.get("tries") == "1" and c.get("why") == "reopened" and c.get("words") == "" and db.one("select (lists = 0 and gone1 is null and next_at <= now())::text from tally_check_days where book_id = %s and day = %s" % (q(BK[6]), q(UPD.isoformat()))) == "true",
+       "1. a day given up to an upload before 222: opened again once, tries 1, due now (%s)" % c)
+    ok(cl.get("up") == "true", "1. a locked month's day: left for the unlock (%s)" % cl.get("words"))
+    pd3 = db.rows("select (upload_at is null)::text as open, coalesce(upload_why, '') as why from tally_period_days where book_id = %s and day = %s" % (q(BK[6]), q(S3.isoformat())))
+    ok(pd3 == [{"open": "true", "why": ""}] and db.one("select (retry_at <= now())::text from tally_period_day_retry where book_id = %s and day = %s" % (q(BK[6]), q(S3.isoformat()))) == "true", "1. the period's 'slow3' day: unmarked, retried now (%s)" % pd3)
+    j("select tally_period_upload(%s, %s, 'shape', 'Payroll', 'Please upload the Day Book of that day.')::text" % (q(BK[6]), q(D(43).isoformat())))
+    w = db.one("select upload_words from tally_period_days where book_id = %s and day = %s" % (q(BK[6]), q(D(43).isoformat())))
+    ok(w == "FinCom could not read %s from Tally by itself." % D(43).strftime("%d-%b-%Y"), "1. tally_period_upload's words never ask for an upload (%r)" % w)
+    print("  -- 2. a hand-out is never a try; a day held_queue_of opens again starts afresh")
+    k = 4; db.sql("update tally_check_runs set state = 'going', stop_why = null where book_id = %s" % q(BK[k]))
+    db.sql("delete from tally_check_days where book_id = %s" % q(BK[k]))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'held')" % (q(BK[k]), q(F), q(D(1).isoformat())))
+    for i in range(3): nxt(k); db.sql("update tally_check_days set asked_at = now() - interval '11 minutes' where book_id = %s" % q(BK[k]))
+    ok(cday(k, D(1)).get("tries") == "0", "handed three times, never answered: tries 0 (%s)" % cday(k, D(1)).get("tries"))
+    ch4 = db.one("select chosen_at::text from tally_check_runs where book_id = %s" % q(BK[k]))
+    j("select tally_check_stop(%s, %s, 'over2s', '', %s)::text" % (q(BK[k]), q(D(1).isoformat()), q(ch4)))
+    ok(db.one("select round(extract(epoch from (next_at - now())) / 3600)::text from tally_check_days where book_id = %s" % q(BK[k])) == "1", "its first real stop waits 1 hour, not 24")
+    db.sql("update tally_check_days set done_at = now(), listed_at = now() - interval '2 hours', via = 'day', lists = 1, tries = 3, next_at = now() + interval '20 hours', last_why = 'over2s' where book_id = %s" % q(BK[k]))
+    line(k, D(1), ago="1 minute")
+    queue(k); c = cday(k, D(1))
+    ok(c.get("done") == "false" and c.get("tries") == "0" and c.get("next_at") == "" and c.get("why") == "", "a new line opens the day again: no tries, no wait carried over (%s)" % c)
+    print("  -- 4. days before the book: only into a LINKED earlier book; the book's own closed")
+    k = 8
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values ('819d4a59-4cee-4bf7-8f8c-000000099222', %s, 'c8', %s, %s)" % (q(F), q(CO(8)), q(PFY.isoformat())))
+    E2 = PFY + datetime.timedelta(days=50)
+    lid = line(k, E2, ago="2 hours")
+    queue(k); r = db.rows("select state, coalesce(held_why, '') as why from tally_recorder_lines where id = %s" % lid)[0]
+    ok(r == {"state": "stale", "why": "Made in Tally in %s, a year FinCom does not keep." % fy0} and db.one("select count(*) from tally_check_days where book_id = '819d4a59-4cee-4bf7-8f8c-000000099222'") == "0",
+       "an earlier book that is not linked: never queued there; the line closed with the words (%s)" % r)
+    c = cday(k, E2)
+    ok(c.get("done") in ("true", None) and (c == {} or c.get("why") == "before_book"), "the book's own day before its first day: closed 'before_book' (%s)" % c)
+    print("  -- 6. delete hardening")
+    k = 5; DE = D(50)
+    vs6 = [V(G(k, 201), 601, DE, "21"), V(G(k, 202), 602, DE, "22"), V(G(k, 203), 603, DE, "23")]
+    j("select tally_ingest_day(%s, %s, %s, %s, 3, 603, 0)::text" % (q(BK[k]), q(DE.isoformat()), js(vs6), js(LNS(vs6))))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'delete') on conflict do nothing" % (q(BK[k]), q(F), q(DE.isoformat())))
+    live6 = lambda: [r_["guid"][-3:] for r_ in db.rows("select guid from tally_vouchers where book_id = %s and day = %s and deleted_at is null order by guid" % (q(BK[k]), q(DE.isoformat())))]
+    age6 = lambda m: db.sql("update tally_check_days set gone1_at = now() - interval '%d minutes' where book_id = %s and day = %s" % (m, q(BK[k]), q(DE.isoformat())))
+    empty = lambda: j("select tally_check_heads(%s, %s, '[]'::jsonb, 'day')::text" % (q(BK[k]), q(DE.isoformat())))
+    empty(); age6(2); empty()
+    ok(len(live6()) == 3, "the reviewer's case: two empty lists a minute apart delete nothing (%s)" % live6())
+    age6(11); empty()
+    ok(live6() == [], "a third empty list 10 minutes after: deleted (%s)" % live6())
+    vs7 = [V(G(k, 204), 604, D(51), "24"), V(G(k, 205), 605, D(51), "25")]
+    j("select tally_ingest_day(%s, %s, %s, %s, 2, 605, 0)::text" % (q(BK[k]), q(D(51).isoformat()), js(vs7), js(LNS(vs7))))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'delete') on conflict do nothing" % (q(BK[k]), q(F), q(D(51).isoformat())))
+    db.sql("set session_replication_role = replica; insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, line_id, event, received_at, state, vch_date, object_guid) values (%s, 'c5', %s, %s, 'ln-held-205', 'altered', now(), 'fetching', %s, %s)"
+           % (q(F), q(BK[k]), q(DA), q(D(51).isoformat()), q(G(k, 205))))
+    hh = lambda: j("select tally_check_heads(%s, %s, %s, 'day')::text" % (q(BK[k]), q(D(51).isoformat()), js([[G(k, 999), 999, 9, "Payment"]])))
+    hh(); db.sql("update tally_check_days set gone1_at = now() - interval '2 minutes' where book_id = %s and day = %s" % (q(BK[k]), q(D(51).isoformat()))); hh()
+    l7 = [r_["guid"][-3:] for r_ in db.rows("select guid from tally_vouchers where book_id = %s and day = %s and deleted_at is null order by guid" % (q(BK[k]), q(D(51).isoformat())))]
+    ok(l7 == ["0cd"], "an entry with a recorder line still being brought: never deleted; the other is (%s)" % l7)
+    print("  -- 5. 'bands' without its bands: as today (a whole list)")
+    DB5 = D(52); vs8 = [V(G(k, 206), 606, DB5, "26"), V(G(k, 207), 607, DB5, "27")]
+    j("select tally_ingest_day(%s, %s, %s, %s, 2, 607, 0)::text" % (q(BK[k]), q(DB5.isoformat()), js(vs8), js(LNS(vs8))))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'delete') on conflict do nothing" % (q(BK[k]), q(F), q(DB5.isoformat())))
+    hb = lambda: j("select tally_check_heads(%s, %s, %s, 'bands', null)::text" % (q(BK[k]), q(DB5.isoformat()), js([[G(k, 206), 206, 606, "Payment"]])))
+    hb(); db.sql("update tally_check_days set gone1_at = now() - interval '2 minutes' where book_id = %s and day = %s" % (q(BK[k]), q(DB5.isoformat()))); hb()
+    l8 = [r_["guid"][-3:] for r_ in db.rows("select guid from tally_vouchers where book_id = %s and day = %s and deleted_at is null order by guid" % (q(BK[k]), q(DB5.isoformat())))]
+    ok(l8 == ["0ce"], "no bands sent (an older bridge): today's whole-list rule, the missing entry deleted on the second list (%s)" % l8)
+    print("  -- 8. the daily re-check: up to 31 dates, the latest edits first")
+    k = 9; db.sql("delete from tally_books where book_id = '819d4a59-4cee-4bf7-8f8c-000000099222'")
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date) values (%s, %s, 'c9', %s, %s) on conflict (book_id) do update set from_date = excluded.from_date, client_id = 'c9'" % (q(BK[k]), q(F), q(CO(k)), q(FY.isoformat())))
+    db.sql("update tally_devices set recorder_source = 'alterid' where id = %s" % q(DA))
+    for n in range(35):
+        db.sql("insert into tally_vouchers (book_id, firm_id, guid, day, alter_id, vtype, vno) values (%s, %s, %s, %s, %d, 'Sales', %s)" % (q(BK[k]), q(F), q("rc-%d" % n), q(D(60 + n).isoformat()), 700 + n, q(str(n))))
+    queue(k)
+    ok(db.one("select count(*) from tally_check_days where book_id = %s and source = 'delete'" % q(BK[k])) == "31", "35 dates edited this week: 31 re-checked (%s)" % db.one("select count(*) from tally_check_days where book_id = %s and source = 'delete'" % q(BK[k])))
+    db.sql("update tally_devices set recorder_source = 'addon' where id = %s" % q(DA))
+    print("  -- 9. the period's auto_tries reset once it reads again")
+    k = 5; db.sql("update tally_period_pulls set auto_tries = 2, state = 'going', chosen_at = now() - interval '1 hour' where book_id = %s" % q(BK[k]))
+    db.sql("insert into tally_period_days (book_id, firm_id, day, tally_n, counted_at) values (%s, %s, %s, 1, now()) on conflict (book_id, day) do update set counted_at = now()" % (q(BK[k]), q(F), q(D(70).isoformat())))
+    queue(k); ok(db.one("select auto_tries::text from tally_period_pulls where book_id = %s" % q(BK[k])) == "0", "a day counted after it started again: auto_tries 0")
 
     print("== 8. the words, the sweep")
     hs = j("select tally_held_status(null)::text", uid=OWNER, role="authenticated")
