@@ -385,7 +385,7 @@ async function salesQueuedSync(){
     // confirmed is not; one Tally already had is In Tally; an IRN cancelled keeps its mark while it may be in Tally
     let maybeIn = false;
     if (r && r.ok && postAlready(r)){ n++; delete v.postJob; v.matchedAt = new Date().toISOString(); v.status = "intally"; v.postNote = "Already in Tally"; v.postError = ""; v.tallyMatch = {number: String(r.vchNumber || r.vchNo || v.x.number || ""), date: String(r.vchDate || "")}; v.postedOptional = !!r.optional; maybeIn = true; }
-    else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); v.sentOptional = salesSentOptional(co, (j && j.created_at) || (r && r.sentAt), r); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
+    else if (r && r.ok){ n++; delete v.postJob; if (postTaken(r)){ v.status = "posted"; v.postedAt = new Date().toISOString(); v.postError = ""; v.postedInto = j.company || ""; v.postedOptional = salesOptional(r, co); v.sentOptional = salesSentOptional(co, (j && j.created_at) || (r && r.sentAt)); learnCustomer(v); } else { v.postError = salesUnconfirmed(r); maybeIn = true; } }
     else if (r && salesRefusal(r)){ n++; delete v.postJob; salesMarkRefused(v, r, salesRefusal(r)); }
     // (the bridge's "already" refusal: said on the invoice, as a direct post says it)
     else if (r && r.already){ n++; delete v.postJob; v.postError = plainMsg(r.message) || "Tally did not confirm this invoice."; maybeIn = true; }
@@ -414,7 +414,7 @@ function salesOptional(r, co){ return !!(r && r.optional) || !!(co && co.createO
 // (re-upload polish 3) whether FinCom itself sent the invoice as an Optional voucher (the client's setting as it sends:
 // ISOPTIONAL in its voucher), never Tally's answer: a voucher type Optional by default in Tally is not FinCom's choice
 // (F1) since: the posting's queued time (a posting marked late, salesQueuedSync), else its send time
-function salesSentOptional(co, since, r){ return sentOptionalAt(co, "", since, !!(r && r.optional)); }
+function salesSentOptional(co, since){ return sentOptionalAt(co, "", since); }
 // an answer Tally took but has not confirmed (an old bridge's real not-found answer is one): never said to be in Tally
 function salesUnconfirmed(x){ return "Not confirmed by Tally yet, so it is not marked as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x && x.verifyNote ? " [" + x.verifyNote + "]" : ""); }
 async function postSalesToTally(){ try { return await postSalesRun(); } catch (e){ salesPostFailed(e); } }
@@ -453,7 +453,7 @@ async function postSalesRun(){
       // the invoice is Refused by Tally (not Ready, never sent again as it is) until it is posted one by one or changed
       if (no){ refusedN++; salesMarkRefused(v, r, no); return; }
       if (r && r.earlier){ early.push([v, r]); return; }   /* (24-Nov-2026) an earlier posting holds it: FinCom's copy of Tally decides (src/js/96-not-in-tally.js) */
-      if (r && r.ok && !postTaken(r)){ bad++; v.postError = salesUnconfirmed(r); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); v.sentOptional = salesSentOptional(co, pressAt, r); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
+      if (r && r.ok && !postTaken(r)){ bad++; v.postError = salesUnconfirmed(r); return; } if (r && r.ok){ ok++; v.status = "posted"; v.postedAt = now; v.postError = ""; v.postedInto = r.company || ""; v.postedOptional = salesOptional(r, co); v.sentOptional = salesSentOptional(co, pressAt); if (v.postedOptional) optionalN++; learnCustomer(v); } else if (r && r.held){ queued++; v.postError = plainMsg(r.message); v.postJob = r.job; }   /* held by a posting still going on in FinCom's cloud: queued, not failed */
       else { bad++; v.postError = plainMsg(r && r.message) || "Tally did not confirm this invoice."; } });
     const ew = early.length && typeof salesEarlier === "function" ? await salesEarlier(early, co) : "";
     saveBank({newLed: true});

@@ -173,8 +173,9 @@ with sync_playwright() as p:
     ok(A.locator("[data-not-in-tally='%s']" % vh).count() == 0, "no \"Not in Tally? Post again\" for such a client")
     A.evaluate("() => { CO().createOptional = false; }")
     print(" i. (polish 3) the client's Optional setting off; Tally answered Optional (a voucher type Optional by default in Tally)")
-    # (polish 4) the setting turned off on purpose before (stamped): an unstamped one counts Tally's answer (1k)
-    A.evaluate("() => { CO().createOptionalAt = '2026-11-01T00:00:00.000Z'; }")
+    # (polish 4b) a client whose setting was never on and never stamped (the owner's case: Tally's voucher-type default
+    # makes its entries Optional): with no stamp, the setting now decides
+    A.evaluate("() => { CO().createOptional = false; delete CO().createOptionalAt; }")
     vi = A.evaluate(ADD, ["ZR/0465", "2026-11-14", G["k"]])
     A.evaluate("""(id) => { const v = SL().list.find(v => v.id === id); v.postJob = 'j-' + id; window.__rows = window.__rows || {};
       window.__rows['j-' + id] = {id: 'j-' + id, status: 'done', company: 'ZZ Test Reupload Traders', results: [{id, ok: true, byReply: true, verified: false, optional: true, sentAt: new Date().toISOString()}]}; }""", vi)
@@ -237,7 +238,7 @@ with sync_playwright() as p:
       return {mergeOff: d.createOptional, mergeStamped: !!d.createOptionalAt,
         noStampPosted: sentOptionalAt({createOptional: false}, '', q, true), noStampRegular: sentOptionalAt({createOptional: false}, '', q, false),
         olderStampPosted: sentOptionalAt({createOptional: false, createOptionalAt: '2026-11-01T00:00:00.000Z'}, '', q, true)}; }""")
-    ok(u == {"mergeOff": False, "mergeStamped": True, "noStampPosted": True, "noStampRegular": False, "olderStampPosted": False}, "a merge turning the setting off stamps it; with no stamp Tally's Optional counts, with an older stamp it does not (%s)" % u)
+    ok(u == {"mergeOff": False, "mergeStamped": True, "noStampPosted": False, "noStampRegular": False, "olderStampPosted": False}, "a merge turning the setting off stamps it; with no stamp the setting now decides (never Tally's answer), with an older stamp too (%s)" % u)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally (%s)" % A.evaluate("() => window.__bridgeCalls"))
 
     print("2. Not in Tally? Post again on a posted invoice")

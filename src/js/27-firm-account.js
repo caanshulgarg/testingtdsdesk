@@ -428,13 +428,13 @@ function clientOptKeep(data, mine, theirs, base){
 // (re-upload polish 3, F1) whether FinCom sent an entry as an Optional voucher, for a posting marked when its answer
 // comes (perhaps long after it was queued): cautiously yes when the client's setting is on now, or was changed after
 // the posting was queued (since: the posting's queued time, else its send time), as it may have been on then.
-// kind "bank": bankOptional (bank lines); else createOptional (bills and invoices). posted: Tally's answer called it
-// Optional; with no stamp (when the setting last changed is not known) that counts, as it may have been on then
-function sentOptionalAt(co, kind, since, posted){
+// kind "bank": bankOptional (bank lines); else createOptional (bills and invoices). With no stamp the setting now
+// decides, never Tally's answer: a voucher type Optional by default in Tally is not FinCom's choice (the owner's
+// decision of 24-Nov-2026); a merge that turns the setting off stamps it (clientOptKeep)
+function sentOptionalAt(co, kind, since){
   if (!co) return false;
   const k = kind === "bank" ? "bankOptional" : "createOptional";
   if (co[k]) return true;
-  if (!co[k + "At"]) return !!posted;
   const at = Date.parse(co[k + "At"] || ""), t = Date.parse(since || "");
   return !!(at && t && at > t);
 }
