@@ -38,6 +38,8 @@ their GST ledgers and some parties in sub-groups (Sales Local under Sales Accoun
      own name for its purchase voucher type is kept when Journal is chosen and chosen back.
  19. next-fix-zoho-sales-sheet (24-Nov-2026): Zoho Books' invoice export (no "Taxable value" column) by rules, no AI:
      Item Total added up an invoice, the taxes far to the right, Draft and Void invoices left out and counted.
+ 20. next-zoho-sheet-followups: Zoho's shipping charge with its tax, an invoice discount before tax, tax-inclusive
+     prices and the Adjustment (to Round Off, posting) taken once an invoice (sales_zoho_more.csv).
  17. the owner (16-Nov-2026): a number already in Tally or posted from FinCom is never posted without "Post duplicate
      anyway", confirmed twice (bulk Post skips and lists it); the client's own sales voucher type from its books.
  18. the owner (16-Nov-2026): every ledger of an invoice changed on it (a box of the client's Tally ledgers, kept as
@@ -959,6 +961,21 @@ with sync_playwright() as p:
     if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
     zl = E("SL().list.map(v => [v.x.number, num(v.x.taxable)]).sort()")
     ok(zl == [["INV-000101", 15000], ["INV-000102", 2000], ["INV-000106", 8000], ["INV-000107", 3500]], "four invoices in To review, each with its taxable value; no draft or void one (%s)" % zl)
+    E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
+
+    print("20. next-zoho-sheet-followups: Zoho's shipping, invoice discount, tax-inclusive prices and Adjustment, once an invoice")
+    upload("sales_zoho_more.csv", "#salesIn")
+    zm = E("Object.fromEntries((SheetImport.st() && SheetImport.st().docs || []).map(d => [d.no, [d.taxable, r2(d.igst + d.cgst + d.sgst), d.total, d.check.ok, d.roundOff || 0]]))")
+    ok(step() == "check" and E("SheetImport.st().how") == "builtin", "the more cases: Zoho's rule, no AI (%s)" % step())
+    ok(zm.get("Z-201") == [1500, 270, 1770, True, 0] and zm.get("Z-205") == [4500, 810, 5310, True, 0] and zm.get("Z-207") == [2000, 230, 2230, True, 0] and zm.get("Z-208") == [1000, 180, 1205, True, 25] and zm.get("Z-210", [0, 0, 0, None])[3] is False,
+       "shipping with its tax, the discount before tax, tax-inclusive, Adjustment 25 as round off; an unexplained one does not add up (%s)" % zm)
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count() == 0:
+        for q in qids():
+            if pg.locator('#app [data-sheet-q="%s"] [data-sheet-a="create"]' % q[0]).count(): answer(q[0], "create")
+    if pg.locator("#app [data-sheet-add]:not([disabled])").count(): pg.click("#app [data-sheet-add]"); W(900)
+    z8 = E("""(() => { const v = SL().list.find(v => v.x.number === 'Z-208'); if (!v) return null; const l = hasLedgerList() ? salesLines(v) : [];
+      return {ro: num(v.x.roundOff), lines: l.filter(x => x.role === 'roundoff').map(x => x.side + ' ' + x.amt), held: salesProblemsNow(v).filter(p => /Round Off/.test(p)).length, list: hasLedgerList()}; })()""")
+    ok(z8 and z8["ro"] == 25 and z8["held"] == 0 and (not z8["list"] or z8["lines"] == ["Cr 25"]), "Z-208 in To review with 25 in Round Off, not held for it (%s)" % z8)
     E("() => { SheetImport.close(); SL().list = []; saveSales(); render(); }")
 
     ok(not errors, "no page errors " + str(errors[:2]))

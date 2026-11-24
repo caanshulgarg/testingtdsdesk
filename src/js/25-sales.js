@@ -515,7 +515,11 @@ function salesProblemsNow(v, lines){
   const p = invoiceProblems(v); if (lines === undefined) lines = hasLedgerList() ? salesLines(v) : null;
   // (next-fix-audit-sales-einv) the voucher's sales and GST lines are the invoice's own figures, and Round Off no more than a
   // rupee: items at their rates that do not add up to the invoice are held, never posted with the gap in Round Off
-  if (lines){ const x = v.x, sum = r => r2(lines.filter(l => l.role === r).reduce((a, l) => a + l.amt, 0)), ro = sum("roundoff");
+  // (the owner, 24-Nov-2026: a difference that is the invoice's own stated Adjustment plus Rounding, x.roundOff, goes to
+  // Round Off and posts; only a difference the invoice does not explain is held)
+  if (lines){ const x = v.x, sum = r => r2(lines.filter(l => l.role === r).reduce((a, l) => a + l.amt, 0)),
+      signed = r2(lines.filter(l => l.role === "roundoff").reduce((a, l) => a + (l.side === "Cr" ? l.amt : -l.amt), 0)),
+      ro = x.roundOff && Math.abs(signed - num(x.roundOff)) < 0.01 ? 0 : sum("roundoff");
     if (Math.abs(sum("sales") - num(x.taxable)) > 1 || Math.abs(sum("tax") - num(x.cgst) - num(x.sgst) - num(x.igst) - num(x.cess)) > 1 || ro > 1)
       p.push("the items (taxable " + money(sum("sales")) + ", GST " + money(sum("tax")) + ") do not agree with the invoice\u2019s taxable value and GST" + (ro > 1 ? ": " + money(ro) + " would go to Round Off" : "") + ". Check the items");
   }

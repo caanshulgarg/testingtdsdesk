@@ -75,3 +75,59 @@ try:
     wb.save(os.path.join(HERE, "sales_zoho_invoice.xlsx"))
 except ImportError: pass
 print(len(rows), "rows")
+
+# sales_zoho_more.csv (next-zoho-sheet-followups): the invoice-level figures Zoho repeats on every line of an invoice,
+# made up the same way. Each case: (no, customer, [(item, qty, price, rate)], invoice fields, line fields)
+#  Z-201 shipping 500 with its tax 90 (no tax type: by the place of supply, UP = the client's state: CGST + SGST), 2 lines
+#  Z-202 shipping 200 at 18% (only the rate), Delhi: IGST 36
+#  Z-203 shipping 300 with tax 54, its tax type IGST (the type wins over the place of supply, UP)
+#  Z-204 shipping 100 with no tax amount or rate: not added, left to the sum check (does not add up by 100)
+#  Z-205 an invoice discount of 500 before tax, 2 lines (3,000 + 2,000 at 18%, IGST on 4,500)
+#  Z-206 an invoice discount of 100 after tax: taxable not cut (left to the sum check)
+#  Z-207 tax-inclusive: Item Total 1,050 at 5% and 1,180 at 18%: taxable 1,000 + 1,000
+#  Z-208 Adjustment 25 on 2 lines: Total 1,205 (1,000 + 180 + 25): round off 25
+#  Z-209 Adjustment -10.50: Total 1,169.50: round off -10.50
+#  Z-210 Adjustment 25 but Total 1,230: not explained, no round off
+def more_rows():
+    out = []
+    MORE = [("Z-201", "Ujala Lamps", [("Lamp", 1, 600, 18), ("Shade", 1, 400, 18)], {"Shipping Charge": "500.00", "Shipping Charge Tax Amount": "90.00", "Shipping Charge Tax %": "18.00"}),
+            ("Z-202", "Dhruv Office Supplies", [("Desk", 1, 2000, 18)], {"Shipping Charge": "200.00", "Shipping Charge Tax %": "18.00"}),
+            ("Z-203", "Ujala Lamps", [("Lamp", 1, 1000, 18)], {"Shipping Charge": "300.00", "Shipping Charge Tax Amount": "54.00", "Shipping Charge Tax Type": "IGST"}),
+            ("Z-204", "Ujala Lamps", [("Lamp", 1, 1000, 18)], {"Shipping Charge": "100.00"}),
+            ("Z-205", "Dhruv Office Supplies", [("Desk", 1, 3000, 18), ("Chair", 1, 2000, 18)], {"Entity Discount Amount": "500.00", "Is Discount Before Tax": "true", "Discount Type": "entity_level"}),
+            ("Z-206", "Dhruv Office Supplies", [("Desk", 1, 1000, 18)], {"Entity Discount Amount": "100.00", "Is Discount Before Tax": "false", "Discount Type": "entity_level"}),
+            ("Z-207", "Ujala Lamps", [("Tea", 1, 1050, 5), ("Lamp", 1, 1180, 18)], {"Is Inclusive Tax": "true"}),
+            ("Z-208", "Ujala Lamps", [("Lamp", 1, 600, 18), ("Shade", 1, 400, 18)], {"Adjustment": "25.00"}),
+            ("Z-209", "Ujala Lamps", [("Lamp", 1, 1000, 18)], {"Adjustment": "-10.50"}),
+            ("Z-210", "Ujala Lamps", [("Lamp", 1, 1000, 18)], {"Adjustment": "25.00", "_total": 1230})]
+    for k, (no, cust, lines, inv) in enumerate(MORE):
+        g, code, pos2, treat = CUST[cust]
+        inter, incl = code != "UP", inv.get("Is Inclusive Tax") == "true"
+        disc = float(inv.get("Entity Discount Amount", 0)) if inv.get("Is Discount Before Tax") == "true" else 0
+        gross = sum(q * p for _, q, p, _ in lines)
+        calc = []
+        for item, qty, price, rate in lines:
+            it = qty * price
+            base = round(it / (1 + rate / 100), 2) if incl else it - round(disc * it / gross, 2)
+            calc.append((item, qty, price, rate, it, round(base * rate / 100, 2)))
+        ship = float(inv.get("Shipping Charge", 0)); st = inv.get("Shipping Charge Tax Amount")
+        st = float(st) if st else (round(ship * float(inv["Shipping Charge Tax %"]) / 100, 2) if inv.get("Shipping Charge Tax %") else 0)
+        tax = sum(c[5] for c in calc)
+        sub = sum(c[4] for c in calc)
+        tot = inv.get("_total") or ((sub if incl else sub - disc) + (0 if incl else tax) + ship + st + float(inv.get("Adjustment", 0))
+                                    - (float(inv.get("Entity Discount Amount", 0)) if inv.get("Is Discount Before Tax") == "false" else 0))
+        for item, qty, price, rate, it, t in calc:
+            r = dict.fromkeys(HEAD, "")
+            r.update({"Invoice Date": "2026-10-20", "Invoice ID": str(6000 + k), "Invoice Number": no, "Issued Date": "2026-10-20", "Invoice Status": "Open", "Customer ID": str(950 + k),
+                "Customer Name": cust, "Place of Supply": code, "Place of Supply(With State Code)": pos2, "GST Treatment": treat, "Is Inclusive Tax": "false", "Currency Code": "INR", "Exchange Rate": "1.00",
+                "Discount Type": "item_level", "Is Discount Before Tax": "true", "Entity Discount Percent": "0.00", "Entity Discount Amount": "0.000", "SubTotal": f2(sub), "Total": f2(tot), "Balance": f2(tot),
+                "Adjustment": "0.00", "Shipping Charge": "0.00", "Item Name": item, "Quantity": f2(qty), "Discount": "0.00", "Discount Amount": "0.00", "Item Total": f2(it), "Item Price": f2(price),
+                "Supplier Org Name": "ZZ Up Client", "Supplier GST Registration Number": OWN, "CGST Rate %": "" if inter else f2(rate / 2), "SGST Rate %": "" if inter else f2(rate / 2),
+                "IGST Rate %": f2(rate) if inter else "", "CGST": "0.00" if inter else f2(t / 2), "SGST": "0.00" if inter else f2(t / 2), "IGST": f2(t) if inter else "0.00", "CESS": "0.00",
+                "GST Identification Number (GSTIN)": g, "HSN/SAC": "9405", "Round Off": "0.00", "Item Tax %": f2(rate), "Item Tax Amount": f2(t)})
+            r.update({h: v for h, v in inv.items() if not h.startswith("_")})
+            out.append([r[h] for h in HEAD])
+    return out
+more = more_rows()
+with open(os.path.join(HERE, "sales_zoho_more.csv"), "w", newline="") as f: csv.writer(f).writerows([HEAD] + more)
+print(len(more), "rows (sales_zoho_more.csv)")

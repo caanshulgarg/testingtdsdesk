@@ -142,16 +142,25 @@ const SheetFmt = {
       const map = {date: one("invoicedate"), no: "invoicenumber", party: one("customername"), gstin: h.find(x => x.startsWith("gstidentificationnumber")) || one("customergstin", "gstin"),
         pos: one("placeofsupply", "placeofsupplywithstatecode"), taxable: one("itemtotal", "subtotal"), igst: one("igst"), cgst: one("cgst"), sgst: one("sgst", "utgst"), cess: one("cess"),
         total: one("total"), hsn: one("hsnsac"), qty: one("quantity"), owngstin: one("suppliergstregistrationnumber"), branch: one("branchname"), status: "invoicestatus"};
+      // (next-zoho-sheet-followups) the invoice's own figures Zoho repeats on each of its lines, taken once an invoice:
+      // its shipping charge and the charge's tax, its discount, whether its prices carry the tax, its Adjustment
+      const zoho = {}, Z = {ship: "shippingcharge", shipTax: "shippingchargetaxamount", shipRate: "shippingchargetax%", shipType: "shippingchargetaxtype",
+        disc: "entitydiscountamount", discBefore: "isdiscountbeforetax", incl: "isinclusivetax", adj: "adjustment", round: "roundoff"};
+      Object.keys(Z).forEach(k => { if (is(Z[k])) zoho[k] = Z[k]; });
       return {id: "builtin:zoho-invoice", name: "Zoho Books invoices", builtin: "zoho-invoice", side: "sales", map,
-        transforms: {date: "dmy", groupByNo: true, docTotal: true, docTaxable: !is("itemtotal")}};
+        transforms: {date: "dmy", groupByNo: true, docTotal: true, docTaxable: !is("itemtotal"), zoho}};
     }
     return null;
   },
   // a known format for this header: {fmt, how: "builtin" | "known" | "drift"} or null
   find(head, sheet, cid, side){
-    const b = this.builtin(head, side);
+    const b = this.builtin(head, side), fp = this.fingerprint(head, sheet);
+    // (next-zoho-sheet-followups) a Zoho export the client saved its own mapping for, this very header: that mapping
+    // first (made before FinCom knew Zoho's layout, or put right by a person); a layout only near it is Zoho's rule
+    const mine = b && b.builtin === "zoho-invoice" && ((CO(cid) || {}).sheetFormats || []).find(f => f && !f.deleted && f.fp === fp && (!side || !f.side || f.side === side));
+    if (mine) return {fmt: mine, how: "known"};
     if (b) return {fmt: b, how: "builtin"};
-    const fp = this.fingerprint(head, sheet), list = this.saved(cid).filter(f => !side || !f.side || f.side === side);
+    const list = this.saved(cid).filter(f => !side || !f.side || f.side === side);
     const same = list.find(f => f.fp === fp);
     if (same) return {fmt: same, how: "known"};
     const names = new Set(head.map(h => this.norm(h)));
@@ -284,7 +293,10 @@ const SheetFmt = {
   fill(map, why, head, side){
     if (side === "vendor" || side === "customer") return map;
     const used = new Set(Object.values(map)), label = n => (head || [])[(head || []).map(x => this.norm(x)).indexOf(n)] || n;
-    Object.entries(this.byName(head, side)).forEach(([f, n]) => { if (!map[f] && !used.has(n) && this.fieldsFor(side).some(x => x[0] === f)){ map[f] = n; used.add(n); why[f] = "by its name, “" + label(n) + "”"; } });
+    // (next-zoho-sheet-followups: one tax column mapped, "tax", is split by FinCom; CGST / SGST / IGST taken by name
+    // beside it would count the tax twice, or stop the split)
+    const one = !!map.tax;
+    Object.entries(this.byName(head, side)).forEach(([f, n]) => { if (!map[f] && !used.has(n) && !(one && ["cgst", "sgst", "igst"].includes(f)) && this.fieldsFor(side).some(x => x[0] === f)){ map[f] = n; used.add(n); why[f] = "by its name, “" + label(n) + "”"; } });
     return map;
   },
   // the documents a mapped sheet holds: one per invoice number (lines of one invoice added up), totals and blank rows
@@ -300,6 +312,8 @@ const SheetFmt = {
     SHEET_FIELDS.forEach(([f]) => { idx[f] = col(f); });
     idx.itcwhy = col("itcwhy");
     const get = (r, f) => idx[f] >= 0 ? r[idx[f]] : "";
+    const zi = {}; Object.entries(t.zoho || {}).forEach(([k, n]) => { zi[k] = head.indexOf(n); });
+    const zc = (r, k) => zi[k] >= 0 ? String(r[zi[k]] == null ? "" : r[zi[k]]).trim() : "", yes = v => /^(true|yes|y|1)$/i.test(v);
     const home0 = stateOfGstin(co && co.gstin);
     const docs = new Map(), skipped = [], byBase = {}, lastKey = {}, lastFy = {};
     grid.slice(hi + 1).forEach((r, n) => {
@@ -374,6 +388,11 @@ const SheetFmt = {
       }
       // no taxable column: the rate and the total tell it
       if (!taxable && total && rate) taxable = r2(total / (1 + rate / 100));
+      // (next-zoho-sheet-followups) Zoho's tax-inclusive invoice: its Item Total carries the line's tax
+      if (yes(zc(r, "incl"))) taxable = r2(taxable - igst - cgst - sgst - cess);
+      // its shipping charge, discount and Adjustment, read from its first line only (each line repeats them)
+      if (!had && t.zoho) d.zoho = {ship: this.amount(zc(r, "ship")), shipTax: zc(r, "shipTax"), shipRate: zc(r, "shipRate"), shipType: zc(r, "shipType"),
+        disc: yes(zc(r, "discBefore")) ? this.amount(zc(r, "disc")) : 0, adj: r2(this.amount(zc(r, "adj")) + this.amount(zc(r, "round")))};
       d.taxable = r2(d.taxable + taxable); d.igst = r2(d.igst + igst); d.cgst = r2(d.cgst + cgst); d.sgst = r2(d.sgst + sgst); d.cess = r2(d.cess + cess);
       d.lineTotals = t.docTotal && had ? d.lineTotals : (d.lineTotals || []).concat([total]);
       if (rate && !d.rates.includes(rate)) d.rates.push(rate);
@@ -388,9 +407,37 @@ const SheetFmt = {
       d.lines++; d.rows.push(hi + 2 + n);
       docs.set(key, d);
     });
-    const out = Array.from(docs.values()).map(d => this.signed(this.finish(d), idx.doctype >= 0));
+    const out = Array.from(docs.values()).map(d => this.signed(this.finish(this.zohoDoc(d, home0)), idx.doctype >= 0));
     out.skipped = skipped;
     return out;
+  },
+  // (next-zoho-sheet-followups) a Zoho invoice's own figures, once: its discount before tax off the taxable value (shared
+  // over its rates as their values); its shipping charge, part of the value of supply (s.15(2)(c) CGST Act), added with
+  // its tax when the sheet gives the charge's tax amount or rate (CGST + SGST or IGST by the charge's tax type, else by
+  // the place of supply against the client's state); without either, left to the sum check. Its Adjustment (and Round
+  // Off) is kept for the check (finish): the invoice's round off when it explains the total exactly
+  zohoDoc(d, home0){
+    const z = d.zoho; delete d.zoho;
+    if (!z) return d;
+    const parts = Object.values(d.parts || {});
+    if (z.disc){
+      const base = r2(parts.reduce((a, p) => a + p.taxable, 0));
+      let left = z.disc;
+      parts.forEach((p, i) => { const cut = i === parts.length - 1 ? left : r2(base ? z.disc * p.taxable / base : 0); p.taxable = r2(p.taxable - cut); left = r2(left - cut); });
+      d.taxable = r2(d.taxable - z.disc);
+    }
+    if (z.ship && (z.shipTax !== "" || z.shipRate !== "")){
+      const rate = z.shipRate !== "" ? this.amount(z.shipRate) : 0, tax = z.shipTax !== "" ? this.amount(z.shipTax) : r2(z.ship * rate / 100);
+      const ty = z.shipType.toLowerCase(), pos = d.pos || stateOfGstin(d.gstin), home = stateOfGstin(d.own) || home0;
+      const inter = /igst|integrated|inter/.test(ty) ? true : /cgst|sgst|utgst|intra|group/.test(ty) ? false : !!(pos && home && pos !== home);
+      const ig = inter ? tax : 0, cg = inter ? 0 : r2(tax / 2), sg = inter ? 0 : r2(tax - cg), rr = rate || this.rateOf(z.ship, tax);
+      d.taxable = r2(d.taxable + z.ship); d.igst = r2(d.igst + ig); d.cgst = r2(d.cgst + cg); d.sgst = r2(d.sgst + sg);
+      const pt = (d.parts = d.parts || {})[rr] || (d.parts[rr] = {rate: rr, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0});
+      pt.taxable = r2(pt.taxable + z.ship); pt.igst = r2(pt.igst + ig); pt.cgst = r2(pt.cgst + cg); pt.sgst = r2(pt.sgst + sg);
+      if (rr && !d.rates.includes(rr)) d.rates.push(rr);
+    }
+    if (z.adj) d.adjust = z.adj;
+    return d;
   },
   // a row's GST rate from its figures: the standard rate it is at (to within 0.05%), else its own to two places
   rateOf(taxable, tax){
@@ -454,7 +501,11 @@ const SheetFmt = {
     if (parts.length > 1) d.items = parts.sort((a, b) => a.rate - b.rate).map(p => Object.assign(p, {tax: r2(p.igst + p.cgst + p.sgst)}));
     d.rate = d.taxable ? Math.round((d.igst + d.cgst + d.sgst) / d.taxable * 10000) / 100 : (d.rates[0] || 0);
     const diff = r2(d.total - d.taxable - tax);
-    d.check = Math.abs(diff) < 0.005 ? {ok: true} : Math.abs(diff) <= 1 ? {ok: true, roundOff: diff} : {ok: false, diff, text: "Taxable " + d.taxable.toFixed(2) + " + tax " + tax.toFixed(2) + " is " + r2(d.taxable + tax).toFixed(2) + ", not the total " + d.total.toFixed(2)};
+    // (next-zoho-sheet-followups, the owner 24-Nov-2026: Zoho's Adjustment goes to Round Off and posts, as on a PDF: kept
+    // as the invoice's round off only when taxable + tax + it is the total exactly)
+    const adj = d.adjust; delete d.adjust;
+    if (adj && Math.abs(diff - adj) < 0.005) d.roundOff = adj;
+    d.check = Math.abs(diff) < 0.005 ? {ok: true} : Math.abs(diff) <= 1 || d.roundOff ? {ok: true, roundOff: diff} : {ok: false, diff, text: "Taxable " + d.taxable.toFixed(2) + " + tax " + tax.toFixed(2) + " is " + r2(d.taxable + tax).toFixed(2) + ", not the total " + d.total.toFixed(2)};
     // (posFromGstin: worked out here, not the sheet's own; SheetPost.notOwn takes it away with an own GSTIN)
     if (!d.pos){ d.pos = stateOfGstin(d.gstin); if (d.pos) d.posFromGstin = true; }
     return d;
@@ -967,7 +1018,8 @@ const SheetPost = {
       const mk = ["amazon", "flipkart", "shopify"].includes(d.market) ? d.market : "";
       const v = newInvoice(Object.assign({number: no, date: d.date, customerName: d.party || (d.gstin ? "" : "Retail customer"), customerGstin: GSTIN_RE.test(d.gstin) ? d.gstin : "", pos: d.pos,
         hsn: d.hsn, taxable: ab(d.taxable), cgst: ab(d.cgst), sgst: ab(d.sgst), igst: ab(d.igst), cess: ab(d.cess), total: ab(d.total),
-        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", ...(cnMine && cnMine !== d.no ? {cnOf: d.no} : {}), sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab)},
+        rate: d.rate, noteKind: d.note || "", againstInvoice: d.against || "", ...(cnMine && cnMine !== d.no ? {cnOf: d.no} : {}), sellerGstin: d.own || "", branch: d.branch || "", items: this.items(d, ab),
+        ...(d.roundOff && !d.note ? {roundOff: d.roundOff} : {})},
         mk ? {ecommerce: mk, tcs: Math.abs(num(d.tcs)), placeOfSupply: (d.pos && typeof GST_STATES === "object" && GST_STATES[d.pos]) || d.pos || ""} : null), mk && !d.hold ? "market" : "sheet", {fileName, market: mk || undefined, sheet: {rows: d.rows, check: d.check, sec: d.sec || ""},
         // (item 1: what the sheet itself gave; a GSTIN or place of supply it did not give comes from the party's Tally
         // ledger, src/js/25 salesPartyFill)
