@@ -79,9 +79,18 @@ function saveSales(what){
   if (typeof cloudSoon === "function") cloudSoon();
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
-  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; BankDB.set("sales:" + cid, list.map(salesSynced)); }, 500);
+  // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay)
+  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(() => { const n = SL(), l = n && n.cid === cid ? (n.loading ? null : n.list) : list;
+    if (l) return BankDB.set("sales:" + cid, l.map(salesSynced)); }); }, 500);
   if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))){ salesCfgStamp(s); salesCfgWrite(s); }
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
+}
+// a change to a client's sales list kept in this browser, in turn with the sync's own (cloudApply, src/js/27): the sync
+// reads the list, adds its rows and lays the list on screen afresh (loadSales); a save in between put the list as it was
+// back over those rows (review of 85592e3f6: invoices synced during an upload lost)
+function salesTurn(f){
+  if (typeof cloudApply !== "function") return f();
+  const run = (cloudApply.q || Promise.resolve()).then(f); cloudApply.q = run.catch(() => {}); return run;
 }
 /* ---------- next-fix-sales-sync (16-Nov-2026): Sales settings merged key by key ---------- */
 // The settings went to the cloud as one whole object, and the last computer to save won: one with empty ledger settings

@@ -71,9 +71,14 @@ async function uploadSales(files){
       const doc = first.get(fh);
       S.files["sv:" + v.id] = file;
       if (doc) v.docOf = doc; else { first.set(fh, v.id); FileStore.put(cid, "sv:" + v.id, file); CloudDocs.add(cid, "sv:" + v.id, file, "sale"); }
-      const s = await live();
-      if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
-      else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
+      // (review of 85592e3f6) in turn with the sync (salesTurn), into the list as it is then: a sync's rows stay, and the
+      // link to the file in the firm account, once it is up, goes on every invoice from it (CloudDocs.sv)
+      await salesTurn(async () => {
+        const up = (CloudDocs.sv || {})[cid + "|sv:" + (v.docOf || v.id)]; if (up){ v.docPath = up[0]; v.docSize = up[1]; }
+        const s = await live();
+        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
+        else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
+      });
       added++;
     } catch (e){
       toast(file.name + of + ": " + (e && e.code === "sales_unreadable" ? "the invoice could not be read. Create it by hand with Create invoice." : e && e.code === "sales_type" ? "use a PDF or a photo." : errCopy(e && e.code)));
