@@ -67,9 +67,12 @@ async function loadSales(cid, old, ids){
     // (removed here, sent or waiting: never brought back by a copy read)
     const gone = v => { const k = "sales|" + cid + "|" + cid + ":" + v.id; return marks[k] === "gone" || k in dels; };
     const lay = (v, n) => { Object.keys(v).forEach(k => { if (!(k in n)) delete v[k]; }); Object.assign(v, n); };
+    // (ids: id -> the copy the cloud sent, null for a removal. Only a removal takes an invoice off; a change the read
+    // lacks (another tab's save of the whole list) is laid from the cloud's copy itself: the re-review of b7e05251c, M2)
     if (ids){
-      ids.forEach(id => { const i = old.list.findIndex(v => v.id === id), n = got.get(id);
-        if (i >= 0 && n) lay(old.list[i], n); else if (i >= 0) old.list.splice(i, 1); else if (n && !gone(n)) old.list.push(n); });
+      ids.forEach((data, id) => { const i = old.list.findIndex(v => v.id === id), n = data === null ? null : got.get(id) || (data && clone(data));
+        if (data === null){ if (i >= 0) old.list.splice(i, 1); }
+        else if (i >= 0 && n) lay(old.list[i], n); else if (n && !gone(n)) old.list.push(n); });
     } else {
       const had = new Set(), kept = old.list.filter(v => { const n = got.get(v.id); if (!n) return !gone(v); had.add(v.id); lay(v, n); return true; });
       old.list.splice(0, old.list.length, ...kept, ...list.filter(v => !had.has(v.id) && !gone(v)));

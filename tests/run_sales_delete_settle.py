@@ -11,7 +11,9 @@ nothing moves (the page's height, its scroll, the bar's height, the number of el
 Also (the reviews of a85572b8b and 8fc130d15): Undo either puts all back or is not offered once the removals come back,
 never part; a colleague's removal is always taken in (of an invoice on the page, one Undo covers, one deleted and put
 back here, one of a client whose Sales is not open, one arriving while Sales opens); a change made here while the cloud's
-is being taken in (Posted, a delete) stays; an invoice mid-upload stays; a field a colleague removed goes.
+is being taken in (Posted, a delete) stays; an invoice mid-upload stays; a field a colleague removed goes. The re-review
+of b7e05251c: another tab never drops a delete waiting here; a colleague's change never takes an invoice off; an Undo
+the delete's own removal overrides says so.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_sales_delete_settle.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -194,6 +196,34 @@ with sync_playwright() as p:
     other = E("(() => { const o = JSON.parse(JSON.stringify(SL().list[4])); delete o.extraNote; o.x.customerName = 'Dev Packaging'; return o; })()")
     E(THEIRS, [other["id"], other]); W(900)
     ok(not E("(d) => 'extraNote' in SL().list.find(v => v.id === d)", d), "the removed field is gone here")
+    print("12. (P6) another tab still showing an invoice deleted here works out its changes: the delete still waits to be sent")
+    fresh22()
+    x = E("SL().list[9].id"); keep = E("(x) => JSON.parse(JSON.stringify(SL().list.find(v => v.id === x)))", x)
+    E("(x) => salesRowAct('delete', x)", x); W(700)
+    # (that tab's list holds the invoice; the list of removals waiting is shared by the tabs, in this browser's storage)
+    E("(v) => { const s = SL(); s.list.push(v); try { cloudChanges(); } finally { s.list.splice(s.list.findIndex(o => o.id === v.id), 1); } }", keep)
+    ok(E("(x) => Object.keys(Cloud.dels()).some(k => k.endsWith(':' + x))", x), "the removal still waits to be sent")
+
+    print("13. (P7) a colleague's change to an invoice this browser's stored list lacks: it stays on the screen, changed")
+    fresh22()
+    y = E("SL().list[10].id")
+    E("""(y) => { const g = BankDB.get.bind(BankDB); window.__g0 = g; BankDB.get = (k) => /^sales:/.test(k) ? g(k).then(l => (l || []).filter(v => v.id !== y)) : g(k); }""", y)
+    other = E("(y) => { const o = JSON.parse(JSON.stringify(SL().list.find(v => v.id === y))); o.x.customerName = 'Dev Packaging'; return o; }", y)
+    E(THEIRS, [y, other]); W(900)
+    E("() => { BankDB.get = window.__g0; }")
+    ok(has(y) and E("(y) => SL().list.find(v => v.id === y).x.customerName", y) == "Dev Packaging", "the invoice stays, with the colleague's change")
+
+    print("14. (P8) Undo pressed after the delete was sent, then its removal comes back: said plainly")
+    fresh22()
+    z = E("SL().list[11].id")
+    E("(z) => salesRowAct('delete', z)", z); W(700)
+    E("""() => { const ch = cloudChanges().changes, m = Cloud.marks(); ch.forEach(r => { m[cloudKey(r)] = r.hash; }); Cloud.setMarks(m); cloudDelsSent(ch); }""")
+    E("() => { window.__toasts = []; if (!window.__tw){ window.__tw = 1; const t0 = window.toast; window.toast = function(m){ window.__toasts.push(String(m)); return t0.apply(this, arguments); }; } }")
+    E("() => salesUndo()"); W(200)
+    shown = has(z)
+    E("(z) => { const cid = SL().cid; return Live.rec('records', {kind: 'sales', id: cid + ':' + z, client_id: cid, data: null, deleted: true, updated_at: new Date().toISOString()}); }", z); W(900)
+    t = E("window.__toasts")
+    ok(shown and not has(z) and any("Could not undo: the delete had already been sent." in m for m in t), "put back, taken off again by its removal, and said: %s" % t[-2:])
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     ctx.close(); br.close()
 srv.shutdown()

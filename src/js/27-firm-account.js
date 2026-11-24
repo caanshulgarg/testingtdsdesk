@@ -271,15 +271,14 @@ function cloudChanges(){
   // not open all look like absence. A record is sent as deleted only when the user removed it (Cloud.delete), and the
   // server keeps its last data even then (migration-19).
   const dels = Cloud.dels(), gone = [];
-  let back = false;
   Object.keys(dels).forEach(k => {
-    if (k in seen){ delete dels[k]; back = true; return; }         // it came back (restored): not deleted, and kept so
+    if (k in seen){ delete dels[k]; return; }                      // it came back (restored): not deleted
     if (marks[k] === "gone") return;
     const bits = k.split("|");
     gone.push({kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone", why: (dels[k] || {}).why || ""});
   });
-  // (the review of 8fc130d15, N2: a removal put back, by Undo, was left in the stored list and skipped colleagues' removals)
-  if (back) Cloud.setDels(dels);
+  // (not saved: the list is shared by this browser's tabs, and another tab still showing an invoice deleted here would
+  // drop its removal, never sent. Undo takes its own off: salesUndo. The re-review of b7e05251c, M1)
   // the open statement now has fewer rows than before: its chunks past the end are sent empty, not deleted
   const b = S.bank && !S.bank.loading ? S.bank : null;
   if (b && bankWhole(b)) Object.keys(marks).forEach(k => {
@@ -552,7 +551,7 @@ async function cloudApplyNow(rows){
   const marks = Cloud.marks();
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
-  const touchedBank = new Set(), touchedSales = new Set(), salesIds = new Set();
+  const touchedBank = new Set(), touchedSales = new Set(), salesIds = new Map();
   const mine = new Map(), mineData = new Map();
   try { cloudSnapshot().forEach(r => { const k = cloudKey(r); mine.set(k, stableStr(r.data)); mineData.set(k, r.data); }); } catch (e){}
   // a sales list or bank statement with a save waiting here: written first, so the reload below does not lose it
@@ -640,7 +639,10 @@ async function cloudApplyNow(rows){
       // their removed invoice, or write over their change: the review of a85572b8b)
       const u = S.sales && S.sales.cid === cid && S.sales.undo, vid = String(r.id).split(":").slice(1).join(":");
       if (u && r.kind === "sales" && (u.before || []).some(o => o.id === vid)){ S.sales.undo = null; if (typeof salesLightRefresh === "function") salesLightRefresh(); }
-      await cloudApplySales(r); touchedSales.add(cid); if (r.kind === "sales") salesIds.add(vid);
+      // (an invoice put back by Undo after its delete was sent, taken off again by that delete coming back: said)
+      if (r.deleted && r.kind === "sales" && S.sales && S.sales.cid === cid && S.sales.undoneSent && S.sales.undoneSent.delete(vid) && S.sales.list.some(v => v.id === vid))
+        toast("Could not undo: the delete had already been sent.");
+      await cloudApplySales(r); touchedSales.add(cid); if (r.kind === "sales") salesIds.set(vid, r.deleted ? null : r.data);
     }
   }
   keepMark.forEach((was, k) => { marks[k] = was; });

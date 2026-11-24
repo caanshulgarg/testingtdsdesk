@@ -510,7 +510,9 @@ function salesUndo(){
   u.before.forEach(old => { const i = s.list.findIndex(v => v.id === old.id); if (i >= 0 && salesInTally(s.list[i]) && s.list[i].status !== old.status){ kept++; return; } if (i >= 0) s.list[i] = old; else s.list.push(old); });
   // (an invoice put back is no longer removed here: its removal is taken off the list waiting to be sent, so it is sent
   // again as an invoice and a colleague's later removal of it is taken in: the review of 8fc130d15, N1)
-  if (typeof Cloud === "object"){ const d = Cloud.dels(); let n = 0; u.before.forEach(o => { const k = "sales|" + s.cid + "|" + s.cid + ":" + o.id; if (k in d){ delete d[k]; n++; } }); if (n) Cloud.setDels(d); }
+  // (one whose removal was already sent: that removal coming back takes it off again, and says so: src/js/27, M3)
+  if (typeof Cloud === "object"){ const d = Cloud.dels(), m = Cloud.marks(); let n = 0; s.undoneSent = s.undoneSent || new Set();
+    u.before.forEach(o => { const k = "sales|" + s.cid + "|" + s.cid + ":" + o.id; if (k in d){ delete d[k]; n++; } else if (m[k] === "gone") s.undoneSent.add(o.id); }); if (n) Cloud.setDels(d); }
   s.undo = null; saveSales(); if (kept) postPart(P => toast("Undone. " + P.keptWords(kept, "invoice"))); else toast("Undone."); render();
 }
 // set a customer ledger; other open invoices of the same customer follow
