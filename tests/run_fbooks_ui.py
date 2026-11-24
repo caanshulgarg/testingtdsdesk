@@ -13,17 +13,24 @@ staff / a look-only member for check 6). The page itself has nothing test-only.
      last minutes shows "Updating" (FinCom Books follows within 10 minutes), and more than 10 minutes behind shows
      "Not in step"
   6. a client without FinCom Books: a look-only member is told who can set it up; staff are offered "Set up FinCom
-     Books" (owner decision 23-Nov-2026) and it sets it up
+     Books" (owner decision 23-Nov-2026) and it sets it up at once (migration 218): "Being built", then "Building: n of
+     m entries" as the 3-minute catch-up builds it, then the book by itself, with no error and no warning. While it is
+     built (review of 24-Nov-2026): one look-again that fails keeps the figures shown and the page keeps looking; a
+     hidden tab does not look again (it does at once when shown); a build that stops says so in plain words, with no
+     alarm and no error text ("Building paused. FinCom carries on by itself in a few minutes; nothing for you to do. So
+     far n of m entries are in."; the error itself is kept in fb_status for staff, never shown); while it is built the
+     trial balance shows no "Debit = Credit" (nor a difference) on the part-built figures
   7. a phone's width: nothing scrolls sideways; no page error anywhere; the page is its own lazy chunk, which keeps the
      MIT notice of the ported rules; no test hook in the built app
-FB_SHOTS=<dir>: also saves the design screenshots there (deviceScaleFactor 2, 1440 and 390 wide).
+FB_SHOTS=<dir>: also saves the design screenshots there (deviceScaleFactor 2, 1440 and 390 wide); FB_SCHEME=dark shows
+them in the dark colour scheme, FB_NEWLOOK=1 with the "New look" on.
 Run on app/dist-test (or TDSDESK_SITE). PG_PORT (55622), FB_PORT (8396)."""
 import os, sys, json, threading, functools, http.server, glob
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from playwright.sync_api import sync_playwright
 import pg_stand
-from fbooks_stand import F1, F2, OWN, STAFF, OTHER, TB1, COPY, MIG, load_sql, books
+from fbooks_stand import F1, F2, OWN, STAFF, OTHER, TB1, COPY, MIG, MIG218, load_sql, books
 VIEW = "aaaaaaaa-0000-0000-0000-000000000004"
 WHO = [OWN]   # who the test server answers as
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
@@ -42,10 +49,12 @@ db.sql("""insert into firms values ('%s', 'Sample & Co'), ('%s', 'Other Firm');
     ('bbbbbbbb-0000-0000-0000-000000000009', '%s', 'c9', 'Second Demo LLP (made up)', '2025-04-01', '2025-04-01');
   grant select on firms, members to authenticated;""" % (F1, F2, OWN, F1, STAFF, F1, OTHER, F2, VIEW, F1, TB1, F1, F1))
 db.sql(open(MIG).read())
+db.sql(open(MIG218).read())
 B = books(400, 7)
 db.sql(load_sql(TB1, F1, B))
 db.sql(load_sql("bbbbbbbb-0000-0000-0000-000000000009", F1, books(60, 21)))
 BK = json.loads(db.one("set role authenticated; select fb_enroll('c1')", OWN))["books"][0]["book"]
+db.sql("call fb_mirror_catchup_run(5000)")   # the timer builds it
 # put the made-up "held" entry right (so the banner is about the missed change only), then a change the mirror misses
 odd = db.one("select guid from tally_vouchers where book_id = '%s' and vno = 'J/ODD-1'" % TB1)
 db.sql("begin; update tally_lines set amount = -100 where book_id = '%s' and guid = '%s' and amount = -100.01; update tally_vouchers set alter_id = alter_id + 1 where book_id = '%s' and guid = '%s'; commit;" % (TB1, odd, TB1, odd))
@@ -55,6 +64,7 @@ db.sql("set role service_role; select fb_tieout('%s')" % BK)
 db.sql("update fb_books set not_in_step_since = '2026-11-21 18:00+05:30' where book_id = '%s'" % BK)   # (a fixed time for the screenshots; not audited away: a superuser's test edit)
 
 CALLS = []
+FAILNEXT = {}   # fn -> how many of its next calls fail (a made-up network failure)
 def lit(v):
     if v is None: return "null"
     if isinstance(v, (int, float)): return str(v)
@@ -67,7 +77,10 @@ class Q(http.server.SimpleHTTPRequestHandler):
         args = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         if not fn.startswith("fb_") or not fn.replace("_", "").isalnum(): self.send_response(400); self.end_headers(); return
         CALLS.append(fn)
-        q = "set role authenticated; select %s(%s)" % (fn, ", ".join("%s => %s" % (k, lit(v)) for k, v in args.items() if k.replace("_", "").isalnum()))
+        if FAILNEXT.get(fn):
+            FAILNEXT[fn] -= 1; body = b'{"message": "made-up network failure"}'
+            self.send_response(503); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
+        q = "set role authenticated; set statement_timeout = '8s'; select %s(%s)" % (fn, ", ".join("%s => %s" % (k, lit(v)) for k, v in args.items() if k.replace("_", "").isalnum()))
         try: out, code = db.one(q, WHO[0]), 200
         except RuntimeError as e: out, code = json.dumps({"message": str(e).split("\n")[0]}), 400
         body = (out or "null").encode()
@@ -103,7 +116,8 @@ try:
         br = p.chromium.launch()
         errs = []
         def page(w, h=1000):
-            ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, timezone_id="Asia/Kolkata")
+            ctx = br.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, timezone_id="Asia/Kolkata", color_scheme=os.environ.get("FB_SCHEME") or "light")
+            if os.environ.get("FB_NEWLOOK"): ctx.add_init_script("try { localStorage.setItem('fincom:newlook:local', 'on'); } catch (e) {}")
             pg = ctx.new_page(); pg.on("pageerror", lambda e: errs.append(str(e)[:200])); return ctx, pg
         ctx, pg = page(1440)
         start(pg)
@@ -177,11 +191,74 @@ try:
         ctx.close()
         WHO[0] = STAFF
         ctx, pg = page(1440)
+        pg.clock.install()   # the page's 30-second look-again is moved on by the test (fast_forward), not waited for
         start(pg, "c9")
         ok(pg.locator("[data-fb-setup]").count() == 1, "6. a client without FinCom Books: staff are offered Set up")
         shot(pg, "p1-06-not-set-up", full=False)
-        pg.click("[data-fb-setup]"); settle(pg, 1500)
-        ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-source]").count() == 1, "6. set up: the trial balance is there")
+        import time as _t
+        t0 = _t.time(); pg.click("[data-fb-setup]")
+        pg.wait_for_selector("[data-fb-building]", timeout=8000); dt = _t.time() - t0; settle(pg)
+        ban = text(pg, "[data-fb-step]")
+        ok(dt < 3 and "Being built" in ban and "within 3 minutes" in ban and pg.locator("[data-fbooks] [role=alert]").count() == 0,
+           "6. Set up answers at once (%.1f s): '%s'; no error" % (dt, ban.split("\n")[0][:120]))
+        shot(pg, "p1-12-being-built", full=False)
+        bk9 = db.one("select book_id from fb_books where client_id = 'c9'")
+        # the timer's first steps: the masters (a call of their own), then part of the first chunk
+        db.sql("set role service_role; select fb_mirror_catchup('%s', 12); select fb_mirror_catchup('%s', 12);" % (bk9, bk9))
+        step = lambda: text(pg, "[data-fb-step]")
+        def waitfor(cond, secs=10):
+            t = _t.time()
+            while _t.time() - t < secs and not cond(): pg.wait_for_timeout(200)
+            return cond()
+        pg.clock.fast_forward(31000)
+        waitfor(lambda: "Building: 12 of" in step())
+        ban = step()
+        ok("Building: 12 of" in ban and "fills in by itself" in ban and pg.locator("[data-fbooks] [role=alert]").count() == 0, "6. the page shows how far, by itself: '%s'" % ban.split("\n")[0][:120])
+        settle(pg)
+        tbt = text(pg, "[data-fb-tb]")
+        ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-ties]").count() == 0 and "Debit = Credit" not in tbt and "differ by" not in tbt,
+           "6. while it is built the trial balance shows no 'Debit = Credit' (nor a difference) on the part-built figures")
+        shot(pg, "p1-13-building", full=False)
+        # a hidden tab does not look again; shown again, it looks at once
+        vis = "(v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); Object.defineProperty(document, 'hidden', { configurable: true, get: () => v === 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); }"
+        pg.evaluate(vis, "hidden"); n0 = CALLS.count("fb_status")
+        pg.clock.fast_forward(95000); pg.wait_for_timeout(1000); n1 = CALLS.count("fb_status")
+        ok(n1 == n0, "6. in a hidden tab the page does not look again (%d look-agains in 95 s)" % (n1 - n0))
+        pg.evaluate(vis, "visible")
+        ok(waitfor(lambda: CALLS.count("fb_status") > n1, 3), "6. ... shown again, it looks again at once")
+        # one look-again fails: the last figures stay, no error banner, and the page keeps looking
+        n0 = CALLS.count("fb_status"); FAILNEXT["fb_status"] = 1
+        pg.clock.fast_forward(31000); waitfor(lambda: CALLS.count("fb_status") > n0); pg.wait_for_timeout(600)
+        ban = step()
+        ok(FAILNEXT["fb_status"] == 0 and "Building: 12 of" in ban and pg.locator("[data-fb-error]").count() == 0 and pg.locator("[data-fbooks] [role=alert]").count() == 0,
+           "6. one look-again fails: the page keeps the last figures, shows no error ('%s')" % ban.split("\n")[0][:80])
+        db.sql("set role service_role; select fb_mirror_catchup('%s', 5)" % bk9)
+        pg.clock.fast_forward(31000); waitfor(lambda: "Building: 17 of" in step())
+        ok("Building: 17 of" in step(), "6. ... and keeps looking: '%s'" % step().split("\n")[0][:80])
+        # the build stops (the catch-up fails for this book): said plainly, no alarm
+        db.sql("""create function zz_fail_trg() returns trigger language plpgsql as $z$ begin raise exception 'made-up failure for the test'; end $z$;
+          create trigger zz_fail before update on fb_mirror_state for each row when (new.book_id = '%s') execute function zz_fail_trg();""" % bk9)
+        db.sql("call fb_mirror_catchup_run(5000)")
+        pg.clock.fast_forward(31000); waitfor(lambda: "Building paused" in step())
+        ban = step()
+        why9 = ((json.loads(db.one("set role authenticated; select fb_status('c9')", STAFF))["books"][0].get("build") or {}).get("failed") or {}).get("why") or ""
+        ok("made-up failure for the test" in why9, "6. ... the error itself is kept in fb_status for staff ('%s')" % why9[:80])
+        ok("Building paused. FinCom carries on by itself in a few minutes; nothing for you to do. So far 17 of " in ban and " entries are in." in ban
+           and pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.tone") == "info"
+           and pg.locator("[data-fbooks] [role=alert]").count() == 0 and pg.locator("[data-fb-error]").count() == 0,
+           "6. a build that stops says so in plain words, no alarm: '%s'" % ban.split("\n")[0][:160])
+        whole = text(pg, "[data-fbooks]")
+        bad = [w for w in ("made-up failure", "stopped", "error", "Error", "exception", "failed", "trigger", "SQL", "ERROR") if w in whole]
+        ok(not bad and pg.locator("[data-fb-ties]").count() == 0, "6. ... and no error text anywhere on the page%s" % (" (found: " + ", ".join(bad) + ")" if bad else ""))
+        shot(pg, "p1-15-build-stopped", full=False)
+        db.sql("drop trigger zz_fail on fb_mirror_state; drop function zz_fail_trg();")
+        db.sql("call fb_mirror_catchup_run(5000)")   # the timer's next run finishes it
+        pg.clock.fast_forward(31000); waitfor(lambda: pg.locator("[data-fb-building]").count() == 0); settle(pg)
+        ban = text(pg, "[data-fb-step]")
+        ok(pg.locator("[data-fb-tb]").count() == 1 and pg.locator("[data-fb-source]").count() == 1 and pg.evaluate("() => document.querySelector('[data-fb-ties]').dataset.fbTies") == "1"
+           and pg.evaluate("() => document.querySelector('[data-fb-step]').dataset.tone") in ("info", "ok") and pg.locator("[data-fbooks] [role=alert]").count() == 0,
+           "6. built: the trial balance by itself, Debit = Credit; no error, no warning ('%s')" % ban.split("\n")[0][:100])
+        shot(pg, "p1-14-built", full=False)
         ctx.close()
         WHO[0] = OWN
         # 7. a phone
