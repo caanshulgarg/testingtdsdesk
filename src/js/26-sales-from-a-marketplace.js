@@ -40,7 +40,8 @@ async function uploadSales(files){
   // client's list as it is now, and is kept at once: the one on screen, else the one in this browser (as salesIngest)
   const now = () => S.sales && S.sales.cid === cid ? S.sales : null;
   const say = t => { const s = now(); if (s){ s.busy = t; render(); } };
-  const live = async () => { while (now() && now().loading) await new Promise(ok => setTimeout(ok, 100)); return now(); };   // a list being loaded: once it is in
+  // (a list being loaded: once it is in; one whose loading failed is waited on no more than 10 s, re-review of e9c90fa34)
+  const live = async () => { for (let t = 0; now() && now().loading && t < 100; t++) await new Promise(ok => setTimeout(ok, 100)); const s = now(); return s && !s.loading ? s : null; };
   const kept = async () => { const s = await live(); return s ? s.list : ((await BankDB.get("sales:" + cid)) || []); };
   const told = new Set();
   let added = 0;
@@ -76,7 +77,7 @@ async function uploadSales(files){
       await salesTurn(async () => {
         const up = (CloudDocs.sv || {})[cid + "|sv:" + (v.docOf || v.id)]; if (up){ v.docPath = up[0]; v.docSize = up[1]; }
         const s = await live();
-        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
+        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = salesSavePending = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
         else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
       });
       added++;

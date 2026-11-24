@@ -657,8 +657,8 @@ async function cloudApplyNow(rows){
 async function cloudFlushListsBefore(rows){
   try {
     const s = S.sales, b = S.bank;
-    if (s && typeof salesSaveTimer !== "undefined" && salesSaveTimer && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
-      clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + s.cid, s.list.map(salesSynced));
+    if (s && typeof salesSaveTimer !== "undefined" && (salesSaveTimer || (typeof salesSavePending !== "undefined" && salesSavePending)) && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
+      clearTimeout(salesSaveTimer); salesSaveTimer = null; await (typeof salesSaveNow === "function" ? salesSaveNow() : BankDB.set("sales:" + s.cid, s.list.map(salesSynced)));
     }
     if (b && b.cur && typeof bankSaveTimer !== "undefined" && bankSaveTimer && rows.some(r => /^bank_/.test(r.kind) && r.client_id === b.cid)){
       clearTimeout(bankSaveTimer); bankSaveTimer = null; await BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows);

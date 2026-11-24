@@ -49,6 +49,8 @@ async function loadSales(cid){
   S.sales = {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
   render();
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
+  // (re-review of e9c90fa34: a save of this client's list still waiting is written first, never lost to this reading)
+  if (salesSavePending && salesSavePending.cid === cid) await salesSaveNow();
   const [list, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
   if (!S.sales || S.sales.cid !== cid) return;
   SALES_REV++; Object.assign(S.sales, {list: list || [], cfg: Object.assign({}, SALES_CFG_DEFAULT, cfg || {}), hist: hist || {}, loading: false});
@@ -68,22 +70,31 @@ async function loadSales(cid){
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
 }
-let salesSaveTimer = null;
+let salesSaveTimer = null, salesSavePending = null;
 // next-fix-hang (review of bb5a5c53d): moved by every save of the sales (and their loading), so the GST figures kept
 // across drawings (GSTR.keptState, src/js/12) see a marketplace invoice changed in place (ignored, its GSTIN typed, undone)
 let SALES_REV = 0;
 function saveSales(what){
   SALES_REV++;
-  const s = SL(); if (!s) return;
+  const s = SL(); if (!s || s.loading) return;   // (a list not yet in: nothing of it to keep)
   const cid = s.cid, list = s.list;
   if (typeof cloudSoon === "function") cloudSoon();
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
-  // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay)
-  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(() => { const n = SL(), l = n && n.cid === cid ? (n.loading ? null : n.list) : list;
-    if (l) return BankDB.set("sales:" + cid, l.map(salesSynced)); }); }, 500);
+  // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay;
+  // re-review of e9c90fa34: waiting, salesSavePending, until it is written, so closing the page still writes it)
+  salesSavePending = {cid, s};
+  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(salesSaveNow); }, 500);
   if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))){ salesCfgStamp(s); salesCfgWrite(s); }
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
+}
+// the save waiting, written now: the list on screen if it is this client's and in, else the one saved (never a list not
+// yet loaded)
+async function salesSaveNow(){
+  const p = salesSavePending; if (!p) return;
+  const n = SL(), src = n && n.cid === p.cid && !n.loading ? n : p.s;
+  if (!src.loading) await BankDB.set("sales:" + p.cid, src.list.map(salesSynced));
+  if (salesSavePending === p) salesSavePending = null;
 }
 // a change to a client's sales list kept in this browser, in turn with the sync's own (cloudApply, src/js/27): the sync
 // reads the list, adds its rows and lays the list on screen afresh (loadSales); a save in between put the list as it was
@@ -166,7 +177,7 @@ let salesNoIdx = null;
 function salesOfNo(no){ return salesNoIdx ? salesNoIdx.get(normInvNo(no)) || [] : SL().list; }
 // the invoice as it is to be kept and sent: as it was before it was looked at again, while nothing else changed it
 function salesSynced(v){ const k = v.__vw; return k && JSON.stringify(v) === k.after ? JSON.parse(k.before) : v; }
-window.addEventListener("pagehide", () => { if (salesSaveTimer && S.sales){ clearTimeout(salesSaveTimer); BankDB.set("sales:" + S.sales.cid, S.sales.list.map(salesSynced)); } });
+window.addEventListener("pagehide", () => { if (salesSavePending){ clearTimeout(salesSaveTimer); salesSaveTimer = null; salesSaveNow(); } });
 function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
 
 /* ---------- ledgers (exact Tally names only) ---------- */
@@ -543,8 +554,10 @@ function invoiceProblems(v){
   if (x.customerGstin && !gstinValid(x.customerGstin)) p.push("customer GSTIN is not valid");
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
   // (the owner, 24-Nov-2026, as the items check in salesProblemsNow: the invoice's own stated Adjustment plus Rounding,
-  // x.roundOff, read from an uploaded PDF or sheet, explains the gap and posts in Round Off; never on an invoice made
-  // here, whose roundOff is worked out as the gap)
+  // x.roundOff, explains the gap and posts in Round Off when the invoice was read from a file: a PDF or photo (upload,
+  // salesReadFile in src/js/26-sales-invoice.js) or a sheet (sheet, market: SheetImport in app/src/lib/registers.js,
+  // only when the sheet's Adjustment and Round Off explain the gap); never on an invoice made here, whose roundOff is
+  // worked out as the gap)
   const ro = ["upload", "sheet", "market"].includes(v.source) ? num(x.roundOff) : 0;
   if (Math.abs(num(x.taxable) + gst + num(x.cess) + ro - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
   if (num(x.igst) && (num(x.cgst) || num(x.sgst))) p.push("both IGST and CGST/SGST");
