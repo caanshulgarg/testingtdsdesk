@@ -527,10 +527,15 @@ function salesProblemsNow(v, lines){
 }
 // every GST rate there is (the usual ones, and 0.1% to a merchant exporter, 1% / 1.5% / 6% / 7.5%), for the items check
 const GST_ALL_RATES = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40];
-function salesRateOk(it){
+// the GST rate an item is at: the listed rate within 0.05% of its own, else the nearest whose tax is its own to two
+// paise a head (a line of 1.30 with 0.12 + 0.12: 18%, not 18.46%); null when none
+function salesRateSnap(it){
   const r = num(it.gstRate), t = num(it.taxable), heads = ["igst", "cgst", "sgst"].filter(h => num(it[h]));
-  return GST_ALL_RATES.some(R => Math.abs(r - R) <= 0.05 || (heads.length > 0 && heads.every(h => Math.abs(num(it[h]) - t * R / (h === "igst" ? 100 : 200)) <= 0.02)));
+  const near = l => l.length ? l.reduce((a, b) => Math.abs(r - b) < Math.abs(r - a) ? b : a) : null;
+  const a = near(GST_ALL_RATES.filter(R => Math.abs(r - R) <= 0.05));
+  return a !== null ? a : near(heads.length ? GST_ALL_RATES.filter(R => heads.every(h => Math.abs(num(it[h]) - t * R / (h === "igst" ? 100 : 200)) <= 0.02)) : []);
 }
+function salesRateOk(it){ return salesRateSnap(it) !== null; }
 function invoiceProblems(v){
   const co = CO(SL().cid), x = v.x, p = [];
   if (v.hold) p.push(v.hold);   // a sheet's row held for a person (a negative amount its Type column does not explain)
@@ -689,6 +694,9 @@ function ledgerProblems(v, lines){
 // made Ready by itself
 function mapInvoice(v, keep){
   if (["posted", "intally", "ignored"].includes(v.status)) return;
+  // (after 0c6f35677) an item of a sheet, PDF or marketplace invoice is kept at the GST rate it is at, so its ledger and
+  // its posting are at 18%, never the 18.46% its rounded figures give; an invoice made here keeps its own rate
+  if (["upload", "sheet", "market"].includes(v.source)) (v.x.items || []).forEach(it => { const R = salesRateSnap(it); if (R !== null && R !== num(it.gstRate)) it.gstRate = R; });
   if (v.status === "ready") delete v.heldBack;
   if (!(keep && v.customerLedger) && (!v.userLedger || !exactLedger(v.customerLedger))){
     const c = hasLedgerList() ? customerLedgerFor(v) : {ledger: "", sure: false, label: ""};

@@ -13,7 +13,7 @@ const {load, HTML} = require("./harness");
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const FX = path.join(__dirname, "fixtures", "sheets");
-const NAMES = ["num", "r2", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "money", "INR", "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile", "GST_CHARS", "gstinCheckChar", "gstinValid"];
+const NAMES = ["num", "r2", "fpHash", "GST_STATES", "SALES_RATES", "stateOfGstin", "GSTIN_RE", "NORM_CACHE", "normNameRaw", "normName", "normInv", "money", "INR", "MONTHS", "toIsoDate", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_ALL_RATES", "salesRateSnap"];
 const h = load(HTML, NAMES);
 h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8").replace(/^import .*$/gm, ""), h.ctx);
 const F = h.ctx.SheetFmt, co = {id: "c1", name: "ZZ Up Client", gstin: "09AANFG3202D1ZR", sheetFormats: []};
@@ -224,6 +224,13 @@ h.ctx.SheetAI.map = async (req) => { sent.push(req); const pick = (n) => req.hea
   ok(its(w) === "0:3600:0,5:5400:270" && w.taxable === 9000 && w.check.ok && !w.hold, "C: 5% and a nil row, SubTotal and a discount: 5,400 at 5% and 3,600 nil, never one line at 3% (" + both(w) + ")");
   w = rd(HD2, [row({no: "C2", v: {cgst: "135.00", sgst: "135.00", "cgstrate%": "2.5", "sgstrate%": "2.5", subtotal: "5400.00", total: "5670.00"}})])[0] || {};
   ok(!its(w) && w.taxable === 5400 && w.rate === 5 && w.check.ok && !w.hold, "one row at 5%: one line (" + both(w) + ")");
+  // (the coordinator, after 0c6f35677) small lines with no rate on the rows (1.30 and 4.70, each 0.12 + 0.12): their rates
+  // from their figures are 18.46% and 5.11%, which are 18% and 5% to the paisa: kept as 18% and 5%, so the ledgers and
+  // the posting are at 18% and 5%
+  w = rd(HD, [row({no: "L2", v: {itemtotal: "1.30", cgst: "0.12", sgst: "0.12", total: "6.48"}}), row({no: "L2", v: {itemtotal: "4.70", cgst: "0.12", sgst: "0.12", total: "6.48"}})])[0] || {};
+  ok(its(w) === "5:4.7:0.24,18:1.3:0.24" && w.check.ok, "L2: 1.30 and 4.70 at 18% and 5%, never 18.46% and 5.11% (" + both(w) + ")");
+  w = rd(HD, [row({no: "L2b", v: {itemtotal: "1.30", cgst: "0.12", sgst: "0.12", total: "3.06"}}), row({no: "L2b", v: {itemtotal: "1.30", cgst: "0.12", sgst: "0.12", total: "3.06"}})])[0] || {};
+  ok(!its(w) && w.taxable === 2.6 && w.check.ok, "two such lines of one rate: one line (" + both(w) + ")");
   // a saved mapping of SubTotal on a header that has Item Total: Item Total
   const zfp2 = F.fingerprint(HD, "Invoice"), sv = (map) => { co.sheetFormats = [{id: "sv", name: "Mine", side: "sales", fp: zfp2, cols: HD.length, headers: HN, map, transforms: {date: "ymd", groupByNo: true}}]; return F.find(HD, "Invoice", "c1", "sales").fmt; };
   const s7 = [row({no: "S7", v: {itemtotal: "6000.00", cgst: "150.00", sgst: "150.00", subtotal: "13000.00", total: "14560.00"}}), row({no: "S7", v: {itemtotal: "7000.00", cgst: "630.00", sgst: "630.00", subtotal: "13000.00", total: "14560.00"}})];

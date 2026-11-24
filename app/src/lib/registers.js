@@ -559,8 +559,16 @@ const SheetFmt = {
     if (!d.total) d.total = r2(d.taxable + tax);
     // rows at more than one rate: one item line a rate, each with its own taxable value and tax (posted as the sales
     // voucher of several rates: a sales ledger and its tax a rate, src/js/25 salesLines)
-    const parts = Object.values(d.parts || {}).filter(p => p.taxable || p.igst || p.cgst || p.sgst);
+    let parts = Object.values(d.parts || {}).filter(p => p.taxable || p.igst || p.cgst || p.sgst);
     delete d.parts; parts.forEach(p => { delete p.known; delete p.gross; });
+    // (after 0c6f35677) each rate as the GST rate it is at (salesRateSnap, src/js/25: 18.46% to the paisa 18% on a line of
+    // 1.30), rates that are then one put together
+    if (typeof salesRateSnap === "function"){
+      const m = {};
+      parts.forEach(p => { const R = salesRateSnap({gstRate: p.rate, taxable: p.taxable, igst: p.igst, cgst: p.cgst, sgst: p.sgst}), k = R !== null ? R : p.rate, q = m[k];
+        if (!q) m[k] = Object.assign(p, {rate: k}); else ["taxable", "igst", "cgst", "sgst", "cess"].forEach(f => { q[f] = r2(q[f] + p[f]); }); });
+      parts = Object.values(m);
+    }
     if (parts.length > 1) d.items = parts.sort((a, b) => a.rate - b.rate).map(p => Object.assign(p, {tax: r2(p.igst + p.cgst + p.sgst)}));
     d.rate = d.taxable ? Math.round((d.igst + d.cgst + d.sgst) / d.taxable * 10000) / 100 : (d.rates[0] || 0);
     const diff = r2(d.total - d.taxable - tax);

@@ -18,7 +18,7 @@ const {load, HTML} = require("./harness");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "INR", "money", "xesc", "GSTIN_RE", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_STATES", "SALES_RATES", "stateOfGstin", "fyLabel", "rateTag",
   "salesOwnGstins", "salesPan", "salesGstinOfPan", "salesOwnStates", "salesIsOwn", "salesSeriesKeys", "salesRegOf", "salesLearnReg",
-  "salesTotals", "GST_ALL_RATES", "salesRateOk", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
+  "salesTotals", "GST_ALL_RATES", "salesRateSnap", "salesRateOk", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
   "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
   "inv", "blankItem", "salesIrnLocked", "startDraft", "recalcDraft", "draftProblems", "saveDraft", "salesSetField", "salesSetKind", "EINV"];
 const {ctx, x} = load(HTML, NAMES);
@@ -66,6 +66,13 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   ok(!r1799.problems.some(p => /check the rates on the sheet/.test(p)), "an item at 17.99% (a sheet's rounding): 18%, not held (" + JSON.stringify(r1799.problems) + ")");
   const tiny = add({taxable: 6, cgst: 0.54, sgst: 0.54, total: 7.08, items: [it(1.3, 18.46, {cgst: 0.12, sgst: 0.12, tax: 0.24}), it(4.7, 18, {cgst: 0.42, sgst: 0.42, tax: 0.84})]});
   ok(!tiny.problems.some(p => /check the rates on the sheet/.test(p)), "a line of 1.30 whose tax 0.12 + 0.12 is 18% to the paisa: not held (" + JSON.stringify(tiny.problems) + ")");
+  // (the coordinator, after 0c6f35677) on a sheet, PDF or marketplace invoice, the rate it is at is kept on the item, so
+  // its ledger and its posting are at 18%; an invoice made here keeps its own rate
+  ok(tiny.x.items[0].gstRate === 18 && tiny.x.items[1].gstRate === 18 && x.salesLines(tiny).filter(l => l.role === "sales").map(l => l.rate).join() === "18", "the 1.30 line stored at 18%, its sales line at 18% (" + JSON.stringify(tiny.x.items.map(i => i.gstRate)) + ")");
+  ok(r1799.x.items[0].gstRate === 18, "the 17.99% item stored at 18% (" + r1799.x.items[0].gstRate + ")");
+  const made = add({taxable: 1.3, cgst: 0.12, sgst: 0.12, total: 1.54, items: [it(1.3, 18.46, {cgst: 0.12, sgst: 0.12, tax: 0.24})]});
+  made.source = "created"; made.x.items[0].gstRate = 18.46; x.mapInvoice(made);
+  ok(made.x.items[0].gstRate === 18.46, "an invoice made here: its own rate kept (" + made.x.items[0].gstRate + ")");
   const r162 = add({taxable: 2000, cgst: 106, sgst: 106, total: 2212, items: [it(1000, 16.2), it(1000, 5)]});
   ok(r162.problems.includes("GST at 16.2% is not a usual rate: check the rates on the sheet or the items"), "an item at 16.2%: held (" + JSON.stringify(r162.problems) + ")");
   const std = add({taxable: 1000, cgst: 7.5, sgst: 7.5, total: 1015, items: [it(500, 3), it(500, 0)]});
