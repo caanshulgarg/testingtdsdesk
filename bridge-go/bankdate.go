@@ -904,7 +904,7 @@ func bankAlertNoteLocked(st *bankCo, n int, from, note string) {
 	if from != "" {
 		day = liveDay(from)
 	}
-	words := fmt.Sprintf("%s for %s; upload the Day Book from %s", what, st.Company, day) + note
+	words := fmt.Sprintf("%s for %s; FinCom brings the days from %s from Tally by itself", what, st.Company, day) + note
 	bank.alerts[k] = M{"company": st.Company, "words": words, "n": n, "from": from, "at": nowS()}
 	writeLog("Bank dates: " + words)
 }
@@ -1028,7 +1028,7 @@ func vchReadGet(cguid, mid string) (vchReadE, bool) {
 func bankNowS() string { return nowFn().Format(time.RFC3339) }
 
 func bankStaleWords(company, since string) string {
-	return "Bank dates for " + company + " not read since " + since + ". Keep Tally open for a few minutes after 7 pm, or upload the Day Book."
+	return "Bank dates for " + company + " not read since " + since + ". Keep Tally open for a few minutes after 7 pm; FinCom reads them by itself."
 }
 
 // the companies not read for 3 days: [{company, since (dd-Mon-yyyy), day (yyyymmdd)}]

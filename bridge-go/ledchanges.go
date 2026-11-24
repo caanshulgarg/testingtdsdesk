@@ -373,7 +373,7 @@ func ledWantedRun(j M) {
 			ledWantNever[bk] = true
 			ledWantMu.Unlock()
 			if !said {
-				writeLog("Ledger '" + cutRunes(name, 200) + "' of " + co + ": FinCom waits for it, but it cannot be asked from Tally by its name (a quote mark, a line break or over 200 characters); its entry stays held: uploading that day's Day Book settles it")
+				writeLog("Ledger '" + cutRunes(name, 200) + "' of " + co + ": FinCom waits for it, but it cannot be asked from Tally by its name (a quote mark, a line break or over 200 characters); its entry stays held: FinCom reading that day again settles it")
 			}
 			continue
 		}
@@ -459,7 +459,7 @@ func ledWantedRun(j M) {
 				ledWantMu.Lock()
 				ledWantNever[k] = true
 				ledWantMu.Unlock()
-				writeLog("Ledger " + name + " of " + w.company + ": Tally has no ledger of that name (FinCom may keep it cleaned, e.g. a line break as a space); its entry stays held (uploading that day's Day Book settles it); not asked again")
+				writeLog("Ledger " + name + " of " + w.company + ": Tally has no ledger of that name (FinCom may keep it cleaned, e.g. a line break as a space); its entry stays held (FinCom reading that day again settles it); not asked again")
 				continue
 			}
 			asked = append(asked, name)

@@ -405,7 +405,7 @@ func TestBankDateOneMoreAsk(t *testing.T) {
 	if a := bankAsked(f); a["26311"] != 2 {
 		t.Fatalf("Tally asked %v (want 26311 twice: once, and once more)", a)
 	}
-	words := "1 bank date set in Tally may not have reached FinCom for " + nwsCo + "; upload the Day Book from 05-Oct-2026"
+	words := "1 bank date set in Tally may not have reached FinCom for " + nwsCo + "; FinCom brings the days from 05-Oct-2026 from Tally by itself"
 	if !strings.Contains(readText(logFile()), words) {
 		t.Fatalf("the log does not say %q:\n%s", words, readText(logFile()))
 	}

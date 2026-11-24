@@ -995,6 +995,7 @@ func beatOnce() {
 		}
 		shadowOK.Store(true)
 		applyReadControl(r.json)    // FinCom's stop or resume of reading on this computer
+		noteTellNamed(r.json)       // 2.5.22: the linked companies FinCom named (tell2522.go: the only names skip and numbersWhy carry)
 		applyBooksFrom(r.json)      // 2.5.1: FinCom's first day of its book of each open company, the ledger requests' period (booksfrom.go)
 		applyRelease(r.json)        // the version this computer may take (update.go)
 		applyCloudSettings(r.json)  // round 15: PostOnly and the batch sizes set in FinCom
@@ -1367,6 +1368,7 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	au, rb := autoUpdateBeat()
 	tport, tdata := myTallyFor(ports)
 	why := tallyWhy(ports)                                                                                          // 2.5.11 (review 9): once per beat (the connection-off look reads Windows' lists and tally.ini)
+	skip, numbersWhy := tellBeat()                                                                                  // 2.5.22 (tell2522.go): from what the bridge holds; nothing asked of Tally
 	waitStarts := liveWaitStarts()                                                                                  // release-240 re-review M2-r: each reason's start, and the earliest
 	return M{"windowsUser": ownerName(), "bridgePort": toInt(cfg("Port")), "tallyPort": tport, "dataFolder": tdata, // 2.3.0: one bridge per Windows user
 		"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
@@ -1422,7 +1424,10 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"lastKeySec": lastKeyBeat(),
 		// 2.5.16 (portwatch2516.go): this login's Tally listens on a port its tally.ini does not name ({port, iniPort,
 		// words}; null when it does, or when Windows cannot tell)
-		"tallyPortNotSaved": portNotSavedBeat()}
+		"tallyPortNotSaved": portNotSavedBeat(),
+		// 2.5.22 (the owner's decision of 24-Nov-2026; tell2522.go, addonsilent2522.go): per company FinCom linked, why it
+		// is not read (skip), why it has no change numbers (numbersWhy), and its add-on not heard (addonSilent); codes only
+		"skip": skip, "numbersWhy": numbersWhy, "addonSilent": addonSilentBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

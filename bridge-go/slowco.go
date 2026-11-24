@@ -36,10 +36,10 @@ import (
 )
 
 // the words a marked company's lines go up held with, and its held lines end with (the owner's words)
-const slowWords = "FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it."
+const slowWords = "FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. FinCom brings that day from Tally by itself to settle it."
 
 // requirement b (2.3.3: the owner's rule): a held line whose one ask again timed out ends with these words
-const liveHeldSlowGiveUp = "Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it"
+const liveHeldSlowGiveUp = "Tally did not answer in time for this entry when asked again; FinCom brings that day from Tally by itself to settle it"
 
 // the entry request was not sent: the company is marked (no entry request for it)
 var errSlowCompany = errors.New("FinCom does not ask Tally for this company's entries (finding one entry took Tally longer than 2 s)")

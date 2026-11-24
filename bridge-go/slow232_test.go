@@ -227,7 +227,7 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	liveReadOnce()
 	liveUploadOnce() // the stop: the line goes up held at once, to be asked once more
 	s := slowSentOf(c, 25720)
-	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "FinCom asks once more at") || !strings.HasSuffix(liveStopEndWords(), "upload that day's Day Book to settle it") {
+	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "FinCom asks once more at") || !strings.HasSuffix(liveStopEndWords(), "FinCom brings that day from Tally by itself to settle it") {
 		t.Fatalf("the line went up: %v", s)
 	}
 	id := str(s[0]["line_id"])
@@ -421,7 +421,7 @@ func TestSlow232VersionAndDecisionLine(t *testing.T) {
 		t.Fatal("the 2.3.1 line is still an exception line (release-check accepts one version only)")
 	}
 	notes := strings.Join(strings.Fields(readText("../docs/bridge-2.3.2-notes.md")), " ")
-	for _, w := range []string{"2.3.2", "1 h", "4 h", "upload that day's Day Book", slowWords, "FinCom has stopped asking Tally for this company's entries",
+	for _, w := range []string{"2.3.2", "1 h", "4 h", "upload that day's Day Book", "FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it." /* 2.3.2's words, as history (2.5.22: slowWords no longer asks for an upload) */, "FinCom has stopped asking Tally for this company's entries",
 		"This lifts when a faster FinCom Bridge is installed", "Test sheet", "roll back", "No Tally request was added or changed"} {
 		if !strings.Contains(notes, w) {
 			t.Errorf("the 2.3.2 notes do not say %q", w)

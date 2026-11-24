@@ -1450,6 +1450,7 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		alterId: onlyDigits(l.AID), vchType: cutRunes(strings.TrimSpace(l.VType), 200), vchNo: cutRunes(strings.TrimSpace(l.VNo), 200), vchDate: normDate(l.VDate),
 		name: strings.TrimSpace(l.Name), parent: strings.TrimSpace(l.Parent), narr: l.Narr, user: cutRunes(strings.TrimSpace(l.User), 200), source: "addon", lineId: id,
 		file: file, start: start, saveMs: -1, readAt: nowFn(), during: posting, lineAlter: toI64(onlyDigits(l.PreAID))}
+	addonLineSeen(c.company, c.alterId) // 2.5.22 (addonsilent2522.go): an add-on line of the company came
 	c.holds = []liveAt{{startFile, start}}
 	if startFile != file {
 		c.holds = append(c.holds, liveAt{file, lineStart})
@@ -2663,7 +2664,7 @@ func (c *change) wire() M {
 		if fid != "" {
 			m["fid"], m["lineFid"] = "", fid
 		}
-		m["heldWhy"] = "the entry is larger than FinCom takes in one line; upload that day's Day Book to settle it"
+		m["heldWhy"] = "the entry is larger than FinCom takes in one line; FinCom brings that day from Tally by itself to settle it"
 	}
 	return m
 }

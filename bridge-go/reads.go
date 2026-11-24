@@ -475,7 +475,7 @@ func getLedgerLines(co, ledger, from, to string, pin int) (M, error) {
 		// round 18 (the owner's decision of 04-Oct-2026): ReadDays off: from the copy only, never Tally; the answer
 		// says the copy does not cover the period
 		return M{"ok": true, "via": "copy", "vouchers": []any{}, "readDays": false,
-			"note": "the copy here does not cover " + from + "-" + to + " for this ledger (" + err.Error() + "); reading entries from Tally is off on this computer, history comes from the Day Book upload"}, nil
+			"note": "the copy here does not cover " + from + "-" + to + " for this ledger (" + err.Error() + "); reading entries from Tally is off on this computer, history comes from the books FinCom already holds"}, nil
 	}
 	port, err := findCompanyPort(co, pin)
 	if err != nil {

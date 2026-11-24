@@ -57,7 +57,7 @@ func sentEvent(c *standCloud, ev string) []M {
 	return o
 }
 
-const deleteWords = "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"
+const deleteWords = "deleted in Tally; FinCom could not tell which entry: FinCom brings that day from Tally by itself to settle it"
 
 // a cancel: asked of Tally by its MasterID, sent with Tally's GUID
 func TestCancelGUIDFromTally(t *testing.T) {

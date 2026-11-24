@@ -34,7 +34,7 @@ func r2516Stops(t *testing.T, c *standCloud) *r2516Cloud {
 			d := str(b["day"])
 			x.fails[d]++
 			if x.fails[d] >= 3 {
-				return 200, M{"ok": true, "fails": x.fails[d], "upload": true, "words": "Tally could not send " + liveDay(d) + " in time on 3 days. Upload that day's Day Book to finish it."}
+				return 200, M{"ok": true, "fails": x.fails[d], "upload": true, "words": "Tally could not send " + liveDay(d) + " in time on 3 days. FinCom tries that day again by itself."}
 			}
 			return 200, M{"ok": true, "fails": x.fails[d], "upload": false}
 		case "period_stop":
@@ -96,7 +96,7 @@ func TestR2516SlowDayStopsThatDayOnly(t *testing.T) {
 	}
 	found := false
 	for _, a := range r2510Acks() {
-		if str(a["code"]) == "dayRetry" && strings.Contains(str(a["words"]), "no action needed") {
+		if str(a["code"]) == "dayRetry" && str(a["words"]) == pickWords["dayRetry"] /* 2.5.22: the cloud's words */ {
 			found = true
 		}
 	}

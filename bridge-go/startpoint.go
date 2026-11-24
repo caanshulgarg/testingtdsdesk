@@ -628,7 +628,11 @@ func lightCheckOpen(sessions []M) {
 			}
 			_, had := startPointOf(name)
 			seq := spSeqOf(name)
-			if _, err := companyCheck(&TC{copier: true, light: true, bg: true, yield: lightCheckYield(name)}, name, port); err != nil {
+			_, err := companyCheck(&TC{copier: true, light: true, bg: true, yield: lightCheckYield(name)}, name, port)
+			if err == nil || !gaveWay(err) {
+				noteTellLight(name, err, err == nil && spSeqOf(name) != seq) // 2.5.22 (tell2522.go): numbersWhy
+			}
+			if err != nil {
 				// not marked: it goes again at the next turn
 				spMu.Lock()
 				if spChecked[name].Equal(now) {

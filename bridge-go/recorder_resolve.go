@@ -391,7 +391,7 @@ func liveHeldStopOnce(cs []*change) {
 
 // 2.3.4 (option (a)): the words a line ends with when its fast request was stopped at the limit
 func liveStopEndWords() string {
-	return liveStopWhat() + " for this entry; upload that day's Day Book to settle it"
+	return liveStopWhat() + " for this entry; FinCom brings that day from Tally by itself to settle it"
 }
 
 // "Tally took longer than 2 s" (the stop as configured)
@@ -632,7 +632,7 @@ type heldLine struct {
 }
 
 // 2.3.4: the words a held line ends with when Tally's voucher is not its entry or there is nothing to ask Tally by
-const liveHeldFinalEnd = "; upload that day's Day Book to settle it"
+const liveHeldFinalEnd = "; FinCom brings that day from Tally by itself to settle it"
 
 // 2.3.3: the asks a held line may have
 func (h heldLine) allow() int {
@@ -762,7 +762,7 @@ func liveHeldCap(items map[string]heldLine) {
 		}
 	}
 	if dropped > 0 {
-		writeLog(fmt.Sprintf("Recorder: the held list is full: the %d oldest line(s) left it (FinCom still holds them; the Day Book upload settles them)", dropped))
+		writeLog(fmt.Sprintf("Recorder: the held list is full: the %d oldest line(s) left it (FinCom still holds them; FinCom's own day reads settle them)", dropped))
 	}
 }
 
@@ -1383,10 +1383,10 @@ func liveLedgerAgainDue(h heldLine) bool {
 
 const (
 	liveHeldMaxTries = 20
-	liveHeldGiveUp   = "Tally did not give this entry after 20 tries; upload that day's Day Book to settle it"
+	liveHeldGiveUp   = "Tally did not give this entry after 20 tries; FinCom brings that day from Tally by itself to settle it"
 	liveHeldSlowMax  = 3 // 2.3.2 (issue 232, b); 2.3.3: no longer used (a held line is asked again once)
 	// 2.3.3: a held line whose one ask again Tally answered without its entry ends with these words
-	liveHeldOnceGiveUp = "Tally did not give this entry when asked again; upload that day's Day Book to settle it"
+	liveHeldOnceGiveUp = "Tally did not give this entry when asked again; FinCom brings that day from Tally by itself to settle it"
 )
 
 // 2.3.2 (issue 232, b): how long a line whose asks timed out n times waits for its next ask: 1 h after the first, 4 h after

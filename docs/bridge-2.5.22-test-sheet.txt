@@ -1,0 +1,29 @@
+FINCOM BRIDGE 2.5.22 - TEST SHEET (2.5.21's sheet, docs/bridge-2.5.21-test-sheet.txt, still applies; 2.5.22's changes here)
+
+File:        FinComBridge-Setup-2.5.22.exe
+Fingerprint: (filled in at the build: the .sha256 file next to the setup)
+             The paper: docs/bridge-2.5.22-notes.md. Branch next-bridge-2522.
+
+2.5.22 makes no new request of Tally and sends none more often: the heartbeat only says, per company FinCom linked,
+why it cannot be read (skip, numbersWhy, addonSilent). The same rules as before: each request stopped at 2 s, one
+request at a time, postings first, never while someone is typing in Tally. Use the test company ZZ TEST with made-up
+entries only. FinCom's words for these need tally-ingest with tellOf and migration 221; without them, check the
+heartbeat's body in the bridge's log folder (the last beat, or FinCom's staging tally_devices info.beat).
+
+ 1. Tally run as administrator: ZZ TEST open only there.
+    Check: close Tally; start TallyPrime with "Run as administrator"; open ZZ TEST (linked in FinCom). You should see:
+    the beat's skip says "ZZ TEST": "ownerUnknown" (and numbersWhy the same while no numbers came); nothing is read
+    or posted to that Tally. Open Tally normally: within a minute the skip entry is gone.
+ 2. ZZ TEST open in two of your own Tallys.
+    Check: open ZZ TEST in two TallyPrime windows of your login (two ports). You should see: skip "twoTallys". Close
+    one: it is gone.
+ 3. A company FinCom did not link is never named.
+    Check: open a made-up company not linked in FinCom (ZZ SPARE) in the administrator Tally. You should see: ZZ SPARE
+    is in no skip, numbersWhy or addonSilent entry.
+ 4. The add-on not loaded: addonSilent.
+    Check: on a computer whose tally.ini is shared (FinCom does not add the add-on there), with ZZ TEST open in your own
+    Tally and the add-on not loaded, alter two made-up entries 15 minutes apart. You should see: about 15 to 25 minutes
+    after the second change, addonSilent names ZZ TEST with reason "addonShared". Load the add-on (F1 > TDLs &
+    Add-ons) and alter an entry: the entry is gone at the next beat.
+ 5. No new request: with Tally open and idle, the bridge's log shows the same requests per 10 minutes as 2.5.21 (the
+    company list and FinComCompany); none while typing in Tally.

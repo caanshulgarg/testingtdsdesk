@@ -302,7 +302,7 @@ func renumAlert(j *renumJob, n int, more bool, from string) {
 	if more {
 		what = fmt.Sprintf("more than %d entries may have been renumbered", n)
 	}
-	words := fmt.Sprintf("%s in %s; upload the Day Book from %s", what, j.Company, liveDay(from))
+	words := fmt.Sprintf("%s in %s; FinCom brings the days from %s from Tally by itself", what, j.Company, liveDay(from))
 	renum.alerts[companyKey(j.Company)] = M{"company": j.Company, "words": words, "n": n, "more": more, "from": from, "type": j.Type, "at": nowS()}
 	writeLog("Renumbering: " + words + " (" + j.Type + "; Tally renumbers the entries after an inserted or deleted one without any line for them)")
 }
@@ -384,7 +384,7 @@ func renumWork(j *renumJob) (int, bool) {
 	}
 	if slowMarked(j.Company, j.CGUID) {
 		renum.mu.Lock()
-		renumSayOnce("slow|"+companyKey(j.Company), "Renumbering: "+j.Company+" is not asked (its entries are not asked of Tally: finding one took longer than 2 s); a renumbered entry keeps its old number in FinCom until that day's Day Book is uploaded")
+		renumSayOnce("slow|"+companyKey(j.Company), "Renumbering: "+j.Company+" is not asked (its entries are not asked of Tally: finding one took longer than 2 s); a renumbered entry keeps its old number in FinCom until FinCom reads that day again")
 		renum.mu.Unlock()
 		return 0, true
 	}
@@ -506,7 +506,7 @@ func renumWork(j *renumJob) (int, bool) {
 					j.Type, c.No, liveDay(c.Day), j.Company, nowFn().Add(liveStopRetry()).Format("15:04")))
 				return asked + queued, false
 			}
-			writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s: Tally took longer than 2 s again; not asked any more (counted in the alert: upload the Day Book)",
+			writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s: Tally took longer than 2 s again; not asked any more (counted in the alert)",
 				j.Type, c.No, liveDay(c.Day), j.Company))
 			renumMiss(j, c)
 			j.Cands = j.Cands[1:]
@@ -520,7 +520,7 @@ func renumWork(j *renumJob) (int, bool) {
 					return asked + queued, false
 				}
 			}
-			writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s could not be read from Tally (%s); counted in the alert: upload the Day Book",
+			writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s could not be read from Tally (%s); counted in the alert",
 				j.Type, c.No, liveDay(c.Day), j.Company, cutRunes(err.Error(), 120)))
 			renumMiss(j, c)
 			j.Cands = j.Cands[1:]

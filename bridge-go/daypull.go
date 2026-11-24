@@ -9,7 +9,7 @@
 //  2. stopped at 2 s: the day asked again one voucher type at a time (F2: the same id, d-MMM-yyyy TYPE="Date", the filter
 //     $Date >= $$Date:"d" AND $Date <= $$Date:"d" AND $VoucherTypeName = "<type>"), the types the cloud names (else
 //     Tally's six standard accounting types); a type still over 2 s: the day is marked "upload" and the person sees ONE
-//     quiet line ("Tally took too long to give 31-Aug-2026. Please upload that day's Day Book."), once; it is never asked
+//     quiet line ("Tally took too long to give 31-Aug-2026. FinCom tries that day again by itself."), once; it is never asked
 //     again. A late answer after a stop is thrown away (the next-inflight wait, tally.go), never used;
 //  3. checks every row is dated the day asked (the round 18 rule): one row of another date and the whole answer is
 //     dropped, the day marked "upload", and day reading stops on that Tally until the bridge restarts (one log line names
@@ -193,6 +193,10 @@ type pullWork struct {
 	bandOpen bool
 	bandSpan int64
 	bandsN   int
+	// 2.5.22 (migration 222's partial-list guard): the bands read and kept, in order, each [from, to] (to 0: the last,
+	// open-ended); sent with the day's list (period_heads "bands"), so FinCom takes the list as whole only when they
+	// start at 1 and join with no hole
+	bandsRead [][2]int64
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -938,6 +942,9 @@ func pullSendHeads(w *pullWork) bool {
 		via = "bands" // 2.5.19 (B1): the day's whole list, read in bands end to end (tally-ingest takes it as a whole day)
 	}
 	body := M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "via": via, "n": len(rows), "heads": rows, "fetch": it.Fetch}
+	if w.bands {
+		body["bands"] = bandsBody(w.bandsRead) // 2.5.22: [[from, to], ...], the last to null
+	}
 	if w.split {
 		body["partial"] = true // 2.5.16 (the code review's H1): only the types asked: never the day's whole count
 	}
@@ -1125,7 +1132,7 @@ const pullEntryMax = 2 * 1024 * 1024
 
 // 2.5.12: an entry read, as kept, goes with the day's others; one larger than FinCom takes is held alone
 func pullKeep(w *pullWork, mid, x string) {
-	if len(x) > pullEntryMax && pullHoldEntry(w, mid, fmt.Sprintf("the entry is larger than FinCom takes (%d characters); upload that day's Day Book to settle it", len(x))) {
+	if len(x) > pullEntryMax && pullHoldEntry(w, mid, fmt.Sprintf("the entry is larger than FinCom takes (%d characters); FinCom brings that day from Tally by itself to settle it", len(x))) {
 		return
 	}
 	w.got = append(w.got, x)
@@ -1268,7 +1275,7 @@ func pullPayrollGiveUp(w *pullWork, how string) {
 		}
 	}
 	w.want = keep
-	writeLog(fmt.Sprintf("Older entries of %s: %s: the payroll's employees did not reach FinCom (%s): %d payroll entr%s of the day not asked; the day's Day Book is to be uploaded", w.it.Company, liveDay(w.it.Day), how, w.paySkip, map[bool]string{true: "y", false: "ies"}[w.paySkip == 1]))
+	writeLog(fmt.Sprintf("Older entries of %s: %s: the payroll's employees did not reach FinCom (%s): %d payroll entr%s of the day not asked; FinCom reads that day again by itself", w.it.Company, liveDay(w.it.Day), how, w.paySkip, map[bool]string{true: "y", false: "ies"}[w.paySkip == 1]))
 }
 
 // the size of the entries read and not sent (review 245 R3: a batch stays far below the cloud's body limit)
@@ -1354,11 +1361,11 @@ func pullNoteUpload(it pullItem, why, words string) {
 // FinCom lists it under a newer choice (chosenAt after the stop). Told again until FinCom takes it (pullTell)
 func pullStopCompany(w *pullWork, why, what string) {
 	it := w.it
-	words := "Tally took too long to give " + liveDay(it.Day) + ", so FinCom stopped reading older entries of " + it.Company + ". Please upload the Day Book for the days still missing."
+	words := "Tally took too long to give " + liveDay(it.Day) + ", so FinCom stopped reading older entries of " + it.Company + ". FinCom tries the days still missing again by itself."
 	if why == "window" {
-		words = "Tally stopped answering while FinCom read " + liveDay(it.Day) + ", so FinCom stopped reading older entries of " + it.Company + ". Please upload the Day Book for the days still missing."
+		words = "Tally stopped answering while FinCom read " + liveDay(it.Day) + ", so FinCom stopped reading older entries of " + it.Company + ". FinCom tries the days still missing again by itself."
 	}
-	writeLog(fmt.Sprintf("Older entries of %s: stopped at %s (%s): nothing more is asked of Tally for the period; FinCom shows one line to upload the Day Book of the days still missing", it.Company, liveDay(it.Day), what))
+	writeLog(fmt.Sprintf("Older entries of %s: stopped at %s (%s): nothing more is asked of Tally for the period; FinCom tries the days still missing again by itself", it.Company, liveDay(it.Day), what))
 	pull.mu.Lock()
 	pull.stopCo[companyKey(it.Company)] = M{"company": it.Company, "day": it.Day, "why": why, "words": words, "at": nowFn().Format(time.RFC3339), "atN": nowFn().UnixNano(), "chosenAt": it.ChosenAt}
 	var keep []pullItem
@@ -1398,11 +1405,11 @@ func pullDrop(w *pullWork) { pullFinish(w, "waiting") }
 // the day marked "upload": FinCom is told (it never lists the day again) and the person sees one quiet line, once
 func pullMarkUpload(w *pullWork, why, typ string) {
 	it := w.it
-	words := "Tally took too long to give " + liveDay(it.Day) + ". Please upload that day's Day Book."
+	words := "Tally took too long to give " + liveDay(it.Day) + ". FinCom tries that day again by itself."
 	if why == "payroll" {
-		words = "FinCom could not read the payroll entries of " + liveDay(it.Day) + " from Tally (the payroll's employees did not reach FinCom). Please upload that day's Day Book."
+		words = "FinCom could not read the payroll entries of " + liveDay(it.Day) + " from Tally (the payroll's employees did not reach FinCom). FinCom tries that day again by itself."
 	} else if why != "over2s" {
-		words = "FinCom could not read " + liveDay(it.Day) + " from Tally. Please upload that day's Day Book."
+		words = "FinCom could not read " + liveDay(it.Day) + " from Tally. FinCom tries that day again by itself."
 	}
 	body := M{"kind": "period_heads", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "upload": true, "why": why, "type": typ, "words": words}
 	pullNoteUpload(it, why+map[bool]string{true: ", type " + typ, false: ""}[typ != ""], words)

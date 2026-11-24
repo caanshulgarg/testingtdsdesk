@@ -48,9 +48,9 @@ var pickWords = map[string]string{
 	"earlier":        "Tally is still on an earlier request; reading follows by itself",
 	"stoppedHere":    "single days are not read from this Tally until FinCom Bridge restarts",
 	"otherCompany":   "the company open in Tally here is another copy than the book's (its GUID differs)",
-	"stopped":        "reading older entries of this company was stopped because Tally was too slow; choose it again in FinCom",
+	"stopped":        "Tally was too slow for this company; FinCom tries again by itself", // 2.5.22: as the cloud says it (no person needed)
 	"queued":         "other days are being read first, one day at a time; this follows by itself",
-	"dayRetry":       "Tally was slow for this day; FinCom Bridge tries it again by itself after a day (no action needed)",
+	"dayRetry":       "Tally was slow for this day; FinCom tries it again by itself", // 2.5.22: as the cloud says it
 }
 
 // the reasons that are about one company (the rest hold every book of this computer alike)

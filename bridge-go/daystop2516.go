@@ -54,7 +54,7 @@ func pullStopDay(w *pullWork, why, what string) {
 	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) && truthy(r.json["upload"]) {
 		// the 3rd separate day it failed: FinCom marked it to upload (its words); never asked again by itself
 		pullRetryDrop(it)
-		pullNoteUpload(it, "slow3", or(str(r.json["words"]), "Tally could not send "+liveDay(it.Day)+" in time on 3 days. Upload that day's Day Book to finish it."))
+		pullNoteUpload(it, "slow3", or(str(r.json["words"]), "Tally could not send "+liveDay(it.Day)+" in time on 3 days. FinCom tries that day again by itself."))
 		pullFinish(w, "upload")
 		return
 	}

@@ -423,7 +423,7 @@ func TestR103PullOver2sStopsCompany(t *testing.T) {
 	ns := len(stops)
 	c.mu.Unlock()
 	if ns != 1 || str(stops[0]["why"]) != "over2s" || str(stops[0]["day"]) != "20250831" || str(stops[0]["chosenAt"]) != chosen ||
-		str(stops[0]["words"]) != "Tally took too long to give 31-Aug-2025, so FinCom stopped reading older entries of "+zz+". Please upload the Day Book for the days still missing." {
+		str(stops[0]["words"]) != "Tally took too long to give 31-Aug-2025, so FinCom stopped reading older entries of "+zz+". FinCom tries the days still missing again by itself." {
 		t.Fatalf("FinCom told: %v", stops)
 	}
 	// the same choice listed again: never asked

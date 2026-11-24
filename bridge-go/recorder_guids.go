@@ -55,7 +55,7 @@ const (
 
 // the words a delete / cancel goes with when its entry cannot be told
 func liveGuidWords(ev string) string {
-	return ev + " in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"
+	return ev + " in Tally; FinCom could not tell which entry: FinCom brings that day from Tally by itself to settle it"
 }
 
 // one entry of the record: Tally's GUID, and the entry's type, number and date as Tally gave them

@@ -118,7 +118,7 @@ func TestRenumberStopOnceMoreThenAlert(t *testing.T) {
 	if alt["26311"] != nil || len(alt["26312"]) != 1 || len(alt["26313"]) != 1 || len(alt["26314"]) != 1 {
 		t.Fatalf("after the second stop: %v (want 26312..26314 sent, 26311 not)", alt)
 	}
-	words := "1 entry may have been renumbered in " + nwsCo + "; upload the Day Book from 05-Oct-2026"
+	words := "1 entry may have been renumbered in " + nwsCo + "; FinCom brings the days from 05-Oct-2026 from Tally by itself"
 	if b := renumBeat(); len(b) != 1 || !strings.Contains(str(obj(b[0])["words"]), words) {
 		t.Fatalf("the beat's alert: %v (want %q)", b, words)
 	}
@@ -211,7 +211,7 @@ func TestRenumberUnreadAndUnknownCounted(t *testing.T) {
 	if a := renumAsked(f); a["26312"] != 1 || a["26313"] != 1 {
 		t.Fatalf("asked %v (each unreadable one once)", a)
 	}
-	words := "4 entries may have been renumbered in " + nwsCo + "; upload the Day Book from 05-Oct-2026"
+	words := "4 entries may have been renumbered in " + nwsCo + "; FinCom brings the days from 05-Oct-2026 from Tally by itself"
 	if b := renumBeat(); len(b) != 1 || !strings.Contains(str(obj(b[0])["words"]), words) {
 		t.Fatalf("the beat's alert: %v (want %q)", b, words)
 	}

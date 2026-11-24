@@ -363,7 +363,7 @@ func trayProblems(f trayFacts) []trayProblem {
 		}
 		d := fromTallyDate(str(e["day"])).Format("2006-01-02")
 		stale = append(stale, trayProblem{Kind: "uploadday|" + strings.ToLower(str(e["company"])) + "|" + d, Company: str(e["company"]), Day: d, Cond: true,
-			Title: "Upload one day's Day Book", Text: str(e["words"])})
+			Title: "One day FinCom reads again", Text: str(e["words"])})
 	}
 	// ROUND 103 (1b): reading older entries of a company stopped (a day's list over 2 s, or Tally's window held): one
 	// quiet notice a company, its words (upload the Day Book of the days still missing)
@@ -373,7 +373,7 @@ func trayProblems(f trayFacts) []trayProblem {
 			continue
 		}
 		stale = append(stale, trayProblem{Kind: "periodstop|" + strings.ToLower(str(e["company"])) + "|" + str(e["at"]), Company: str(e["company"]), Cond: true,
-			Title: "Upload the Day Book of the days still missing", Text: str(e["words"])})
+			Title: "Days FinCom reads again", Text: str(e["words"])})
 	}
 	return append([]trayProblem{
 		{Kind: "down", Cond: false},

@@ -99,7 +99,7 @@ func TestBankNotReadThreeDaysOneNotice(t *testing.T) {
 	if len(shown) != 0 {
 		t.Fatalf("a notice before 3 days: %v", shown)
 	}
-	want := "Bank dates for " + nwsCo + " not read since 06-Oct-2026. Keep Tally open for a few minutes after 7 pm, or upload the Day Book."
+	want := "Bank dates for " + nwsCo + " not read since 06-Oct-2026. Keep Tally open for a few minutes after 7 pm; FinCom reads them by itself."
 	for _, at := range []time.Time{istAt(2026, 10, 9, 10, 1), istAt(2026, 10, 9, 20, 0), istAt(2026, 10, 10, 10, 0), istAt(2026, 10, 12, 11, 0)} {
 		nowFn = func() time.Time { return at }
 		look()

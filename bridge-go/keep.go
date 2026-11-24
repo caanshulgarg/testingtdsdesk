@@ -218,7 +218,7 @@ func directReadsOn() bool {
 
 // round 18 (the owner's decision of 04-Oct-2026): FinCom's direct reads of entries (/daybook, /vouchers, /keepcheck)
 // are refused with these words unless ReadDays is true (2.5.20 review A1: the default leaves them off); nothing is sent
-const readsOffWords = "Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."
+const readsOffWords = "Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the books FinCom already holds)."
 
 func readsOffErr() error {
 	if directReadsOn() {

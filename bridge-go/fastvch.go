@@ -639,7 +639,7 @@ var errFastShape = errors.New("Tally keeps this entry in a form FinCom does not 
 type fastShapeError struct{ why string }
 
 func (e fastShapeError) Error() string {
-	return "Tally keeps this entry with " + e.why + "; upload that day's Day Book to settle it"
+	return "Tally keeps this entry with " + e.why + "; FinCom brings that day from Tally by itself to settle it"
 }
 func (e fastShapeError) Is(t error) bool { return t == errFastShape }
 

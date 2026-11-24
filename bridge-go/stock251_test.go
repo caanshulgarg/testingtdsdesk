@@ -540,9 +540,11 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 	}
 	// the decision line, and the class
 	a := tallyAllowList[stockID]
-	// 2.5.3: the row says it, as history ("2.5.2 allowed by ...; unchanged in 2.5.3"); the decision line names 2.5.3
-	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in "+BridgeVersion+")") || a.measureOnly || a.maxSec <= 0 ||
-		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.21" { // 2.5.21 (r2521version_test.go); 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
+	// 2.5.3: the row says it, as history ("2.5.2 allowed by ...; unchanged in 2.5.3"); the decision line names 2.5.3.
+	// 2.5.22: the row's version word stays "2.5.21" (the request is unchanged), so the table and its hash do not move for a
+	// release that adds and changes no request (r2522version_test.go)
+	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in 2.5.21)") || a.measureOnly || a.maxSec <= 0 ||
+		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.22" { // 2.5.22 (r2522version_test.go); 2.5.21 (r2521version_test.go); 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("the allow-list row: %+v, class %q, version %s", a, requestClass[stockID], BridgeVersion)
 	}
 }
@@ -561,7 +563,7 @@ func allowRowsBeforeStock() string {
 // --- 8. 2.5.2: the version; one request added (the table otherwise 2.5.0's); the decision line names 2.5.2 by the owner's
 // decision of 2026-10-30 (person's click only), 2.5.0's kept as history; the dated line; the test sheet
 func TestStock251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.21" { // 2.5.21 (r2521version_test.go); 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
+	if BridgeVersion != "2.5.22" { // 2.5.22 (r2522version_test.go); 2.5.21 (r2521version_test.go); 2.5.20 (r2520version_test.go); 2.5.19 (r2519_test.go); 2.5.18 (r2518_test.go); 2.5.17 (r2517_test.go); 2.5.16 (r2516_test.go); 2.5.15 (r2515_test.go); 2.5.14 (r2514_test.go); 2.5.13 (r2513_test.go); 2.5.12 (r2512_test.go); 2.5.11 (r2511_test.go); 2.5.10 (r2510pick_test.go); 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBeforeStock()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {

@@ -140,7 +140,7 @@ func TestFast234EndedLineReaskTimesOut(t *testing.T) {
 	if n, b := fastBodied(c, "nws-25732:resolved"); n != 1 || b != 0 {
 		t.Fatalf("the second held row: %d sent, %d with body (want 1, 0)", n, b)
 	}
-	if s := r222cSentID(c, "nws-25732:resolved"); len(s) != 1 || !strings.Contains(str(s[0]["heldWhy"]), "upload that day's Day Book to settle it") {
+	if s := r222cSentID(c, "nws-25732:resolved"); len(s) != 1 || !strings.Contains(str(s[0]["heldWhy"]), "FinCom brings that day from Tally by itself to settle it") {
 		t.Fatalf("its words: %v", s)
 	}
 }
@@ -308,7 +308,7 @@ func TestFast234OlderHeldLinesAskedOnce(t *testing.T) {
 			t.Fatalf("%s: %d sent, %d with Tally's body", id, n, b)
 		}
 	}
-	if s := r222cSentID(c, "old-nothing:resolved"); len(s) != 1 || !strings.Contains(str(s[0]["heldWhy"]), "Day Book") {
+	if s := r222cSentID(c, "old-nothing:resolved"); len(s) != 1 || !strings.Contains(str(s[0]["heldWhy"]), "by itself") /* 2.5.22: no upload asked */ {
 		t.Fatalf("the line with nothing to ask by is not ended with the Day Book words: %v", s)
 	}
 	for _, restart := range []bool{false, true} {

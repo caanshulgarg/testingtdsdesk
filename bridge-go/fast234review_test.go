@@ -182,7 +182,7 @@ func TestFast234UnreadShapeHeld(t *testing.T) {
 	fastTurns(3)
 	s := c.recSent()
 	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "INVENTORYENTRIES") ||
-		!strings.Contains(str(s[0]["heldWhy"]), "upload that day's Day Book to settle it") {
+		!strings.Contains(str(s[0]["heldWhy"]), "FinCom brings that day from Tally by itself to settle it") {
 		t.Fatalf("sent: %v", s)
 	}
 	if f.n(vchByNumberID) != 0 || f.n(vchObjectID) != 1 {

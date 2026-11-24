@@ -39,7 +39,7 @@ func TestFast234RROlderLineUnreadableAnswerEnds(t *testing.T) {
 		t.Fatalf("asked %d times (want once): %v", n, f.ids())
 	}
 	s := r222cSentID(c, "old-unreadable:resolved")
-	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.HasSuffix(str(s[0]["heldWhy"]), "upload that day's Day Book to settle it") {
+	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.HasSuffix(str(s[0]["heldWhy"]), "FinCom brings that day from Tally by itself to settle it") {
 		t.Fatalf("not ended with the Day Book words: %v", s)
 	}
 	if _, left := liveHeldLoad(); len(left) != 0 {

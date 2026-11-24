@@ -50,6 +50,7 @@ func pullBandsBegin(w *pullWork) bool {
 	}
 	pull.mu.Lock()
 	w.bands, w.bandA, w.bandN, w.bandSpan, w.bandsN, w.bandOpen = true, 1, n, span, 0, n >= span
+	w.bandsRead = nil
 	w.heads = map[string]pullHead{}
 	pull.mu.Unlock()
 	writeLog(fmt.Sprintf("Older entries of %s: %s: the day's list took Tally over 2 s; read again in pieces of entry numbers (1 to %d; the highest entry number seen %d; the first piece %d)", w.it.Company, liveDay(w.it.Day), span, vchMidTop(w.it.Company), n))
@@ -218,6 +219,7 @@ func pullBandStep(w *pullWork, port int) (bool, bool) {
 		}
 		w.heads[h.Mid] = h
 	}
+	w.bandsRead = append(w.bandsRead, [2]int64{a, b}) // 2.5.22: this band is kept (its every row inside it)
 	w.fails = 0
 	ms := took * 1000
 	if b == 0 {
@@ -254,4 +256,17 @@ func dayPartExact(tc *TC, x string) bool {
 	}
 	a, b := w.band()
 	return x == dayPartRequest(w.it.Company, day, a, b) || x == dayPartRequest(pinCo(x), day, a, b)
+}
+
+// 2.5.22: the bands for the day's list in FinCom's form: [[from, to], ...], an open-ended band's to as null
+func bandsBody(l [][2]int64) []any {
+	out := make([]any, 0, len(l))
+	for _, b := range l {
+		var to any
+		if b[1] > 0 {
+			to = b[1]
+		}
+		out = append(out, []any{b[0], to})
+	}
+	return out
 }

@@ -169,7 +169,7 @@ func TestR245KeepAutoBankBigCompany(t *testing.T) {
 		t.Fatalf("at night: %d lists, entries asked %v", n, bankAsked(f))
 	}
 	lg := readText(logFile())
-	if !strings.Contains(lg, "may not have reached FinCom for "+nwsCo) || !strings.Contains(lg, "upload the Day Book") {
+	if !strings.Contains(lg, "may not have reached FinCom for "+nwsCo) || !strings.Contains(lg, "from Tally by itself") {
 		t.Fatalf("no alert:\n%s", cutTail(lg, 2000))
 	}
 }

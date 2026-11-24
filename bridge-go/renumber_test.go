@@ -203,7 +203,7 @@ func TestRenumberOverCapAlert(t *testing.T) {
 	if lim := toInt(c.renumAsks[0]["limit"]); lim != 3 {
 		t.Fatalf("the ask's limit %d (want the cap, 3)", lim)
 	}
-	words := "more than 3 entries may have been renumbered in " + nwsCo + "; upload the Day Book from 05-Oct-2026"
+	words := "more than 3 entries may have been renumbered in " + nwsCo + "; FinCom brings the days from 05-Oct-2026 from Tally by itself"
 	if !strings.Contains(readText(logFile()), words) {
 		t.Fatalf("the log does not say %q:\n%s", words, readText(logFile()))
 	}
@@ -365,7 +365,7 @@ func TestRenumberBelowStartPoint(t *testing.T) {
 	if asked := renumAsked(f); asked["26313"] != 0 || asked["26314"] != 0 {
 		t.Fatalf("entries below the starting point read: %v", asked)
 	}
-	words := "2 entries may have been renumbered in " + nwsCo + "; upload the Day Book from 06-Oct-2026"
+	words := "2 entries may have been renumbered in " + nwsCo + "; FinCom brings the days from 06-Oct-2026 from Tally by itself"
 	if !strings.Contains(readText(logFile()), words) {
 		t.Fatalf("the log does not say %q:\n%s", words, readText(logFile()))
 	}

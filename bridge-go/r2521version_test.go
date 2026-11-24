@@ -11,7 +11,7 @@ import (
 )
 
 func TestR2521Version(t *testing.T) {
-	if BridgeVersion != "2.5.21" || !newerVersion("2.5.21", "2.5.20") || newerVersion("2.5.20", "2.5.21") {
+	if BridgeVersion != "2.5.22" /* 2.5.22 (r2522version_test.go) */ || !newerVersion("2.5.21", "2.5.20") || newerVersion("2.5.20", "2.5.21") {
 		t.Fatalf("version %s", BridgeVersion)
 	}
 	for _, f := range []string{"../docs/bridge-2.5.21-test-sheet.txt", "../docs/bridge-2.5.21-notes.md"} {
@@ -24,11 +24,11 @@ func TestR2521Version(t *testing.T) {
 	if len(tallyAllowList) != r2521Requests {
 		t.Errorf("2.5.21 adds no request: %d on the allow-list, 2.5.20 had %d", len(tallyAllowList), r2521Requests)
 	}
-	if !strings.Contains(al, "(re-measured on 2026-11-24 for 2.5.21: nothing new to measure, no request added or changed") {
+	if !strings.Contains(al, "(re-measured on 2026-11-24 for 2.5.21: nothing new to measure, no request added or changed") || strings.Contains(al, "allowed for 2.5.21 by") {
 		t.Error("no dated line for 2.5.21")
 	}
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.21 by the owner's standing decision of 2026-10-06 (2.5.21: no request added or changed", "as for 2.5.20 by the owner's decision of 2026-11-23"} {
+	for _, w := range []string{"as for 2.5.21 by the owner's standing decision of 2026-10-06 (2.5.21: no request added or changed" /* 2.5.22 names the line (r2522version_test.go) */, "as for 2.5.20 by the owner's decision of 2026-11-23"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}

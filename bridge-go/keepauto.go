@@ -116,7 +116,7 @@ func keepAutoAfter(route, company, guid string, holdMs int) {
 	if err := saveFile(keepAutoFile(), text); err != nil {
 		writeLog("Tally's list of changed entries: " + keepAutoFile() + " could not be written: " + err.Error())
 	}
-	writeLog(fmt.Sprintf("%s for %s: Tally's window did not answer for %.1f s while it listed the changed entries; the bridge does not ask that list for this company again (the add-on's lines and the Day Book upload cover it)", route, company, float64(holdMs)/1000))
+	writeLog(fmt.Sprintf("%s for %s: Tally's window did not answer for %.1f s while it listed the changed entries; the bridge does not ask that list for this company again (the add-on's lines and FinCom's own day reads cover it)", route, company, float64(holdMs)/1000))
 }
 
 // the window watched while the list is at Tally (from its send): the hold in ms (0 when nothing reached Tally)

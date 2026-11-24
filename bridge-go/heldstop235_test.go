@@ -322,7 +322,7 @@ func TestHeldStop235DeleteNotAnsweredThenProven(t *testing.T) {
 		liveLine("after_delete", "Voucher", "", gone.master, "", "Journal", "PD-1", td, "", "", "gone too"))
 	h.drain(t, n1+1)
 	for _, m := range h.c.recSent()[n1:] {
-		if str(m["event"]) == "deleted" && (str(m["object_guid"]) != "" || !strings.Contains(str(m["heldWhy"]), "Day Book")) {
+		if str(m["event"]) == "deleted" && (str(m["object_guid"]) != "" || !strings.Contains(str(m["heldWhy"]), "by itself")) /* 2.5.22: no upload asked */ {
 			t.Fatalf("a delete nobody knows the GUID of was not held with the Day Book words: %v", m)
 		}
 	}
@@ -348,7 +348,7 @@ func TestHeldStop235DeleteEndsHeldNeverBare(t *testing.T) {
 	for i := 1; i <= 6; i++ {
 		h.turns(time.Duration(i*16) * time.Minute)
 	}
-	if e := hs235First(h.c.recSent(), "deleted", true); e == nil || str(e["object_guid"]) != "" || !strings.Contains(str(e["heldWhy"]), "Day Book") || !truthy(e["guidHeld"]) {
+	if e := hs235First(h.c.recSent(), "deleted", true); e == nil || str(e["object_guid"]) != "" || !strings.Contains(str(e["heldWhy"]), "by itself") /* 2.5.22 */ || !truthy(e["guidHeld"]) {
 		t.Fatalf("the held delete did not end held with the Day Book words: %v\nall: %v", e, h.c.recSent())
 	}
 	hs235NoBareDelete(t, h.c.recSent())
