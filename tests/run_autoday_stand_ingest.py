@@ -6,9 +6,9 @@ its serving rule, the hand-out, the pickup, the heads); the rest of tally-ingest
 (fake_supabase.py), the computer's record copied to the database before each of its calls. Made-up data only. Checks:
   1. a stuck line's day: queued by the beat itself (held, prio 1) and handed to the 2.5.16 bridge serving the book, as a
      check day
-  2. a 2.5.10 bridge serving the book: not handed it and never claims it (222's p_auto false), so the 2.5.16 bridge's
-     next beat gets it at once (the claims kept between the beats); a bridge the database does not know as this
-     computer's (not serving): no check day at all
+  2. a lone 2.5.10 bridge serving the book: handed the held day as before (p_auto false); one of 222's new days (a
+     possible delete) never handed to it nor claimed, so the 2.5.16 bridge's next beat gets it at once (the claims kept
+     between the beats); a bridge the database does not know as this computer's (not serving): no check day at all
   3. a pick-up refused 'slow': the day waits (tries 1, an hour) and is not handed; told once, not again each beat;
      'started' clears its why
   4. a day read in bands: a hole deletes nothing however many lists; whole bands delete on the second list a minute later
@@ -133,14 +133,18 @@ try:
 
     print("== 2. an older bridge, a bridge not serving")
     db.sql("delete from tally_work_claims where book_id = %s" % q(BOOK)); unask()
+    held_by = lambda b, d: db.one("select count(*) from tally_work_claims where book_id = %s and kind = 'check' and unit = %s and bridge_id = %s and until > now()" % (q(BOOK), q(d8(d)), q(b["id"])))
     beat(GB); c, r, cd = beat(GB)
-    ok(c == 200 and d8(STUCK) not in [d["day"] for d in cd], "2. 2.5.10: not handed the stuck line's day (%s)" % [d["day"] for d in cd])
-    ok(any(n == "tally_days_claim" and a.get("p_kind") == "check" for n, a in CALLS), "2. (it serves the book: its days are claimed for it) (%s)" % [n for n, _ in CALLS])
-    held_by = lambda b: db.one("select count(*) from tally_work_claims where book_id = %s and kind = 'check' and unit = %s and bridge_id = %s and until > now()" % (q(BOOK), q(d8(STUCK)), q(b["id"])))
-    ok(held_by(GB) == "0", "2. the 2.5.10 bridge never claimed it (222's p_auto false) (%s; %s)" % (held_by(GB), [(n, a.get("p_kind"), a.get("p_auto")) for n, a in CALLS if n == "tally_days_claim"]))
-    unask()
-    c, r, cd = beat()     # (the claims NOT cleared between the beats)
-    ok(c == 200 and d8(STUCK) in [d["day"] for d in cd] and held_by(GA) == "1", "2. the 2.5.16 bridge's next beat: handed it at once, nothing held by the older one (%s)" % [d["day"] for d in cd])
+    ok(c == 200 and d8(STUCK) in [d["day"] for d in cd] and held_by(GB, STUCK) == "1", "2. a lone 2.5.10 bridge: handed the stuck line's day (196's held day, as before) (%s)" % [d["day"] for d in cd])
+    ok(any(n == "tally_days_claim" and a.get("p_kind") == "check" and a.get("p_auto") is False for n, a in CALLS), "2. its claim says p_auto false (%s)" % [(n, a.get("p_kind"), a.get("p_auto")) for n, a in CALLS if n == "tally_days_claim"])
+    # one of 222's new days (a possible delete): never claimed by the older bridge; the claims kept between the beats
+    DEL = D(15)
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source, prio) values (%s, %s, %s, 'delete', 2) on conflict (book_id, day) do update set source = 'delete', prio = 2" % (q(BOOK), q(F), q(DEL.isoformat())))
+    unask(); c, r, cd = beat(GB)
+    ok(d8(DEL) not in [d["day"] for d in cd] and held_by(GB, DEL) == "0", "2. a possible delete's day: the 2.5.10 bridge never handed nor claims it (%s)" % [d["day"] for d in cd])
+    unask(); c, r, cd = beat()
+    ok(c == 200 and d8(DEL) in [d["day"] for d in cd] and held_by(GA, DEL) == "1", "2. the 2.5.16 bridge's next beat: handed it at once, nothing held by the older one (%s)" % [d["day"] for d in cd])
+    db.sql("delete from tally_check_days where book_id = %s and day = %s" % (q(BOOK), q(DEL.isoformat())))
     db.sql("delete from tally_work_claims where book_id = %s" % q(BOOK)); unask()
     c, r, cd = beat(GC)
     ok(c == 200 and cd == [] and not any(n in ("tally_check_next_open", "tally_check_next") and a.get("p_book") == BOOK for n, a in CALLS if n != "tally_days_claim"), "2. a bridge the database does not know as this computer's: no check day (%s)" % [d["day"] for d in cd])
