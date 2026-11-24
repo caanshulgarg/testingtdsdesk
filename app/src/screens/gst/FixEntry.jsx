@@ -5,20 +5,24 @@
 //     of error needs: the invoice number (too long, characters, used twice), the place of supply (none, or the tax type not
 //     matching it), the party's GSTIN (none, or not valid). Every other kind shows the entry and Open in Look up.
 //   - A GSTIN (the owner, 24-Nov-2026, amending decision 5): the party ledger first, then that party's invoices of the
-//     month on screen that carry another GSTIN or none, listed all ticked, each sent on its own (the voucher's PARTYGSTIN,
-//     shape A), read back, one after another; a row leaves What to fix only when its own invoice is corrected. The
-//     ledger already right: Save goes on to the invoices. A ledger FinCom holds no change number for is read from Tally
+//     month on screen with no GSTIN, one that is not valid, or the ledger's old wrong one (never another valid GSTIN: a
+//     branch, another address, a registration of other dates), listed all ticked, each sent on its own (the voucher's
+//     PARTYGSTIN, shape A), read back, one after another; a row leaves What to fix only when its own invoice is corrected.
+//     The ledger already right: Save goes on to the invoices. The GSTIN box stays in the invoices step: another GSTIN
+//     typed there changes the ledger first, then the invoices, in the same Save. A party that is not a ledger (a cash
+//     sale with the buyer's details): only the invoices. A ledger FinCom holds no change number for is read from Tally
 //     first in the same Save (the bridge's one-ledger read), then the fix goes with that change number.
 //   - Save in Tally sends the one change to FinCom Bridge (POST /fix, bridge-go/fixalter.go), which checks Tally's change
 //     number (AlterID) first and never overwrites a later change, makes the change, reads the entry back and gives it to
 //     FinCom's cloud. The entry read back replaces FinCom's (Books.importDayBook of that one voucher), so the list is worked
 //     out again and the row leaves it.
 //   - Tally closed, or no FinCom Bridge on this computer: the change is kept with the client's books (b.fixq) and sent when
-//     Tally is open (decision 4), checked against Tally's change number then.
+//     Tally is open (decision 4), checked against Tally's change number then, from any computer whose bridge is up for
+//     the client (who saved it and who sent it are both kept: by and dev, sentBy and sentDev).
 //   - Every change is kept in Changes made here, with Undo where the earlier value is one Tally can be given again.
 // Anyone who can post to Tally may fix (decision 6). Plain words only, no warnings.
-/* global S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
-import { useState, useEffect } from "react";
+/* global GST_STATE_ALIAS, S, CO, render, saveBooks, Books, Bridge, bridgeLive, linkGuid, ensureTallyCompany, LinkRec, tallyCoName, GST_STATES, gstinValid, INR, r2, num, fmtDate, tallyDate, FC, LK, auditEvent, GSTR, AlertClear, stateCodeFrom */
+import { useState, useEffect, useRef } from "react";
 import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 
 const NUM = /^Invoice numbers (longer than|with characters|used twice)/;
@@ -39,10 +43,21 @@ const gstOk = (g) => typeof gstinValid === "function" ? gstinValid(g) : /^\d{2}[
 const STATES = () => Object.keys(GST_STATES || {}).filter((c) => /^\d{2}$/.test(c) && c !== "96" && c !== "99").sort().map((c) => [c, GST_STATES[c]]);
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (d ? fmtDate(tallyDate(d)) : "");
+// a state's code from a code or a name, "&" read as "and" ("Jammu & Kashmir", "Andaman & Nicobar Islands")
+const flat = (t) => String(t || "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z]/g, "");
+export function stCode(t) {
+  const x = String(t || "").trim(), st = GST_STATES || {};
+  if (/^\d{2}$/.test(x)) return st[x] ? x : "";
+  const n = flat(x), al = typeof GST_STATE_ALIAS === "object" ? GST_STATE_ALIAS : {};
+  const hit = n && Object.keys(st).find((c) => flat(st[c]) === n || (al[c] || []).some((a) => flat(a) === n));
+  return hit || (typeof stateCodeFrom === "function" ? stateCodeFrom(x) : "");
+}
 const amountOf = (d) => (d.total != null ? d.total : num(d.taxable) + num(d.igst) + num(d.cgst) + num(d.sgst) + num(d.cess));
 
 // what the window and Changes made here say
 const WAIT = "Waiting for Tally. It is saved there when Tally is open.";
+// no FinCom Bridge on this computer (review of 24-Nov-2026): kept, and sent from any computer where Tally is open
+const NOBRIDGE = "Waiting for Tally. It goes to Tally from the computer where Tally is open.";
 const CHANGED = "Changed in Tally since you opened it. This is how it is now.";
 const OLD = "This needs FinCom Bridge 2.5.21 or later on the Tally computer. Update it there, then press Save again.";
 const SAID = { done: "Saved in Tally", waiting: "Waiting for Tally", already: "Already in Tally" };
@@ -65,20 +80,22 @@ export const FixQ = {
   async coGuid(co) { try { return (typeof LinkRec === "object" && (await LinkRec.guidFor(co, tallyCoName(co)))) || ""; } catch (e) { return ""; } },
   // a change waiting, or with Tally now, for this entry (or ledger)
   waitingFor(key) { return !!key && FixQ.list().some((x) => x.state === "waiting" && (x.vid === key || (x.ask && x.ask.target === "ledger" && x.ask.ledger === key))); },
-  // Tally holds exactly what was asked (the number as typed, letter case too; a state by its code or Tally's name)
+  // Tally holds exactly what was asked (the number as typed, letter case too; a place of supply by its state code, so
+  // "Jammu & Kashmir" is "Jammu and Kashmir")
   mine(rec, now) {
     if (!now) return false;
     const f = rec.ask.fields || {}, k = Object.keys(f)[0], want = String(f[k] || "");
     const got = String(k === "gstin" ? now.gstin || "" : k === "number" ? now.number || "" : now.pos || "");
-    return !!want && (got === want || (k === "pos" && got === String((GST_STATES || {})[want] || "")));
+    return !!want && (k === "pos" ? !!stCode(want) && stCode(got) === stCode(want) : got === want);
   },
-  // this computer (a browser's own id, kept in it): only the changes made here are sent again by themselves
+  // who is signed in here (saved by, sent by)
+  who() { return (window.Cloud && Cloud.st && Cloud.st.email) || ""; },
+  // this computer (a browser's own id, kept in it): kept with each change, for the computer that saved it and the one that sent it
   dev() {
     if (typeof AlertClear === "object" && AlertClear && typeof AlertClear.device === "function") return AlertClear.device();
     try { let d = localStorage.getItem("fincom:device-id"); if (!d) { d = "dev-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem("fincom:device-id", d); } return d; }
     catch (e) { return FixQ.memDev || (FixQ.memDev = "dev-" + Math.random().toString(36).slice(2, 10)); }
   },
-  here(x) { return !!x && !!x.dev && x.dev === FixQ.dev(); },
   // the changes Tally took (Changes made here (N))
   taken(l) { return (l || FixQ.list()).filter((x) => x.state === "done").length; },
   // the bridge asked once: what the answer means. Bridge.call throws on any answer that says no; its body comes with it
@@ -120,7 +137,7 @@ export const FixQ = {
     const a = await call(rec.ask);
     if (a.fail) return Object.assign(a.fail, a.lost ? { mayHave: true } : {}); // no answer: Tally may have it
     const r = a.r;
-    if (r.ok) return Object.assign(p, { state: "done", before: r.before, after: r.after, doneAt: at, r });
+    if (r.ok) return Object.assign(p, { state: "done", before: r.before, after: r.after, doneAt: at, r }, Array.isArray(r.alsoChanged) && r.alsoChanged.length ? { also: r.alsoChanged.map(String) } : {});
     if (r.held) return Object.assign(p, { state: "waiting", words: WAIT });
     // changed since, but Tally holds exactly what was asked: this computer's earlier send whose answer was lost (done,
     // with Undo), else someone else's (already in Tally, no Undo)
@@ -136,7 +153,9 @@ export const FixQ = {
     FixQ.flying.add(rec.id);
     try {
       const co = CO(rec.cid);
-      const p = !co || typeof bridgeLive !== "function" || !bridgeLive(co) ? { state: "waiting", words: WAIT } : await FixQ.ask(rec, co);
+      const p = !co || typeof bridgeLive !== "function" || !bridgeLive(co) ? { state: "waiting", words: NOBRIDGE } : await FixQ.ask(rec, co);
+      // sent from here: who and which computer sent it, kept beside who saved it (rec.by, rec.dev)
+      if (p.state !== "waiting") Object.assign(p, { sentBy: FixQ.who(), sentDev: FixQ.dev(), sentAt: new Date().toISOString() });
       await FixQ.put(rec, p);
     } finally { FixQ.flying.delete(rec.id); }
     if (typeof render === "function") render();
@@ -147,7 +166,8 @@ export const FixQ = {
     const r = p.r; delete p.r;
     const bk = await FixQ.books(rec.cid);
     const got = !!(r && bk && (await FixQ.back(bk, rec, r)));
-    if (p.state === "done") p.words = got ? "Saved in Tally and FinCom Books." : "Saved in Tally. FinCom Books take it at the next read from Tally.";
+    if (p.state === "done") p.words = (got ? "Saved in Tally and FinCom Books." : "Saved in Tally. FinCom Books take it at the next read from Tally.")
+      + (p.also ? " Tally also changed the " + p.also.join(", the ") + " of this entry. Check it in Tally." : "");
     if (p.state === "already" && !got) p.words = ALREADY + " FinCom Books take it at the next read from Tally.";
     Object.assign(rec, p);
     if (!bk) return;
@@ -190,15 +210,16 @@ export const FixQ = {
       return true;
     } catch (e) { return false; /* the cloud copy brings it in its turn */ }
   },
-  // the held changes of the client open, sent one after another when Tally is open (at most once a minute from a page
-  // drawing); another client opened meanwhile: the one with Tally finishes for its own client, the rest wait
+  // the held changes of the client open, sent one after another when Tally is open here (at most once a minute from a
+  // page drawing); another client opened meanwhile: the one with Tally finishes for its own client, the rest wait. Any
+  // computer whose bridge is up sends them, whoever saved them and wherever (review of 24-Nov-2026): the bridge checks
+  // Tally's change number and the value first, so a second send of the same change does nothing.
   async pump(force) {
     const b = S.books, cid = b && b.cid;
     if (!cid || b.loading || FixQ.busy || (!force && Date.now() - FixQ.last < 60000)) return;
     const co = CO(cid);
     if (!co || typeof bridgeLive !== "function" || !bridgeLive(co)) return;
-    // only the changes made on this computer: a colleague's are shown here, never sent from here
-    const w = FixQ.list(b).filter((x) => x.state === "waiting" && x.cid === cid && FixQ.here(x) && !FixQ.flying.has(x.id));
+    const w = FixQ.list(b).filter((x) => x.state === "waiting" && x.cid === cid && !FixQ.flying.has(x.id));
     if (!w.length) return;
     FixQ.busy = true; FixQ.last = Date.now();
     try {
@@ -215,7 +236,7 @@ export const FixQ = {
     if (!cid) return null;
     const co = CO(cid), coGuid = co ? await FixQ.coGuid(co) : "";
     const rec = Object.assign({ id: "fx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(),
-      by: (window.Cloud && Cloud.st && Cloud.st.email) || "", dev: FixQ.dev(), cid, coGuid, ask, label, state: "waiting", words: "Saving in Tally…" }, extra || {});
+      by: FixQ.who(), dev: FixQ.dev(), cid, coGuid, ask, label, state: "waiting", words: "Saving in Tally…" }, extra || {});
     const l = FixQ.list(b);
     l.push(rec);
     // the newest KEEP kept: the oldest dropped first, a change still waiting for Tally last
@@ -232,13 +253,24 @@ const voucherOf = (id) => ((S.books || {}).vouchers || []).find((v) => v.id === 
 const SUPPLIER = /^(Purchases with no supplier GSTIN|Supplier GSTINs that are not valid)$/;
 // the rows of the month on screen that GST reads (the sales side, or the purchases for a supplier's GSTIN)
 const rowsOf = (what, ym, reg) => { try { return (SUPPLIER.test(what) ? GSTR.inward(ym, reg) : GSTR.outward(ym, reg)) || []; } catch (e) { return []; } };
-// a party's invoices of the month whose GSTIN on the invoice is not this one (none, or another): the ones the GSTIN fix
-// corrects after the ledger (each must carry Tally's change number to be sent)
-export function partyInvoices(what, ym, reg, party, gstin) {
-  const seen = new Map();
+const up = (g) => String(g || "").trim().toUpperCase();
+// the party ledger of an entry (review of 24-Nov-2026): Tally's PARTYLEDGERNAME is always one of the entry's ledger
+// lines, so the party is its ledger when it is one of them. A cash sale with the buyer's details (PARTYNAME a buyer, the
+// party ledger Cash) has no ledger of the party: only its invoices are corrected.
+export function partyLedgerOf(v, party) {
+  const p = String(party || ""), u = (x) => (Books && Books.unesc ? Books.unesc(x) : String(x || ""));
+  if (!p || !v || !Array.isArray(v.ent) || !v.ent.length) return p;
+  return v.ent.some((e) => e && (e.l === p || u(e.l) === u(p))) ? p : "";
+}
+// a party's invoices of the month that the GSTIN fix corrects: no GSTIN, one that is not valid (its check digit), or one
+// of `wrong` (the ledger's old wrong GSTIN). Never one with another valid GSTIN: another address, a branch, or a
+// registration of other dates. Each must carry Tally's change number to be sent. gstin null: none typed yet.
+export function partyInvoices(what, ym, reg, party, gstin, wrong) {
+  const seen = new Map(), bad = new Set((wrong || []).map(up).filter(Boolean));
   rowsOf(what, ym, reg).forEach((r) => {
     if (!r || !r.id || r.party !== party || r.b2cSum || r.b2cNote || r.fromHold || seen.has(r.id)) return;
-    if (String(r.gstin || "").toUpperCase() === gstin) return;
+    const g = up(r.gstin);
+    if ((gstin && g === gstin) || (g && gstOk(g) && !bad.has(g))) return;
     const v = voucherOf(r.id);
     if (v && v.alt != null) seen.set(r.id, { id: r.id, no: r.no || v.no || "", date: v.date, gstin: String(r.gstin || ""), amount: amountOf(r) });
   });
@@ -247,61 +279,78 @@ export function partyInvoices(what, ym, reg, party, gstin) {
 // the row of an entry as the list works it out now (after Tally's entry came in: its number, place of supply, GSTIN)
 const rowNow = (what, ym, reg, id) => (id && rowsOf(what, ym, reg).find((r) => r.id === id)) || null;
 const posCodeOf = (v) => (v && v.pos && typeof stateCodeFrom === "function" ? stateCodeFrom(v.pos) : "");
+const LED_SAID = { done: "Saved in Tally", has: "Has this GSTIN", change: "Changed first" };
 
 // the window
 export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
   const [ym, reg] = String(at || "").split("|");
   const kind = fixKind(c.what), v = d0 && d0.id ? voucherOf(d0.id) : null;
   const [val, setVal] = useState(null), [st, setSt] = useState(null), [busy, setBusy] = useState(false);
-  // the invoices step of a GSTIN: the invoices listed (fixed when it began), the ones unticked, how each went
+  // the invoices step of a GSTIN: the invoices listed (fixed for the GSTIN they were sent with), the ones unticked, how
+  // each went (with the GSTIN it was sent), the ledger's GSTINs this window replaced, the ledger saved here
   const [inv, setInv] = useState(null), [off, setOff] = useState(() => new Set()), [invSt, setInvSt] = useState({});
+  const [olds, setOlds] = useState([]), [ledSaved, setLedSaved] = useState(false);
+  const inStep = useRef(false);
   // the entry as it is now: after "changed since" (or kept) the list's own row of Tally's entry, else the one opened
   const fresh = st && (st.state === "changed" || st.state === "kept") && kind !== "gstin" ? rowNow(c.what, ym, reg, d0.id) : null;
   const d = fresh || d0;
-  const led = String(d.party || ""), ledG = String(((S.books || {}).gstins || {})[led] || "").toUpperCase();
+  const party = String(d.party || ""), led = kind === "gstin" ? partyLedgerOf(v, party) : party;
+  const ledG = led ? up(((S.books || {}).gstins || {})[led]) : "";
   const posNow = (fresh && fresh.posCode) || (st && st.state === "changed" && posCodeOf(v)) || d.posCode || String(d.pos || "").slice(0, 2);
   const noNow = fresh ? String(fresh.no || "") : String(d.no || "");
-  const startVal = kind === "number" ? String(d0.no || "") : kind === "pos" ? (/^\d{2}$/.test(posNow) ? posNow : (d0.gstin ? String(d0.gstin).slice(0, 2) : "")) : kind === "gstin" ? ledG : "";
+  const startVal = kind === "number" ? String(d0.no || "") : kind === "pos" ? (/^\d{2}$/.test(posNow) ? posNow : (d0.gstin ? String(d0.gstin).slice(0, 2) : ""))
+    : kind === "gstin" ? (led ? ledG : up(d0.gstin)) : "";
   const value = val == null ? startVal : val;
   const clean = kind === "gstin" ? value.trim().toUpperCase() : value.trim();
   const gstGood = kind === "gstin" && gstOk(clean);
-  // the invoices of this party in the month on screen with another GSTIN (or none) than the one in the box
-  const invNow = gstGood ? partyInvoices(c.what, ym, reg, led, clean) : [];
-  const ledDone = kind === "gstin" && gstGood && clean === ledG;
-  const step = kind === "gstin" && (inv || (ledDone && invNow.length)) ? "invoices" : "entry";
-  const invList = inv || (step === "invoices" ? invNow : []);
-  const invLeft = invList.filter((x) => !off.has(x.id) && !(invSt[x.id] && (invSt[x.id].state === "done" || invSt[x.id].state === "already")));
+  // the ledger to change first (another GSTIN typed than it holds); the GSTINs whose invoices are corrected too
+  const ledNeeds = kind === "gstin" && !!led && clean !== ledG;
+  const wrong = olds.concat(ledNeeds && ledG ? [ledG] : [], !led ? [up(d0.gstin)] : []);
+  const invNow = kind === "gstin" ? partyInvoices(c.what, ym, reg, party, gstGood ? clean : null, wrong) : [];
+  // the invoices step: no ledger (only invoices), or the ledger right with invoices to correct; it stays once begun
+  if (kind === "gstin" && (!led || (gstGood && !ledNeeds && invNow.length))) inStep.current = true;
+  const step = kind === "gstin" && inStep.current ? "invoices" : "entry";
+  const invList = inv && inv.g === clean ? inv.rows : invNow;
+  const finished = (r) => r && (r.state === "done" || r.state === "already");
+  const said = (x) => { const r = invSt[x.id]; return r && r.to === clean ? r : null; };
+  const invLeft = invList.filter((x) => !off.has(x.id) && !finished(said(x)));
   const ok = kind === "number" ? numberOk(clean) && clean !== noNow : kind === "pos" ? /^\d{2}$/.test(clean) && clean !== posNow
-    : kind === "gstin" ? gstGood && (clean !== ledG || (step === "invoices" ? invLeft.length > 0 : invNow.length > 0)) : false;
-  const canFix = kind && (kind === "gstin" ? !!led : !!(v && v.id && v.alt != null));
+    : kind === "gstin" ? gstGood && (ledNeeds || invLeft.length > 0) : false;
+  const canFix = kind && (kind === "gstin" ? !!party : !!(v && v.id && v.alt != null));
   // a change of this entry (or ledger, or one of the invoices) waiting for Tally, or with Tally now: not asked twice
   const held = busy || (st && st.state === "waiting") || FixQ.waitingFor(kind === "gstin" ? led : d0.id) || invList.some((x) => FixQ.waitingFor(x.id));
+  // one saved on a computer with no bridge, or on this one before: sent now when the bridge is up here
+  useEffect(() => { if (FixQ.waitingFor(kind === "gstin" ? led : d0.id) || invList.some((x) => FixQ.waitingFor(x.id))) FixQ.pump(true); }, []);
   const ledAlt = (((S.books || {}).ledInfo || {})[led] || {}).alt;
-  const finished = (r) => r && (r.state === "done" || r.state === "already");
+  const ledState = ledNeeds ? "change" : ledSaved ? "done" : "has";
   const later = (f) => setTimeout(f, 1200);
-  // the ticked invoices, one at a time, each read back (Tally closed: that one waits, the rest are not sent now)
-  const sendInvoices = async (list) => {
-    setInv(list);
-    const said = {};
+  // the ticked invoices, one at a time, each read back (Tally closed: that one waits, the rest are not sent now). Another
+  // client opened meanwhile: stopped; the rest stay to be fixed for their own client.
+  const sendInvoices = async (list, cid) => {
+    setInv({ g: clean, rows: list });
+    const now = {}, show = () => setInvSt((o) => Object.assign({}, o, now));
     for (const x of list) {
-      if (off.has(x.id) || finished(invSt[x.id])) continue;
+      if (off.has(x.id) || finished(said(x))) continue;
+      if (!S.books || S.books.cid !== cid) break;
       const iv = voucherOf(x.id);
-      if (!iv || iv.alt == null) { said[x.id] = { state: "refused", words: "Not sent: FinCom has no change number of this invoice. Read the books from Tally again." }; setInvSt(Object.assign({}, invSt, said)); continue; }
-      said[x.id] = { state: "waiting", words: "Saving in Tally…" }; setInvSt(Object.assign({}, invSt, said));
+      if (!iv || iv.alt == null) { now[x.id] = { state: "refused", to: clean, words: "Not sent: FinCom has no change number of this invoice. Read the books from Tally again." }; show(); continue; }
+      now[x.id] = { state: "waiting", to: clean, words: "Saving in Tally…" }; show();
       const ask = { target: "voucher", guid: iv.id, alterId: String(iv.alt), vchType: Books.unesc(iv.type), vchDate: iv.date, fields: { gstin: clean } };
       const rec = await FixQ.add(ask, "GSTIN on " + (x.no || "the invoice") + " of " + day(iv.date) + ": " + (iv.gstin || "none") + " → " + clean, { was: String(iv.gstin || ""), to: clean, kind: "gstin", vid: iv.id });
       if (!rec) break;
-      said[x.id] = { state: rec.state, words: rec.words }; setInvSt(Object.assign({}, invSt, said));
+      now[x.id] = { state: rec.state, words: rec.words, to: clean }; show();
       if (rec.state === "waiting") break;
     }
     render();
-    if (list.every((x) => off.has(x.id) || finished(said[x.id]) || finished(invSt[x.id]))) later(onClose);
+    if (S.books && S.books.cid === cid && list.every((x) => off.has(x.id) || finished(now[x.id]) || finished(said(x)))) later(onClose);
   };
   const save = async () => {
+    const cid = (S.books || {}).cid, fromStep = step === "invoices", seen = invList;
     setBusy(true);
     try {
-      if (kind === "gstin" && step === "invoices") { await sendInvoices(invList); return; }
-      // a ledger with no change number in FinCom Books is read from Tally first, in this same Save (FixQ.ask)
+      if (kind === "gstin" && !ledNeeds) { await sendInvoices(seen, cid); return; }
+      // the entry's own fix, or the party ledger first. A ledger with no change number in FinCom Books is read from Tally
+      // first, in this same Save (FixQ.ask)
       setSt({ state: "waiting", words: kind === "gstin" && (ledAlt == null || ledAlt === "") ? "Reading the party from Tally, then saving…" : "Saving in Tally…" });
       const ask = kind === "gstin"
         ? Object.assign({ target: "ledger", ledger: led, was: { gstin: ledG }, fields: { gstin: clean } }, ledAlt != null && ledAlt !== "" ? { alterId: String(ledAlt) } : {})
@@ -313,9 +362,14 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
       if (!rec) return;
       setSt(rec); render();
       if (!finished(rec)) return;
-      // the ledger saved: its invoices of the month with another GSTIN next, all ticked (none: done)
-      if (kind === "gstin") { const l = partyInvoices(c.what, ym, reg, led, clean); if (l.length) { setInv(l); return; } }
-      later(onClose);
+      if (kind !== "gstin") { later(onClose); return; }
+      // the ledger saved: its GSTIN before is one whose invoices are corrected too. From the invoices step the same Save
+      // goes on to the ticked invoices; from the entry they are listed first, all ticked (none: done)
+      const ol = olds.concat(ledG ? [ledG] : []), l = fromStep ? seen : partyInvoices(c.what, ym, reg, party, clean, ol);
+      setOlds(ol); setLedSaved(true);
+      if (!l.length) { later(onClose); return; }
+      inStep.current = true;
+      if (fromStep) await sendInvoices(l, cid); else setInv({ g: clean, rows: l });
     } finally { setBusy(false); }
   };
   // Tally did not say whether it changed: asked again only when the person presses it (the change number decides)
@@ -323,24 +377,33 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
   const tick = (id) => { const n = new Set(off); if (n.has(id)) n.delete(id); else n.add(id); setOff(n); };
   const lines = v ? (v.ent || []).filter((e) => e && e.l) : [];
   const gstNow = fresh ? fresh.gstin : (v && st && st.state === "changed" ? v.gstin : d.gstin);
+  // the ledger's own answer: shown in the entry step; in the invoices step only when it did not go (done: its line says so)
+  const showSt = st && (step === "entry" || !finished(st));
+  const gstBox = kind === "gstin" && <label>GSTIN of {party} <input type="text" data-fix-input="gstin" value={value} maxLength={15} disabled={busy} onChange={(e) => setVal(e.target.value.toUpperCase())} autoFocus />
+    <span className="note" data-fix-count="">{gstOk(clean) ? "✓ " + ((GST_STATES || {})[clean.slice(0, 2)] || "") : clean.length + " of 15"}</span>
+    <span className="note fx-sub">{step === "entry" ? "Changed on the party ledger in Tally, then on this party's invoices of the month." : led ? "Changed on the party ledger in Tally, then on the ticked invoices." : "Changed on the ticked invoices only."}</span></label>;
   return <PanelDialog open={true} onClose={onClose} title={(noNow || "Entry") + (d.date ? " · " + day(d.date) : "")} description={undefined} attrs={{ "data-fix-entry": d0.id || "", "data-fix-kind": kind || "none", "data-fix-step": step }}>
     <div className="fx-pop">
       <p className="fx-pop-head" data-fix-head="">{[v && Books.unesc(v.type), d.party, d.id ? money(amountOf(d)) : ""].filter(Boolean).join(" · ")}</p>
       {why && step === "entry" && <p className="note" data-fix-why="">{why}</p>}
-      {canFix && step === "entry" && <div className="fx-field">
+      {canFix && <div className="fx-field">
         {kind === "number" && <label>Invoice number <input type="text" data-fix-input="number" value={value} maxLength={40} onChange={(e) => setVal(e.target.value)} autoFocus />
           <span className="note" data-fix-count="">{clean.length} of 16{numberOk(clean) ? " ✓" : ""}</span></label>}
         {kind === "pos" && <label>Place of supply <select data-fix-input="pos" value={value} onChange={(e) => setVal(e.target.value)} autoFocus>
           <option value="">Choose the state</option>{STATES().map(([cd, n]) => <option key={cd} value={cd}>{cd} {n}</option>)}</select></label>}
-        {kind === "gstin" && <label>GSTIN of {led} <input type="text" data-fix-input="gstin" value={value} maxLength={15} onChange={(e) => setVal(e.target.value.toUpperCase())} autoFocus />
-          <span className="note" data-fix-count="">{gstOk(clean) ? "✓ " + ((GST_STATES || {})[clean.slice(0, 2)] || "") : clean.length + " of 15"}</span>
-          <span className="note fx-sub">Changed on the party ledger in Tally, then on this party's invoices of the month.</span></label>}
+        {gstBox}
         {kind === "number" && <p className="note fx-sub">Up to 16 letters, digits, / and -.</p>}
       </div>}
       {step === "invoices" && <div className="fx-inv" data-fix-invoices={invList.length}>
-        <p className="note">{ledDone && !inv ? "The party ledger has this GSTIN. " : "The party ledger is saved. "}These invoices of {led}{ym ? " in " + (GSTR.label ? GSTR.label(ym) : ym) : ""} carry {invList.some((x) => x.gstin) ? "another GSTIN" : "no GSTIN"}. Ticked ones get {clean} in Tally.</p>
+        <p className="note">{!invList.length ? "No invoice of " + party + " in this month needs it." : led
+          ? "These invoices of " + party + (ym ? " in " + (GSTR.label ? GSTR.label(ym) : ym) : "") + " have no GSTIN, one that is not valid, or the ledger's old one. Ticked ones get " + (gstGood ? clean : "the GSTIN above") + " in Tally."
+          : party + " is not a ledger in Tally: the buyer's details are on the invoice. Ticked ones get " + (gstGood ? clean : "the GSTIN above") + " in Tally."}</p>
         <table className="bk-table fx-lines"><tbody>
-          {invList.map((x) => { const r = invSt[x.id]; return <tr key={x.id} data-fix-inv={x.id} data-fix-inv-state={r ? r.state : ""}>
+          {led && <tr className="fx-led-row" data-fix-led-row={led} data-fix-led-state={ledState}>
+            <td>Party ledger: {led}</td>
+            <td className="n">{ledState === "change" ? <>{ledG || "no GSTIN"}<br />→ {gstGood ? clean : "…"}</> : ledG}</td>
+            <td className="n">{LED_SAID[ledState]}</td></tr>}
+          {invList.map((x) => { const r = said(x); return <tr key={x.id} data-fix-inv={x.id} data-fix-inv-state={r ? r.state : ""}>
             <td><label className="fx-tick"><input type="checkbox" data-fix-tick={x.id} checked={!off.has(x.id)} disabled={held || finished(r)} onChange={() => tick(x.id)} /> {x.no || "—"} · {day(x.date)}</label></td>
             <td className="n">{x.gstin || "no GSTIN"}</td>
             <td className="n">{r ? (finished(r) ? SAID[r.state] : r.words) : money(x.amount)}</td></tr>; })}
@@ -352,7 +415,7 @@ export function FixEntry({ d: d0, c, why, tally, at, onClose, onLookup }) {
         <tr><td>GSTIN</td><td className="n" data-fix-gstin="">{gstNow || ledG || "—"}</td></tr>
       </tbody></table>}
       {!kind && tally && <p className="fx-tally" data-fix-tally="">{tally}</p>}
-      {st && <p className={"fx-state" + (finished(st) ? " good" : "")} data-fix-state={st.state}>{st.words}
+      {showSt && <p className={"fx-state" + (finished(st) ? " good" : "")} data-fix-state={st.state}>{st.words}
         {st.state === "unknown" && <>{" "}<button type="button" className="linkbtn" data-fix-again="" disabled={busy} onClick={again}>Ask Tally again</button></>}</p>}
       <div className="fx-pop-act">
         <button type="button" className="linkbtn" data-fix-lookup="" onClick={onLookup}>Open in Look up</button>
@@ -391,7 +454,7 @@ export function FixHistory() {
   return <details className="fx-hist" data-fix-history={l.length}>
     <summary>Changes made here ({FixQ.taken(l)})</summary>
     <ul>{l.slice().reverse().slice(0, 50).map((x) => <li key={x.id} data-fix-rec={x.state}>
-      <span>{x.label}</span> <span className="note">· {SAID[x.state] || x.words}{x.by ? " · " + x.by : ""}{x.state === "waiting" && !FixQ.here(x) ? " · sent from the computer it was made on" : ""}</span>
+      <span>{x.label}</span> <span className="note">· {SAID[x.state] || x.words}{x.by ? " · saved by " + x.by : ""}{x.sentDev && x.sentDev !== x.dev ? " · sent from another computer" + (x.sentBy && x.sentBy !== x.by ? " by " + x.sentBy : "") : ""}</span>
       {x.state === "unknown" && <>{" · "}<button type="button" className="linkbtn" data-fix-again={x.id} disabled={FixQ.flying.has(x.id)} onClick={() => FixQ.send(x)}>Ask Tally again</button></>}
       {can(x) && <>{" · "}<button type="button" className="linkbtn" data-fix-undo={x.id} disabled={pending(x)} onClick={() => undo(x)}>Undo</button></>}
     </li>)}</ul>
