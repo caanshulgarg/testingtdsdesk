@@ -660,7 +660,7 @@ else {
     out = Object.assign({ ok: true, kind: made.kind, words: String(made.words || "") + (gone ? BACK : "") }, gone ? { withdrawn: gone } : {}, made.nosalary ? { nosalary: true } : {});
   } else {
     const a = await applyNow({ rest, firm: F, cid: "c1", night: today.slice(0, 4) + "-" + today.slice(4, 6) + "-" + today.slice(6, 8), by: "u-made-up", press: body.press === true }, made);
-    const words = a.kind === "kept" ? (a.client ? (a.question === "asked" || a.question === "answered" ? "Waiting for the client’s answer for " + mon + " on Daily Check › From clients." : "The question for " + mon + " is on Daily Check › From clients.") : "Daily Check needs you for " + mon + ".") : made.words || "";
+    const words = a.kind === "kept" ? (a.client ? (a.question === "answered" ? "The client has answered the question for " + mon + " on Daily Check › From clients. Close it there, then press Make the journal now." : a.question === "asked" ? "Waiting for the client’s answer for " + mon + " on Daily Check › From clients." : "The question for " + mon + " is on Daily Check › From clients.") : "Daily Check needs you for " + mon + ".") : made.words || "";
     out = Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a);
   }
 }

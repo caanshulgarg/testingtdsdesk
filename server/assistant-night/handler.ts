@@ -241,8 +241,9 @@ export function handler(deps: Deps) {
     const a = await applyNow({ rest, firm, cid, night: istDay(now()), by: String(user.id), press: body.press === true }, made);
     // (review 3) kept (the month set aside or undone on Daily Check): Needs you, never the note of an entry made
     // (review 5) held by a question asked of the client: waiting for the client's answer (From clients), not Needs you
-    // (review 6) a question not yet sent (a Draft) or closed: its place named, not "waiting for the client"
-    const words = a.kind === "kept" ? (a.client ? (a.question === "asked" || a.question === "answered" ? "Waiting for the client’s answer for " + monYear(ym) + " on Daily Check › From clients." : "The question for " + monYear(ym) + " is on Daily Check › From clients.") : "Daily Check needs you for " + monYear(ym) + ".") : a.kind === "you" ? String(made.words || "") : made.words || "";
+    // (review 6) a question not yet sent (a Draft) or closed: its place named, not "waiting for the client"; (review 7)
+    // answered: what to do (close it, then press)
+    const words = a.kind === "kept" ? (a.client ? (a.question === "answered" ? "The client has answered the question for " + monYear(ym) + " on Daily Check › From clients. Close it there, then press Make the journal now." : a.question === "asked" ? "Waiting for the client’s answer for " + monYear(ym) + " on Daily Check › From clients." : "The question for " + monYear(ym) + " is on Daily Check › From clients.") : "Daily Check needs you for " + monYear(ym) + ".") : a.kind === "you" ? String(made.words || "") : made.words || "";
     return [200, Object.assign({ ok: true, words: words + (a.withdrawn ? BACK : "") }, made.running ? { running: true } : {}, a)] as const;
   }
 

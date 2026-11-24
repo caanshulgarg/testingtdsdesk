@@ -296,9 +296,14 @@ console.log("9. (review 4) a press is the person's new decision; the update afte
   ok((await applyNow(ctx(uq, true), o1)).kind === "kept" && uq.db.night_entries.length === 0 && uq.db.night_findings[0].state === "ask", "undone with a question to the client open: kept (the client's to answer)");
   const uc = cloud({ findings: [U()], asks: [{ id: "q1", finding_id: "f7", state: "closed" }] });
   ok((await applyNow(ctx(uc, true), o1)).kind === "made" && uc.db.night_entries.length === 1, "its question closed: pressed, made");
-  // a person's other choice (decided, not set aside) is not touched by a press
+  // (review 7) asked of the client by a person (Ask client: ask, decided): a press is their new decision too, unless the
+  // question is Asked or Answered (the client's to answer)
   const dd = cloud({ findings: [D({ state: "ask" })] });
-  ok((await applyNow(ctx(dd, true), o1)).kind === "kept" && dd.db.night_findings[0].decided_by === "u2", "a person's other choice (ask the client) stays");
+  const rdd = await applyNow(ctx(dd, true), o1);
+  ok(rdd.kind === "made" && rdd.reopened === "asked" && dd.db.night_entries.length === 1 && dd.db.night_findings[0].decided_by === null, "asked of the client by a person, no question sent: pressed, opened again and made: " + JSON.stringify(rdd));
+  const dq = cloud({ findings: [D({ state: "ask" })], asks: [{ id: "q1", finding_id: "f7", state: "answered" }] });
+  const rdq = await applyNow(ctx(dq, true), o1);
+  ok(rdq.kind === "kept" && rdq.client === true && rdq.question === "answered" && dq.db.night_entries.length === 0 && dq.db.night_findings[0].decided_by === "u2", "asked of the client by a person, the client answered: kept, the client's: " + JSON.stringify(rdq));
 
   // 3. the same mismatch again, not a salary difference: no loop, the server's own words
   const { stillAsChecked, NOT_YET } = await import("../app/src/screens/daily/again.js");

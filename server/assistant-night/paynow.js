@@ -27,10 +27,12 @@ export async function existingNow(rest, firm, cid, ym) {
 // FinCom finds it now (its old choice and undo cleared), so the entry is made as normal. Never by the update after a save
 // (no press): that keeps the person's choice. (review 5) Either way, a question asked of the client (Asked, or Answered)
 // keeps the finding the client's to answer; a Draft never sent to the client does not hold the press back (and is left as
-// it is). Their id: the one opened again, or "" ("client": held by a question asked of the client)
+// it is). (review 7) One a person asked of the client (Ask client: ask, decided) is the same: its question a Draft never
+// sent, or Closed, does not hold the press back. Their id: the one opened again, or "" ("client": held by a question
+// asked of the client)
 const CLIENTS = ["asked", "answered"];
 async function reopenFinding(rest, firm, cid, cur) {
-  if (!(cur.state === "dismissed" || (cur.undone_at && cur.state === "ask" && !cur.decided_by))) return "";
+  if (!(cur.state === "dismissed" || (cur.state === "ask" && (cur.decided_by || cur.undone_at)))) return "";
   const qs = await rest("/rest/v1/client_asks?select=id,state&finding_id=eq." + enc(cur.id));
   if (!Array.isArray(qs)) throw new Error("the client's questions could not be read");
   return qs.some((q) => q && CLIENTS.includes(q.state)) ? "client" : cur.id;
@@ -57,11 +59,21 @@ async function putFinding(rest, firm, cid, night, f, press, by) {
     return { id: cur.id, state: "ask", undone: true, reopened: "dismissed" };
   }
   if (again) {
-    const was = cur.state === "dismissed" ? "dismissed" : "undone";
-    // (review 5) only while it is still set aside or undone: a decision made on Daily Check at the same moment stays (kept)
-    const done = await rest("/rest/v1/night_findings?id=eq." + enc(cur.id) + "&state=in.(dismissed,ask)", "", { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ facts: f.facts || {}, state: st, evidence: ev, candidates: st === "you" ? (f.candidates || []) : [],
+    const was = cur.state === "dismissed" ? "dismissed" : cur.decided_by ? "asked" : "undone";
+    // (review 5) only while it is still set aside or undone: a decision made on Daily Check at the same moment stays (kept);
+    // (review 7) one asked of the client by a person: only while it is still a question (ask)
+    const done = await rest("/rest/v1/night_findings?id=eq." + enc(cur.id) + (was === "asked" ? "&state=in.(ask)" : "&state=in.(dismissed,ask)"), "", { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ facts: f.facts || {}, state: st, evidence: ev, candidates: st === "you" ? (f.candidates || []) : [],
       decided_by: null, decided_at: null, undone_by: null, undone_at: null, last_seen: cur.last_seen && String(cur.last_seen) > night ? cur.last_seen : night }) });
     if (!(Array.isArray(done) && done.length)) return { id: cur.id, state: cur.state, undone: !!cur.undone_at, raced: true };
+    // (review 7, race) its question sent to the client meanwhile (Asked or Answered since the first read): nothing made; the
+    // finding back as the client's question (ask, undone: never resolved by itself), only while still as reopened
+    const q2 = await rest("/rest/v1/client_asks?select=id,state&finding_id=eq." + enc(cur.id)).catch(() => null);
+    if (!Array.isArray(q2) || q2.some((q) => q && CLIENTS.includes(q.state))) {
+      const back = await rest("/rest/v1/night_findings?id=eq." + enc(cur.id) + "&state=in.(" + st + ")", "", { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ state: "ask", evidence: [], candidates: [],
+        decided_by: null, decided_at: null, undone_by: by || null, undone_at: new Date().toISOString() }) });
+      if (!(Array.isArray(back) && back.length)) return { id: cur.id, state: st, undone: false, reopened: was, raced: true };
+      return { id: cur.id, state: "ask", undone: true, reopened: was };
+    }
     return { id: cur.id, state: st, undone: false, reopened: was };
   }
   if (cur) {
