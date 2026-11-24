@@ -473,7 +473,7 @@ try:
         db.sql("insert into tally_bridge_ids (bridge_id, device_id, firm_id) values (%s, %s, %s)" % (q(br), q(dv), q(F)))
     db.sql("update tally_check_runs set state = 'going', stop_why = null where book_id = %s" % q(BK[k]))
     db.sql("delete from tally_check_days where book_id = %s" % q(BK[k]))
-    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'held'), (%s, %s, %s, 'fill')" % (q(BK[k]), q(F), q(D(1).isoformat()), q(BK[k]), q(F), q(D(2).isoformat())))
+    db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'delete'), (%s, %s, %s, 'fill')" % (q(BK[k]), q(F), q(D(1).isoformat()), q(BK[k]), q(F), q(D(2).isoformat())))
     claim = lambda dv, br, auto=None: j("select tally_days_claim(%s, %s, %s, %s, 'check', 3, false%s)::text" % (q(F), q(BK[k]), q(dv), q(br), "" if auto is None else (", true" if auto else ", false")))
     days = lambda r_: [x.get("day") for x in r_] if isinstance(r_, list) else ["error: %s" % r_]
     ok(db.one("select count(*) from jsonb_array_elements(tally_read_serving(%s, %s))" % (q(F), q(BK[k]))) == "2", "(step) both bridges serve the book")
@@ -481,9 +481,9 @@ try:
     for i in range(3):     # the old bridge beats three times; its claims are never deleted
         got_old.append(days(claim(OLD, BO, False)))
         db.sql("update tally_check_days set asked_at = now() - interval '3 minutes' where book_id = %s" % q(BK[k]))
-    ok(all(g == [d8(D(2))] for g in got_old), "an old bridge (p_auto false): only the 'fill' day, never the held one, beat after beat (%s)" % got_old)
+    ok(all(g == [d8(D(2))] for g in got_old), "an old bridge (p_auto false): only the 'fill' day, never the 'delete' one, beat after beat (%s)" % got_old)
     gn = days(claim(NEW, BN, True))
-    ok(gn == [d8(D(1))], "then a 2.5.16+ bridge: gets the stuck held day at once (%s)" % gn)
+    ok(gn == [d8(D(1))], "then a 2.5.16+ bridge: gets the stuck 'delete' day at once (%s)" % gn)
     db.sql("delete from tally_work_claims where book_id = %s" % q(BK[k])); db.sql("update tally_check_days set asked_at = null where book_id = %s" % q(BK[k]))
     g7 = days(claim(NEW, BN))
     ok(sorted(g7) == sorted([d8(D(1)), d8(D(2))]), "the 7-argument call works as before: every source (%s)" % g7)
@@ -510,6 +510,16 @@ try:
     ok(pr == {D(80).isoformat(): "false", D(81).isoformat(): "true", D(82).isoformat(): "false"}, "a check day finished: its period day unmarked; the payroll one still waiting (%s)" % pr)
     queue(k); ok(cday(k, D(81)).get("done") == "false" and db.one("select count(*) from tally_check_days where book_id = %s and day = %s" % (q(BK[k]), q(D(80).isoformat()))) == "1", "queued again: the open one left as it is, the finished one not reopened")
 
+    print("  -- p_auto false: held and gap days as today; delete, future and retry for newer bridges only")
+    k = 1
+    db.sql("update tally_check_runs set state = 'going', stop_why = null where book_id = %s; delete from tally_check_days where book_id = %s" % (q(BK[k]), q(BK[k])))
+    srcs = {"held": 90, "gap": 91, "delete": 92, "future": 93, "retry": 94, "fill": 95, "oddsource": 96}
+    for src, n_ in srcs.items():
+        db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, %s)" % (q(BK[k]), q(F), q(D(n_).isoformat()), q(src)))
+    o = j("select tally_check_next_open(%s, 30, false)::text" % q(BK[k]))
+    got = sorted(src for src, n_ in srcs.items() if isinstance(o, list) and d8(D(n_)) in [x["day"] for x in o])
+    ok(got == ["fill", "gap", "held"], "an old bridge: held and gap days handed (as today), never delete, future, retry or an unknown source (%s)" % got)
+    db.sql("update tally_check_days set asked_at = null where book_id = %s" % q(BK[k]))
     print("  -- a give-up by tally_period_upload backs off the day's open check day: 1 h, 3 h, then 24 h")
     k = 6; GU = D(84)
     db.sql("insert into tally_check_days (book_id, firm_id, day, source) values (%s, %s, %s, 'retry') on conflict do nothing" % (q(BK[k]), q(F), q(GU.isoformat())))
