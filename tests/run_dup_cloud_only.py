@@ -287,7 +287,7 @@ with sync_playwright() as p:
     a, st, sent = one("ZS/72", "", sv("ZS/72", typ="Sales UP"))
     ok(st == "posted" and sent == [[a]], "cloud copy: no GSTIN on the invoice, 'Sales UP' against 'Sales': posted (%s, sent %s)" % (st, sent))
     a, st, sent = one("ZS/73", "", sv("ZS/73", typ="Sales UP", party="Lambda Stores"))
-    ok(st == "posted" and sent == [[a]], "cloud copy: neither with a GSTIN, another type: posted (%s)" % st)
+    ok(st == "intally Sales UP" and sent == [], "cloud copy: neither with a GSTIN, another Sales-class type and party, the same number, date and amount: In Tally (the owner, 24-Nov-2026) (%s)" % st)
     a, st, sent = one("ZS/74", G["k"], sv("ZS/74", typ="Sales UP", party="Mu Traders", gstin=G["m"]))
     ok(st == "posted" and sent == [[a]], "cloud copy: another GSTIN: posted (%s)" % st)
     a, st, sent = one("ZS/75", G["k"], sv("ZS/75", typ="Credit Note"))
@@ -384,19 +384,25 @@ with sync_playwright() as p:
     ok(vts == ["Credit Sales"], "salesBooksVts: only 'Credit Sales' is the client's sales type (%s)" % vts)
     A.evaluate("() => { const c = SL().cfg; [c.creditNoteType, c.debitNoteType] = window.__nt; if (!c.creditNoteType) delete c.creditNoteType; if (!c.debitNoteType) delete c.debitNoteType; }")
 
-    print("SALES 14e. a cash memo is a sale; an order or a delivery with a sales word is one; an order, a delivery note, a challan or a quotation alone never (the owner, 24-Nov-2026)")
-    CM_SALE = ["Cash Memo", "Sales Cash Memo", "Sales (Cash Memo)", "CashMemo", "Home Delivery Sales", "Door Delivery Sales", "Sales (Free Delivery)", "Sales Order Invoice", "Sales Online Order", "Online Order Sales", "Sales Border"]
-    CM_NOT = ["Sales Order", "Sales Orders", "Sales Reorder", "Sales - Delivery", "Delivery Note", "Delivery Challan", "Sales Delivery Challan", "Sales Quotation", "Sales Memorandum", "Sales Memo", "Cash Memorandum", "Purchase Cash Memo", "Cash Memo Return"]
+    print("SALES 14e. a cash memo is a sale; an order or a delivery with a sales word is one; an order, a delivery note or challan, a purchase, a petty or expense cash memo, a proforma or a quotation never (the owner, 24-Nov-2026)")
+    CM_SALE = ["Cash Memo", "Sales Cash Memo", "Sales (Cash Memo)", "CashMemo", "Home Delivery Sales", "Door Delivery Sales", "Sales (Free Delivery)", "Sales Order Invoice", "Sales Online Order", "Online Order Sales", "Sales Border",
+               # (review of 0d6a1b2e1: sales before it, sales again) a challan or a purchase word after "Sales", a delivery
+               # not in the delivery-note sense, an order invoice written "Inv"
+               "Sales Challan", "Challan Sales", "Sales Purchase", "Sales Purchases", "Sales Delivered", "Sales Deliveries", "Sales Order Inv", "Sales Order Inv.",
+               # (the owner, 24-Nov-2026) an invoice, a bill of supply, a sales delivery on its own
+               "Tax Invoice", "Retail Invoice", "Bill of Supply", "Sales Delivery", "Sales - Delivery"]
+    CM_NOT = ["Sales Order", "Sales Orders", "Sales Reorder", "Delivery Note", "Delivery Challan", "Sales Delivery Challan", "Sales Quotation", "Sales Memorandum", "Sales Memo", "Cash Memorandum", "Purchase Cash Memo", "Cash Memo Return",
+              "Petty Cash Memo", "Expense Cash Memo", "Purchase Invoice", "Purchases Invoice", "Purchase", "Proforma Invoice", "Pro-forma Invoice", "Delivery", "Sales Delivery Note"]
     for i, t in enumerate(CM_SALE):
         a, st, sent = one("ZS/16%02d" % i, G["k"], sv("ZS/16%02d" % i, typ=t))
         ok(st == "intally " + t and sent == [], "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
     for i, t in enumerate(CM_NOT):
         a, st, sent = one("ZS/17%02d" % i, G["k"], sv("ZS/17%02d" % i, typ=t))
         ok(st == "posted" and sent == [[a]], "cloud copy: '%s', the same GSTIN: never the sale, posted (%s)" % (t, st))
-    for i, t in enumerate(["Cash Memo", "Door Delivery Sales", "Sales Order Invoice", "Sales Online Order"]):
+    for i, t in enumerate(["Cash Memo", "Door Delivery Sales", "Sales Order Invoice", "Sales Online Order", "Tax Invoice", "Sales Challan", "Sales Order Inv"]):
         a, st, sent = own("ZS/18%02d" % i, G["k"], mine=t)
         ok(st == "intally" and sent == [], "FinCom's own: an invoice In Tally as '%s', another 'Sales' invoice of that number, the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
-    for i, t in enumerate(["Sales Order", "Delivery Challan", "Sales Quotation", "Sales Memorandum"]):
+    for i, t in enumerate(["Sales Order", "Delivery Challan", "Sales Quotation", "Sales Memorandum", "Purchase Invoice", "Petty Cash Memo", "Proforma Invoice"]):
         a, st, sent = own("ZS/19%02d" % i, G["k"], mine=t)
         ok(st == "posted" and sent == [[a]], "FinCom's own: the one of that number is a '%s': never the sale, posted (%s)" % (t, st))
     cls = A.evaluate("(ts) => ts.map(t => salesTypeClasses([])(t))", CM_SALE + CM_NOT)
@@ -405,6 +411,57 @@ with sync_playwright() as p:
       S.books = {cid: SL().cid, vouchers: [].concat(mk('Sales Cash Memo', 9), mk('Door Delivery Sales', 6), mk('Cash Memo', 4), mk('Sales Order', 20), mk('Delivery Challan', 20), mk('Sales Memorandum', 20), mk('Sales Quotation', 20))};
       try { return salesBooksVts().map(x => x.type); } finally { S.books = b0; } }""")
     ok(vts == ["Sales Cash Memo", "Door Delivery Sales", "Cash Memo"], "salesBooksVts: the cash memos and 'Door Delivery Sales' are the client's sales types; orders, challans, memoranda, quotations never (%s)" % vts)
+
+    print("SALES 14f. neither with a GSTIN (a walk-in cash memo): the same number, date and amount (to Rs 1) of any sale is the same entry, whatever the party or the type (the owner, 24-Nov-2026)")
+    A.evaluate(SETL, [LED + [["Walk-in Customer", "Sundry Debtors"], ["Cash", "Cash-in-Hand"]], G])
+    def walkin(n, d="2026-11-02", tot=0):
+        a = A.evaluate(ADD, [n, d, "", tot])
+        A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.x.customerName = 'Walk-in Customer'; v.customerLedger = 'Walk-in Customer'; v.userLedger = true; mapInvoice(v); }", a)
+        return a
+    def b2c(n, copy):
+        sfresh(A); a = walkin(n)
+        A.evaluate("() => { window.__cloud.vouchers = [" + copy + "]; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        return a, A.evaluate(SST1, a), A.evaluate("() => window.__sent")
+    a, st, sent = b2c("CM/1", sv("CM/1", typ="Cash Memo", party="Cash"))
+    ok(st == "intally Cash Memo" and sent == [], "cloud copy: 'CM/1' in Tally as 'Cash Memo' to 'Cash', uploaded again as 'Sales' to 'Walk-in Customer': In Tally, not sent (%s, sent %s)" % (st, sent))
+    a, st, sent = b2c("CM/2", sv("CM/2", typ="Cash Memo", party="Cash", amt="1180.90"))
+    ok(st == "intally Cash Memo" and sent == [], "cloud copy: the same, 90 paise off: In Tally (%s)" % st)
+    a, st, sent = b2c("CM/3", sv("CM/3", typ="Cash Memo", party="Cash", d="20261103"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: the same number, another date: posted (%s)" % st)
+    a, st, sent = b2c("CM/4", sv("CM/4", typ="Cash Memo", party="Cash", amt="1185.00"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: the same number, Rs 5 off: posted (%s)" % st)
+    a, st, sent = b2c("CM/5", sv("CM/5", typ="Tax Invoice", party="Cash"))
+    ok(st == "intally Tax Invoice" and sent == [], "cloud copy: a 'Tax Invoice' of that number, date and amount: In Tally (%s)" % st)
+    for i, t in enumerate(["Purchase Invoice", "Petty Cash Memo", "Proforma Invoice", "Sales Order", "Credit Note", "Journal"]):
+        a, st, sent = b2c("CM/6%d" % i, sv("CM/6%d" % i, typ=t, party="Cash"))
+        ok(st == "posted" and sent == [[a]], "cloud copy: a '%s' of that number, date and amount: never the sale, posted (%s)" % (t, st))
+    a, st, sent = b2c("CM/7", sv("CM/7", typ="Cash Memo", party="Cash", opt="Yes"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: an Optional 'Cash Memo' of that entry: posted (%s)" % st)
+    a, st, sent = b2c("CM/8", sv("CM/8", typ="Cash Memo", party="Cash", can="Yes"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: a cancelled 'Cash Memo' of that entry: posted (%s)" % st)
+    a, st, sent = one("CM/9", G["k"], sv("CM/9", typ="Cash Memo", party="Cash"))
+    ok(st == "posted" and sent == [[a]], "cloud copy: the new invoice with a GSTIN, the Tally one to 'Cash' with none: the old rule, posted (%s)" % st)
+    def own_b(n, mine, d="2026-11-02", tot=1180, g=""):
+        ids = sfresh(A, n)
+        A.evaluate("([id, t, d, tot, g]) => { const p = SL().list.find(v => v.id === id); p.status = 'intally'; p.x.customerGstin = g; p.x.customerName = 'Cash'; p.customerLedger = 'Cash'; p.x.date = d; p.x.total = tot; p.tallyMatch = {key: 'k-' + id, number: p.x.number, type: t, date: d.replace(/-/g, '')}; }", [ids[0], mine, d, tot, g])
+        a = walkin(n)
+        A.evaluate("() => { window.__cloud.vouchers = []; }")
+        A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(700)
+        return a, A.evaluate("(id) => SL().list.find(v => v.id === id).status", a), A.evaluate("() => window.__sent")
+    a, st, sent = own_b("CM/11", "Cash Memo")
+    ok(st == "intally" and sent == [], "FinCom's own: 'CM/11' In Tally as 'Cash Memo' to 'Cash', uploaded again as 'Sales' to 'Walk-in Customer': In Tally, not sent (%s, sent %s)" % (st, sent))
+    a, st, sent = own_b("CM/12", "Cash Memo", d="2026-11-03")
+    ok(st == "posted" and sent == [[a]], "FinCom's own: the same number, another date: posted (%s)" % st)
+    a, st, sent = own_b("CM/13", "Cash Memo", tot=1185)
+    ok(st == "posted" and sent == [[a]], "FinCom's own: the same number, Rs 5 off: posted (%s)" % st)
+    a, st, sent = own_b("CM/14", "Tax Invoice")
+    ok(st == "intally" and sent == [], "FinCom's own: a 'Tax Invoice' of that number In Tally: In Tally (%s)" % st)
+    a, st, sent = own_b("CM/15", "Purchase Invoice")
+    ok(st == "posted" and sent == [[a]], "FinCom's own: a 'Purchase Invoice' of that number: posted (%s)" % st)
+    a, st, sent = own_b("CM/16", "Cash Memo", g=G["m"])
+    ok(st == "posted" and sent == [[a]], "FinCom's own: the one In Tally with a GSTIN, the new one with none: the old rule, posted (%s)" % st)
+    A.evaluate(SETL, [LED, G])
 
     print("SALES 15. an entry not really in the books never makes a new upload the same entry (an Optional voucher deleted in Tally)")
     a, st, sent = one("ZS/120", G["k"], sv("ZS/120", opt="Yes"))

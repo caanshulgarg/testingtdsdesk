@@ -320,7 +320,9 @@ async function salesVouchersIn(co, from, to, call){
 // note type (salesNotSale)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b|cash[\s_-]*memo/i.test(n); };
+  // (the owner, 24-Nov-2026: "Tax Invoice", "Retail Invoice", "Bill of Supply" are sales too; "Proforma Invoice",
+  // "Purchase Invoice" never, salesNotSale)
+  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b|cash[\s_-]*memo|\binvoices?\b|bill[\s_-]*of[\s_-]*supply/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
