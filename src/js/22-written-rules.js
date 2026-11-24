@@ -439,7 +439,8 @@ async function uploadStatements(files, force){
       if (!rows.length && x.top){ b.busy = ""; await bankOpenHeld(b.cid, x.top); continue; }
       // a line held aside as a repeat is not charged (review of 08-Nov-2026), nor one already uploaded (audit of 22-Nov-2026)
       const paid = x.rows.length - x.held;
-      if (paid > 0 && !(await charge("bank", paid, file.name, paid + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
+      // (force.again: the same statement read again with its columns put right, parts/bank/ColsRead.jsx: not charged twice)
+      if (paid > 0 && !(force && force.again) && !(await charge("bank", paid, file.name, paid + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
       st.otherClient = other ? other.name : "";
       // another client (or this one afresh) opened while the file was read: the statement is kept under its own client,
       // written there, never on the page open now (audit of 22-Nov-2026), and suggested when its page is opened
@@ -458,7 +459,7 @@ async function uploadStatements(files, force){
       toast(file.name + ": " + x.say + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
-      b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
+      b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString(), head: err && err.diag && err.diag.head};
     }
   }
   } finally { on.delete(b.cid); }

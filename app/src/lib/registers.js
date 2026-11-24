@@ -6,6 +6,8 @@
 // (VR.refs, the document numbers in a narration: the vendor reconciliation, loaded with it)
 import "../../../src/js/99-screen-parts.js";
 import "./vendorRecon.js";
+// the one-time AI column reading of a bank statement sheet and a 24Q salary sheet, on SheetAI below (aiColumns.js)
+import { forPage as aiColsFor } from "./aiColumns.js";
 /* ================================================================== */
 /* A register uploaded as a sheet or JSON becomes entries to review   */
 /* ================================================================== */
@@ -1535,3 +1537,4 @@ function reconPickFile(side){
 }
 
 Object.assign(window, {SHEET_FIELDS, SHEET_AMOUNTS, SheetFmt, SheetPost, SheetAI, SheetImport, PARTY_FIELDS, RECON_TOL, PartyRecon, reconPickFile});
+if (typeof aiColsFor === "function") window.AiCols = aiColsFor(window);   // (the Node tests read this file without its imports)

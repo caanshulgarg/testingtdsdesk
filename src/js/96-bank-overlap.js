@@ -138,6 +138,8 @@ const BankOverlap = (() => {
     if (dupIds.length) st.dupIds = dupIds;
     // a PDF with more pages than are read (readStatement: parsed.cut): said here and on the statement (Bank.jsx)
     if (parsed.cut) st.cut = parsed.cut;
+    // a sheet read by the columns FinCom's AI (or a person) gave for its layout: said on the statement (parts/bank/ColsRead.jsx)
+    if (parsed.cols) st.cols = parsed.cols;
     let say;
     if (x.dupRows){
       const w = periodWords(skipped.map(r => r.date), rows.map(r => r.date));

@@ -45,6 +45,8 @@ import Deductions24 from "./tds/Ded24.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 import "../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
+// the 24Q salary sheet read through the columns FinCom's AI gave its layout: "Columns read as …", Change
+import SalaryCols from "./tds/SalaryCols.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -588,6 +590,7 @@ export function Return24({ b }) {
   </div>;
   return <>
     <ReturnShell fy={fy} q={q} form="24Q" status={status} draft={false} val={val} primary={primary} more={more} steps={steps}>
+      {S.tdsTab !== "deductor" && <SalaryCols />}
       {S.tdsTab === "deductor" ? <DeductorDetails />
         : S.tdsTab === "deductees" ? <DeducteesPan form="24Q" fy={fy} q={q} title={CO().name + " " + fname + " " + q + " " + fy} />
         : S.tdsTab === "challans" ? <ReturnChallans fy={fy} q={q} form="24Q" />
