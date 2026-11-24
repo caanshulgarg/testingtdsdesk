@@ -602,13 +602,17 @@ function salesDupOf(v){
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), party: o.customerLedger || o.x.customerName || "", id: o.id} : null;
 }
 // a voucher type that is never a sale, by a word of its name (spaces, "_", "-", brackets between words): a credit or
-// debit note (also "Cr Note", "Dr Note", CN, DN, a note alone), a Journal, a receipt, a payment, a contra, Rtn or Ret;
-// or by any part of it: a return ("SalesReturn", "Returnable"), an order, a quotation, a delivery or a memo ("Sales
-// Memorandum": not in the books). "Credit" or "Debit" alone is a sale ("Credit Sales", "Sales (Credit)"); salesBooksVts
-// and salesTypeClasses use this one test, and salesNotSale with the client's own note types (next-posting-followups)
-const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra)(?=$|[^a-z0-9])|return|order|quotation|delivery|memo/i;
+// debit note (also "Cr Note", "Dr Note", CN, DN, a note alone), a Journal, a receipt, a payment, a contra, a challan,
+// a purchase, Rtn or Ret; or by any part of it: a return ("SalesReturn", "Returnable"), a quotation or a memo ("Sales
+// Memorandum": not in the books), but a cash memo is a sale (the owner, 24-Nov-2026: "Cash Memo", "Sales Cash Memo"; a
+// sales word as "sales" is); an order or a delivery only with "sales" or "invoice" after it, or a home, door, online or
+// free one with either ("Door Delivery Sales", "Sales Order Invoice", "Sales Online Order"), never alone ("Sales Order",
+// "Delivery Note"; "Sales Border" is no order). "Credit" or "Debit" alone is a sale ("Credit Sales"); salesBooksVts and salesTypeClasses use this
+// one test (salesNotSale, with the client's own note types)
+const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra|challans?|purchases?)(?=$|[^a-z0-9])|return|quotation|memo/i;
 // (a note type set the same as the client's sales type is no note: never a reason to post a sale again)
-function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x || "").toLowerCase().trim(), n = l(t); return SALES_NOT_SALE.test(n) || (n !== l(c.voucherType || "Sales") && [c.creditNoteType, c.debitNoteType].some(x => !!n && l(x) === n)); }
+function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x || "").toLowerCase().trim(), n = l(t), m = n.replace(/cash[\s_-]*memo(?!r)/g, "cash sales");
+  return SALES_NOT_SALE.test(m) || (/(?:^|[^a-z]|sales|re)order|deliver/.test(m) && !(/(?:order|deliver)[\s\S]*(?:\bsales?\b|invoice)/.test(m) || /\bsales?\b|invoice/.test(m) && /(?:home|door|online|free)[\s_-]*(?:order|deliver)/.test(m))) || (n !== l(c.voucherType || "Sales") && [c.creditNoteType, c.debitNoteType].some(x => !!n && l(x) === n)); }
 // next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already
 // reads (the client's books): the Sales-class type most used, the default for uploads, shown as "(from your Tally)"; a
 // type a person typed in Sales settings stands (cfg.vtBy "you"), and when the books use more than one in real use the
@@ -616,7 +620,7 @@ function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x 
 function salesBooksVts(){
   const s = SL(), bk = S.books && s && S.books.cid === s.cid ? S.books : null; if (!bk) return [];
   const n = new Map();
-  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || salesNotSale(t) || !/\bsales\b/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
+  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || salesNotSale(t) || !/\bsales\b|cash[\s_-]*memo/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
   const all = Array.from(n.entries()).sort((a, b) => b[1] - a[1]), tot = all.reduce((a, x) => a + x[1], 0);
   // (in real use: at least 3 vouchers and a twentieth of the client's sales)
   return all.filter(([, c]) => c >= 3 && c >= tot * 0.05).map(([type, count]) => ({type, count}));

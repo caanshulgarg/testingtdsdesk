@@ -384,6 +384,28 @@ with sync_playwright() as p:
     ok(vts == ["Credit Sales"], "salesBooksVts: only 'Credit Sales' is the client's sales type (%s)" % vts)
     A.evaluate("() => { const c = SL().cfg; [c.creditNoteType, c.debitNoteType] = window.__nt; if (!c.creditNoteType) delete c.creditNoteType; if (!c.debitNoteType) delete c.debitNoteType; }")
 
+    print("SALES 14e. a cash memo is a sale; an order or a delivery with a sales word is one; an order, a delivery note, a challan or a quotation alone never (the owner, 24-Nov-2026)")
+    CM_SALE = ["Cash Memo", "Sales Cash Memo", "Sales (Cash Memo)", "CashMemo", "Home Delivery Sales", "Door Delivery Sales", "Sales (Free Delivery)", "Sales Order Invoice", "Sales Online Order", "Online Order Sales", "Sales Border"]
+    CM_NOT = ["Sales Order", "Sales Orders", "Sales Reorder", "Sales - Delivery", "Delivery Note", "Delivery Challan", "Sales Delivery Challan", "Sales Quotation", "Sales Memorandum", "Sales Memo", "Cash Memorandum", "Purchase Cash Memo", "Cash Memo Return"]
+    for i, t in enumerate(CM_SALE):
+        a, st, sent = one("ZS/16%02d" % i, G["k"], sv("ZS/16%02d" % i, typ=t))
+        ok(st == "intally " + t and sent == [], "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
+    for i, t in enumerate(CM_NOT):
+        a, st, sent = one("ZS/17%02d" % i, G["k"], sv("ZS/17%02d" % i, typ=t))
+        ok(st == "posted" and sent == [[a]], "cloud copy: '%s', the same GSTIN: never the sale, posted (%s)" % (t, st))
+    for i, t in enumerate(["Cash Memo", "Door Delivery Sales", "Sales Order Invoice", "Sales Online Order"]):
+        a, st, sent = own("ZS/18%02d" % i, G["k"], mine=t)
+        ok(st == "intally" and sent == [], "FinCom's own: an invoice In Tally as '%s', another 'Sales' invoice of that number, the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
+    for i, t in enumerate(["Sales Order", "Delivery Challan", "Sales Quotation", "Sales Memorandum"]):
+        a, st, sent = own("ZS/19%02d" % i, G["k"], mine=t)
+        ok(st == "posted" and sent == [[a]], "FinCom's own: the one of that number is a '%s': never the sale, posted (%s)" % (t, st))
+    cls = A.evaluate("(ts) => ts.map(t => salesTypeClasses([])(t))", CM_SALE + CM_NOT)
+    ok(cls == [True] * len(CM_SALE) + [False] * len(CM_NOT), "salesTypeClasses: the cash memos and the sales with an order or a delivery are; the rest never (%s)" % cls)
+    vts = A.evaluate("""() => { const b0 = S.books, mk = (t, n) => Array.from({length: n}, () => ({type: t}));
+      S.books = {cid: SL().cid, vouchers: [].concat(mk('Sales Cash Memo', 9), mk('Door Delivery Sales', 6), mk('Cash Memo', 4), mk('Sales Order', 20), mk('Delivery Challan', 20), mk('Sales Memorandum', 20), mk('Sales Quotation', 20))};
+      try { return salesBooksVts().map(x => x.type); } finally { S.books = b0; } }""")
+    ok(vts == ["Sales Cash Memo", "Door Delivery Sales", "Cash Memo"], "salesBooksVts: the cash memos and 'Door Delivery Sales' are the client's sales types; orders, challans, memoranda, quotations never (%s)" % vts)
+
     print("SALES 15. an entry not really in the books never makes a new upload the same entry (an Optional voucher deleted in Tally)")
     a, st, sent = one("ZS/120", G["k"], sv("ZS/120", opt="Yes"))
     ok(st == "posted" and sent == [[a]], "cloud copy: an Optional voucher of the same number, amount, year and customer: posted (%s)" % st)
