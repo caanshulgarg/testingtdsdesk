@@ -41,6 +41,13 @@ const CloudTally = {
     throw {code: "cloud", message: "This needs the Tally computer (" + path + ")."};
   }
 };
+// next-dup-cloud-only (the owner, 23-Nov-2026): FinCom never reads Tally before posting. The duplicate check of sales,
+// bank lines and bills reads FinCom's cloud copy only (CloudTally: tally_vouchers_in, the read of any other computer).
+// "It should flow" (20:25 IST): the same entry found there is marked In Tally quietly, with Tally's number, not posted;
+// everything else posts; no data for the day, or the copy not there or not answering: posted, no note, no warning (at
+// most DUP_NOT_CHECKED on a sales invoice's own panel). Nothing stops or holds a batch
+const DUP_NOT_CHECKED = "Not checked for duplicates: FinCom's copy of Tally did not answer.";
+function dupCopy(co, url){ return typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id) ? CloudTally.call(co, url) : Promise.reject({code: "cloud", message: DUP_NOT_CHECKED}); }
 const CloudPost = {
   uuid(){
     if (crypto.randomUUID) return crypto.randomUUID();
