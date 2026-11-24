@@ -327,7 +327,14 @@ with sync_playwright() as p:
         m = pg.evaluate("() => { " + CP + GON + """return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: 'E1'}); }),
           cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''}); }), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: 'E1'}); }),
           cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'cancelled'}); })]; }""")
-        ok(m == [False, False, False, True, False], look + "Sales: no IRN (Make the IRN), IRN of 2 hours (Cancel the IRN), no e-way bill (Make the e-way bill) keep it; IRN of 30 hours with its e-way bill hides; IRN cancelled (Make the IRN again) keeps it: %s" % m)
+        ok(m == [False, False, True, True, False], look + "Sales: no IRN (Make the IRN), IRN of 2 hours (Cancel the IRN) keep it; IRN of 30 hours with no goods (no e-way bill needed) or with its e-way bill hides; IRN cancelled (Make the IRN again) keeps it: %s" % m)
+        # the e-way bill counts only when one is needed: goods (an HSN not starting with 99) worth over Rs 50,000 (EINV.ewbNeeded)
+        IT = "const it = (hsn, taxable, gstRate) => ({desc: 'Made-up item', hsn, qty: 1, rate: taxable, taxable, gstRate}); const irn = (v, items) => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: '', items}); }; "
+        m = pg.evaluate("() => { " + CP + GON + IT + """return {services: cp(v => irn(v, [it('998314', 90000, 18)])), goodsOver: cp(v => irn(v, [it('8471', 50000, 18)])),
+          goodsAt: cp(v => irn(v, [it('8471', 50000, 0)])), goodsUnder: cp(v => irn(v, [it('8471', 30000, 18)])), mixedOver: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 45000, 18)])),
+          mixedUnder: cp(v => irn(v, [it('998314', 90000, 18), it('8471', 20000, 18)])), goodsOverWithEwb: cp(v => { irn(v, [it('8471', 50000, 18)]); v.x.ewayNo = 'E1'; })}; }""")
+        ok(m == {"services": True, "goodsOver": False, "goodsAt": True, "goodsUnder": True, "mixedOver": False, "mixedUnder": True, "goodsOverWithEwb": True},
+           look + "Sales, an IRN of 30 hours and no e-way bill: services only hides; goods over Rs 50,000 stays (Make the e-way bill); goods of Rs 50,000 or under hides; with its e-way bill hides: %s" % m)
         m = pg.evaluate("() => { " + CP + "GSTAPI.on = window.__gon; return [cp(v => {}), cp(v => { Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(2), ewayNo: ''}); })]; }")
         ok(m == [True, True], look + "Sales: the firm's GST API off (no e-invoice part on the panel): nothing offered, it hides: %s" % m)
         # ... and on the page: listed while its panel offers the button, gone once nothing is offered
@@ -340,13 +347,15 @@ with sync_playwright() as p:
             return "SI-s2" in t, n
         m = listed_with("", "Make the IRN")
         ok(m == (True, 1), look + "Sales: no IRN yet: listed, and its panel offers Make the IRN: %s" % (m,))
-        m = listed_with("Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: ''});", "Make the e-way bill")
-        ok(m == (True, 1), look + "Sales: an IRN and no e-way bill: listed, and its panel offers Make the e-way bill: %s" % (m,))
+        m = listed_with("Object.assign(v.x, {irn: 'I1', irnStatus: 'active', ackNo: '1', ackDt: h(30), ewayNo: '', items: [{desc: 'Made-up item', hsn: '998314', qty: 1, rate: 90000, taxable: 90000, gstRate: 18}]});", "Make the e-way bill")
+        ok(m == (False, 1), look + "Sales: services with an IRN and no e-way bill: off the page, its panel still offers Make the e-way bill: %s" % (m,))
+        m = listed_with("v.x.items = [{desc: 'Made-up item', hsn: '8471', qty: 1, rate: 50000, taxable: 50000, gstRate: 18}];", "Make the e-way bill")
+        ok(m == (True, 1), look + "Sales: goods over Rs 50,000 with an IRN and no e-way bill: listed, and its panel offers Make the e-way bill: %s" % (m,))
         m = listed_with("Object.assign(v.x, {ackDt: h(2), ewayNo: 'E1'});", "Cancel the IRN")
         ok(m == (True, 1), look + "Sales: an IRN of 2 hours: listed, and its panel offers Cancel the IRN: %s" % (m,))
         m = listed_with("Object.assign(v.x, {ackDt: h(30), ewayNo: 'E1'});", "")
         ok(m == (False, 0), look + "Sales: an IRN of 30 hours with its e-way bill: nothing offered, off the page: %s" % (m,))
-        go(pg, "GSTAPI.on = window.__gon; const v = SL().list.find(x => x.id === 's2'); Object.assign(v.x, {irn: '', irnStatus: '', ackDt: '', ewayNo: '', customerGstin: ''}); render();", 500)
+        go(pg, "GSTAPI.on = window.__gon; const v = SL().list.find(x => x.id === 's2'); Object.assign(v.x, {irn: '', irnStatus: '', ackDt: '', ewayNo: '', customerGstin: '', items: []}); render();", 500)
         # Bills: b6, Tally's reply 30 hours ago, nothing to do: hides; each warning or action keeps it
         m = pg.evaluate("() => { " + H + """const cp = (f) => { const e = JSON.parse(JSON.stringify(D().entries.b6)); f(e); return billOld(e); };
           return {none: cp(e => {}), postedOptional: cp(e => { e.postedOptional = true; }), ownerRelease: cp(e => { e.ownerRelease = {ask: true, by: 'Made-up Member', why: 'made-up'}; }),

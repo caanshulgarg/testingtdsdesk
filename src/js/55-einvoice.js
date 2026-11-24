@@ -84,6 +84,14 @@ const EINV = {
     const a = this.need(this.seller(v, co) || gstin), active = !!x.irn && x.irnStatus !== "cancelled", on = !!a && active;
     return {a, active, irn: !!a && !active, ewb: on && !x.ewayNo, cancel: on && !!x.ackDt && Date.now() - Date.parse(x.ackDt) < 864e5};
   },
+  // whether the invoice needs an e-way bill (CGST Rules r.138): goods (a line whose HSN does not start with 99, the IRP's
+  // IsServc rule in build) worth more than EWB_MIN, their taxable value with GST and cess. Only for keeping the invoice
+  // listed (salesNeedsAction, src/js/03): the panel offers Make the e-way bill on any invoice with an IRN (offers)
+  EWB_MIN: 50000,
+  ewbNeeded(v){
+    const goods = ((v.x || {}).items || []).filter(it => !/^99/.test(String(it.hsn || "").trim()));
+    return goods.reduce((a, it) => { const t = num(it.taxable) || (num(it.qty) || 1) * num(it.rate); return a + t * (1 + num(it.gstRate) / 100) + num(it.cess); }, 0) > this.EWB_MIN;
+  },
   accounts: {}, asked: {},
   // the client's e-invoice user, asked of the server once a session (and after a sign-in); never the password
   need(gstin){ if (!this.asked[gstin]){ this.asked[gstin] = Date.now(); this.status(gstin).then(() => render(), () => {}); } return this.accounts[gstin]; },

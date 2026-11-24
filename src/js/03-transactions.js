@@ -28,8 +28,8 @@ function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true
 // Only the posted list: a bill deleted, held or marked no entry is always listed. The owner (24-Nov-2026): anything that
 // still needs the person never leaves, whatever its age: one rule per kind (salesNeedsAction, billNeedsAction,
 // bankNeedsAction), true whenever the entry's page or panel offers an action or a warning, read from what those panels
-// show: a sales invoice's alerts and its e-invoice part (EINV.offers, src/js/55: Make the IRN, Make the e-way bill,
-// Cancel the IRN), a bill's or bank line's row on Post to Tally (an action, or a tab other than Posted: postNeeds)
+// show: a sales invoice's alerts and its e-invoice part (EINV.offers, src/js/55: Make the IRN, Make the e-way bill when
+// one is needed, EINV.ewbNeeded: goods over Rs 50,000; Cancel the IRN), a bill's or bank line's row on Post to Tally (an action, or a tab other than Posted: postNeeds)
 let POSTED_KEEP_MS = 864e5;
 function postedOld(at){ return !(Date.parse(at || "") > Date.now() - POSTED_KEEP_MS); }
 // the keys ("bill:id", "bank:id") of the Post to Tally rows with something to do (Correct the Tally id, a posting queued
@@ -47,7 +47,7 @@ function postNeeds(cid){
 // the Sales panel (app/src/screens/Sales.jsx Detail): its alerts (problems, Tally's error, Optional voucher, checked on
 // FinCom's copy, IRN cancelled while in Tally), Try again (refused, to check), a posting queued, and the e-invoice part
 function salesNeedsAction(v){ const x = v.x || {}, o = typeof EINV === "object" && EINV.offers(v);
-  return !!(x.irnCancelInTally || v.postJob || v.postError || v.refused || v.needsCheck || v.postedOptional || v.copyCheck || (v.problems || []).length || (v.ledgerIssues || []).length || (o && (o.irn || o.ewb || o.cancel))); }
+  return !!(x.irnCancelInTally || v.postJob || v.postError || v.refused || v.needsCheck || v.postedOptional || v.copyCheck || (v.problems || []).length || (v.ledgerIssues || []).length || (o && (o.irn || (o.ewb && EINV.ewbNeeded(v)) || o.cancel))); }
 // a bill: its owner's release (asked or held), Optional voucher, gone from Tally, Tally's error or a check that failed,
 // sent and not confirmed, and its row on Post to Tally
 function billNeedsAction(e, cid){ return !!(e.ownerRelease || e.postedOptional || e.goneFromTally || e.postError || e.postCheckFailed || e.postUnconfirmed || postNeeds(cid || S.coId).has("bill:" + e.id)); }
