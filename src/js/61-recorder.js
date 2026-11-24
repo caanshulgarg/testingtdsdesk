@@ -25,6 +25,7 @@ const Rec = {
   tie: {},                 // cid -> {rows: {month: row}, locks: {month: row}, no44, at, busy, err, msg: {month: {ok|err}}}
   tieOf(cid){
     const t = this.tie[cid] = this.tie[cid] || {rows: {}, locks: {}, msg: {}, at: 0, busy: false};
+    if (typeof Live === "object" && Live.want) Live.want("sync");     // next-db-load-2: the tie-out is on screen
     if (typeof TCloud === "object" && TCloud.on() && !t.busy && !t.no44 && Date.now() - t.at > 60000){ t.at = Date.now(); setTimeout(() => this.tieLoad(cid), 0); }
     return t;
   },
@@ -450,8 +451,9 @@ const Rec = {
   gaps: {},                // {byClient: {cid: [{book, company, gap}]}, at, busy, no44}
   gapsOf(){
     const g = this.gaps;
-    // speed round (27-Oct-2026): every 5 minutes while seen (a gap's change comes at once through CopyLive)
-    if (typeof TCloud === "object" && TCloud.on() && !g.busy && !g.no44 && Date.now() - (g.at || 0) > SLOW_MS && pollOk()){ g.at = Date.now(); setTimeout(() => this.gapsLoad(), 0); }
+    // speed round (27-Oct-2026): every 5 minutes while seen (a gap's change comes at once through CopyLive); next-db-load-2:
+    // each minute on a page that does not have the gap live (Live.joinSync: Sync activity and the tie-out only)
+    if (typeof TCloud === "object" && TCloud.on() && !g.busy && !g.no44 && Date.now() - (g.at || 0) > (Live.syncLive ? SLOW_MS : 60000) && pollOk()){ g.at = Date.now(); setTimeout(() => this.gapsLoad(), 0); }
     return g;
   },
   async gapsLoad(){
@@ -459,7 +461,10 @@ const Rec = {
     g.busy = true;
     try {
       const cur = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,gap,gap_at,last_match_at&gap=not.is.null") || []).filter(c => c && c.gap && typeof c.gap === "object");
-      const books = cur.length ? [].concat(await TCloud.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : [];
+      // (review of 370f28773) the books list kept between reads: read again only for a book not in it, or after 10 minutes
+      const kept = g.books && Date.now() - (g.booksAt || 0) < 600000 && cur.every(c => g.books.some(x => x.book_id === c.book_id)) ? g.books : null;
+      const books = kept || (cur.length ? [].concat(await TCloud.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []);
+      if (!kept && cur.length){ g.books = books; g.booksAt = Date.now(); }
       const by = {};
       cur.forEach(c => { const b = books.find(x => x.book_id === c.book_id); if (b && b.client_id) (by[b.client_id] = by[b.client_id] || []).push({book: c.book_id, company: b.company || "", gap: c.gap, gapAt: c.gap_at}); });
       g.byClient = by; g.no44 = false;
