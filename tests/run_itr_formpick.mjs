@@ -16,7 +16,10 @@ console.log("1. the kind of person from the PAN's fourth letter (Client setup's 
 T("entity", () => {
   eq(entityFrom("", "ZZZCX1234Z").code, "C", "ZZZCX1234Z: C, a company");
   eq(entityFrom("", "ZZZpx1234z").code, "P", "lower case PAN read too");
-  eq(entityFrom("F", "ZZZCX1234Z").code, "F", "the kind chosen in Client setup wins over the PAN");
+  // the review of 24-Nov-2026 (2): the PAN's fourth letter settles the kind; Client setup's kind is used only without a PAN
+  eq(entityFrom("F", "ZZZCX1234Z").code, "C", "Client setup says a firm, the PAN's fourth letter is C: the PAN is followed");
+  eq(entityFrom("F", "ZZZCX1234Z").set, "F", "and what Client setup said is kept, to say so");
+  eq(entityFrom("F", "").code, "F", "no PAN: the kind chosen in Client setup");
   eq(entityFrom("C", "ZZZCX1234Z").by, "pan", "the page's code agreeing with the PAN: said as the PAN's fourth letter");
   ok(/fourth letter is C/.test(recommendForm({ entity: "C", pan: "ZZZCX1234Z" }).why), "the page passes the code and the PAN: the reason still names the PAN's letter");
   eq(entityFrom("", "NOTAPAN").code, "", "no PAN: not known");
@@ -57,7 +60,7 @@ T("HUF", () => {
 });
 T("firm", () => {
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true }).form, "ITR-5", "firm: ITR-5");
-  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, agriOver: false }).form, "ITR-4", "a partnership firm, presumptive, within 50 lakh, agricultural income Rs 5,000 or less: ITR-4");
+  eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, unlisted: false, agriOver: false }).form, "ITR-4", "a partnership firm, presumptive, within 50 lakh, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000 }).form, "ITR-5", "a partnership firm, presumptive, agricultural income not answered: ITR-5");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: false, ti: 2000000, agriOver: true }).form, "ITR-5", "a partnership firm with agricultural income above Rs 5,000: ITR-5");
   eq(recommendForm({ pan: "ZZZFX1234Z", business: true, presumptive: true, llp: true }).form, "ITR-5", "an LLP is never ITR-4: ITR-5");
@@ -134,6 +137,94 @@ try {
   eq(store.state().form, undefined, "another client has its own choice");
   eq(A.clientOf().entity, "P", "and its own kind (P)");
 } catch (e) { ok(false, "page names: threw " + String(e && e.stack).slice(0, 200)); }
+
+console.log("7. the review of 24-Nov-2026 (2): rule 12 in full for ITR-1 and ITR-4, the PAN settles the kind");
+const N3 = { director: false, unlisted: false, agriOver: false };
+const PRES = { business: true, presumptive: true, ti: 1800000 };
+T("firm unlisted", () => {
+  const F = (o) => recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false }, PRES, o));
+  eq(F({ unlisted: false, agriOver: false }).form, "ITR-4", "a partnership firm, presumptive, no unlisted shares, agricultural income Rs 5,000 or less: ITR-4");
+  let r = F({ unlisted: true, agriOver: false });
+  ok(r.form === "ITR-5" && /firm that held unlisted shares/.test(r.why), "a firm that held unlisted equity shares: ITR-5, said: " + r.why);
+  ok(r.barred["ITR-4"] && !r.allowed.includes("ITR-4"), "and ITR-4 is not for it");
+  r = F({ agriOver: false });
+  ok(r.form === "ITR-5" && /unlisted/.test(r.why) && !/director/.test(r.why), "a firm, unlisted shares not answered: ITR-5, the firm is asked about unlisted shares (never director): " + r.why);
+  eq(F({ director: true, unlisted: false, agriOver: false }).form, "ITR-4", "a firm: the director question is for individuals and HUFs only");
+  const s = formStatus("ITR-4", F({ unlisted: true, agriOver: false }));
+  ok(!s.fits && !s.json && /ITR-4 is not for a firm that held unlisted shares/.test(s.text), "ITR-4 chosen by hand for a firm with unlisted shares: no JSON, said: " + s.text);
+});
+T("blank answers", () => {
+  const P = (o) => recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, PRES, o));
+  let s = formStatus("ITR-4", P({}));
+  ok(s.fits && !s.json && s.tone === "info", "an individual, rule 12 not answered, ITR-4 chosen by hand: no JSON yet, in the info tone (" + s.tone + ")");
+  ok(/answer the questions below/i.test(s.text) && /director/.test(s.text) && /unlisted/.test(s.text) && /agricultural/.test(s.text) && /ITR-4/.test(s.text), "and it says which questions to answer: " + s.text);
+  s = formStatus("ITR-4", P({ director: false, unlisted: false }));
+  ok(!s.json && /agricultural/.test(s.text) && !/director/.test(s.text), "one answer missing: only that one named: " + s.text);
+  s = formStatus("ITR-4", P(N3));
+  ok(s.fits && s.json && !s.text, "all three answered No: the ITR-4 JSON is made");
+  s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false }, PRES, { agriOver: false })));
+  ok(!s.json && /unlisted/.test(s.text) && !/director/.test(s.text), "a firm, unlisted not answered: no ITR-4 JSON, asked: " + s.text);
+  s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZHX1234Z" }, PRES)));
+  ok(!s.json && /director/.test(s.text), "a HUF, not answered: no ITR-4 JSON: " + s.text);
+  s = formStatus("ITR-1", recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 }));
+  ok(s.fits && !s.json && s.tone === "info" && /answer the questions below/i.test(s.text) && /director/.test(s.text), "ITR-1 chosen by hand, not answered: the questions named the same way: " + s.text);
+  s = formStatus("ITR-1", recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, ...N3 }));
+  ok(!/answer the questions/i.test(s.text), "ITR-1, all answered: no question asked");
+  s = formStatus("ITR-3", recommendForm({ pan: "ZZZPX1234Z", business: true }));
+  ok(s.json && !s.text, "ITR-3 needs none of these answers: its JSON as before");
+});
+T("PAN settles the kind", () => {
+  let r = recommendForm({ entity: "F", pan: "ZZZCX1234Z", business: true, presumptive: true, llp: false, agriOver: false, unlisted: false });
+  ok(r.form === "ITR-6" && r.code === "C", "Client setup says a firm, the PAN a company: ITR-6 (" + r.form + ")");
+  ok(/fourth letter is C/.test(r.why) && /Client setup says a firm/i.test(r.why) && /follows the PAN/.test(r.why), "said plainly: " + r.why);
+  ok(!r.allowed.includes("ITR-5") && !r.allowed.includes("ITR-4"), "a company PAN never gets ITR-5 or ITR-4 (" + r.allowed + ")");
+  ["ITR-4", "ITR-5"].forEach((f) => { const s = formStatus(f, r); ok(!s.fits && !s.json, "a company PAN, " + f + " chosen by hand: no JSON: " + s.text); });
+  r = recommendForm({ entity: "P", pan: "ZZZFX1234Z" });
+  ok(r.code === "F" && /Client setup says an individual/.test(r.why), "Client setup says an individual, the PAN a firm: a firm, said: " + r.why);
+  r = recommendForm({ entity: "C", pan: "ZZZCX1234Z" });
+  ok(!/Client setup says/.test(r.why), "Client setup and the PAN agree: nothing more said");
+  eq(recommendForm({ entity: "C" }).form, "ITR-6", "no PAN: Client setup's kind is used");
+});
+T("assets outside India", () => {
+  let r = recommendForm(Object.assign({ pan: "ZZZPX1234Z", foreign: true }, PRES, N3));
+  ok(r.form === "ITR-3" && /outside India/.test(r.why) && r.barred["ITR-4"], "presumptive, assets outside India: ITR-3 (no Schedule FA in ITR-4): " + r.why);
+  r = recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, foreign: true, ...N3 });
+  ok(r.form === "ITR-2" && r.barred["ITR-1"], "salary, assets outside India: ITR-2, ITR-1 barred");
+  let s = formStatus("ITR-4", recommendForm(Object.assign({ pan: "ZZZPX1234Z", foreign: true }, PRES, N3)));
+  ok(!s.fits && !s.json && /outside India/.test(s.text), "ITR-4 chosen by hand with assets outside India: no JSON, said: " + s.text);
+  r = recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false, foreign: true }, PRES, N3));
+  ok(r.form === "ITR-5" && r.barred["ITR-4"], "a firm with assets outside India: ITR-5");
+});
+T("two houses in ITR-4", () => {
+  eq(recommendForm(Object.assign({ pan: "ZZZPX1234Z", houses: 2 }, PRES, N3)).form, "ITR-4", "presumptive, two houses (AY 2026-27): ITR-4");
+  const r = recommendForm(Object.assign({ pan: "ZZZPX1234Z", houses: 3 }, PRES, N3));
+  ok(r.form === "ITR-3" && r.barred["ITR-4"] && /two houses|more than two/.test(r.why), "three houses: ITR-3: " + r.why);
+});
+T("other rule 12 bars", () => {
+  const cases = [["a non-resident", { resident: false }, /not a resident|non-resident/], ["TDS under 194N", { tds194N: true }, /194N/], ["losses of earlier years", { bfLoss: true }, /loss/]];
+  for (const [w, o, re] of cases) {
+    let r = recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, PRES, N3, o));
+    ok(r.form === "ITR-3" && r.barred["ITR-4"] && re.test(r.why), "presumptive, " + w + ": ITR-3, ITR-4 barred: " + r.why);
+    const s = formStatus("ITR-4", r);
+    ok(!s.fits && !s.json && re.test(s.text), w + ", ITR-4 chosen by hand: no JSON, said: " + s.text);
+    r = recommendForm(Object.assign({ pan: "ZZZPX1234Z", salary: true, ti: 900000 }, N3, o));
+    ok(r.form === "ITR-2" && r.barred["ITR-1"], "salary, " + w + ": ITR-2, ITR-1 barred");
+    r = recommendForm(Object.assign({ pan: "ZZZFX1234Z", llp: false }, PRES, N3, o));
+    ok(r.form === "ITR-5" && r.barred["ITR-4"], "a firm, " + w + ": ITR-5");
+  }
+});
+T("wording when not answered", () => {
+  const r = recommendForm(Object.assign({ pan: "ZZZPX1234Z" }, PRES));
+  ok(r.why.includes("ITR-4 is not for someone who is a director in a company, held unlisted shares or has agricultural income above Rs 5,000. Answer the questions below to see if it fits."), "the owner's words: " + r.why);
+  ok(!/does not know yet|ITR-4 is not for such a person/.test(r.why), "not said as if ruled out already");
+  const r1 = recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000 });
+  ok(r1.why.includes("ITR-1 is not for someone who is a director in a company, held unlisted shares or has agricultural income above Rs 5,000. Answer the questions below to see if it fits."), "ITR-1 the same: " + r1.why);
+});
+T("no JSON yet in the info tone", () => {
+  const s = formStatus("ITR-2", recommendForm({ pan: "ZZZPX1234Z", salary: true, ti: 900000, ...N3 }));
+  ok(s.tone === "info" && /FinCom cannot make the JSON for ITR-2 yet/.test(s.text) && /Winman/.test(s.text), "ITR-2: the no-JSON-yet note in the info tone (" + s.tone + "): " + s.text);
+  ok(formStatus("ITR-5", recommendForm({ pan: "ZZZCX1234Z" })).tone === "bad", "a form that does not fit: still the warning tone");
+});
 
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

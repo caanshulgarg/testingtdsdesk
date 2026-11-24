@@ -14,6 +14,10 @@ itr form should be there and there should recommendation of itr form which is to
      kind of taxpayer (never "Other") while it is not known. The same individual with presumptive business income:
      ITR-3 while rule 12 is not answered (ITR-4 is not for a director, unlisted shares or agricultural income above
      Rs 5,000), ITR-4 once all three are No, ITR-3 again for a director. Classic light and New look dark.
+  5. the review of 24-Nov-2026 (2): the wording while rule 12 is not answered ("ITR-4 is not for someone who ... Answer
+     the questions below to see if it fits."); ITR-4 chosen by hand with blank answers: no JSON, the questions named in
+     the info tone; ITR-2's no-JSON-yet note in the info tone, not amber; a firm asked about unlisted shares (not
+     director), ITR-5 for a Yes or assets abroad; Client setup a firm with a company PAN: ITR-6, said plainly.
 TDSDESK_SHOTS=<dir> keeps the screenshots (deviceScaleFactor 2). Run on the React build:
 TDSDESK_SITE=../app/dist-test python3 run_side_itr_ui.py"""
 import os, threading, functools, http.server
@@ -34,7 +38,9 @@ OPEN = "() => new Promise((r) => { const go = () => (typeof doAct === 'function'
 SETUP = """() => { const c = newCompany({name: "Sample Works Private Limited", gstin: "07ZZZCX4321Z1Z5"}); c.pan = "ZZZCX4321Z"; S.companies[c.id] = c;
   const p = newCompany({name: "Sample Person", gstin: ""}); p.pan = "ZZZPX4321Z"; S.companies[p.id] = p;
   const n = newCompany({name: "Sample New Client", gstin: ""}); n.pan = ""; S.companies[n.id] = n;
-  S.coId = c.id; S.view = "company"; render(); goClient("books:itr"); return [c.id, p.id, n.id]; }"""
+  const f = newCompany({name: "Sample Partners", gstin: ""}); f.pan = "ZZZFX4321Z"; S.companies[f.id] = f;
+  const k = newCompany({name: "Sample Traders Private Limited", gstin: ""}); k.pan = "ZZZCX5432Z"; k.entity = "F"; S.companies[k.id] = k;
+  S.coId = c.id; S.view = "company"; render(); goClient("books:itr"); return [c.id, p.id, n.id, f.id, k.id]; }"""
 # at a scroll of the sidebar: whether the top block (FinCom row and client card) is whole, painted, and on top of the menu
 SIDE = """(y) => { const s = document.getElementById('side'); s.scrollTop = y;
   const top = s.querySelector('.side-top') || s.querySelector('.side-client'), brand = s.querySelector('.side-brand'), card = s.querySelector('.side-client');
@@ -144,7 +150,11 @@ with sync_playwright() as p:
             ok(pg.locator("[data-itr-json=unsupported]").count() == 1 and pg.locator("[data-itr-download]").count() == 0 and NOKIND in pg.inner_text("[data-itr-json=unsupported]"), look + "no PAN, %s: the JSON step makes no JSON and says why" % f)
         pg.evaluate("(id) => openCompany(id).then(() => goClient('books:itr'))", ids[1]); pg.wait_for_timeout(2500)
         why = pg.inner_text("[data-itr-why]")
-        ok(head().startswith("ITR-2") and "Recommended: ITR-2" in why and "director" in why and "unlisted" in why and "agricultural" in why and "does not know yet" in why, look + "an individual, rule 12 not answered: ITR-2, and why in plain words: " + why)
+        ok(head().startswith("ITR-2") and "Recommended: ITR-2" in why and "ITR-1 is not for someone who is a director in a company, held unlisted shares or has agricultural income above Rs 5,000. Answer the questions below to see if it fits." in why, look + "an individual, rule 12 not answered: ITR-2, and why in plain words: " + why)
+        ok("does not know yet" not in why, look + "not said as if ITR-1 were ruled out already")
+        tone = pg.eval_on_selector("[data-itr-form-warn]", "e => [e.dataset.tone, getComputedStyle(e).backgroundColor, getComputedStyle(e.closest('.itr')).getPropertyValue('--itr-warn-bg')]") if pg.locator("[data-itr-form-warn]").count() else None
+        ok(tone and tone[0] == "info" and "cannot make the JSON for ITR-2 yet" in pg.inner_text("[data-itr-form-warn]") and "Winman" in pg.inner_text("[data-itr-form-warn]"), look + "ITR-2's no-JSON-yet note in the info tone (%s)" % (tone,))
+        ok(tone and tone[1] != pg.evaluate("() => { const d = document.createElement('div'); d.style.background = getComputedStyle(document.querySelector('.itr')).getPropertyValue('--itr-warn-bg'); document.querySelector('.itr').appendChild(d); const c = getComputedStyle(d).backgroundColor; d.remove(); return c; }"), look + "not amber (%s)" % (tone,))
         ok(pg.locator("[data-itr-q1]").count() == 3, look + "the three questions are asked on the form box")
         if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "itr2-%s-%s.png" % ("newlook" if nl else "classic", scheme)))
         pg.select_option("[data-itr-q1=director]", "y"); pg.wait_for_timeout(400)
@@ -157,8 +167,16 @@ with sync_playwright() as p:
         for k in ("unlisted", "agriOver"): pg.select_option("[data-itr-q1=%s]" % k, ""); pg.wait_for_timeout(300)
         pg.select_option("[data-itr-presq]", "y"); pg.wait_for_timeout(500)
         why = pg.inner_text("[data-itr-why]")
-        ok(head().startswith("ITR-3") and "Individual" in head() and "Recommended: ITR-3" in why and "business or profession" in why and "does not know yet" in why and "ITR-4 is not for such a person" in why
-           and "director" in why and "unlisted" in why and "agricultural" in why, look + "presumptive income, rule 12 not answered: ITR-3, and why in plain words: " + why)
+        ok(head().startswith("ITR-3") and "Individual" in head() and "Recommended: ITR-3" in why and "business or profession" in why
+           and "ITR-4 is not for someone who is a director in a company, held unlisted shares or has agricultural income above Rs 5,000. Answer the questions below to see if it fits." in why, look + "presumptive income, rule 12 not answered: ITR-3, and why in plain words: " + why)
+        # ITR-4 chosen by hand with the answers blank: no JSON until they are given, the questions named, info tone
+        pg.select_option("[data-itr-form]", "ITR-4"); pg.wait_for_timeout(500)
+        warn = pg.inner_text("[data-itr-form-warn]") if pg.locator("[data-itr-form-warn]").count() else ""
+        ok("answer the questions below" in warn and "director" in warn and pg.eval_on_selector("[data-itr-pick]", "e => e.dataset.json") == "0" and pg.eval_on_selector("[data-itr-form-warn]", "e => e.dataset.tone") == "info", look + "ITR-4 by hand, answers blank: no JSON, the questions named, info tone: " + warn)
+        if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "itr4-blank-%s-%s.png" % ("newlook" if nl else "classic", scheme)))
+        pg.click("[data-itr-tab=itr-json]"); pg.wait_for_timeout(700)
+        ok(pg.locator("[data-itr-json=unsupported]").count() == 1 and pg.locator("[data-itr-download]").count() == 0, look + "ITR-4 by hand, answers blank: the JSON step makes no JSON")
+        pg.click("[data-itr-use-rec]"); pg.wait_for_timeout(500)
         ok(pg.locator("[data-itr-q1]").count() == 3 and pg.locator("[data-itr-form-warn]").count() == 0, look + "the three questions asked, no warning for ITR-3")
         if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "itr3-%s-%s.png" % ("newlook" if nl else "classic", scheme)))
         for k in ("director", "unlisted", "agriOver"): pg.select_option("[data-itr-q1=%s]" % k, "n"); pg.wait_for_timeout(400)
@@ -173,6 +191,29 @@ with sync_playwright() as p:
         warn = pg.inner_text("[data-itr-form-warn]") if pg.locator("[data-itr-form-warn]").count() else ""
         ok("ITR-4 is not for someone who is a director in a company" in warn and pg.eval_on_selector("[data-itr-pick]", "e => e.dataset.json") == "0", look + "ITR-4 chosen by hand for a director: no JSON, said: " + warn)
         ctx.close()
+    print("5. the review of 24-Nov-2026 (2): a firm asked about unlisted shares; the PAN settles the kind; assets abroad")
+    ctx, pg, ids = page(br, 1000, 700)
+    pg.evaluate("(id) => openCompany(id).then(() => goClient('books:itr'))", ids[3]); pg.wait_for_timeout(2500)
+    pg.select_option("[data-itr-presq]", "y"); pg.wait_for_timeout(500)
+    qs = pg.eval_on_selector_all("[data-itr-q1]", "es => es.map(e => e.dataset.itrQ1)")
+    ok(qs == ["unlisted", "agriOver"], "a firm with presumptive income: asked about unlisted shares and agricultural income, not director (%s)" % qs)
+    why = pg.inner_text("[data-itr-why]")
+    ok(head().startswith("ITR-5") and "ITR-4 is not for a firm that held unlisted shares or has agricultural income above Rs 5,000. Answer the questions below to see if it fits." in why, "a firm, not answered: ITR-5, said: " + why)
+    pg.select_option("[data-itr-q1=agriOver]", "n"); pg.select_option("[data-itr-q1=unlisted]", "y"); pg.wait_for_timeout(500)
+    ok(head().startswith("ITR-5") and "not for a firm that held unlisted shares" in pg.inner_text("[data-itr-why]"), "a firm that held unlisted shares: ITR-5: " + pg.inner_text("[data-itr-why]"))
+    pg.select_option("[data-itr-q1=unlisted]", "n"); pg.wait_for_timeout(500)
+    ok(head().startswith("ITR-4"), "a firm, both No: ITR-4 (%s)" % head().split("\n")[0])
+    if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "firm-itr4-classic-light.png"))
+    pg.evaluate("() => { const st = S.books.itr['2026|state']; st.profile = Object.assign({}, st.profile, { foreignAssets: 'YES' }); }")
+    pg.evaluate("(id) => openCompany(id).then(() => goClient('books:itr'))", ids[3]); pg.wait_for_timeout(2500)
+    ok(head().startswith("ITR-5") and "outside India" in pg.inner_text("[data-itr-why]"), "a firm with assets outside India: ITR-5, said: " + pg.inner_text("[data-itr-why]"))
+    pg.evaluate("(id) => openCompany(id).then(() => goClient('books:itr'))", ids[4]); pg.wait_for_timeout(2500)
+    why = pg.inner_text("[data-itr-why]")
+    ok(head().startswith("ITR-6") and "Company" in head() and "fourth letter is C" in why and "Client setup says a firm or LLP" in why and "FinCom follows the PAN" in why, "Client setup a firm, the PAN a company: ITR-6, said plainly: %s | %s" % (head().replace("\n", " "), why))
+    opts = pg.eval_on_selector_all("[data-itr-form] option", "os => os.map(o => o.textContent)")
+    ok("ITR-5 (not for this client)" in opts and "ITR-4 (not for this client)" in opts, "a company PAN: ITR-4 and ITR-5 not for this client (%s)" % opts)
+    if SHOTS2: pg.screenshot(path=os.path.join(SHOTS2, "pan-vs-setup-classic-light.png"))
+    ctx.close()
     print("3. on a phone (390 px): the chooser and its questions fit the width")
     ctx = br.new_context(viewport={"width": 390, "height": 800}, device_scale_factor=2, is_mobile=True, has_touch=True)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)[:200]))

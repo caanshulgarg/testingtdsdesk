@@ -55,7 +55,9 @@ export function pfBooks(books) { return books && books.ok ? books.sched.pl.pf.cy
 // the client's entity (Client setup / the PAN), its PAN, name and GSTIN; firm or LLP is asked in the return (never read from the name)
 export function clientOf() {
   const g = G(), co = (g.CO && g.CO()) || {};
-  // Client setup's choice, else the PAN's fourth letter (FS.entityOf); the PAN read here too when FS is not on the page
-  const ent = (g.FS && g.FS.entityOf ? g.FS.entityOf(co).code : "") || entityFrom(co.entity, co.pan, co.gstin).code;
-  return { id: co.id, name: co.name || "", pan: String(co.pan || "").toUpperCase(), gstin: co.gstin || "", entity: ent };
+  // the PAN's fourth letter settles the kind (pick.js entityFrom); Client setup's choice (FS.entityOf) only without a
+  // PAN. entitySet: what Client setup says, so the page can say when it differs from the PAN
+  const fsCode = g.FS && g.FS.entityOf ? g.FS.entityOf(co).code : "", setCode = String(co.entity || "").toUpperCase();
+  const ent = entityFrom(fsCode || setCode, co.pan, co.gstin).code || fsCode;
+  return { id: co.id, name: co.name || "", pan: String(co.pan || "").toUpperCase(), gstin: co.gstin || "", entity: ent, entitySet: setCode };
 }

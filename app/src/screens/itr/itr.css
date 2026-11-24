@@ -31,8 +31,9 @@
 .itr .itr-pick-row:not(.itr-pick-qs) > .itr-pick-f:first-child select { font-weight: 600; }
 .itr .itr-pick-why { flex: 1 1 280px; margin: 0; font-size: 13px; color: var(--itr-muted); overflow-wrap: anywhere; }
 .itr .itr-pick-why b { color: var(--itr-ink); font-weight: 600; }
-.itr .itr-pick-warn { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; background: var(--itr-warn-bg); color: var(--itr-warn); overflow-wrap: anywhere; }
-.itr .itr-pick[data-fits="0"] .itr-pick-warn { background: var(--itr-bad-bg); color: var(--itr-bad); }
+/* the note under the form: the info tone of the page's notes (no JSON yet, answers needed); a form that does not fit red */
+.itr .itr-pick-warn { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; background: var(--itr-tint); color: var(--itr-ink); overflow-wrap: anywhere; }
+.itr .itr-pick-warn[data-tone="bad"] { background: var(--itr-bad-bg); color: var(--itr-bad); }
 .itr .itr-pick-qs .itr-pick-f { flex: 0 1 auto; }
 .itr .itr-pick-row:not(.itr-pick-qs) > .itr-pick-f:first-child > span { white-space: nowrap; }
 .itr .itr-pick-qs .itr-pick-f > span { min-width: 0; overflow-wrap: anywhere; }
