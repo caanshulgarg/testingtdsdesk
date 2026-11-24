@@ -40,8 +40,10 @@ async function uploadSales(files){
   // client's list as it is now, and is kept at once: the one on screen, else the one in this browser (as salesIngest)
   const now = () => S.sales && S.sales.cid === cid ? S.sales : null;
   const say = t => { const s = now(); if (s){ s.busy = t; render(); } };
-  // (a list being loaded: once it is in; one whose loading failed is waited on no more than 10 s, re-review of e9c90fa34)
-  const live = async () => { for (let t = 0; now() && now().loading && t < 100; t++) await new Promise(ok => setTimeout(ok, 100)); const s = now(); return s && !s.loading ? s : null; };
+  // (a list being loaded: once it is in; one whose loading failed is waited on 10 s, once, re-review of e9c90fa34)
+  let stuck = null;
+  const live = async () => { for (let t = 0; now() && now().loading && now() !== stuck && t < 100; t++) await new Promise(ok => setTimeout(ok, 100));
+    const s = now(); if (s && s.loading) stuck = s; return s && !s.loading ? s : null; };
   const kept = async () => { const s = await live(); return s ? s.list : ((await BankDB.get("sales:" + cid)) || []); };
   const told = new Set();
   let added = 0;
