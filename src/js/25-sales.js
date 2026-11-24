@@ -56,6 +56,8 @@ async function loadSales(cid, old, ids){
   const st = old || {cid, loading: true, list: [], cfg: Object.assign({}, SALES_CFG_DEFAULT), filter: "review", q: "", sel: new Set(), sticky: new Set(), busy: "", openId: null, view: "list", draft: null, undo: null, hist: {}};
   if (!old){ S.sales = st; render(); }
   if (!S.bank || S.bank.cid !== cid) await loadBank(cid);   // the client's Tally ledgers live with the bank data
+  // (re-review of e9c90fa34: a save of this client's list still waiting is written first, never lost to this reading)
+  if (salesSavePending && salesSavePending.cid === cid) await salesSaveNow();
   const [list0, cfg, hist] = await Promise.all([BankDB.get("sales:" + cid), BankDB.get("salescfg:" + cid), BankDB.get("saleshist:" + cid)]);
   // (another read started since, a removal arriving while this one was reading: that one is drawn)
   if (S.sales !== st) return;
@@ -105,22 +107,31 @@ function salesAfterRead(cid){
   render();
   if (bridgeLive(CO(cid))) salesAutoSync();
 }
-let salesSaveTimer = null;
+let salesSaveTimer = null, salesSavePending = null;
 // next-fix-hang (review of bb5a5c53d): moved by every save of the sales (and their loading), so the GST figures kept
 // across drawings (GSTR.keptState, src/js/12) see a marketplace invoice changed in place (ignored, its GSTIN typed, undone)
 let SALES_REV = 0;
 function saveSales(what){
   SALES_REV++;
-  const s = SL(); if (!s) return;
+  const s = SL(); if (!s || s.loading) return;   // (a list not yet in: nothing of it to keep)
   const cid = s.cid, list = s.list;
   if (typeof cloudSoon === "function") cloudSoon();
   clearTimeout(salesSaveTimer);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = list;
-  // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay)
-  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(() => { const n = SL(), l = n && n.cid === cid ? (n.loading ? null : n.list) : list;
-    if (l) return BankDB.set("sales:" + cid, l.map(salesSynced)); }); }, 500);
+  // (review of 85592e3f6: in turn with the sync, and the list as it is then, so a sync's rows written meanwhile stay;
+  // re-review of e9c90fa34: waiting, salesSavePending, until it is written, so closing the page still writes it)
+  salesSavePending = {cid, s};
+  salesSaveTimer = setTimeout(() => { salesSaveTimer = null; salesTurn(salesSaveNow); }, 500);
   if (what && what.cfg && !(typeof Drafts === "object" && Drafts.hold("salescfg:" + cid))){ salesCfgStamp(s); salesCfgWrite(s); }
   if (what && what.hist) BankDB.set("saleshist:" + cid, s.hist);
+}
+// the save waiting, written now: the list on screen if it is this client's and in, else the one saved (never a list not
+// yet loaded)
+async function salesSaveNow(){
+  const p = salesSavePending; if (!p) return;
+  const n = SL(), src = n && n.cid === p.cid && !n.loading ? n : p.s;
+  if (!src.loading) await BankDB.set("sales:" + p.cid, src.list.map(salesSynced));
+  if (salesSavePending === p) salesSavePending = null;
 }
 // a change to a client's sales list kept in this browser, in turn with the sync's own (cloudApply, src/js/27): the sync
 // reads the list, adds its rows and lays the list on screen afresh (loadSales); a save in between put the list as it was
@@ -203,7 +214,7 @@ let salesNoIdx = null;
 function salesOfNo(no){ return salesNoIdx ? salesNoIdx.get(normInvNo(no)) || [] : SL().list; }
 // the invoice as it is to be kept and sent: as it was before it was looked at again, while nothing else changed it
 function salesSynced(v){ const k = v.__vw; return k && JSON.stringify(v) === k.after ? JSON.parse(k.before) : v; }
-window.addEventListener("pagehide", () => { if (salesSaveTimer && S.sales){ clearTimeout(salesSaveTimer); BankDB.set("sales:" + S.sales.cid, S.sales.list.map(salesSynced)); } });
+window.addEventListener("pagehide", () => { if (salesSavePending){ clearTimeout(salesSaveTimer); salesSaveTimer = null; salesSaveNow(); } });
 function inv(id){ const s = SL(); return s && s.list.find(v => v.id === id); }
 
 /* ---------- ledgers (exact Tally names only) ---------- */
@@ -580,8 +591,10 @@ function invoiceProblems(v){
   if (x.customerGstin && !gstinValid(x.customerGstin)) p.push("customer GSTIN is not valid");
   const gst = num(x.cgst) + num(x.sgst) + num(x.igst);
   // (the owner, 24-Nov-2026, as the items check in salesProblemsNow: the invoice's own stated Adjustment plus Rounding,
-  // x.roundOff, read from an uploaded PDF or sheet, explains the gap and posts in Round Off; never on an invoice made
-  // here, whose roundOff is worked out as the gap)
+  // x.roundOff, explains the gap and posts in Round Off when the invoice was read from a file: a PDF or photo (upload,
+  // salesReadFile in src/js/26-sales-invoice.js) or a sheet (sheet, market: SheetImport in app/src/lib/registers.js,
+  // only when the sheet's Adjustment and Round Off explain the gap); never on an invoice made here, whose roundOff is
+  // worked out as the gap)
   const ro = ["upload", "sheet", "market"].includes(v.source) ? num(x.roundOff) : 0;
   if (Math.abs(num(x.taxable) + gst + num(x.cess) + ro - num(x.total)) > 1.0) p.push("taxable value + GST does not equal the total");
   if (num(x.igst) && (num(x.cgst) || num(x.sgst))) p.push("both IGST and CGST/SGST");
@@ -625,18 +638,22 @@ function invoiceProblems(v){
 // {no (normInvNo), type, date (yyyy-mm-dd), amount, gstin, party, note, seller}; isInv: the Sales-class test
 // (salesCheckTally's). A client with several registrations of its own, or the two issued from different GSTINs (the
 // invoice's seller GSTIN, the Tally entry's company GSTIN): the exact type only, so two branches' invoice 12 are never
-// one (review of 03ffa5eed). Anything less is another entry, and is posted
+// one (review of 03ffa5eed). Neither with a GSTIN (a walk-in cash memo, the owner, 24-Nov-2026): also any two Sales-class
+// vouchers of the same date, whatever the party or the type ("CM/1" a "Cash Memo" to "Cash" in Tally, a "Sales" to
+// "Walk-in Customer" here). Anything less is another entry, and is posted
 function salesSameEntry(a, b, isInv){
   const lc = s => String(s || "").trim().toLowerCase(), up = s => String(s || "").trim().toUpperCase();
   if (!a.no || a.no !== b.no || !a.date || !b.date || fyLabel(a.date) !== fyLabel(b.date) || Math.abs(r2(a.amount) - r2(b.amount)) > 1) return false;
-  const same = !!lc(a.type) && lc(a.type) === lc(b.type);
+  const same = !!lc(a.type) && lc(a.type) === lc(b.type), sale = () => { const cls = isInv || salesTypeClasses([].concat((SL() && SL().cfg || {}).voucherType || [])); return !a.note && !b.note && cls(a.type) && cls(b.type); };
+  // (several registrations: only when both sellers are known and the same; one registration: unless they differ)
+  const otherSeller = up(a.seller) && up(b.seller) ? up(a.seller) !== up(b.seller) : salesOwnGstins().length > 1;
+  // (neither with a GSTIN: never issued from another GSTIN, nor a Tally voucher found by its reference, byRef; review of 69441fde7)
+  if (!up(a.gstin) && !up(b.gstin) && !otherSeller && !a.byRef && !b.byRef && String(a.date).slice(0, 10) === String(b.date).slice(0, 10) && sale()) return true;
   if (!up(a.gstin) || !up(b.gstin)) return same && !!lc(a.party) && lc(a.party) === lc(b.party);
   if (up(a.gstin) !== up(b.gstin)) return false;
   if (same) return true;
-  // (several registrations: only when both sellers are known and the same; one registration: unless they differ)
-  if (up(a.seller) && up(b.seller) ? up(a.seller) !== up(b.seller) : salesOwnGstins().length > 1) return false;
-  const cls = isInv || salesTypeClasses([].concat((SL() && SL().cfg || {}).voucherType || []));
-  return !a.note && !b.note && cls(a.type) && cls(b.type);
+  if (otherSeller) return false;
+  return sale();
 }
 // (an invoice already In Tally: the type of the Tally entry it was matched to)
 function salesEntryOf(v){ return {no: normInvNo(v.x.number), type: (v.status === "intally" && v.tallyMatch && v.tallyMatch.type) || salesVt(v.x), date: v.x.date, amount: Math.abs(num(v.x.total)), gstin: v.x.customerGstin, party: v.customerLedger, note: !!v.x.noteKind, seller: v.x.sellerGstin || ""}; }
@@ -656,13 +673,29 @@ function salesDupOf(v){
   return o ? {src: "fincom", type: salesVt(o.x), number: o.x.number, date: o.x.date, amount: r2(Math.abs(num(o.x.total))), party: o.customerLedger || o.x.customerName || "", id: o.id} : null;
 }
 // a voucher type that is never a sale, by a word of its name (spaces, "_", "-", brackets between words): a credit or
-// debit note (also "Cr Note", "Dr Note", CN, DN, a note alone), a Journal, a receipt, a payment, a contra, Rtn or Ret;
-// or by any part of it: a return ("SalesReturn", "Returnable"), an order, a quotation, a delivery or a memo ("Sales
-// Memorandum": not in the books). "Credit" or "Debit" alone is a sale ("Credit Sales", "Sales (Credit)"); salesBooksVts
-// and salesTypeClasses use this one test, and salesNotSale with the client's own note types (next-posting-followups)
-const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra)(?=$|[^a-z0-9])|return|order|quotation|delivery|memo/i;
+// debit note (also "Cr Note", "Dr Note", CN, DN, a note alone), a Journal, a receipt, a payment, a contra, Rtn or Ret, a
+// petty or an expense one ("Petty Cash Memo"); or by any part of it: a challan (the owner, 24-Nov-2026: "Delivery
+// challan is not sales": "Sales Challan", "Challan Sales", "Sales Delivery Challan" never), a proforma, a self invoice
+// (reverse charge, an inward supply), an inward, import, supplier's, vendor's, "Pur"/"Purch",
+// job-work-in, cancelled or "Performa" one (review of 69441fde7: "invoice" alone is not enough), a return
+// ("SalesReturn", "Returnable"), a quotation or a memo ("Sales Memorandum": not in the books), but a cash memo is a sale
+// (the owner, 24-Nov-2026: "Cash Memo", "Sales Cash Memo"; a sales word as "sales" is); a purchase first ("Purchase
+// Cash Memo", "Purchase Invoice"), or anywhere with no "sales" ("Sales Purchase" is one); RCM or reverse charge with no
+// "sales" ("RCM Invoice"; "Sales RCM" is one); an order only with "sales" or
+// "invoice" ("Inv") after it, or a home, door, online or free one with either ("Sales Order Invoice", "Sales Online
+// Order"), never alone ("Sales Order"; "Sales Border" is no order); a delivery ("Delivery", "Deliveries", not
+// "Delivered") only with a sales word ("Sales Delivery", "Door Delivery Sales"; never "Delivery Note", "Sales Delivery
+// Challan"). "Credit" or "Debit" alone is a sale ("Credit Sales");
+// salesBooksVts and salesTypeClasses use this one test (salesNotSale, with the client's own note types)
+const SALES_NOT_SALE = /(?:^|[^a-z0-9])(?:(?:credit|debit|cr|dr)\.?[\s_-]*notes?|notes?|cn|dn|journals?|receipts?|payments?|rtn|ret|contra|petty|expenses?)(?=$|[^a-z0-9])|challan|pro[\s_-]*forma|self[\s_-]*invoice|return|quotation|memo|inward|\bimport(?:s|ed)?\b|supplier|vendor|\bpur(?:ch)?\b|cancel|perfor?ma|job[\s_-]*work[\s_-]*in(?:ward)?\b/i;
 // (a note type set the same as the client's sales type is no note: never a reason to post a sale again)
-function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x || "").toLowerCase().trim(), n = l(t); return SALES_NOT_SALE.test(n) || (n !== l(c.voucherType || "Sales") && [c.creditNoteType, c.debitNoteType].some(x => !!n && l(x) === n)); }
+function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x || "").toLowerCase().trim(), n = l(t), m = n.replace(/cash[\s_-]*memo(?!r)/g, "cash sales");
+  // (a sales word of the name itself: a cash memo is none, "Cash Memo Purchase", "Cash Memo Delivery" never a sale)
+  const sw = /\bsales?\b/.test(n), iw = sw || /\binv(?:oice)?\b/.test(n);
+  // (RCM or reverse charge with no sales word: an inward one, "RCM Invoice"; "Sales RCM" is an outward sale, the owner)
+  return SALES_NOT_SALE.test(m) || (/(?:^|[^a-z0-9])purchases?(?=$|[^a-z0-9])/.test(m) && (/^purchase/.test(m) || !sw)) || (/rcm|reverse[\s_-]*charge/.test(m) && !sw)
+    || (/(?:^|[^a-z]|sales|re)order/.test(m) && !(/order[\s\S]*(?:\bsales?\b|\binv(?:oice)?\b)/.test(m) || iw && /(?:home|door|online|free)[\s_-]*order/.test(m)))
+    || (/deliver(?:y|ies)?\b/.test(m) && !iw) || (n !== l(c.voucherType || "Sales") && [c.creditNoteType, c.debitNoteType].some(x => !!n && l(x) === n)); }
 // next-fix-sales-upload (the owner, 16-Nov-2026): the client's own sales voucher type, from the vouchers FinCom already
 // reads (the client's books): the Sales-class type most used, the default for uploads, shown as "(from your Tally)"; a
 // type a person typed in Sales settings stands (cfg.vtBy "you"), and when the books use more than one in real use the
@@ -670,7 +703,7 @@ function salesNotSale(t){ const c = (SL() && SL().cfg) || {}, l = x => String(x 
 function salesBooksVts(){
   const s = SL(), bk = S.books && s && S.books.cid === s.cid ? S.books : null; if (!bk) return [];
   const n = new Map();
-  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || salesNotSale(t) || !/\bsales\b/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
+  (bk.vouchers || []).forEach(v => { const t = String(v.type || "").trim(); if (!t || v.opt || v.cancel || salesNotSale(t) || !/\bsales\b|cash[\s_-]*memo/i.test(t)) return; n.set(t, (n.get(t) || 0) + 1); });
   const all = Array.from(n.entries()).sort((a, b) => b[1] - a[1]), tot = all.reduce((a, x) => a + x[1], 0);
   // (in real use: at least 3 vouchers and a twentieth of the client's sales)
   return all.filter(([, c]) => c >= 3 && c >= tot * 0.05).map(([type, count]) => ({type, count}));

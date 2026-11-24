@@ -40,7 +40,10 @@ async function uploadSales(files){
   // client's list as it is now, and is kept at once: the one on screen, else the one in this browser (as salesIngest)
   const now = () => S.sales && S.sales.cid === cid ? S.sales : null;
   const say = t => { const s = now(); if (s){ s.busy = t; render(); } };
-  const live = async () => { while (now() && now().loading) await new Promise(ok => setTimeout(ok, 100)); return now(); };   // a list being loaded: once it is in
+  // (a list being loaded: once it is in; one whose loading failed is waited on 10 s, once, re-review of e9c90fa34)
+  let stuck = null;
+  const live = async () => { for (let t = 0; now() && now().loading && now() !== stuck && t < 100; t++) await new Promise(ok => setTimeout(ok, 100));
+    const s = now(); if (s && s.loading) stuck = s; return s && !s.loading ? s : null; };
   const kept = async () => { const s = await live(); return s ? s.list : ((await BankDB.get("sales:" + cid)) || []); };
   const told = new Set();
   let added = 0;
@@ -76,7 +79,7 @@ async function uploadSales(files){
       await salesTurn(async () => {
         const up = (CloudDocs.sv || {})[cid + "|sv:" + (v.docOf || v.id)]; if (up){ v.docPath = up[0]; v.docSize = up[1]; }
         const s = await live();
-        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
+        if (s){ s.list.push(v); mapInvoice(v); saveSales(); clearTimeout(salesSaveTimer); salesSaveTimer = salesSavePending = null; await BankDB.set("sales:" + cid, s.list.map(salesSynced)); }
         else { v.needsMap = true; const list = await kept(); list.push(v); await BankDB.set("sales:" + cid, list); }
       });
       added++;
@@ -309,7 +312,8 @@ async function salesCheckTally(list, call){
     const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
     const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
     const prior = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id));
-    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""};
+    // (byRef: found by its reference, not its own number: never the walk-in rule of salesSameEntry, review of 69441fde7)
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || "", byRef: normInvNo(x.number) !== no};
       if (!salesSameEntry(me, e, isInv) || gone.some(g => salesSameEntry(g, e, isInv))) return false;
       const was = prior.filter(o => salesSameEntry(salesEntryOf(o), e, isInv) && Date.parse(o.postedAt || "") >= copyAt);
       return !was.length || was.some(salesInBooks); });
@@ -342,7 +346,9 @@ async function salesVouchersIn(co, from, to, call){
 // note type (salesNotSale)
 function salesTypeClasses(own){
   const lc = s => String(s || "").toLowerCase().trim(), names = new Set([].concat(own || [], "Sales").filter(Boolean).map(lc));
-  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b/i.test(n); };
+  // (the owner, 24-Nov-2026: "Tax Invoice", "Retail Invoice", "Bill of Supply" are sales too; "Proforma Invoice",
+  // "Purchase Invoice" never, salesNotSale)
+  return t => { const n = lc(t); if (!n || salesNotSale(n)) return false; return names.has(n) || /\bsales\b|cash[\s_-]*memo|\binvoices?\b|bill[\s_-]*of[\s_-]*supply/i.test(n); };
 }
 function salesAmtNum(a){ return num(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); }
 // a Tally voucher's amount: its own when the answer carries one, else its party's line (the bridge's and the cloud's
