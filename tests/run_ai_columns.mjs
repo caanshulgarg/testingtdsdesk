@@ -160,6 +160,40 @@ console.log("6. the review of aead82472: a wrong AI mapping is put right or not 
     return dirs(p) === RIGHT && kept.map.drcr === "Type"; }, "one Amount with no Dr / Cr while a column holds only C and D: that column filled in as Dr / Cr");
   await tryOk(async () => { const co = fresh(); answer = M({ date: "Txn On", narration: "Remarks", amount: "Running Total", drcr: "Type", balance: "Amt" });
     try { await read("zz.csv", AMT); return false; } catch (e) { return e.code === "bank_unreadable" && !co.aiColumns; } finally { back(); } }, "the amount and the balance taken for each other: the running balance does not fit, not used, not kept");
+  // 3, 4, 6 (re-review): only clear money words turn a mapping round; Debit / Credit and Dr / Cr never settle it
+  const csv = (h, rows) => [h].concat(rows).join("\n");
+  const MM = (d, c, bal, extra) => M(Object.assign({ date: "Date", narration: "Particulars", debit: d, credit: c }, bal ? { balance: bal } : {}, extra || {}));
+  // -> the lines' "debit/credit", or "choose" when the mapping was not used
+  const got = async (a, data) => { const co = fresh(); answer = a; try { const p = await read("zz.csv", data); return dirs(p) + (Object.values(co.aiColumns || {})[0] || {}).checked; } catch (e) { return e.code === "bank_unreadable" && !co.aiColumns ? "choose" : "threw " + e.code; } finally { back(); } };
+  const W4 = "250/0 0/1250.5 1000.5/0", OD = ["01/09/2026,Open,,,5000.00", "02/09/2026,UPI to ZZ Shop,250.00,,5250.00", "05/09/2026,NEFT from ZZ Buyer,,1250.50,3999.50", "07/09/2026,Chq paid,1000.50,,5000.00"];
+  // (headings a rule knows by name never reach the AI: those mappings are checked by bankCheck itself, as the AI path does)
+  const split = (l) => l.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((x) => x.replace(/"/g, ""));
+  const direct = (a, data) => { const g = data.split("\n").map(split), head = g[0], body = g.slice(1), line = (r) => r.filter(Boolean).join(" ");
+    const rd = (m) => { const c = AC.indexes(m, head); return C.rowsFromCells(body, c, (r, x) => r[x], line); };
+    const c = AC.bankCheck(AC.bankMap(a, head), head, body, rd); return c.map ? dirs({ rows: c.rows }) + "1" : "choose"; };
+  const t = async (w, a, data, want) => { const named = C.findHeader(data.split("\n").map(split)); const g = named ? direct(a, data) : await got(a, data); ok(g === want, w + " (" + g + (named ? ", checked directly" : "") + ")"); };
+  await t("balance fits only turned round, headings Amount 1 / Amount 2 say nothing: Choose the columns", MM("Amount 1", "Amount 2", "Balance"), csv("Date,Particulars,Amount 1,Amount 2,Balance", OD), "choose");
+  await t("the same with Nikasi / Jama: Choose the columns", MM("Nikasi", "Jama", "Balance"), csv("Date,Particulars,Nikasi,Jama,Balance", OD), "choose");
+  const DR = ["01/09/2026,Open,,,5000.00 Dr", "02/09/2026,UPI to ZZ Shop,250.00,,5250.00 Dr", "05/09/2026,NEFT from ZZ Buyer,,1250.50,3999.50 Dr", "07/09/2026,Chq paid,1000.50,,5000.00 Dr"];
+  await t("a balance printed with Dr, Withdrawal / Deposit mapped right: used as it is", MM("Withdrawal", "Deposit", "Balance"), csv("Date,Particulars,Withdrawal,Deposit,Balance", DR), W4 + "1");
+  await t("the same mapped the wrong way round: the headings (Withdrawal / Deposit) turn it round", MM("Deposit", "Withdrawal", "Balance"), csv("Date,Particulars,Withdrawal,Deposit,Balance", DR), W4 + "1");
+  const BKB = csv("Date,Particulars,Debit,Credit,Balance", ["01/09/2026,Opening,10000.00,,10000.00 Dr", "02/09/2026,ZZ Shop (payment),,250.00,9750.00 Dr", "05/09/2026,ZZ Buyer (receipt),1250.50,,11000.50 Dr", "07/09/2026,Chq paid ZZ,,1000.50,10000.00 Dr"]);
+  await t("Debit / Credit headings (the books' side) against the balance: never turned round on them, Choose the columns", MM("Credit", "Debit", "Balance"), BKB, "choose");
+  const NB = csv("Date,Particulars,Debit,Credit", ["02/09/2026,UPI to ZZ Shop,250.00,", "05/09/2026,NEFT from ZZ Buyer,,1250.50", "07/09/2026,Chq paid,1000.50,"]);
+  await t("no balance, Debit / Credit headings: they do not settle it, Choose the columns", MM("Debit", "Credit"), NB, "choose");
+  await t("… nor the other way round", MM("Credit", "Debit"), NB, "choose");
+  const PI = csv("Date,Particulars,Paid In,Paid Out", ["02/09/2026,UPI to ZZ Shop,,250.00", "05/09/2026,NEFT from ZZ Buyer,1250.50,", "07/09/2026,Chq paid,,1000.50"]);
+  await t("no balance, Paid In / Paid Out mapped the wrong way: turned round", MM("Paid In", "Paid Out"), PI, W4 + "1");
+  await t("no balance, Paid In / Paid Out right: used", MM("Paid Out", "Paid In"), PI, W4 + "1");
+  const WI = csv("Date,Particulars,Withdrawal Amount (in Rs.),Deposit Amount (in Rs.)", ["02/09/2026,UPI to ZZ Shop,250.00,", "05/09/2026,NEFT from ZZ Buyer,,1250.50", "07/09/2026,Chq paid,1000.50,"]);
+  await t("\"(in Rs.)\" is no money-in word: the swapped mapping turned round by Withdrawal / Deposit", MM("Deposit Amount (in Rs.)", "Withdrawal Amount (in Rs.)"), WI, W4 + "1");
+  const REV1 = csv("Date,Particulars,Withdrawal,Deposit,Balance", ["07/09/2026,Chq paid,1000.50,,10000.00", "07/09/2026,NEFT from ZZ Buyer,,1250.50,11000.50", "07/09/2026,UPI to ZZ Shop,250.00,,9750.00", "07/09/2026,Open,,10000.00,10000.00"]);
+  await t("a one-day statement newest first, mapped right: the reversed order fits, used", MM("Withdrawal", "Deposit", "Balance"), REV1, "1000.5/0 0/1250.5 250/0 0/100001");
+  // 7. a mapping kept by the earlier build (no checked mark) is checked before it is used
+  await tryOk(async () => { const co = fresh(), head = ["Txn On", "Remarks", "Chq", "Money Out", "Money In", "Running Total"];
+    co.aiColumns = { ["bank:" + AC.layoutKey(head)]: { kind: "bank", head, how: "ai", map: { date: "Txn On", narr: "Remarks", debit: "Money In", credit: "Money Out", balance: "Running Total" } } };
+    const was = calls.length, p = await read("zz.csv", BANK), k = Object.values(co.aiColumns)[0]; back();
+    return dirs(p) === RIGHT && k.map.debit === "Money Out" && k.checked === 1 && calls.length === was; }, "an unchecked AI mapping kept before: checked, turned round, marked checked (no AI call)");
   // 8. a kept mapping is for this very header
   ok(AC.kept({ aiColumns: { ["bank:" + AC.layoutKey(["A", "B", "C"])]: { head: ["X", "Y", "Z"], map: { date: "A" } } } }, "bank", ["A", "B", "C"]) === null, "a kept mapping whose stored header is not this one is not used");
   // 9. a workbook: after the AI is off (or the cap reached) on one sheet, it is not asked for the next
@@ -169,19 +203,23 @@ console.log("6. the review of aead82472: a wrong AI mapping is put right or not 
     const buf = C.XLSX.write(wb, { type: "array", bookType: "xlsx" });
     try { await read("zz.xlsx", new Uint8Array(buf)); } catch (e) { /* not read */ } finally { aiOn = true; back(); }
     return calls.length - was === 1; }, "a two-sheet workbook with the AI off: asked once, not again for the second sheet");
-  // 5. the person's choices carried to the lines read again
-  const old = [{ id: "s1-0", date: "2026-09-02", narr: "UPI to ZZ Grocer", debit: 0, credit: 250, state: "ready", ledger: "ZZ Grocer", userSet: true },
-    { id: "s1-1", date: "2026-09-07", narr: "Cheque paid", debit: 0, credit: 1000.5, state: "sent", ledger: "ZZ Rent", tally: { guid: "g1" } },
-    { id: "s1-2", date: "2026-09-09", narr: "Gone line", debit: 5, credit: 0, state: "ready", ledger: "X", userSet: true }];
-  const nw = [{ id: "s2-0", date: "2026-09-02", narr: "UPI to ZZ Grocer", debit: 250, credit: 0, state: "attention", ledger: "" },
-    { id: "s2-1", date: "2026-09-07", narr: "Cheque paid", debit: 1000.5, credit: 0, state: "attention", ledger: "" },
-    { id: "s2-2", date: "2026-09-05", narr: "NEFT from ZZ Buyer", debit: 0, credit: 1250.5, state: "attention", ledger: "" }];
-  await tryOk(async () => { const c = AC.carry(old, nw), g = c.rows.find((r) => r.narr === "UPI to ZZ Grocer"), q = c.rows.find((r) => r.narr === "Cheque paid");
-    return g.ledger === "ZZ Grocer" && g.userSet && g.debit === 250 && g.state === "suggested" && q.id === "s1-1" && q.state === "sent" && q.credit === 1000.5 && c.rows.length === 3 && c.lost === 1 && c.carried === 1 && c.kept === 1; },
-    "carry: a ledger chosen goes with its line (to check again when its direction changed), a line in Tally stays as it is, a line not read again stays in Restore");
-  // 4. a line being posted: nothing read again
-  ok(AC.inFlight({ state: "ready", postJob: "j1" }) && AC.inFlight({ state: "sent", checking: true }) && AC.inFlight({ state: "ready" }, () => ({ status: "waiting" })) && !AC.inFlight({ state: "ready" }) && !AC.inFlight({ state: "sent" }),
-    "a line queued for Tally, or held for checking, counts as being posted");
+  // 5. (re-review) carry: exact narration over every new line first, then date + amount + the same direction, unique on both sides
+  const Lr = (id, date, d, c, narr, x) => Object.assign({ id, date, debit: d, credit: c, narr, state: "attention", ledger: "" }, x || {});
+  const led = (x) => x.rows.map((r) => r.id + ":" + (r.ledger || "-") + ":" + r.state).join(" ");
+  {
+    const old = [Lr("o1", "2026-09-02", 500, 0, "UPI to ZZ Alpha", { state: "ready", ledger: "ZZ Alpha", userSet: true }), Lr("o2", "2026-09-02", 500, 0, "UPI to ZZ Beta", { state: "ready", ledger: "ZZ Beta", userSet: true })];
+    ok(led(AC.carry(old, [Lr("n1", "2026-09-02", 500, 0, "UPI to ZZ Alpha ref 9"), Lr("n2", "2026-09-02", 500, 0, "UPI to ZZ Beta")])) === "n1:ZZ Alpha:ready n2:ZZ Beta:ready", "carry: the exact narration first (Beta), then the one left by date and amount (Alpha)");
+    ok(led(AC.carry(old, [Lr("n1", "2026-09-02", 500, 0, "UPI to ZZ Beta"), Lr("n2", "2026-09-02", 500, 0, "Paid ZZ Alpha")])) === "n1:ZZ Beta:ready n2:ZZ Alpha:ready", "carry: the same whatever the order in the file");
+    ok(led(AC.carry(old, [Lr("n1", "2026-09-02", 500, 0, "Paid one"), Lr("n2", "2026-09-02", 500, 0, "Paid two")])) === "n1:-:attention n2:-:attention", "carry: two lines of the same date and amount with no narration met: no ledger guessed");
+    const o4 = [Lr("o1", "2026-09-02", 0, 500, "UPI/P2M/412345678901/ZZ SHOP PVT LTD/PAY", { state: "ready", ledger: "ZZ Shop", userSet: true }), Lr("o2", "2026-09-02", 500, 0, "UPI/P2M/412345678901/ZZ SHOP PVT LTD/REVERSAL", { state: "ready", ledger: "ZZ Refunds", userSet: true })];
+    ok(led(AC.carry(o4, [Lr("n1", "2026-09-02", 0, 500, "UPI/P2M/412345678901/ZZ SHOP PVT LTD/REVERSAL"), Lr("n2", "2026-09-02", 500, 0, "UPI/P2M/412345678901/ZZ SHOP PVT LTD/PAY")])) === "n1:ZZ Refunds:suggested n2:ZZ Shop:suggested", "carry: the whole narration (not its first 24 letters); a line turned round is to check again");
+    const c2 = AC.carry([Lr("o1", "2026-09-02", 500, 0, "UPI to ZZ Rent", { state: "ready", ledger: "ZZ Rent", userSet: true })], [Lr("n1", "2026-09-02", 0, 500, "NEFT from ZZ Buyer"), Lr("n2", "2026-09-02", 500, 0, "UPI to ZZ Rent")]);
+    ok(led(c2) === "n1:-:attention n2:ZZ Rent:ready" && c2.lost === 0, "carry: a deposit of the same date and amount never takes a payment's ledger");
+  }
+  // 1. (re-review) a line in Tally, or with any posting (live, done or posted), or being checked: the statement is not read again
+  ok(AC.touched({ state: "sent" }) && AC.touched({ state: "intally" }) && AC.touched({ state: "ready", tally: { guid: "g" } }) && AC.touched({ state: "ready", postJob: "j1" }) && AC.touched({ state: "ready", checking: true })
+    && AC.touched({ state: "ready", postError: "already sent from this computer on 01-Sep-2026, job abcdef123456" }) && AC.touched({ state: "ready" }, () => ({ status: "done" })) && !AC.touched({ state: "ready" }) && !AC.touched({ state: "attention" }, () => null),
+    "a line in Tally, with any posting job (done too), named in a post error, or being checked: counts");
   // 6. billing on a re-read: only the lines more than were paid for
   ok(AC.extraLines(4, 4) === 0 && AC.extraLines(4, 6) === 2 && AC.extraLines(5, 3) === 0, "read again: charged only for lines more than the first read (max(0, new - paid))");
   // 7. 24Q: a Date of Joining is no pay date for the AI either; Cess and Regime filled by names; TDS above gross not used

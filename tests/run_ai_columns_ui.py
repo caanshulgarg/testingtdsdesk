@@ -63,36 +63,41 @@ def run(br, w, tag):
     shot(pg, "%s-1-columns-read" % tag)
     print("2. (%s) Change: two columns put right, read again" % tag)
     pg.evaluate("() => { window.__toasts = []; const t = toast; window.toast = (m, ...a) => { window.__toasts.push(String(m)); return t(m, ...a); }; }")
-    # a ledger chosen on the grocer's line, the cheque line already in Tally, and (first) a line queued for Tally
-    pg.evaluate("() => { const r = B().rows; Object.assign(r[1], {ledger: 'ZZ Grocer', userSet: true, state: 'ready'}); Object.assign(r[3], {state: 'sent', tally: {guid: 'g1'}, ledger: 'ZZ Rent'}); r[0].postJob = 'j1'; render(); }")
+    # a ledger chosen on the grocer's line; first a line queued for Tally, then a line in Tally: the statement stays as read
+    pg.evaluate("() => { const r = B().rows; Object.assign(r[1], {ledger: 'ZZ Grocer', userSet: true, state: 'ready'}); r[0].postJob = 'j1'; render(); }")
     def change(shoot=False):
         pg.click("#app [data-cols-change]"); pg.wait_for_timeout(300)
         pg.select_option('#app [data-cols-pick] select[data-cols-field="debit"]', "Money In"); pg.select_option('#app [data-cols-pick] select[data-cols-field="credit"]', "Money Out"); pg.wait_for_timeout(200)
         if shoot: shot(pg, "%s-2-change" % tag)
         pg.click("#app [data-cols-save]"); pg.wait_for_timeout(1500)
+    STAYS = "Some lines of this statement are already in Tally, so it stays as read. The new columns will be used for the next statement."
     sid0 = pg.evaluate("B().cur")
+    same = lambda: pg.evaluate("B().cur") == sid0 and pg.evaluate("B().rows.map(r => r.debit + '/' + r.credit).join(' ')") == "0/10000 250/0 0/1250.5 1000.5/0"
     change()
-    ok(pg.evaluate("B().cur") == sid0 and pg.evaluate("B().rows.map(r => r.debit + '/' + r.credit).join(' ')") == "0/10000 250/0 0/1250.5 1000.5/0" and any("being posted to Tally now" in x for x in pg.evaluate("window.__toasts")),
-       "a line queued for Tally: nothing read again, the statement stays, said plainly")
-    pg.evaluate("() => { delete B().rows[0].postJob; S.__keep = S.files['st:' + B().cur]; S.files['st:' + B().cur] = new File(['not a statement'], 'zz-statement-sep.csv', {type: 'text/csv'}); }")
+    ok(same() and STAYS in pg.evaluate("window.__toasts"), "a line queued for Tally: the statement stays as read, said in plain words")
+    pg.evaluate("() => { const r = B().rows; delete r[0].postJob; Object.assign(r[3], {state: 'sent', tally: {guid: 'g1'}, ledger: 'ZZ Rent'}); render(); }")
+    pg.evaluate("() => { window.__toasts = []; }")
     change()
-    ok(pg.evaluate("B().cur") == sid0 and pg.evaluate("B().stmts.length") == 1 and any("could not be read with these columns" in x or "no lines were read" in x for x in pg.evaluate("window.__toasts")),
+    ok(same() and STAYS in pg.evaluate("window.__toasts"), "a line in Tally: the statement stays as read (never read again, never posted twice)")
+    ok(pg.evaluate("(cid) => Object.values(CO(cid).aiColumns || {})[0].how", cid) == "person", "the columns put right are kept for the next statement of this layout")
+    shot(pg, "%s-3-stays" % tag)
+    pg.evaluate("() => { const r = B().rows[3]; delete r.tally; r.state = 'ready'; S.__keep = S.files['st:' + B().cur]; S.files['st:' + B().cur] = new File(['not a statement'], 'zz-statement-sep.csv', {type: 'text/csv'}); window.__toasts = []; render(); }")
+    change()
+    ok(same() and pg.evaluate("B().stmts.length") == 1 and any("could not be read with these columns" in x or "no lines were read" in x for x in pg.evaluate("window.__toasts")),
        "the read again fails: the old statement stays where it was, said plainly")
     pg.evaluate("() => { S.files['st:' + B().cur] = S.__keep; }")
-    ok(pg.locator("#app [data-cols-pick] select").count() == 0, "(the choice closed)")
     ch0 = pg.evaluate("window.__charged.length")
     change(True)
-    ok(pg.evaluate("B().cur") != sid0, "read again: the new statement in place of the old")
-    ok(pg.evaluate("B().rows.map(r => r.debit + '/' + r.credit).join(' ')") == "10000/0 0/250 1250.5/0 1000.5/0", "read again with the columns as set; the line in Tally kept exactly as it was")
+    ok(pg.evaluate("B().cur") != sid0, "nothing in Tally: read again, the new statement in place of the old")
+    ok(pg.evaluate("B().rows.map(r => r.debit + '/' + r.credit).join(' ')") == "10000/0 0/250 1250.5/0 0/1000.5", "read again with the columns as set")
     g = pg.evaluate("(() => { const r = B().rows.find(x => /Grocer/.test(x.narr)); return [r.ledger, r.userSet, r.state].join('|'); })()")
     ok(g == "ZZ Grocer|true|suggested", "the ledger chosen goes with its line, to check again as its direction changed (%s)" % g)
-    ok(pg.evaluate("(() => { const r = B().rows.find(x => /Cheque/.test(x.narr)); return r.state === 'sent' && r.tally.guid === 'g1'; })()"), "the cheque line stays in Tally")
     ok(pg.evaluate("B().stmts.length") == 1, "one statement (the first put aside, kept to restore)")
     ok(pg.evaluate("window.__charged.length") == ch0, "not charged again for the same lines")
     ok(pg.evaluate("window.__ai.length") == 1, "no AI call for it")
     l2 = pg.locator("#app [data-cols-read]")
     ok(l2.count() == 1 and l2.get_attribute("data-cols-read") == "person" and "as you set them" in l2.inner_text(), "the line says the columns are as the person set them")
-    shot(pg, "%s-3-as-set" % tag)
+    shot(pg, "%s-4-as-set" % tag)
     print("3. (%s) the AI not available: Choose the columns" % tag)
     pg.evaluate("() => { window.__aiOn = false; }")
     pg.evaluate(SETUP, "ZZ Other Client"); pg.wait_for_timeout(2500)
@@ -106,7 +111,7 @@ def run(br, w, tag):
     pg.click("#app [data-cols-open]"); pg.wait_for_timeout(300)
     for f, h in [("date", "Txn On"), ("narr", "Remarks"), ("debit", "Money Out"), ("credit", "Money In"), ("balance", "Running Total")]:
         pg.select_option('#app [data-cols-pick] select[data-cols-field="%s"]' % f, h)
-    shot(pg, "%s-4-choose" % tag)
+    shot(pg, "%s-5-choose" % tag)
     pg.click("#app [data-cols-save]"); pg.wait_for_timeout(1500)
     ok(pg.evaluate("B().rows.length") == 4 and pg.locator("#app [data-cols-read]").get_attribute("data-cols-read") == "person", "read with the columns chosen; kept as the person's")
     pg.evaluate("() => { window.__aiOn = true; }")
@@ -119,10 +124,10 @@ def run(br, w, tag):
     sc = pg.locator("#app [data-salary-cols]")
     ok(sc.count() == 1 and "TDS ← “IT Deducted”" in sc.inner_text(), "the salary sheet's Columns read as line (%s)" % r)
     if sc.count():
-        sc.scroll_into_view_if_needed(); shot(pg, "%s-5-24q" % tag)
+        sc.scroll_into_view_if_needed(); shot(pg, "%s-6-24q" % tag)
         pg.click("#app [data-salary-cols-change]"); pg.wait_for_timeout(300)
         ok(pg.locator("#app [data-salary-cols] select").count() == 8, "Change: one list for each salary field")
-        shot(pg, "%s-6-24q-change" % tag)
+        shot(pg, "%s-7-24q-change" % tag)
     ctx.close()
 
 with sync_playwright() as p:

@@ -6,25 +6,29 @@
 //   (the choice itself: parts/ColsPick.jsx)
 // The mapping lives in app/src/lib/aiColumns.js (one module with registers.js's SheetAI).
 import { useState } from "react";
-import { keep, saidCols, carry, inFlight, extraLines } from "../../lib/aiColumns.js";
+import { keep, saidCols, carry, touched, extraLines } from "../../lib/aiColumns.js";
 import ColsPick from "../ColsPick.jsx";
 /* global S, B, CO, Store, whoAmI, toast, render, uploadStatements, readStatement, checkBalances, bankTake, bankAside, bankErr, charge, uid, suggestAll, matchTallyBook,
-   countStates, bankLinks, CloudDocs, BankDB, postJobOf, CloudJobs, Trash, Cloud, saveBank, FileStore, fmtDate, bankSaveTimer */
+   countStates, bankLinks, CloudDocs, BankDB, postJobOf, postReconcile, Trash, Cloud, saveBank, FileStore, fmtDate, bankSaveTimer */
 
 const who = () => { try { return whoAmI(); } catch (e) { return ""; } };
 
-// the statement read again with the columns just kept (the review of aead82472): the file is read FIRST; only when that
-// read gives lines is the old statement put aside (as "Delete this statement" does: kept to restore) and the new one put
-// in its place, with the person's ledger choices carried over (aiColumns.js carry) and the lines in Tally kept exactly as
-// they are. Busy, a line being posted, or a read that fails: the old statement stays where it was, and that is said.
-// Charged only for lines beyond those paid for the first time. -> true when the statement was replaced
+// the statement read again with the columns just kept (re-reviews of aead82472 and 9c49e2da2). Only a statement none of
+// whose lines is in Tally or has anything to do with posting is read again (aiColumns.js touched, after FinCom has
+// matched its postings, postReconcile); otherwise it stays as read and the columns are used for the next statement. The
+// file is read FIRST; the lines are checked again just before the swap; only then is the old statement put aside (as
+// "Delete this statement" does: kept to restore) and the new one put in its place, with the person's ledger choices
+// carried over (aiColumns.js carry); billed after the swap, only for lines beyond those paid for. Busy, or a read that
+// fails: the old statement stays where it was, said plainly. -> true when the statement was replaced
 const say = (m) => { try { toast(m); } catch (e) { /* no toast here */ } };
-const jobOf = (cid) => (r) => { try { const j = typeof postJobOf === "function" ? postJobOf(cid, r.id) : null; return j && (typeof CloudJobs !== "object" || CloudJobs.live(j)) ? j : null; } catch (e) { return null; } };
+export const IN_TALLY_WORDS = "Some lines of this statement are already in Tally, so it stays as read. The new columns will be used for the next statement.";
+const jobOf = (cid) => (r) => { try { return typeof postJobOf === "function" ? postJobOf(cid, r.id) : null; } catch (e) { return null; } };
+const rowsOf = async (b, st) => (b.cur === st.id ? b.rows : ((await BankDB.get("stmt:" + b.cid + ":" + st.id)) || []));
 export async function readAgain(b, st) {
   const cid = b.cid, stays = " The statement stays as it was; the columns are kept for this layout.";
   if (b.busy || (uploadStatements.on && uploadStatements.on.has(cid))) { say("FinCom is reading another statement now." + stays + " Press Change again in a moment to read this one with them."); return false; }
-  const old = b.cur === st.id ? b.rows : ((await BankDB.get("stmt:" + cid + ":" + st.id)) || []);
-  if (old.some((r) => inFlight(r, jobOf(cid)))) { say("Some lines of this statement are being posted to Tally now." + stays); return false; }
+  try { await Promise.resolve(typeof postReconcile === "function" ? postReconcile(cid, true) : 0); } catch (e) { /* the lines as they are */ }
+  if ((await rowsOf(b, st)).some((r) => touched(r, jobOf(cid)))) { say(IN_TALLY_WORDS); return false; }
   let file = S.files["st:" + st.id];
   if (!file) try { file = await FileStore.get(cid, "st:" + st.id, st.docPath, st.fileName); } catch (e) { file = null; }
   if (!file) { say("The statement's file is not on this computer." + stays + " Upload it again to read it with them."); return false; }
@@ -40,23 +44,26 @@ export async function readAgain(b, st) {
     oldKeys.forEach((k) => { delete keys[k]; });
     const sid = uid("st"), x = await bankTake(parsed, acc, { cid, keys, stmts: b.stmts.filter((s) => s.id !== st.id) }, sid, co.name, chk, file, st.hash);
     if (!x.rows.length) { say(st.fileName + ": no lines were read with these columns." + stays); return false; }
+    // checked again just before the swap: a posting may have started meanwhile
+    const old = await rowsOf(b, st);
+    if (B() !== b || !b.stmts.some((s) => s.id === st.id) || old.some((r) => touched(r, jobOf(cid)))) { say(IN_TALLY_WORDS); return false; }
     const c = carry(old, x.rows), paid = old.filter((r) => !bankAside(r)).length, extra = extraLines(paid, x.rows.length - x.held);
-    if (extra > 0 && !(await charge("bank", extra, file.name, extra + " more statement lines read again"))) { say(stays.trim()); return false; }
-    // now the swap: the old statement to the deleted ones (More → Restore), the new one in its place
+    // the swap: the old statement to the deleted ones (More → Restore), the new one in its place
     await Trash.put(cid, "statement", (st.bank || "Statement") + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", { st, keys: oldKeys, rows: old }, "columns read again");
     oldKeys.forEach((k) => { delete b.keys[k]; });
     Object.assign(b.keys, x.nk);
-    c.rows.forEach((r) => { if (r.fp && !r.id.startsWith(sid)) b.keys[r.fp] = sid; });
     if (typeof Cloud === "object") Cloud.delete("bank_stmt", cid, cid + ":" + st.id, "columns read again");
     try { clearTimeout(bankSaveTimer); } catch (e) { /* none waiting */ }
     b.stmts = b.stmts.filter((s) => s.id !== st.id).concat([x.st]); b.stmtsTrash = null;
     b.cur = sid; b.rows = c.rows; b.sel.clear(); b.sticky.clear(); b.undo = null;
     suggestAll(c.rows.filter((r) => !r.userSet), true); matchTallyBook(acc, c.rows);   // (a ledger the person chose is theirs)
-    x.st.counts = countStates(c.rows); x.st.links = bankLinks(c.rows); x.st.n = c.rows.filter((r) => !bankAside(r)).length;
+    x.st.counts = countStates(c.rows); x.st.links = bankLinks(c.rows);
     S.files["st:" + sid] = file; FileStore.put(cid, "st:" + sid, file); CloudDocs.add(cid, "st:" + sid, file, "stmt");
     await BankDB.set("stmt:" + cid + ":" + sid, c.rows);
     saveBank({ stmts: true, keys: true, rows: true });
-    say(st.fileName + " read again with these columns: " + c.rows.length + " lines" + (c.carried ? ", " + c.carried + " with the ledger chosen before" : "") + (c.kept ? ", " + c.kept + " already in Tally kept as they are" : "") + (c.lost ? ". " + c.lost + " earlier lines not read again are in More → Restore" : "") + ".");
+    // billed after the swap: only the lines beyond those paid for the first time
+    if (extra > 0) try { await charge("bank", extra, file.name, extra + " more statement lines read again"); } catch (e) { /* said by the billing */ }
+    say(st.fileName + " read again with these columns: " + c.rows.length + " lines" + (c.carried ? ", " + c.carried + " with the ledger chosen before" : "") + (c.lost ? ". " + c.lost + " earlier lines not met are in More → Restore" : "") + ".");
     return true;
   } finally { on.delete(cid); b.busy = ""; render(); }
 }

@@ -40,10 +40,10 @@ export function kept(co, kind, head) {
   const same = v && Array.isArray(v.head) && v.head.map(norm).join("|") === (head || []).map(norm).join("|");
   return v && v.map && !v.deleted && same ? v : null;
 }
-export function keep(co, kind, head, map, how, who) {
+export function keep(co, kind, head, map, how, who, more) {
   if (!co) return null;
   const k = kind + ":" + layoutKey(head);
-  co.aiColumns = Object.assign({}, co.aiColumns, { [k]: { kind, key: layoutKey(head), head: (head || []).map(text), map: Object.assign({}, map), how, by: who || "", at: new Date().toISOString() } });
+  co.aiColumns = Object.assign({}, co.aiColumns, { [k]: Object.assign({ kind, key: layoutKey(head), head: (head || []).map(text), map: Object.assign({}, map), how, by: who || "", at: new Date().toISOString() }, more || {}) });
   return co.aiColumns[k];
 }
 // a mapping by header text -> column indexes of this header
@@ -115,13 +115,13 @@ export function bankMap(answer, head) {
 // turned round), the headings decide when there is no balance, and a mapping nothing settles is not used (the person
 // chooses the columns). Also not used: lines that often have both a debit and a credit, one Amount with no Dr / Cr when
 // a column holds only D / C (that column is taken as Dr / Cr), a running balance that does not fit either way.
-const IN_WORDS = /(^|[^a-z])(in|deposits?|credits?|cr|receipts?|received)([^a-z]|$)/i, OUT_WORDS = /(^|[^a-z])(out|withdrawals?|withdrawn|debits?|dr|payments?|paid)([^a-z]|$)/i;
-const says = (h) => { const i = IN_WORDS.test(h), o = OUT_WORDS.test(h); return i && !o ? "in" : o && !i ? "out" : ""; };
+// (re-review of 9c49e2da2) only plain money words settle a direction: Withdrawal / Deposit, Paid in / out, Money in /
+// out, Received. Debit / Credit and Dr / Cr never do (they depend on whose books it is: the bank's or the client's).
+const IN_WORDS = /deposit|paid\s*in\b|money\s*in\b|received|^in$/i, OUT_WORDS = /withdraw|paid\s*out\b|money\s*out\b|^out$/i;
+const says = (h) => { const t = String(h || "").replace(/\(?\s*\bin\s+(rs\.?|inr|rupees|₹)[^)]*\)?/gi, " ").replace(/\s+/g, " ").trim(); const i = IN_WORDS.test(t), o = OUT_WORDS.test(t); return i && !o ? "in" : o && !i ? "out" : ""; };
 const DC_ONLY = /^(d|c|dr|cr|debit|credit)\.?$/i;
 const fit = (p, r, v) => Math.abs(Math.round((p - r.debit + r.credit) * 100) / 100 - v) <= 0.011;
-// how many lines fit their running balance as read, and turned round: {as, round, n}
-export function balanceFit(rows) {
-  const list = rows.length > 1 && rows[0].date > rows[rows.length - 1].date ? rows.slice().reverse() : rows;
+const fitOf = (list) => {
   let as = 0, round = 0, n = 0;
   for (let i = 1; i < list.length; i++) {
     const p = list[i - 1].balance, r = list[i];
@@ -131,9 +131,18 @@ export function balanceFit(rows) {
     if (fit(p, { debit: r.credit, credit: r.debit }, r.balance)) round++;
   }
   return { as, round, n };
+};
+// how many lines fit their running balance as read, and turned round: {as, round, n}. Newest first (a later first
+// date) is read oldest first; a statement of one day may be in either order, so both are tried and the better kept
+export function balanceFit(rows) {
+  if (rows.length > 1 && rows[0].date > rows[rows.length - 1].date) return fitOf(rows.slice().reverse());
+  const a = fitOf(rows);
+  if (rows.length > 1 && rows[0].date === rows[rows.length - 1].date) { const z = fitOf(rows.slice().reverse()); if (Math.max(z.as, z.round) > Math.max(a.as, a.round)) return z; }
+  return a;
 }
 const swapMap = (m) => { const x = Object.assign({}, m); x.debit = m.credit; x.credit = m.debit; return x; };
-// -> {map, rows} to use, or {why} when the mapping is not to be used. read(map) reads the rows by a mapping
+// -> {map, rows} to use, or {why} when the mapping is not to be used (the person chooses the columns). A mapping is
+// turned round only when the money words of its headings say it was swapped; the running balance must then fit
 export function bankCheck(map, head, body, read) {
   let m = Object.assign({}, map);
   const names = (head || []).map(text);
@@ -146,18 +155,19 @@ export function bankCheck(map, head, body, read) {
   if (!rows.length) return { why: "no lines were read with FinCom's AI's columns" };
   if (m.debit && m.credit && rows.filter((r) => r.debit && r.credit).length * 5 > rows.length) return { why: "lines read with both a withdrawal and a deposit" };
   const two = !!(m.debit && m.credit), dSays = two ? says(m.debit) : "", cSays = two ? says(m.credit) : "";
-  const headsRight = dSays === "out" || cSays === "in", headsRound = dSays === "in" || cSays === "out";
+  const right = (dSays === "out" || cSays === "in") && dSays !== "in" && cSays !== "out", round = (dSays === "in" || cSays === "out") && dSays !== "out" && cSays !== "in";
   if (m.balance) {
-    const f = balanceFit(rows);
-    if (f.n && f.as * 2 > f.n && f.as >= f.round) return headsRound && !headsRight && f.round < f.as ? { why: "the headings and the balance disagree" } : { map: m, rows };
-    // fits only turned round: Withdrawal and Deposit were swapped (unless the headings say they were right: an
-    // overdraft printed without its minus, which the balance check knows, src/js/22-bank-guards.js)
-    if (f.n && f.round * 2 > f.n && two) { if (headsRight && !headsRound) return { map: m, rows }; const sw = swapMap(m); return { map: sw, rows: read(sw), swapped: true }; }
-    return { why: "the running balance does not fit the columns" };
+    const f = balanceFit(rows), asFits = f.n && f.as * 2 > f.n && f.as >= f.round, roundFits = f.n && f.round * 2 > f.n && f.round > f.as;
+    if (asFits) return round ? { why: "the headings and the balance disagree" } : { map: m, rows };
+    if (roundFits && two && round) { const sw = swapMap(m); return { map: sw, rows: read(sw), swapped: true }; }
+    // fits only turned round with headings that say it is right: an overdraft printed without its minus (the balance
+    // check knows it, src/js/22-bank-guards.js); with headings that say nothing: not settled
+    if (roundFits && two && right) return { map: m, rows };
+    return { why: roundFits ? "nothing says which column is the withdrawal" : "the running balance does not fit the columns" };
   }
   if (!two) return m.drcr ? { map: m, rows } : { why: "one amount column with nothing saying which way" };
-  if (headsRight && !headsRound) return { map: m, rows };
-  if (headsRound && !headsRight && dSays === "in" && cSays === "out") { const sw = swapMap(m); return { map: sw, rows: read(sw), swapped: true }; }
+  if (right) return { map: m, rows };
+  if (round) { const sw = swapMap(m); return { map: sw, rows: read(sw), swapped: true }; }
   return { why: "nothing says which column is the withdrawal" };
 }
 
@@ -173,6 +183,13 @@ export async function bankFromGrids(grids, o) {
     const body = grid.slice(hi + 1), line = (r) => (r || []).map(text).filter(Boolean).join(" ");
     const read = (m) => { const c = indexes(m, head); return bankOk(c) ? H.rowsFromCells(body, c, (r, x) => r[x], line) : []; };
     let got = kept(o.co, "bank", head), how = got ? got.how : "", rows = null;
+    // (an AI mapping kept by the build before the checks: checked now, kept again marked, or not used)
+    if (got && got.how === "ai" && !got.checked) {
+      const c = bankOk(indexes(got.map, head)) ? bankCheck(got.map, head, body, read) : { why: "not complete" };
+      if (!c.map) { why = c.why; continue; }
+      got = keep(o.co, "bank", head, c.map, "ai", got.by, { checked: 1 }); rows = c.rows;
+      if (o.save) try { o.save(o.co); } catch (e) { /* kept on this page */ }
+    }
     let cols = got ? indexes(got.map, head) : null;
     if (!cols || !bankOk(cols)) {
       // (the AI off, or the firm's cap reached, on one sheet: not asked again for the next sheets of the file)
@@ -184,7 +201,7 @@ export async function bankFromGrids(grids, o) {
       if (!bankOk(indexes(map0, head))) { why = "FinCom's AI could not tell the date, narration and amount columns"; continue; }
       const c = bankCheck(map0, head, body, read);
       if (!c.map) { why = c.why; continue; }
-      got = keep(o.co, "bank", head, c.map, "ai", o.who); how = "ai"; rows = c.rows; cols = indexes(c.map, head);
+      got = keep(o.co, "bank", head, c.map, "ai", o.who, { checked: 1 }); how = "ai"; rows = c.rows; cols = indexes(c.map, head);
       if (o.save) try { o.save(o.co); } catch (e) { /* kept on this page */ }
     }
     const top = grid.slice(0, hi).map(line), tail = body.filter((r) => !H.bankDate(r[cols.date])).map(line);
@@ -196,47 +213,44 @@ export async function bankFromGrids(grids, o) {
 }
 
 // ---------------------------------------------------------------- a statement read again with its columns put right
-// a line being posted: queued for Tally (its posting job, here or in FinCom's cloud) or held for checking. jobOf(r): the
-// cloud's live posting holding it, if any
-export function inFlight(r, jobOf) {
+// (re-review of 9c49e2da2) a statement is read again only when none of its lines is in Tally or has anything to do with
+// posting: a line in Tally (sent, in Tally, a Tally id), any posting job for it (live, done or posted; on this computer
+// or FinCom's cloud; one named in its post error) or held for checking. jobOf(r): any posting job holding the line
+export function touched(r, jobOf) {
   if (!r) return false;
-  if (r.checking || r.postJob || r.postJobNew) return true;
-  if (r.state === "ready" && /already sent from this computer on .*?, job /.test(String(r.postError || ""))) return true;
-  const j = typeof jobOf === "function" ? jobOf(r) : null;
-  return !!(j && !/^(done|failed|cancel)/.test(String(j.status || "")));
+  if (r.state === "sent" || r.state === "intally" || r.tally || r.sentAt || r.checking || r.postJob || r.postJobNew) return true;
+  if (/, job [A-Za-z0-9-]{8,64}/.test(String(r.postError || ""))) return true;
+  return !!(typeof jobOf === "function" && jobOf(r));
 }
 // the lines read again are charged only beyond those paid for the first time
 export const extraLines = (paid, now) => Math.max(0, (now || 0) - (paid || 0));
-const nk = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
+const nk = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 const amt = (r) => Math.round(Math.max(Number(r.debit) || 0, Number(r.credit) || 0) * 100);
-const inTally = (r) => r.state === "sent" || r.state === "intally";
+const dir = (r) => (Number(r.debit) || 0) > 0 ? "d" : "c";
 const CARRY = ["ledger", "userSet", "state", "vtype", "note", "splits", "billId", "billRef", "tdsAtPay", "tdsLedger", "salesIds", "narrEdit", "why"];
-// the person's choices on the old lines carried to the lines read again, matched by date, amount and narration (else by
-// date and amount when only one fits): a line in Tally stays exactly as it is (the read again never changes it); a
-// ledger chosen goes with its line, to check again (suggested) when its direction changed; an old line matched by none
-// stays in the deleted copy (More → Restore). -> {rows, carried, kept, lost}
+const FLIP_DROP = ["vtype", "billId", "billRef", "salesIds", "tdsAtPay", "tdsLedger", "splits"];
+// the person's choices on the old lines (a statement with nothing in Tally) carried to the lines read again: first the
+// same date, amount and whole narration, over every new line; then, for the lines left, the same date, amount and
+// direction when exactly one old line and one new line are left so. A line turned round is to check again (suggested).
+// An old line met by none stays in the deleted copy (More → Restore). -> {rows, carried, lost}
 export function carry(oldRows, newRows) {
-  const left = (oldRows || []).slice(), out = [];
-  let carried = 0, keptN = 0;
-  const take = (r) => {
-    let i = left.findIndex((o) => o.date === r.date && amt(o) === amt(r) && nk(o.narr) === nk(r.narr));
-    if (i < 0) { const c = left.map((o, j) => (o.date === r.date && amt(o) === amt(r) ? j : -1)).filter((j) => j >= 0); if (c.length === 1) i = c[0]; }
-    return i < 0 ? null : left.splice(i, 1)[0];
-  };
-  (newRows || []).forEach((r) => {
-    const o = take(r);
-    if (o && inTally(o)) { out.push(o); keptN++; return; }
-    if (o && (o.userSet || o.ledger)) {
-      const flipped = !!o.debit !== !!r.debit;
-      CARRY.forEach((k) => { if (o[k] !== undefined && !(flipped && ["vtype", "billId", "billRef", "salesIds", "tdsAtPay", "tdsLedger", "splits"].includes(k))) r[k] = o[k]; });
-      if (flipped && ["ready", "sent", "intally"].includes(r.state)) r.state = "suggested";
-      carried++;
-    }
-    out.push(r);
+  const left = (oldRows || []).slice(), rows = (newRows || []).slice(), pair = new Map();
+  rows.forEach((r) => { const i = left.findIndex((o) => o.date === r.date && amt(o) === amt(r) && nk(o.narr) === nk(r.narr)); if (i >= 0) pair.set(r, left.splice(i, 1)[0]); });
+  const key = (r) => r.date + "|" + amt(r) + "|" + dir(r);
+  rows.filter((r) => !pair.has(r)).forEach((r, _, rest) => {
+    const olds = left.filter((o) => key(o) === key(r)), news = rest.filter((x) => key(x) === key(r));
+    if (olds.length === 1 && news.length === 1) { pair.set(r, olds[0]); left.splice(left.indexOf(olds[0]), 1); }
   });
-  // a line in Tally the new reading did not meet is kept too (never lost from the books)
-  left.filter(inTally).forEach((o) => { out.push(o); keptN++; });
-  return { rows: out, carried, kept: keptN, lost: left.filter((o) => !inTally(o)).length };
+  let carried = 0;
+  rows.forEach((r) => {
+    const o = pair.get(r);
+    if (!o || !(o.userSet || o.ledger)) return;
+    const flipped = dir(o) !== dir(r);
+    CARRY.forEach((k) => { if (o[k] !== undefined && !(flipped && FLIP_DROP.includes(k))) r[k] = o[k]; });
+    if (flipped && ["ready", "sent", "intally"].includes(r.state)) r.state = "suggested";
+    carried++;
+  });
+  return { rows, carried, lost: left.length };
 }
 
 // ---------------------------------------------------------------- the 24Q salary sheet
@@ -276,7 +290,7 @@ export async function salaryCols(grid, o) {
   return { hi, idx, cols: { kind: "salary", key: layoutKey(head), how, head, map } };
 }
 
-export const AiCols = { layoutKey, kept, keep, indexes, saidCols, bankHead, bankSample, bankMap, bankCheck, balanceFit, bankFromGrids, inFlight, extraLines, carry, salaryCols, BANK_FIELDS, SALARY_FIELDS };
+export const AiCols = { layoutKey, kept, keep, indexes, saidCols, bankHead, bankSample, bankMap, bankCheck, balanceFit, bankFromGrids, touched, extraLines, carry, salaryCols, BANK_FIELDS, SALARY_FIELDS };
 
 // what the page calls (registers.js: window.AiCols = forPage(window)), on its own globals: the open client, its store,
 // who is signed in, the firm's AI (SheetAI.map) and the bank reader's functions (src/js/20-bank-statements.js)
