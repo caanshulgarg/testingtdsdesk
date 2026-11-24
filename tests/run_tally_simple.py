@@ -64,7 +64,10 @@ SPLIT, ZETA = EVER + " 01 Apr 2018", "Zeta Mills"
 LATEST = {"setup": {"version": "2.5.1", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.5.1.exe", "sha256": "ab" * 32}}
 # the stand-in cloud's extra answers: the books' summary (the entries being brought), the openings (migration 138), the
 # ledgers' changes today; and the link: a company linked is linked in the stand-in's companies
-EXTRA = """([sum, open, rows, changes, heldSt]) => {
+# (the Tally page's own file, which sets FCTallySimple, comes a moment after the page opens: waited for, at most 15 s,
+# before it is used; a busy machine had it a few ms late)
+EXTRA = """async ([sum, open, rows, changes, heldSt]) => {
+  for (let i = 0; typeof FCTallySimple !== 'object' && i < 300; i++) await new Promise((r) => setTimeout(r, 50));
   window.__sum = sum; window.__open = open; window.__openRows = rows; window.__heldSt = heldSt || [];
   const rpc = TCloud.rpc;
   TCloud.rpc = async (fn, a) => {
@@ -299,9 +302,9 @@ def main():
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
         ok(re.match(r"Till today \d\d:\d\d$", txt(cell(ACME, "e") + " [data-tsm-note]") or ""), "3. entries: Till today <time> (%s)" % txt(cell(ACME, "e")))
         ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_MINE, "3. %s: not open in this user's Tally: No, %s (%s)" % (BRIGHT, NOT_MINE, txt(cell(BRIGHT, "o"))))
-        ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(row(BRIGHT) + ' [data-tpt-main="again"]') == "Check again" and txt(cell(BRIGHT, "do") + ' [data-tsm-act]') == "Upload Day Book"
-           and txt(cell(BRIGHT, "do") + " [data-tsm-todo]") == "5 changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.",
-           "3. held lines (migration 136): All entries received? No, the period, the row's button Check again (not open anywhere, the firm's bridge online), Upload Day Book in its details (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
+        ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(row(BRIGHT) + ' [data-tpt-main="again"]') == "Check again" and n(cell(BRIGHT, "do") + ' [data-tsm-act]') == 0
+           and txt(cell(BRIGHT, "do") + " [data-tsm-todo]") == "5 changes saved in Tally are not in FinCom yet. FinCom brings them from Tally by itself.",
+           "3. held lines (migration 136): All entries received? No, the period, the row's button Check again (not open anywhere, the firm's bridge online); FinCom brings them itself, no upload asked (Tally tell, 24-Nov-2026) (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
         ok(n("#app [data-tally-simple] [data-held-block]") == 0, "3. the held lines are the row's, not a block of their own")
         ok(word(CORAL, "e") == "Not yet" and txt(cell(CORAL, "e") + " [data-tsm-note]") == "New client · 62% received · 6 min left" and pg.get_attribute(cell(CORAL, "e") + " [role=progressbar]", "aria-valuenow") == "62",
            "3. being brought: Not yet, New client · 62%% received · 6 min left, the bar (%s)" % txt(cell(CORAL, "e")))
