@@ -390,9 +390,12 @@ with sync_playwright() as p:
                # delivery-note sense, an order invoice written "Inv"
                "Sales Purchase", "Sales Purchases", "Sales Delivered", "Sales Deliveries", "Sales Order Inv", "Sales Order Inv.",
                # (the owner, 24-Nov-2026) an invoice, a bill of supply, a sales delivery on its own
-               "Tax Invoice", "Retail Invoice", "Bill of Supply", "Sales Delivery", "Sales - Delivery"]
+               "Tax Invoice", "Retail Invoice", "Bill of Supply", "Sales Delivery", "Sales - Delivery", "Export Invoice", "Job Work Invoice"]
     CM_NOT = ["Sales Order", "Sales Orders", "Sales Reorder", "Delivery Note", "Delivery Challan", "Sales Delivery Challan", "Sales Quotation", "Sales Memorandum", "Sales Memo", "Cash Memorandum", "Purchase Cash Memo", "Cash Memo Return",
-              "Petty Cash Memo", "Expense Cash Memo", "Sales Challan", "Challan Sales", "Sales_Challan", "Challans", "Purchase Invoice", "Purchases Invoice", "Purchase", "Proforma Invoice", "Pro-forma Invoice", "Delivery", "Sales Delivery Note"]
+              "Petty Cash Memo", "Expense Cash Memo", "Sales Challan", "Challan Sales", "Sales_Challan", "Challans", "Purchase Invoice", "Purchases Invoice", "Purchase", "Proforma Invoice", "Pro-forma Invoice", "Delivery", "Sales Delivery Note",
+              # (review of 69441fde7) "invoice" is no sales word for an inward, purchase-side or cancelled one
+              "Import Invoice", "RCM Invoice", "Reverse Charge Invoice", "Service Invoice (Inward)", "Inward Invoice", "Invoice (Inward)", "Inward Supply Invoice", "Inward Bill of Supply",
+              "Supplier Invoice", "Vendor Invoice", "Pur Invoice", "Purch Invoice", "Job Work In Invoice", "Invoice Cancellation", "Cancelled Invoice", "Performa Invoice"]
     for i, t in enumerate(CM_SALE):
         a, st, sent = one("ZS/16%02d" % i, G["k"], sv("ZS/16%02d" % i, typ=t))
         ok(st == "intally " + t and sent == [], "cloud copy: '%s' against 'Sales', the same GSTIN: In Tally, not sent (%s, sent %s)" % (t, st, sent))
@@ -440,6 +443,13 @@ with sync_playwright() as p:
     ok(st == "posted" and sent == [[a]], "cloud copy: an Optional 'Cash Memo' of that entry: posted (%s)" % st)
     a, st, sent = b2c("CM/8", sv("CM/8", typ="Cash Memo", party="Cash", can="Yes"))
     ok(st == "posted" and sent == [[a]], "cloud copy: a cancelled 'Cash Memo' of that entry: posted (%s)" % st)
+    # (review of 69441fde7) issued from another of the client's GSTINs (a branch): never the same entry
+    sfresh(A); a = walkin("CM/20")
+    A.evaluate("() => { window.__cloud.vouchers = [" + sv("CM/20", typ="Cash Memo", party="Cash", cmp=G["up2"]) + "]; postSalesToTally(); }"); A.wait_for_timeout(700)
+    ok(A.evaluate(SST1, a) == "posted" and A.evaluate("() => window.__sent") == [[a]], "cloud copy: the same walk-in cash memo issued from another GSTIN than the invoice's: posted (%s)" % A.evaluate(SST1, a))
+    # (review of 69441fde7) a Tally voucher of another number whose reference is this invoice's number: never by this rule
+    a, st, sent = b2c("12", sv("CM/57", typ="Cash Memo", party="Cash")[:-1] + ", reference: '12'}")
+    ok(st == "posted" and sent == [[a]], "cloud copy: a 'Cash Memo' CM/57 with reference '12', the same date and amount, against invoice '12': posted (%s)" % st)
     a, st, sent = one("CM/9", G["k"], sv("CM/9", typ="Cash Memo", party="Cash"))
     ok(st == "posted" and sent == [[a]], "cloud copy: the new invoice with a GSTIN, the Tally one to 'Cash' with none: the old rule, posted (%s)" % st)
     def own_b(n, mine, d="2026-11-02", tot=1180, g=""):
@@ -459,6 +469,10 @@ with sync_playwright() as p:
     ok(st == "intally" and sent == [], "FinCom's own: a 'Tax Invoice' of that number In Tally: In Tally (%s)" % st)
     a, st, sent = own_b("CM/15", "Purchase Invoice")
     ok(st == "posted" and sent == [[a]], "FinCom's own: a 'Purchase Invoice' of that number: posted (%s)" % st)
+    ids = sfresh(A, "CM/17")
+    A.evaluate("([id, g]) => { const p = SL().list.find(v => v.id === id); p.status = 'intally'; p.x.customerGstin = ''; p.x.sellerGstin = g; p.customerLedger = 'Cash'; p.tallyMatch = {key: 'k-' + id, number: p.x.number, type: 'Cash Memo', date: '20261102'}; }", [ids[0], G["up2"]])
+    a = walkin("CM/17"); A.evaluate("() => { window.__cloud.vouchers = []; postSalesToTally(); }"); A.wait_for_timeout(700)
+    ok(A.evaluate("(id) => SL().list.find(v => v.id === id).status", a) == "posted", "FinCom's own: the walk-in cash memo In Tally issued from another GSTIN: posted (%s)" % A.evaluate(SST1, a))
     a, st, sent = own_b("CM/16", "Cash Memo", g=G["m"])
     ok(st == "posted" and sent == [[a]], "FinCom's own: the one In Tally with a GSTIN, the new one with none: the old rule, posted (%s)" % st)
     A.evaluate(SETL, [LED, G])

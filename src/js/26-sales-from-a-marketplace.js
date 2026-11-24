@@ -287,7 +287,8 @@ async function salesCheckTally(list, call){
     const me = salesEntryOf(v), cust = x => x.gstin || x.partyGstin || (typeof partyMaster === "function" && (partyMaster(x.party) || {}).gstin) || "";
     const gone = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && not.includes("fincom:" + o.id)).map(salesEntryOf);
     const prior = salesOfNo(v.x.number).filter(o => o.id !== v.id && ["posted", "intally"].includes(o.status) && !not.includes("fincom:" + o.id));
-    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || ""};
+    // (byRef: found by its reference, not its own number: never the walk-in rule of salesSameEntry, review of 69441fde7)
+    const hit = same.find(x => { const e = {no, type: x.type, date: iso(x), amount: salesTallyAmount(x), gstin: cust(x), party: x.party, seller: x.cmpGstin || "", byRef: normInvNo(x.number) !== no};
       if (!salesSameEntry(me, e, isInv) || gone.some(g => salesSameEntry(g, e, isInv))) return false;
       const was = prior.filter(o => salesSameEntry(salesEntryOf(o), e, isInv) && Date.parse(o.postedAt || "") >= copyAt);
       return !was.length || was.some(salesInBooks); });
