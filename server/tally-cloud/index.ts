@@ -1257,7 +1257,10 @@ async function waitingWords(dev: any, bridge: string, entry: any) {
   waitWordsAt.set(key, now + WAIT_WORDS_MS);
   const closed = String(entry?.tallyState || (entry?.tally ? "open" : "closed")) === "closed";
   const open = new Set(((Array.isArray(entry?.open) ? entry.open : []) as unknown[]).map((x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase()));
-  const { data, error } = await db.from("tally_post_jobs").select("id,company,message,taken_by,target_bridge,row_version").eq("device_id", dev.id).eq("status", "waiting").is("stop_reason", null).limit(50);
+  // (review of 76d6c030e: this bridge's postings chosen in the query, before the limit: taken by it, or never taken and
+  // meant for it; bridge is a checked go- id above)
+  const { data, error } = await db.from("tally_post_jobs").select("id,company,message,taken_by,target_bridge,row_version").eq("device_id", dev.id).eq("status", "waiting").is("stop_reason", null)
+    .or(`taken_by.eq.${bridge},and(taken_by.is.null,target_bridge.eq.${bridge})`).limit(50);
   if (error) { if (!missingRel(error)) console.error("tally-ingest: waiting postings' words not read", dev.id, String(error.message || "").slice(0, 200)); return; }
   for (const j of (data || []) as any[]) {
     if ((j.taken_by || j.target_bridge) !== bridge) continue;

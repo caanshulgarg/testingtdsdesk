@@ -59,10 +59,26 @@ ids = itertools.count(1)
 def now(): return time.time()
 def like_re(pat):   # a LIKE pattern (\\ escapes, % or PostgREST's * any, _ one) as a regular expression
     return re.sub(r"\\(.)|[%*]|_|[^%*_\\]+", lambda m: re.escape(m.group(1)) if m.group(1) is not None else ".*" if m.group(0) in "%*" else "." if m.group(0) == "_" else re.escape(m.group(0)), pat)
+def _split(s):   # PostgREST's or=(...) terms at the top level (commas inside and(...) / or(...) kept)
+    out, d, cur = [], 0, ""
+    for ch in s:
+        if ch == "," and d == 0: out.append(cur); cur = ""; continue
+        d += (ch == "(") - (ch == ")"); cur += ch
+    return out + [cur] if cur else out
+def _term(row, t):   # one term of or=(...): col.op.val, and(...) or or(...)
+    for g in ("and", "or"):
+        if t.startswith(g + "("):
+            r = [_term(row, x) for x in _split(t[len(g) + 1:-1])]
+            return all(r) if g == "and" else any(r)
+    col, _, rest = t.partition(".")
+    return match(row, {col: [rest]})
 def match(row, q):
     for k, vs in q.items():
         if k in ("select", "order", "limit", "offset", "on_conflict", "columns"): continue
         v = vs[0]
+        if k == "or":   # or=(a.eq.x,and(b.is.null,c.eq.y)): any of its terms
+            if not any(_term(row, t) for t in _split(v.strip()[1:-1])): return False
+            continue
         op, _, val = v.partition(".")
         cell = row.get(k)
         cs = "" if cell is None else str(cell).lower() if isinstance(cell, bool) else str(cell)

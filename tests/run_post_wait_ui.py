@@ -69,6 +69,12 @@ with sync_playwright() as p:
             print("2. the company not open")
             pg.evaluate("() => { const b = TLight.st.devs[0].info.bridges['go-demo11']; b.tallyState = 'open'; b.tally = true; b.open = ['Another Demo Co']; render(); }"); pg.wait_for_timeout(600)
             ok("Demo Builders Pvt Ltd is not open in Tally. Open Tally and Demo Builders Pvt Ltd." in pg.evaluate(TXT), "the company not open there")
+            print("2b. the beat explains nothing: the posting's own words, with no computer or Windows user named")
+            W4A = "Still waiting after 6 hours (since 23-Nov-2026 10:00 IST) for PC-DEMO1 · DEMO\\asha, which started it (it is never posted from another computer). Open Demo Builders Pvt Ltd in Tally there."
+            pg.evaluate("(w) => { const b = TLight.st.devs[0].info.bridges['go-demo11']; b.open = ['Demo Builders Pvt Ltd']; CloudJobs.list[0].message = w; render(); }", W4A); pg.wait_for_timeout(600)
+            t = pg.evaluate(TXT)
+            ok("Still waiting after 6 hours (since 23-Nov-2026 10:00 IST) for the Tally computer that started it. Open Demo Builders Pvt Ltd in Tally there." in t and "PC-DEMO1" not in t and "asha" not in t, "4a words: plain, no names")
+            shot(pg, "desktop-post-wait-4a-plain")
             print("3. Home: no new box, the figure as before")
             pg.evaluate("() => { S.view = 'home'; navHome('today'); render(); }"); pg.wait_for_timeout(1200)
             ok(pg.locator("[data-post-needs]").count() == 0, "Home: no extra warning box")

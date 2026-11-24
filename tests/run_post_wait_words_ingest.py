@@ -53,6 +53,10 @@ try:
         try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
         except urllib.error.HTTPError: break
         except Exception: time.sleep(0.5)
+    # (review of 76d6c030e: the bridge is chosen in the query, not after its limit of 50: 55 waiting postings of another
+    # bridge come first, and this bridge's are still read)
+    F.HONOR_LIMIT[0] = True
+    F.T["tally_post_jobs"] += [job("w-o%02d" % k, target_bridge=OTHER, taken_by=OTHER) for k in range(55)]
     F.T["tally_post_jobs"] += [job("w1"), job("w-other", target_bridge=OTHER, taken_by=OTHER), job("w-held", stop_reason="The client's Tally link changed after this posting was made."),
                               job("w-taken", status="taken"), job("w-person", message="Not posted yet: the linked Tally company ZZ HERON CO is not open in Tally on the computer"),
                               job("w-res", message=RESUMED)]
@@ -62,6 +66,9 @@ try:
     ok(c == 200 and w["message"] == CLOSED, "the 2-hour words replaced: %r" % w["message"])
     ok("PC-MADEUP" not in w["message"] and "madeup" not in w["message"] and "restart" not in w["message"], "no computer, no Windows user, no 'restart'")
     ok(w["status"] == "waiting" and w["taken_by"] == ME["id"] and w["target_bridge"] == ME["id"] and w["stop_reason"] is None, "words only: waiting, the same bridge")
+    q = [_up.unquote(qq) for m, pp, qq in F.QUERIES if m == "GET" and pp.endswith("/tally_post_jobs") and _up.unquote(qq).startswith("select=id,company,message,")]
+    ok(q and ("or=(taken_by.eq.%s,and(taken_by.is.null,target_bridge.eq.%s))" % (ME["id"], ME["id"])) in q[0], "the bridge chosen in the query (%s)" % (q[:1],))
+    ok(all(row("w-o%02d" % k)["message"] == TWO_H for k in range(55)), "the other bridge's 55: as they were")
     print("== 4. never another's, held, taken or other words")
     ok(row("w-other")["message"] == TWO_H, "another bridge's posting: as it was")
     ok(row("w-held")["message"] == TWO_H, "a held posting (stop_reason): as it was")

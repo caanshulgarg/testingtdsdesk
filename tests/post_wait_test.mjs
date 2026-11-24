@@ -48,6 +48,26 @@ ok(x.todo === "Number 1 in the queue: The Tally computer is off. Turn it on, the
 console.log("4. taken, then Tally closed");
 x = at([dev({})], job({ status: "taken", items: [] }));
 ok(x.code === 5 && x.todo === "Stopped part-way: Tally is closed. Open Tally and Demo Builders Pvt Ltd.", "taken: " + x.todo);
+console.log("4b. running, Tally busy or open there: Tally is taking it now (Stopped part-way only when closed, not open or off)");
+x = at([dev({ tallyState: "busy", tally: true, open: ["Demo Builders Pvt Ltd"] })], job({ status: "running", items: [], message: "Posting" }));
+ok(x.code === 5 && x.todo.startsWith("Tally is taking it now") && !/Stopped part-way/.test(x.todo), "running, busy: " + x.todo);
+x = at([dev({ tallyState: "open", tally: true, open: ["Demo Builders Pvt Ltd"] })], job({ status: "running", items: [], message: "Posting" }));
+ok(x.code === 5 && x.todo === "Tally is taking it now. Nothing to do.", "running, open there: " + x.todo);
+x = at([dev({ tallyState: "open", tally: true, open: ["Another Demo Co"] })], job({ status: "running", items: [] }));
+ok(x.todo === "Stopped part-way: Demo Builders Pvt Ltd is not open in Tally. Open Tally and Demo Builders Pvt Ltd.", "running, not open there: " + x.todo);
+x = at([dev({ at: ago(45) })], job({ status: "running", items: [] }));
+ok(x.todo.startsWith("Stopped part-way: The Tally computer is off."), "running, off: " + x.todo);
+console.log("4c. the beat explains nothing: the posting's own words, never a computer or Windows user named in them");
+const W4A = "Still waiting after 6 hours (since 23-Nov-2026 10:00 IST) for PC-DEMO1 · DEMO\\asha, which started it (it is never posted from another computer). Open Demo Builders Pvt Ltd in Tally there.";
+const OPEN = { tallyState: "open", tally: true, open: ["Demo Builders Pvt Ltd"] };
+for (const [label, devs] of [["open there", [dev(OPEN)]], ["no beat known", []]]) {
+  x = at(devs, job({ message: W4A }));
+  ok(x.code === 4 && /Still waiting after 6 hours/.test(x.todo) && /Open Demo Builders Pvt Ltd in Tally/.test(x.todo) && !/PC-DEMO1|asha|DEMO\\/.test(x.todo), "4a words, " + label + ": no names (" + x.todo + ")");
+}
+x = at([dev(OPEN)], job({ status: "running", items: [], message: "Started on PC-DEMO1 · DEMO\\asha, and that FinCom Bridge can no longer post; it is never moved to another bridge (part of it may be in Tally)." }));
+ok(x.todo.startsWith("Tally is taking it now") && !/PC-DEMO1|asha/.test(x.todo), "running, 'Started on <computer>': no names (" + x.todo + ")");
+x = at([dev(OPEN)], job({ message: "Waiting at PC-DEMO1 for Tally" }));
+ok(!/PC-DEMO1/.test(x.todo), "any words naming its computer: not shown (" + x.todo + ")");
 console.log("5. an old bridge: no new warning (the owner: no warnings in posting)");
 x = at([dev({ tallyState: "open", tally: true, open: ["Demo Builders Pvt Ltd"], version: "2.5.1" })], job({ message: "Waiting for the Tally computer" }));
 ok(!/old version|Update FinCom Bridge/.test(x.todo), "an old bridge after 30 minutes: the posting's own words (" + x.todo + ")");
