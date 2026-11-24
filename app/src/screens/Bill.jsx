@@ -74,7 +74,8 @@ function Items({ e }) {
 // ₹1 between the bill's lines and its total goes to round off only once a person says the total is right
 function DocWarnings({ e, c }) {
   const co = CO(), x = e.x, bill = String(x.buyerGstin || "").toUpperCase(), ship = String(x.shipGstin || "").toUpperCase();
-  const notBill = e.docKind && !e.docOverride, elsewhere = co.gstin && bill && !ownGstins(co).includes(bill) && !e.buyerOverride, deliveredHere = ship && ship === co.gstin;
+  // (billDocWarns, src/js/03: the same two keep a bill on Purchase past 24 hours, billNeedsAction)
+  const { notBill, elsewhere } = billDocWarns(e, co), deliveredHere = ship && ship === co.gstin;
   const ro = e.status === "draft" && c && Math.abs(c.ro) > 1 && e.roOk !== c.ro;
   // a bill to the client's other registration: its credit is that GSTIN's (s.16, s.25(4) CGST Act), a person says the GST ledgers are its
   const reg = e.status === "draft" && c && c.itc && c.itc.reg && c.itc.reg !== String(co.gstin || "").toUpperCase() && e.regOk !== c.itc.reg && (c.missing || []).some((m) => /GST ledgers/.test(m)) ? c.itc.reg : "";

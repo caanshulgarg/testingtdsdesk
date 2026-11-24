@@ -48,6 +48,9 @@ L2 = re.compile(r"^(Posted|Sent) to Tally on \d\d-[A-Z][a-z]{2}-\d{4} \d\d:\d\d 
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:%s/" % os.environ["PORT"]); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
+    # next-hide-posted-24h: Purchase lists a posting for 24 hours (POSTED_KEEP_MS, src/js/03); these postings, dated
+    # Sep-Oct 2026, are what this test looks at, so the window is widened here (run_hide_posted_24h.py tests the 24 hours)
+    pg.evaluate("() => { POSTED_KEEP_MS = 1e13; }")
     E = lambda js, *a: pg.evaluate(js, *a)
     E(rf.FIXTURE, FX); pg.wait_for_timeout(1500)
     # a statement open here with the line the posting U(11) put in Tally

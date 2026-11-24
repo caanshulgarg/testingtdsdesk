@@ -349,7 +349,7 @@ function postPostedRows(cid){
 }
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
-function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
+function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).filter(x => x.state !== "posted" || !postedOld(x.at)).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
 // ---------- a bill sent and not confirmed in Tally, checked with a fresh read of Tally (review of 02-Oct-2026, item 3)
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
 // made while bridge 2.1.1 was timing out: a duplicate in real books. Now, before such a bill is shown, Tally is read

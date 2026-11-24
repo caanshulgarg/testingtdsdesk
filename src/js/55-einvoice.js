@@ -73,6 +73,66 @@ const EINV = {
       ValDtls: {AssVal: ass, CgstVal: cg, SgstVal: sg, IgstVal: ig, CesVal: ces, RndOffAmt: Math.abs(round) < 10 ? round : 0, TotInvVal: Math.abs(round) < 10 ? total : tot}
     };
   },
+  // what the invoice's e-invoice part (app/src/screens/Sales.jsx EinvPanel) shows and offers, or null when it is not shown
+  // (the firm's GST API off, or a GSTIN not given): a, the e-invoice user (none: "Give the client's e-invoice API user");
+  // irn: Make the IRN (none made, or it was cancelled); ewb: Make the e-way bill (an IRN and no e-way bill); cancel:
+  // Cancel the IRN (within 24 hours of it). Sales hides an invoice posted over 24 hours ago only when none is offered
+  // (salesNeedsAction, src/js/03)
+  offers(v, co){
+    co = co || CO(SL().cid); const x = v.x || {}, gstin = String(co.gstin || "").toUpperCase();
+    if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
+    const a = this.need(this.seller(v, co) || gstin), active = !!x.irn && x.irnStatus !== "cancelled", on = !!a && active;
+    return {a, active, irn: !!a && !active, ewb: on && !x.ewayNo, cancel: on && !!x.ackDt && Date.now() - Date.parse(x.ackDt) < 864e5};
+  },
+  // whether the invoice needs an e-way bill (CGST Rules r.138), only for keeping it listed (salesNeedsAction, src/js/03;
+  // the panel offers Make the e-way bill on any invoice with an IRN: offers): never a credit or debit note; goods (a line
+  // whose HSN does not start with 99, the IRP's IsServc rule in build; a blank HSN counts as goods) that bear GST (exempt
+  // and 0% lines left out), worth more than EWB_MIN: their taxable value with GST (none under LUT: SEZWOP, EXPWOP) and
+  // cess, with the invoice's own cess when no line carries one
+  EWB_MIN: 50000,
+  ewbNeeded(v){
+    const x = v.x || {}, lut = /^(SEZWOP|EXPWOP)$/.test(x.supply || "");   // (under LUT, to an SEZ or exported: no GST)
+    if (x.noteKind) return false;
+    const goods = (x.items || []).filter(it => !/^99/.test(String(it.hsn || "").trim()) && num(it.gstRate) > 0 && !it.exempt);
+    if (!goods.length) return false;
+    const lineCess = (x.items || []).some(it => num(it.cess));
+    return goods.reduce((a, it) => { const t = num(it.taxable) || (num(it.qty) || 1) * num(it.rate); return a + t * (1 + (lut ? 0 : num(it.gstRate) / 100)) + num(it.cess); }, lineCess ? 0 : num(x.cess)) > this.EWB_MIN;
+  },
+  // the IRP's time limit, as the GST checks say it (src/js/12: "E-invoices generated more than 30 days after the invoice
+  // date"), for turnover of Rs 10 crore and above in the year before the invoice's year: GSTF.aato (typed in GST settings,
+  // else from the books, as the late fee reads it), else the client's "Turnover last year was above Rs 10 crore" when
+  // that is not known. Not known either way: no limit. Past it, Make the IRN does not keep an invoice listed (the panel
+  // still offers it)
+  IRN_DAYS: 30,
+  irnLate(v, co){
+    const x = v.x || {}, d = Date.parse(String(x.date || "").slice(0, 10));
+    if (!d || Date.now() - d <= this.IRN_DAYS * 864e5) return false;
+    const a = this.aato(GSTF.fyOf(String(x.date).slice(0, 7).replace("-", "")));
+    return a ? a >= 1e8 : !!(co || {}).turnover10cr;
+  },
+  // GSTF.aato(fy).v, worked out once for the books open and the year: from the books it reads every outward entry of a
+  // year (seconds on large books), and Sales asks it of each invoice (salesOld, in drawings and outside them: Select
+  // all, salesCounts). Held while the same books object, its saves (BOOKS_REV), its entries (vouchers, mapV) are the same; a figure
+  // typed in GST settings is read afresh each time (S.books.gstAato)
+  aato(fy){
+    const b = typeof GSTF === "object" ? S.books : null;
+    if (!b) return 0;
+    const typed = num((b.gstAato || {})[fy]);
+    if (typed) return typed;
+    const k = [typeof BOOKS_REV === "number" ? BOOKS_REV : 0, (b.vouchers || []).length].join("|"), m = this.aatoMemo;
+    if (!m || m.books !== b || m.vouchers !== b.vouchers || m.mapV !== b.mapV || m.k !== k) this.aatoMemo = {books: b, vouchers: b.vouchers, mapV: b.mapV, k, v: {}};
+    const v = this.aatoMemo.v;
+    if (!(fy in v)){ try { v[fy] = num(GSTF.aato(fy).v); } catch (e){ v[fy] = 0; } }
+    return v[fy];
+  },
+  aatoMemo: null,
+  // what keeps Make the IRN from being pressed that the person cannot set right on the Sales page: EINV.problems, less
+  // the client's own address PIN (Sales settings, opened from that page)
+  irnBlocked(v, co, cfg){
+    const pin = "Made-up 110001", seller = this.seller(v, co), c = Object.assign({}, cfg, {address: this.pin(cfg.address) ? cfg.address : pin});
+    if (seller) c["address_" + seller] = this.pin(cfg["address_" + seller]) ? cfg["address_" + seller] : pin;
+    return this.problems(v, co, c);
+  },
   accounts: {}, asked: {},
   // the client's e-invoice user, asked of the server once a session (and after a sign-in); never the password
   need(gstin){ if (!this.asked[gstin]){ this.asked[gstin] = Date.now(); this.status(gstin).then(() => render(), () => {}); } return this.accounts[gstin]; },

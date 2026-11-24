@@ -19,6 +19,7 @@
 //      the counts are postCounts (postTabCounts), the tab with work opens by itself (Errors when any), and the tab chosen
 //      is kept for the client (S.postTabs).
 // Posting itself stays in the business logic (postAllToTally, postBillsToTally, …).
+import OldPosted from "../parts/OldPosted.jsx";
 import "../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
@@ -487,7 +488,8 @@ function Attention({ co, canPost }) {
 }
 // Posted: every entry in statuses 1, 2, 3 and 10, newest first
 function History({ co, canPost }) {
-  return <div data-post-history=""><EntryList co={co} tab="posted" canPost={canPost} empty={<p className="note" data-post-noposted="">{"Nothing posted yet for this client."}</p>} /></div>;
+  const old = typeof postTabRows === "function" && postTabRows(co.id, "posted").old;
+  return <div data-post-history=""><EntryList co={co} tab="posted" canPost={canPost} empty={<p className="note" data-post-noposted="">{old ? "Nothing posted to Tally in the last 24 hours." : "Nothing posted yet for this client."}</p>} /></div>;
 }
 
 function ImportSteps({ co, ledgers }) {
@@ -569,6 +571,7 @@ export function PostStep() {
       {tab === "posted" && <div data-post-panel="posted" role="tabpanel" data-in-tally=""><AutoRuns co={co} /><History co={co} canPost={canPost} />
         <HomeLink id="sent" text={"Everything sent to Tally for " + co.name + ", with who sent it and when, is on the Tally page."} link="Everything sent to Tally" go={() => goTallyPage("sent")} /></div>}
       {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><OwnerRelease co={co} /><Attention co={co} canPost={canPost} /></div>}
+      <OldPosted kind="bills" />
     </section>
   );
 }
