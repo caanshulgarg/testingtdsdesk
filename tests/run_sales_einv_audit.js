@@ -18,10 +18,12 @@ const {load, HTML} = require("./harness");
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const NAMES = ["num", "r2", "INR", "money", "xesc", "GSTIN_RE", "GST_CHARS", "gstinCheckChar", "gstinValid", "GST_STATES", "SALES_RATES", "stateOfGstin", "fyLabel", "rateTag",
   "salesOwnGstins", "salesPan", "salesGstinOfPan", "salesOwnStates", "salesIsOwn", "salesSeriesKeys", "salesRegOf", "salesLearnReg",
-  "salesTotals", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
-  "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync",
+  "salesTotals", "GST_ALL_RATES", "salesItemHeads", "salesRateFit", "salesRateSnap", "salesRateClash", "isInterState", "salesLines", "salesTaxKey", "invoiceProblems", "normInvNo", "ledgerProblems", "mapInvoice", "salesVt", "salesCmpGstin", "salesAgainstOf", "salesVoucherXml",
+  "stateCodeFrom", "partyMaster", "salesPartyFill", "salesProblemsNow", "salesSnapshot", "salesInTally", "salesBulk", "salesRowAct", "salesQueuedSync", "postAlready", "postNamesKnown", "postNameScrub", "POST_REASONS", "postReasonText", "postCloudSay", "salesSel", "salesOptional", "salesUnconfirmed", "postAltered", "postTaken",
   "inv", "blankItem", "salesIrnLocked", "startDraft", "recalcDraft", "draftProblems", "saveDraft", "salesSetField", "salesSetKind", "EINV"];
 const {ctx, x} = load(HTML, NAMES);
+// (salesSel, staging-next's hide-posted-24h: an invoice posted over 24 hours ago is never among the ticked; none here is)
+ctx.salesOld = () => false;
 // made-up GSTINs of one PAN in Maharashtra (27) and Karnataka (29), and customers'
 const mk = b => { for (const c of "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") if (x.gstinValid(b + c)) return b + c; };
 const MH = mk("27AAACZ1234Q1Z"), KA = mk("29AAACZ1234Q1Z"), CMH = mk("27AAACK5678P1Z"), CKA = mk("29AAACM5678P1Z"), SEZC = mk("27AAACS4321R1Z");
@@ -30,7 +32,7 @@ const s = {cid: "c1", list: [], cfg: {auto: true, address: "1 Test Road, Pune 41
 let calls = [], toasts = [], jobs = {};
 Object.assign(ctx, {SL: () => s, CO: () => co, saveSales(){}, render(){}, toast: t => toasts.push(t), hasLedgerList: () => true, exactLedger: n => n || "",
   taxLedgerPick: (kind) => ({ledger: "Output " + kind.toUpperCase()}), salesLedgerFor: () => "Sales", roundOffLedger: () => "Round Off",
-  customerLedgerFor: () => ({ledger: "Made Up Customer", sure: true, label: "test"}), salesDupOf: () => null, salesDupWords: () => "", salesOfNo: () => s.list,
+  customerLedgerFor: () => ({ledger: "Made Up Customer", sure: true, label: "test"}), salesDupOf: () => null, salesOfNo: () => s.list,
   B: () => ({ledgers: {list: [{name: "Customer A", gstin: CMH, state: "Maharashtra"}, {name: "Customer B", gstin: CKA, state: "Karnataka"}]}}), salesSetUndo(){}, Cloud: {delete(){}},
   CloudPost: {row: async id => jobs[id]}, salesRefusal: () => null, salesMarkRefused(){}, plainMsg: m => String(m || ""),
   tallyLedgerName: n => n, fmtDate: d => d, toTallyDate: d => String(d).replace(/-/g, ""), learnCustomer(){}, esc: t => t,
@@ -52,6 +54,55 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   ok(paise.status === "ready", "an invoice rounded to the rupee (round off 0.48) stays ready (" + JSON.stringify(paise.problems) + ")");
   const sumOff = add({taxable: 10000, cgst: 900, sgst: 900, total: 11800, items: [it(6000, 18), it(3000, 18)]});
   ok(sumOff.status !== "ready" && sumOff.problems.some(p => /items/i.test(p)), "items' taxable 9,000 against the invoice's 10,000 at one rate: held (" + JSON.stringify(sumOff.problems) + ")");
+
+  // (review of 1352e5dfb) an item at a rate that is no GST rate (a sheet's rates read wrong): held, said in plain words
+  const odd = add({taxable: 1800, cgst: 93.15, sgst: 93.15, total: 1986.3, items: [it(900, 16.2), it(900, 4.5)]});
+  ok(odd.status !== "ready" && odd.problems.some(p => p === "GST at 4.5% and 16.2% are not usual rates: check the rates on the sheet or the items"), "items at 16.2% and 4.5%: held, said plainly (" + JSON.stringify(odd.problems) + ")");
+  // (review of b2a451774) real GST rates that are not FinCom's usual list (0.1%, 1%, 1.5%, 6%, 7.5%) are never held, nor
+  // a rate a sheet rounded (17.99%); 16.2% alone is
+  const two = (a, b) => { const t = Math.round(1000 * a) / 100 + Math.round(1000 * b) / 100; return {taxable: 2000, cgst: r2(t / 2), sgst: r2(t - r2(t / 2)), total: r2(2000 + t), items: [it(1000, a), it(1000, b)]}; };
+  const r2 = (v) => Math.round(v * 100) / 100;
+  [[0.1, 0], [1, 18], [1.5, 3], [6, 18], [7.5, 12]].forEach(([a, b]) => { const v = add(two(a, b));
+    ok(!v.problems.some(p => /check the rates on the sheet/.test(p)), "items at " + a + "% and " + b + "%: a GST rate, not held (" + JSON.stringify(v.problems) + ")"); });
+  const r1799 = add({taxable: 2000, cgst: 115, sgst: 115, total: 2230, items: [it(1000, 17.99), it(1000, 5)]});
+  ok(!r1799.problems.some(p => /check the rates on the sheet/.test(p)), "an item at 17.99% (a sheet's rounding): 18%, not held (" + JSON.stringify(r1799.problems) + ")");
+  const tiny = add({taxable: 6, cgst: 0.54, sgst: 0.54, total: 7.08, items: [it(1.3, 18.46, {cgst: 0.12, sgst: 0.12, tax: 0.24}), it(4.7, 18, {cgst: 0.42, sgst: 0.42, tax: 0.84})]});
+  ok(!tiny.problems.some(p => /check the rates on the sheet/.test(p)), "a line of 1.30 whose tax 0.12 + 0.12 is 18% to the paisa: not held (" + JSON.stringify(tiny.problems) + ")");
+  // (the coordinator, after 0c6f35677) on a sheet, PDF or marketplace invoice, the rate it is at is kept on the item, so
+  // its ledger and its posting are at 18%; an invoice made here keeps its own rate
+  ok(tiny.x.items[0].gstRate === 18 && tiny.x.items[1].gstRate === 18 && x.salesLines(tiny).filter(l => l.role === "sales").map(l => l.rate).join() === "18", "the 1.30 line stored at 18%, its sales line at 18% (" + JSON.stringify(tiny.x.items.map(i => i.gstRate)) + ")");
+  ok(r1799.x.items[0].gstRate === 18, "the 17.99% item stored at 18% (" + r1799.x.items[0].gstRate + ")");
+  const made = add({taxable: 1.3, cgst: 0.12, sgst: 0.12, total: 1.54, items: [it(1.3, 18.46, {cgst: 0.12, sgst: 0.12, tax: 0.24})]});
+  made.source = "created"; made.x.items[0].gstRate = 18.46; x.mapInvoice(made);
+  ok(made.x.items[0].gstRate === 18.46, "an invoice made here: its own rate kept (" + made.x.items[0].gstRate + ")");
+  // (review of c48ce8de8) G: an item that carries its own tax is at a listed rate only when that tax is the rate's, to
+  // two paise a head or a rupee an item; H: its own tax is checked against the rate it states
+  const own = (t, r, ig) => it(t, r, {igst: ig, cgst: 0, sgst: 0, tax: ig});
+  const sh = (o) => { const v = add(Object.assign({pos: "29", customerGstin: CKA}, o)); v.source = "sheet"; x.mapInvoice(v); return v; };
+  const rateP = (v) => v.problems.filter(p => /check the rate/.test(p));
+  const g1 = sh({taxable: 101000, igst: 18010, total: 119010, items: [own(100000, 17.96, 17960), own(1000, 5, 50)]});
+  ok(g1.x.items[0].gstRate === 17.96 && g1.status !== "ready" && rateP(g1).includes("Item at 17.96% carries ₹17,960.00 tax, which is not 18%: check the rate on the sheet"), "G: 1,00,000 at 17.96% with IGST 17,960 (₹40 short of 18%): not taken as 18%, held (" + g1.x.items[0].gstRate + " " + JSON.stringify(g1.problems) + ")");
+  const g2 = sh({taxable: 101000, igst: 18090, total: 119090, items: [own(100000, 18.04, 18040), own(1000, 5, 50)]});
+  ok(g2.x.items[0].gstRate === 18.04 && rateP(g2).length === 1, "G: 18.04% with ₹40 over: held (" + JSON.stringify(rateP(g2)) + ")");
+  const g3 = add({pos: "29", customerGstin: CKA, taxable: 101000, igst: 18050, total: 119050, items: [it(100000, 17.96), it(1000, 5)]});
+  ok(g3.x.items[0].gstRate === 18 && !rateP(g3).length, "G: a PDF item at 17.96% with no tax of its own (worked out again): 18% (" + g3.x.items[0].gstRate + " " + JSON.stringify(g3.problems) + ")");
+  const g4 = sh({taxable: 1900, igst: 212, total: 2112, items: [own(900, 16.2, 162), own(1000, 5, 50)]});
+  ok(g4.x.items[0].gstRate === 18 && !rateP(g4).length, "a stated 16.2% whose tax is 18% exactly: 18% (" + g4.x.items[0].gstRate + " " + JSON.stringify(g4.problems) + ")");
+  const g5 = sh({taxable: 1000.5, igst: 50.2, total: 1050.7, items: [own(0.5, 40, 0.2), own(1000, 5, 50)]});
+  ok(g5.x.items[0].gstRate === 40 && !rateP(g5).length, "a line of 0.50 at 40% with tax 0.20: as it is (" + JSON.stringify(g5.problems) + ")");
+  const h1 = sh({taxable: 1900, igst: 212, total: 2112, items: [own(900, 12, 162), own(1000, 5, 50)]});
+  ok(h1.x.items[0].gstRate === 12 && h1.status !== "ready" && rateP(h1).includes("Item at 12% carries ₹162.00 tax, which is 18%: check the rate on the sheet"), "H: stated 12%, IGST 162 on 900 (18%): held, said plainly (" + JSON.stringify(h1.problems) + ")");
+  const h2 = sh({taxable: 1900, igst: 200, total: 2100, items: [own(900, 12, 150), own(1000, 5, 50)]});
+  ok(rateP(h2).includes("Item at 12% carries ₹150.00 tax, which is not 12%: check the rate on the sheet"), "H: stated 12%, IGST 150 on 900 (no rate): held (" + JSON.stringify(h2.problems) + ")");
+  const h3 = add({pos: "29", customerGstin: CKA, taxable: 1900, igst: 212, total: 2112, items: [own(900, 12, 162), own(1000, 5, 50)]});
+  h3.source = "created"; x.mapInvoice(h3);
+  ok(rateP(h3).includes("Item at 12% carries ₹162.00 tax, which is 18%: check the rate on the sheet"), "H: on an invoice made here too (" + JSON.stringify(h3.problems) + ")");
+  const h4 = sh({taxable: 1900, igst: 212.3, total: 2112.3, items: [own(900, 18, 162.3), own(1000, 5, 50)]});
+  ok(!rateP(h4).length, "18% with 30 paise of rounding in its tax: as it is (" + JSON.stringify(h4.problems) + ")");
+  const r162 = add({taxable: 2000, cgst: 106, sgst: 106, total: 2212, items: [it(1000, 16.2), it(1000, 5)]});
+  ok(r162.problems.includes("GST at 16.2% is not a usual rate: check the rates on the sheet or the items"), "an item at 16.2%: held (" + JSON.stringify(r162.problems) + ")");
+  const std = add({taxable: 1000, cgst: 7.5, sgst: 7.5, total: 1015, items: [it(500, 3), it(500, 0)]});
+  ok(!std.problems.some(p => /not a GST rate/.test(p)), "items at 3% and 0%: no such hold (" + JSON.stringify(std.problems) + ")");
 
   console.log("2. the e-invoice under the registration the invoice is issued from");
   co.otherGstins = KA;
@@ -174,7 +225,8 @@ const it = (taxable, gstRate, extra) => Object.assign({desc: "Made up item", hsn
   await x.EINV.cancel(q, "2", "test");
   ok(q.status === "ready" && q.x.irnCancelInTally === true, "a posting queued: the result still awaited, marked for cancelling in Tally (" + q.status + ")");
   x.mapInvoice(q);
-  jobs["job-ok-1"] = {status: "done", company: "Made Up Co", results: [{id: q.id, ok: true}]};
+  // (Tally's own reply says it took the voucher: since next-sales-followups an answer not confirmed is not posted)
+  jobs["job-ok-1"] = {status: "done", company: "Made Up Co", results: [{id: q.id, ok: true, byReply: true}]};
   await x.salesQueuedSync();
   ok(q.status === "posted" && q.x.irnCancelInTally === true, "the voucher reached Tally: posted, and the alert to cancel it there stands (" + q.status + ")");
   const q2 = add({taxable: 1000, cgst: 90, sgst: 90, total: 1180, irn: "IRN-Q2", irnStatus: "active", irnGstin: MH}); q2.status = "ready"; q2.postJob = "job-bad-1";

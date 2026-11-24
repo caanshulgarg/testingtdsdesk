@@ -6,7 +6,7 @@
 // prompt is cached (1 hour), so a firm mapping several formats in a session pays for it once.
 // Plain module: no Deno, no imports.
 
-export const SHEET_FIELDS = ["date", "no", "party", "gstin", "pos", "taxable", "rate", "igst", "cgst", "sgst", "cess", "tax", "total", "hsn", "qty", "ledger", "sledger", "doctype", "against", "owngstin", "branch"];
+export const SHEET_FIELDS = ["date", "no", "party", "gstin", "pos", "taxable", "rate", "igst", "cgst", "sgst", "cess", "tax", "total", "hsn", "qty", "ledger", "sledger", "doctype", "against", "owngstin", "branch", "status"];
 // a party's statement of account (a vendor's or customer's ledger of the client, for reconciliation: app/src/lib/registers.js)
 export const PARTY_FIELDS = ["date", "no", "narration", "debit", "credit", "amount", "drcr", "balance", "tds", "gst"];
 export const PARTY_SYSTEM = [
@@ -14,6 +14,19 @@ export const PARTY_SYSTEM = [
   "You are given the header row and up to 10 data rows. Names, GSTINs, PANs, phone numbers and e-mails are masked (TEXT_1, GSTIN_1, …); keep to the shape of the values.",
   "Fields: date, no (voucher, bill or reference number), narration (particulars), debit, credit, amount (one signed amount column, only when there are no separate debit and credit columns),",
   "drcr (a column saying Dr or Cr for that amount), balance (the running balance), tds (a TDS column), gst (a GST or tax column).",
+  "Map a field only when a column clearly holds it; never two fields to one column; use the header text exactly as given.",
+  "Answer only JSON: {\"map\": {field: header}, \"transforms\": {\"date\": \"dmy\"}, \"why\": {field: \"a few words\"}}.",
+].join("\n");
+
+// a bank statement sheet whose headings FinCom's rules do not know (app/src/lib/aiColumns.js; the owner, 24-Nov-2026: the
+// one-time AI reading of the columns by default wherever a sheet is uploaded): the same shape of answer
+export const BANK_FIELDS = ["date", "valuedate", "narration", "ref", "debit", "credit", "amount", "drcr", "balance"];
+export const BANK_SYSTEM = [
+  "You map the columns of an Indian bank statement (an Excel or CSV download from net banking) to an accounting app's fields.",
+  "You are given the header row and up to 10 data rows. Words, account numbers, references and UPI ids are masked (TEXT_1, NUMBER_1, ID_1); keep to the shape of the values.",
+  "Fields: date (the transaction or posting date), valuedate (the value date, only when there is also a transaction date), narration (particulars, description, remarks),",
+  "ref (cheque, reference or UTR number), debit (withdrawals, money out), credit (deposits, money in), amount (one amount column, only when there are no separate debit and credit columns),",
+  "drcr (a column saying Dr or Cr for that amount), balance (the running balance).",
   "Map a field only when a column clearly holds it; never two fields to one column; use the header text exactly as given.",
   "Answer only JSON: {\"map\": {field: header}, \"transforms\": {\"date\": \"dmy\"}, \"why\": {field: \"a few words\"}}.",
 ].join("\n");
@@ -28,18 +41,25 @@ export const SHEET_SYSTEM = [
   "ledger (the party's own ledger name as kept in the accounting software, only when it is a column other than the party name; never an income, expense or tax ledger),",
   "doctype (what the document is: invoice / credit note / debit note / return; a Voucher Type column is this),",
   "owngstin (on a sales register only: the seller's own GSTIN the invoice is issued from, a column such as Our GSTIN, Company GSTIN or Seller GSTIN; never the customer's),",
-  "branch (the branch, location or invoice series the row was issued from).",
+  "branch (the branch, location or invoice series the row was issued from),",
+  "status (the document's status column, such as Invoice Status: Draft, Open, Paid, Void).",
+  "The taxable value may be a line's amount after its discount (Item Total, Line Amount) when there is no column named taxable; the taxes may be far to the right.",
   "Map a field only when a column clearly holds it; leave it out otherwise. Never map two fields to one column. Use the column's header text exactly as given.",
   "Also say how to read: date order (dmy, mdy or ymd) from the sample values; whether rows sharing an invoice number are one invoice (groupByNo);",
-  "Answer only JSON: {\"map\": {field: header}, \"transforms\": {\"date\": \"dmy\", \"groupByNo\": true}, \"skip\": [\"what rows to skip, e.g. total rows\"], \"why\": {field: \"a few words: from 'Inv Dt'\"}}.",
+  "Answer only JSON: {\"map\": {field: header}, \"transforms\": {\"date\": \"dmy\", \"groupByNo\": true}, \"skip\": [\"what rows to skip, e.g. total rows\"], \"why\": {field: \"at most five words\"}}. Nothing else: no notes, no fields left unmapped.",
 ].join("\n");
 
 // the user message: the header and the rows, as a small table
 export function sheetPrompt(head: string[], rows: string[][], side: string): string {
   const h = (head || []).slice(0, 80).map((x) => String(x ?? "").slice(0, 60));
   const r = (rows || []).slice(0, 10).map((row) => (row || []).slice(0, 80).map((x) => String(x ?? "").slice(0, 40)));
-  const what = side === "sales" ? "A sales register" : side === "vendor" ? "A vendor's statement of our account" : side === "customer" ? "A customer's statement of our account" : "A purchase register";
+  const what = side === "bank" ? "A bank statement" : side === "sales" ? "A sales register" : side === "vendor" ? "A vendor's statement of our account" : side === "customer" ? "A customer's statement of our account" : "A purchase register";
   return what + ".\nHeader: " + JSON.stringify(h) + "\nRows:\n" + r.map((x) => JSON.stringify(x)).join("\n");
+}
+
+// a side's prompt and fields: a bank statement, a party's statement (vendor, customer), else a register
+export function mapFor(side: string): { system: string, fields: string[] } {
+  return side === "bank" ? { system: BANK_SYSTEM, fields: BANK_FIELDS } : side === "vendor" || side === "customer" ? { system: PARTY_SYSTEM, fields: PARTY_FIELDS } : { system: SHEET_SYSTEM, fields: SHEET_FIELDS };
 }
 
 // the model's answer, checked: only FinCom's fields, only the sheet's own headers, one field a column

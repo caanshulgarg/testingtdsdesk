@@ -21,7 +21,11 @@ const Cloud = {
   // deleted, and blanked all three clients of a firm). Only what is on this list is ever sent as deleted.
   dels(){ let m = {}; try { m = JSON.parse(lsGet("tdsdesk:clouddels") || "{}"); } catch (e){} return m; },
   setDels(m){ lsSet("tdsdesk:clouddels", JSON.stringify(m)); },
-  delete(kind, cid, id, why){ if (typeof Live === "object" && Live.applying) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
+  // (quiet: set only while a copy from the server is being laid in, synchronously (takeClientHere and the like), so a
+  // removal that comes from the server is not sent back; never while a row merely waits its turn (Live.applying), when a
+  // person's own delete must still be recorded: the review of 8fc130d15, N4)
+  quiet: false,
+  delete(kind, cid, id, why){ if (this.quiet) return; const d = this.dels(); d[kind + "|" + (cid || "") + "|" + id] = {at: new Date().toISOString(), why: String(why || "").slice(0, 200)}; this.setDels(d); },
   setMarks(m){ lsSet("tdsdesk:cloudmarks", JSON.stringify(m)); },
   // reliability (11-Nov-2026; the cloud held requests for minutes and every poll's "busy" stayed set, the page silently
   // stale): no request to FinCom's cloud waits for ever. timed(ms, f, idle): f(signal, alive) is given up when its answer
@@ -273,6 +277,8 @@ function cloudChanges(){
     const bits = k.split("|");
     gone.push({kind: bits[0], client_id: bits[1] || "", id: bits.slice(2).join("|"), data: {}, deleted: true, hash: "gone", why: (dels[k] || {}).why || ""});
   });
+  // (not saved: the list is shared by this browser's tabs, and another tab still showing an invoice deleted here would
+  // drop its removal, never sent. Undo takes its own off: salesUndo. The re-review of b7e05251c, M1)
   // the open statement now has fewer rows than before: its chunks past the end are sent empty, not deleted
   const b = S.bank && !S.bank.loading ? S.bank : null;
   if (b && bankWhole(b)) Object.keys(marks).forEach(k => {
@@ -360,7 +366,7 @@ function merge3(base, mine, theirs){
 // that line of the copy both had; with no such copy, this computer's line), and a line posted on one side only (sent or
 // in Tally, not as the copy both had) keeps that side's posting, so a voucher already in Tally is never offered again.
 // The list of lines stays this computer's (a part is a slice by position: no line is added to it from the other copy).
-const BANK_POST_KEYS = ["state", "sentAt", "postedVia", "postError", "postJob", "postJobNew", "postedOptional", "postVerified", "postByReply", "checking", "tally"];
+const BANK_POST_KEYS = ["state", "sentAt", "postedVia", "postError", "postJob", "postJobNew", "postedOptional", "sentOptional", "postVerified", "postByReply", "checking", "tally", "matchedAt"];
 function bankRowsMerge(base, mine, theirs){
   const by = d => new Map(((d && d.rows) || []).filter(x => x && x.id != null).map(x => [String(x.id), x]));
   const bb = base === NOBASE ? null : by(base), tt = by(theirs), posted = x => !!x && (x.state === "sent" || x.state === "intally");
@@ -433,8 +439,8 @@ const ClientBase = {
 };
 // the merged copy, kept on this computer too; returns the mark (fingerprint) of what is now here
 function takeClientHere(id, data){
-  const was = Live.applying; Live.applying = true;
-  try { S.companies[id] = fixCompany(clone(data)); Store.saveCompany(S.companies[id]); } finally { Live.applying = was; }
+  const was = Live.applying, q = Cloud.quiet; Live.applying = true; Cloud.quiet = true;
+  try { S.companies[id] = fixCompany(clone(data)); Store.saveCompany(S.companies[id]); } finally { Live.applying = was; Cloud.quiet = q; }
   return fpHash(JSON.stringify(S.companies[id]));
 }
 async function cloudPushClient(r, sendBatch){
@@ -451,8 +457,8 @@ async function cloudPushClient(r, sendBatch){
       return r.hash;
     }
     if (cur.deleted){                                             // removed on another computer: not brought back by a save here
-      const was = Live.applying; Live.applying = true;
-      try { delete S.companies[r.id]; Store.put("companies/" + r.id, null); } finally { Live.applying = was; }
+      const was = Live.applying, q = Cloud.quiet; Live.applying = true; Cloud.quiet = true;
+      try { delete S.companies[r.id]; Store.put("companies/" + r.id, null); } finally { Live.applying = was; Cloud.quiet = q; }
       return "gone";
     }
     const theirs = plainObj(cur.data) ? cur.data : {};
@@ -545,7 +551,7 @@ async function cloudApplyNow(rows){
   const marks = Cloud.marks();
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
-  const touchedBank = new Set(), touchedSales = new Set();
+  const touchedBank = new Set(), touchedSales = new Set(), salesIds = new Map();
   const mine = new Map(), mineData = new Map();
   try { cloudSnapshot().forEach(r => { const k = cloudKey(r); mine.set(k, stableStr(r.data)); mineData.set(k, r.data); }); } catch (e){}
   // a sales list or bank statement with a save waiting here: written first, so the reload below does not lose it
@@ -628,7 +634,16 @@ async function cloudApplyNow(rows){
     else if (r.kind === "inbox"){ if (r.deleted) delete S.docq[r.id]; else S.docq[r.id] = Object.assign({}, r.data, {id: r.id, client_id: r.client_id || ""}); }
     else if (r.kind === "bank_meta"){ await cloudApplyBankMeta(cid, r); touchedBank.add(cid); }
     else if (r.kind === "bank_stmt" || r.kind === "bank_rows"){ await cloudApplyBankPart(r); touchedBank.add(cid); }
-    else if (r.kind === "sales" || r.kind === "sales_cfg"){ await cloudApplySales(r); touchedSales.add(cid); }
+    else if (r.kind === "sales" || r.kind === "sales_cfg"){
+      // a colleague's change to an invoice this computer's Undo covers: that Undo is taken away (it would bring back
+      // their removed invoice, or write over their change: the review of a85572b8b)
+      const u = S.sales && S.sales.cid === cid && S.sales.undo, vid = String(r.id).split(":").slice(1).join(":");
+      if (u && r.kind === "sales" && (u.before || []).some(o => o.id === vid)){ S.sales.undo = null; if (typeof salesLightRefresh === "function") salesLightRefresh(); }
+      // (an invoice put back by Undo after its delete was sent, taken off again by that delete coming back: said)
+      if (r.deleted && r.kind === "sales" && S.sales && S.sales.cid === cid && S.sales.undoneSent && S.sales.undoneSent.delete(vid) && S.sales.list.some(v => v.id === vid))
+        toast("Could not undo: the delete had already been sent.");
+      await cloudApplySales(r); touchedSales.add(cid); if (r.kind === "sales") salesIds.set(vid, r.deleted ? null : r.data);
+    }
   }
   keepMark.forEach((was, k) => { marks[k] = was; });
   Cloud.setMarks(marks);
@@ -644,11 +659,12 @@ async function cloudApplyNow(rows){
       if (sameStmt){ if (S.bank.cur !== keep.cur && typeof openStatement === "function") await openStatement(keep.cur); S.bank.sel = new Set([...keep.sel].filter(id => S.bank.rows.some(r => r.id === id))); }
     }
   }
-  if (S.sales && touchedSales.has(S.sales.cid)){
-    const o = S.sales, keep = {filter: o.filter, q: o.q, sel: o.sel, openId: o.openId, view: o.view};
-    await loadSales(o.cid);
-    if (S.sales && S.sales.cid === o.cid) Object.assign(S.sales, {filter: keep.filter, q: keep.q, openId: keep.openId, view: keep.view, sel: new Set([...keep.sel].filter(id => S.sales.list.some(v => v.id === id)))});
-  }
+  // the Sales list open on screen: what the cloud changed is laid over the invoices it names, in place, now (in this
+  // turn of the sync, so a save after it keeps it); the page is drawn once the rows stop coming (src/js/25 loadSales,
+  // next-fix-sales-delete-shake: each of 22 removals coming back drew the loading page and back, the page shaking).
+  // A list still being read is read afresh (the newest read is the one drawn)
+  if (S.sales && touchedSales.has(S.sales.cid)) await (S.sales.loading ? loadSales(S.sales.cid) : loadSales(S.sales.cid, S.sales, salesIds));
+
   if (took) Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
   // how many rows changed something here (this computer's own saves coming back are not counted): the page is drawn again
   // only when one did (quiet refresh, 14-Oct-2026)
@@ -657,8 +673,8 @@ async function cloudApplyNow(rows){
 async function cloudFlushListsBefore(rows){
   try {
     const s = S.sales, b = S.bank;
-    if (s && typeof salesSaveTimer !== "undefined" && salesSaveTimer && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
-      clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + s.cid, s.list.map(salesSynced));
+    if (s && typeof salesSaveTimer !== "undefined" && (salesSaveTimer || (typeof salesSavePending !== "undefined" && salesSavePending)) && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
+      clearTimeout(salesSaveTimer); salesSaveTimer = null; await (typeof salesSaveNow === "function" ? salesSaveNow() : BankDB.set("sales:" + s.cid, s.list.map(salesSynced)));
     }
     if (b && b.cur && typeof bankSaveTimer !== "undefined" && bankSaveTimer && rows.some(r => /^bank_/.test(r.kind) && r.client_id === b.cid)){
       clearTimeout(bankSaveTimer); bankSaveTimer = null; await BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows);
@@ -708,6 +724,7 @@ async function cloudApplySales(r){
     await BankDB.set("saleshist:" + cid, (r.data || {}).hist || {});
     return;
   }
+  if (typeof salesLayPending === "function") salesLayPending(cid, id, r.deleted ? null : r.data);
   const list = (await BankDB.get("sales:" + cid)) || [];
   const i = list.findIndex(v => v.id === id);
   if (r.deleted){ if (i >= 0){ list.splice(i, 1); await BankDB.set("sales:" + cid, list); } return; }
@@ -916,7 +933,7 @@ function switcherList(){
   return list;
 }
 // the client switcher is drawn by React (app/src/Switcher.jsx), with its own keys
-function renderSwitcher(){ if (window.FinComReact) FinComReact.redraw(); }
+function renderSwitcher(){ if (window.FinComReact) FinComReact.sw(); }
 function openSwitcher(){ if (!Object.keys(S.companies).length){ goHome(); S.addingCo = true; render(); return; } S.switcher = {q:"", idx:0}; renderSwitcher(); }
 // next-fix-hang-home (FINCOM-APP-STAGING-H, staging 12-Nov-2026 06:18 UTC: 2,124 ms in a timer, a click on the sidebar's
 // Clients from a large client's books): every page change (navHome, goHome, goSettings, goTallyPage, openCompany) closed
@@ -1213,7 +1230,11 @@ function billRestore(id){
   if (e.fileHash) registerHash(S.coId, e.fileHash, e.id);
   Store.saveEntry(S.coId, e);
   auditEvent("bill_restore", (e.x.vendorName || e.fileName || "") + " " + (e.x.invoiceNo || e.id), S.coId);
-  S.filter = "draft"; S.selected = e.id; refreshStats(S.coId); toast("Restored to To review."); render();
+  // where it is now, said and shown: a bill in Tally over 24 hours is listed in Transactions only (billOld, src/js/03),
+  // so no bill stays open that the list does not show
+  const old = billOld(e), where = {draft: "To review", approved: billInTally(e) ? "In Tally" : "Post to Tally", duplicate: "Duplicates", rejected: "No entry"}[e.status] || "";
+  if (old) S.selected = null; else { S.filter = e.status; S.selected = e.id; }
+  refreshStats(S.coId); toast(old ? "Restored; it is in Transactions." : "Restored to " + where + "."); render();
 }
 // round 14c (C1, C2): the items of compute().missing that are a box on the bill (data-focus-field on its input), and the
 // click that puts the cursor there; the first missing one is marked bk-missing when the bill opens
@@ -2183,7 +2204,8 @@ document.addEventListener("change", ev => {
     TDS24Q.fromFile(f).then(async r => {
       b.busy = "";
       if (r.error){ toast(r.error); render(); return; }
-      b.salary = r.rows; await saveBooks();
+      // (cols: the columns FinCom's AI read for this layout, said and changed on the 24Q page: screens/tds/SalaryCols.jsx)
+      b.salary = r.rows; b.salaryCols = r.cols || null; S.files["salary:" + b.cid] = f; await saveBooks();
       const noPan = r.rows.filter(x => !/^[A-Z]{5}\d{4}[A-Z]$/.test(x.pan)).length;
       toast(r.rows.length + " salary rows read" + (noPan ? ", " + noPan + " without a valid PAN" : "") + (r.undated ? ", " + r.undated + " without a date (in no quarter): give a Month or Date column" : "") + ".");
       render();

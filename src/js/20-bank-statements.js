@@ -10,7 +10,8 @@ const BANK_STATES = {attention:"Needs a ledger", suggested:"Suggested", ready:"R
 
 /* ---------- storage: IndexedDB (large), kept per client ---------- */
 const BankDB = {
-  mem: {}, dbp: null, mode: "starting", lost: false,
+  // (writes: how many times each key was written here, so a reading can tell it was written meanwhile: src/js/25 loadSales)
+  mem: {}, dbp: null, mode: "starting", lost: false, writes: {},
   open(){
     if (this.dbp) return this.dbp;
     if (!idbOk(this)) return Promise.resolve(null);
@@ -45,6 +46,7 @@ const BankDB = {
     return Promise.race([new Promise(ok => { try { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(this.mem[k]); } catch (e){ ok(!again && idbGone(this, db, e) ? this.get(k, late, 1) : this.mem[k]); } }), slow]).finally(() => clearTimeout(t));
   },
   async set(k, v, again){
+    if (!again) this.writes[k] = (this.writes[k] || 0) + 1;
     this.mem[k] = v;
     const db = await this.open();
     if (!db) return this.lsSet(k, v);

@@ -7,6 +7,7 @@
 // status review → ready → posted, or intally / ignored), filter (the tab), q (search), sel (ticked), openId (the one
 // open in the panel), draft (an invoice being created), cfg (numbering, the firm's details, ledgers), undo.
 // The actions are in src/js/26: salesAct("salesPost"), salesRowAct("confirm", id), salesSetCust(id, name), …
+import OldPosted from "../parts/OldPosted.jsx";
 import "../../../src/js/99-screen-parts.js";
 import { useRef, useState } from "react";
 import { useDismiss } from "../parts/dismiss.js";
@@ -28,6 +29,8 @@ import "../../../src/js/26-sales-invoice.js";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
+// next-fix-reupload-posted: "Not in Tally? Check and post again" (NotInTally, salesNotInTally)
+import "../../../src/js/96-not-in-tally.js";
 
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
@@ -38,7 +41,7 @@ const salesOptShown = (v) => !!v.postedOptional && ["posted", "intally"].include
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to review: every invoice has its customer ledger, and waits under Ready to post.",
   ready: "Nothing ready to post. Confirm each invoice's customer ledger under To review; it then waits here.",
-  done: "Nothing in Tally yet. Post the invoices under Ready to post.", ignored: "No invoice ignored." };
+  done: "Nothing in Tally yet. Post the invoices under Ready to post.", old: "Nothing posted to Tally in the last 24 hours.", ignored: "No invoice ignored." };
 const States = () => <><option value="">— Choose —</option>{gstStateList().map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</>;
 const gstOf = (x) => r2(num(x.cgst) + num(x.sgst) + num(x.igst) + num(x.cess));
 
@@ -65,13 +68,13 @@ function salesCols(s, list, nSel) {
     { k: "cust", role: "party", label: "Customer", cls: "pt", filter: <ColFunnel hideIdle t="sales" k="cust" label="Customer" />, v: (v) => v.x.customerName || "",
       cell: (v) => { const x = v.x; return <><div className="pn">{x.customerName || "—"}</div><div className="nr">{x.customerGstin || "Unregistered"}{x.pos ? " · " + (GST_STATES[x.pos] || x.pos) : ""}{gstinFromLedger(v) && <> <span className="src" data-gstin-from={v.id}>GSTIN from Tally ledger</span></>}</div></>; } },
     { k: "val", role: "amount", label: "Total", cls: "n", filter: <ColFunnel hideIdle t="sales" k="val" label="Total" />, v: (v) => num(v.x.total), cell: (v) => <b>{money(num(v.x.total))}</b> },
-    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <><span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>{salesOptShown(v) && <div className="nr" data-sales-opt={v.id}>Optional voucher</div>}{v.copyCheck && <div className="nr" data-sales-copy={v.id} title={v.copyCheck.note}>Checked on FinCom’s copy</div>}</>; } },
+    { k: "st", role: "status", label: "Status", v: (v) => (ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["", v.status])[1], cell: (v) => { const w = ST_WORDS[v.refused && v.status === "review" ? "refused" : v.status] || ["no", v.status]; return <><span className={"tag " + w[0]} data-sales-st={v.id}>{w[1]}</span>{salesOptShown(v) && <div className="nr" data-sales-opt={v.id}>Optional voucher</div>}</>; } },
     { k: "tx", label: "Taxable", cls: "n", v: (v) => num(v.x.taxable), sum: true, cell: (v) => money(num(v.x.taxable)) },
     { k: "gst", label: "GST", cls: "n", v: (v) => gstOf(v.x), sum: true, cell: (v) => <>{money(gstOf(v.x))}
       {(v.taxPicks || []).map((t, i) => <div key={i} className="nr" data-tax-led={t.kind} title={t.why ? t.ledger + ": " + t.why : t.ledger}>{t.ledger}</div>)}</> },
     { k: "led", label: "Customer ledger", cls: "lg", filter: <ColFunnel hideIdle t="sales" k="led" label="Customer ledger" />, v: (v) => v.customerLedger || "",
       cell: (v, p) => p.editable ? <>
-        {v.postError && v.status !== "intally" && <span className="src bad" title={v.postError}>Tally: {v.postError}</span>}
+        {v.postError && v.status !== "intally" && <span className="src bad" title={postCloudSay(v.postError)} data-sales-posterr="">Tally: {postCloudSay(v.postError)}</span>}
         <LedgerBox className={"lgbox" + (v.status === "ready" ? " done" : v.customerLedger ? " sugg" : "")} value={v.customerLedger || ""} fk={"svcust:" + v.id} data-svcust={v.id}
           placeholder="Select customer ledger" aria-label={"Customer ledger for " + (v.x.number || "invoice")} onCommit={(val) => salesSetCust(v.id, val)} />
         {v.hold && v.status === "review" && <select aria-label="Edit type" data-edit-type={v.id} value="" onChange={(ev) => salesSetKind(v.id, ev.target.value)}><option value="">Edit type…</option><option value="invoice">Invoice</option><option value="credit">Credit Note</option><option value="debit">Debit Note</option></select>}
@@ -80,12 +83,23 @@ function salesCols(s, list, nSel) {
         {p.issue ? <span className="src bad" title={(v.problems || []).concat(v.ledgerIssues || []).join("; ")}>{p.issue}</span>
           : <span className={"src" + (v.status === "ready" ? " ok" : "")}>{v.status === "ready" ? (v.userLedger ? "Set by you" : v.custSource || "Ready") : v.customerLedger ? "Suggested · " + (v.custSource || "match") : "No match found"}</span>}
       </> : <><span className="lgtext">{v.customerLedger || "—"}</span>
-        <span className="src muted">{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span></> },
+        <span className="src muted" style={v.postNote ? { whiteSpace: "normal" } : undefined}>{v.status === "posted" ? "Posted " + (v.postedAt ? shortDate(v.postedAt.slice(0, 10)) : "") + (v.postNote ? " · " + v.postNote : "") : v.status === "intally" ? "Already in Tally" : "Ignored"}{v.receivedAt ? " · paid " + shortDate(v.receivedAt) : ""}</span>
+        {/* (under the ledger, not beside Open: the row's buttons fit the table at any width) */}
+        {v.status === "intally" && <div><button className="linkbtn" data-sales-nottally={v.id} onClick={act("nottally", v)}>Not this Tally entry</button></div>}</> },
     { k: "ac", role: "act", cls: "ac", cell: (v, p) => p.editable ? <>
         {v.status === "review" && v.customerLedger && !p.issue ? <button className="btn small primary" onClick={act("confirm", v)}>Confirm</button> : <button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>}
         {v.x.irnStatus !== "active" && <button className="icon" title="Ignore" aria-label="Ignore" onClick={act("ignore", v)}>✕</button>}
-      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}{v.status === "intally" && <button className="linkbtn" onClick={act("nottally", v)}>Not this Tally entry</button>}</> },
+      </> : <><button className="btn small" onClick={() => salesOpen(v.id)}>Open</button>{v.status === "ignored" && <button className="linkbtn" onClick={act("restore", v)}>Restore</button>}<NotThere v={v} /></> },
   ];
+}
+
+// next-fix-reupload-posted: a posted invoice that is not in Tally any more (deleted there, or only Optional): FinCom's own
+// copy of Tally decides and, if so, it is posted again (src/js/96-not-in-tally.js; nothing is asked of Tally)
+function NotThere({ v, wide }) {
+  // (a client posting Optional vouchers by its setting: its Optional voucher is the posting; no such button)
+  if (v.status !== "posted" || v.postedVia === "file" || NotInTally.optional(CO(SL().cid), "", v)) return null;
+  const busy = NotInTally.on(v.id);
+  return <button className={wide ? "btn" : "linkbtn"} data-not-in-tally={v.id} disabled={busy} title="FinCom's copy of Tally decides: if it shows this invoice deleted in Tally, or only as an Optional or cancelled voucher, it is posted again." onClick={() => salesNotInTally(v.id)}>{busy ? "Checking…" : NotInTally.LABEL}</button>;
 }
 
 // a panel over the page (the invoice, or the settings); a click on the dark area around it or Esc closes it
@@ -128,12 +142,12 @@ function DraftText({ x, label, k, area, ...p }) {
 // tax-accuracy: the e-invoice (IRN) and e-way bill of this invoice, made through the firm's GST API
 function EinvPanel({ v }) {
   // (next-fix-audit-sales-einv) the e-invoice user of the registration the invoice is issued from (EINV.seller), not always the main GSTIN
-  const s = SL(), co = CO(s.cid), x = v.x, gstin = String(co.gstin || "").toUpperCase(), seller = EINV.seller(v, co) || gstin;
+  // (what it shows and offers: EINV.offers, the rule Sales also reads to keep an invoice listed, salesNeedsAction)
+  const s = SL(), co = CO(s.cid), x = v.x, o = EINV.offers(v, co);
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [t, setT] = useState({ distance: "", vehicleNo: "", transporterId: "", mode: "1" });
-  if (!GSTAPI.on() || !GSTIN_RE.test(gstin) || !GSTIN_RE.test(String(x.customerGstin || "").toUpperCase())) return null;
-  const a = EINV.need(seller), probs = EINV.problems(v, co, s.cfg);
+  if (!o) return null;
+  const { a, active } = o, canCancel = o.cancel, probs = EINV.problems(v, co, s.cfg);
   const go = (label, f) => async () => { setBusy(label); setMsg(""); try { setMsg(await f()); } catch (e) { setMsg((e && e.message) || String(e)); } setBusy(""); render(); };
-  const active = x.irn && x.irnStatus !== "cancelled", canCancel = active && x.ackDt && Date.now() - Date.parse(x.ackDt) < 24 * 3600000;
   return <section data-einv={v.id}><h3>E-invoice and e-way bill</h3>
     {EINV.host === "sandbox" && <p className="note">The firm's server sends to the IRP's <b>sandbox</b> (test): an IRN made here is not a real one.</p>}
     {active ? <div className="bk-alert"><b>IRN</b> {x.irn}<div className="note">Ack. no. {x.ackNo} · {fmtDateTime(x.ackDt)}{x.ewayNo ? " · E-way bill " + x.ewayNo + (x.ewayValidTill ? ", valid till " + fmtDateTime(x.ewayValidTill) : "") : ""}</div></div>
@@ -144,7 +158,7 @@ function EinvPanel({ v }) {
         {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
         <button className="btn small primary" disabled={!!busy || probs.length > 0} onClick={go("irn", async () => { const j = await EINV.irn(v); return "IRN made: " + j.irn; })}>{busy === "irn" ? "Making the IRN…" : "Make the IRN"}</button>
       </> : <>
-        {!x.ewayNo && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+        {o.ewb && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
           <input type="number" min="0" placeholder="Distance (km)" aria-label="Distance in km" value={t.distance} style={{ width: 120 }} onChange={(ev) => setT({ ...t, distance: ev.target.value })} />
           <select aria-label="Mode" value={t.mode} style={{ width: "auto" }} onChange={(ev) => setT({ ...t, mode: ev.target.value })}><option value="1">Road</option><option value="2">Rail</option><option value="3">Air</option><option value="4">Ship</option></select>
           <input type="text" placeholder="Vehicle no." aria-label="Vehicle number" value={t.vehicleNo} style={{ width: 130 }} onChange={(ev) => setT({ ...t, vehicleNo: ev.target.value })} />
@@ -170,10 +184,12 @@ function Detail({ v }) {
   return (
     <Panel wide title={<>Invoice {x.number || ""} <span className={"tag " + cls}>{word}</span></>} close={() => salesAct("salesClose")}>
       {probs.length > 0 && <div className="bk-alert bad">{probs.map((p, i) => <div key={i}>{p}</div>)}</div>}
-      {v.postError && v.status !== "intally" && <div className="bk-alert bad">Tally: {v.postError}</div>}
+      {v.postError && v.status !== "intally" && <div className="bk-alert bad" data-sales-posterr="">Tally: {postCloudSay(v.postError)}</div>}
+      {/* (polish 2) the reason alone: it says when FinCom posted it and why the copy cannot tell, never beside "not sent again" */}
+      {v.status === "posted" && v.postWhy && <div className="bk-alert" data-post-why={v.id}>{v.postWhy}</div>}
       {salesOptShown(v) && <div className="bk-alert" data-sales-opt-note={v.id}>In Tally as an Optional voucher: it is not in the books until you make it regular in Tally (Display More Reports → Exception Reports → Optional Vouchers).{v.status === "posted" && co.createOptional && " To post regular vouchers, untick “Post purchase bills and sales invoices as Optional vouchers” in Client setup."}</div>}
-      {/* next-fix-sales-readsoff: checked for duplicates against an old FinCom cloud copy (src/js/26-sales-invoice.js salesCheckSafe) */}
-      {v.copyCheck && <div className="bk-alert" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}
+      {/* next-dup-cloud-only: the duplicate check's one small line (an old FinCom cloud copy, or it did not answer), on the panel only: src/js/26-sales-invoice.js salesCheckSafe */}
+      {v.copyCheck && <div className="bk-alert info" data-sales-copy-note={v.id}>{v.copyCheck.note}</div>}
       <SalesAsk v={v} wide />
       <section><h3>Invoice details</h3>
         <div className="bk-form">
@@ -217,6 +233,7 @@ function Detail({ v }) {
           <button className="btn small" disabled={!claudeReady()} onClick={act("reread", "claude")}>Claude</button></>}
         {v.status === "review" && <button className="btn primary" onClick={act("confirm")}>Confirm</button>}
         {v.status === "ready" && <button className="btn" onClick={act("unready")}>Back to review</button>}
+        <NotThere v={v} wide />
         <button className="btn" onClick={act("print")}>Print invoice</button>
         {S.files["sv:" + v.id] && <button className="btn" onClick={act("file")}>View uploaded file</button>}
         {!fro && <button className="btn" onClick={act("edit")}>{v.source === "created" ? "Edit invoice" : (x.items || []).length ? "Edit items" : "Enter items"}</button>}
@@ -367,19 +384,14 @@ function BulkLine({ s }) {
 }
 // a GSTIN FinCom filled from the party's Tally ledger (a sheet that gave none), said where it is shown
 const gstinFromLedger = (v) => !!(v && v.filled && v.filled.customerGstin && v.filled.customerGstin === v.x.customerGstin);
-// on an invoice: "Try again" (refused by Tally, or not confirmed: the duplicate check runs first), and the answer to a Tally
-// voucher of the same number and another amount
+// on an invoice: "Try again" (refused by Tally, or not confirmed: the duplicate check runs first); no duplicate is ever
+// held for a person (the owner, 23-Nov-2026: the same entry is marked In Tally when posting, anything else posted)
 function SalesAsk({ v, wide }) {
   const s = SL(), cls = wide ? "btn small" : "linkbtn";
   if (!["review", "ready"].includes(v.status)) return null;
-  // (the invoices by number listed once for the drawing: salesDupNow, src/js/26-sales-invoice.js)
-  const dup = salesDupNow(v);
   return <>
     {s.vtAsk && s.vtAsk.length > 1 && !v.x.noteKind && <span data-sales-vt-row={v.id}>{s.vtAsk.map((t) => <button key={t.type} className={cls} data-vt-pick-row={t.type} onClick={() => salesVtAnswer(t.type)}>{t.type}</button>)}</span>}
     {(v.refused || v.needsCheck) && <button className={cls} data-sales-retry={v.id} disabled={!!s.busy || !canPostTally(CO())} title="Checks Tally for it first, then sends it on its own" onClick={() => salesPostOneByOne([v.id])}>Try again</button>}
-    {dup && <span data-sales-dup={v.id}>{wide && <b>{salesDupWords(dup)} </b>}
-      {dup.src === "tally" && <><button className={cls} data-near-same="" onClick={() => salesNearAnswer(v.id)}>It is this invoice</button>{" · "}</>}
-      <button className={wide ? "btn small danger" : "linkbtn danger"} data-dup-override="" onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></span>}
   </>;
 }
 // the client's own sales voucher type from its books (src/js/25 salesLearnVt), and the one question when there are several
@@ -393,11 +405,8 @@ function SalesVt({ s }) {
 }
 function SalesRefused({ s }) {
   const waiting = s.list.filter((v) => v.refused && !v.refused.single && v.status === "review"), done = s.oneByOne;
-  const skipped = (s.dupSkipped || []).map((id) => s.list.find((v) => v.id === id)).filter((v) => v && salesDupNow(v));
-  if (!waiting.length && !(done && done.rows && done.rows.length) && !skipped.length) return null;
+  if (!waiting.length && !(done && done.rows && done.rows.length)) return null;
   return <div className="bk-alert" data-sales-refused="">
-    {skipped.length > 0 && <div data-sales-dupskipped=""><b>Not posted: already in Tally</b>
-      <ul style={{ margin: "4px 0 0 18px" }}>{skipped.map((v) => <li key={v.id}>{v.x.number}: {salesDupWords(salesDupNow(v))} <button className="linkbtn danger" data-dup-override={v.id} onClick={() => salesDupOverride(v.id)}>Post duplicate anyway</button></li>)}</ul></div>}
     {waiting.length > 0 && <div><b>Refused by Tally:</b> {waiting.length} invoice{waiting.length === 1 ? "" : "s"}. {waiting[0].refused.hint}{" "}
       <button className="btn small" data-sales-onebyone="" disabled={!!s.busy || !canPostTally(CO())} onClick={() => salesPostOneByOne()}>Post one by one to find the cause</button></div>}
     {done && done.rows && done.rows.length > 0 && <div data-sales-onebyone-result="" style={{ marginTop: waiting.length ? 8 : 0 }}><b>Posted one by one:</b>
@@ -410,6 +419,7 @@ export default function Sales() {
   const co = CO(), s = SL();
   if (!s || s.cid !== co.id) { loadSales(co.id); return <Loading what="sales invoices" page="table" />; }
   if (s.loading) return <Loading what="sales invoices" page="table" />;
+  salesSel();   // a ticked invoice now older than 24 hours is unticked (src/js/26)
   if (s.view === "create" && s.draft) return <Create />;
   ensureFileInputs();
   const all = s.list.filter((v) => v.status !== "ignored"), dates = all.map((v) => v.x.date).filter(Boolean).sort();
@@ -455,17 +465,19 @@ export default function Sales() {
     </div>
     {s.showSettings && <SettingsPanel />}
   </>;
-  const list = salesVisible(), nSel = list.filter((v) => s.sel.has(v.id)).length, open = s.openId && inv(s.openId);
+  // the invoices this page lists: all but those Tally confirmed more than 24 hours ago (in Transactions only, salesOld)
+  const list = salesVisible(), listed = s.list.filter((v) => !salesOld(v)).length, nSel = list.filter((v) => s.sel.has(v.id)).length, open = s.openId && inv(s.openId);
   return <>
     <div className="bk sl">{head}
       <div className="bk-bar">
         <input type="search" className="bk-search" autoComplete="off" placeholder="Search invoice, customer, GSTIN" aria-label="Search the invoices" value={s.q} onChange={(ev) => salesSearch(ev.target.value)} />
       </div>
-      <ChipBar t="sales" shown={list.length} total={s.list.length + " invoices"} />
+      <ChipBar t="sales" shown={list.length} total={listed + " invoices"} />
       {/* the one list table (spec K6) */}
-      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={s.list.length} selected={s.sel}
+      <ListTable name="sales" className="bk-table gf-off" cols={salesCols(s, list, nSel)} rows={list} rowKey={(v) => v.id} prep={salesPrep} unit={["invoice", "invoices"]} of={listed} selected={s.sel}
         rowProps={(v) => ({ className: s.sel.has(v.id) ? "picked" : undefined })}
-        empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter]} />
+        empty={salesColOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("sales")}>Clear all filters</button> to see every invoice.</> : EMPTY[s.filter === "done" && salesCounts().old ? "old" : s.filter]} />
+      <OldPosted kind="sales" />
     </div>
     {open && <Detail v={open} />}
     {s.showSettings && <SettingsPanel />}
@@ -482,10 +494,9 @@ export function SalesBar() {
       <div className="ab-right"><button className="btn" onClick={() => salesAct("salesCancel")}>Cancel</button><button className="btn" onClick={() => salesAct("salesPrintDraft")}>Preview / Print</button><button className="btn primary" onClick={() => salesAct("salesSave")}>Save invoice</button></div>
     </div>) : null;
   if (!s.list.length) return null;
-  const tc = salesCounts(), nsel = s.sel.size;
+  const rows = salesSel(), tc = salesCounts(), nsel = s.sel.size;
   let left, right;
   if (nsel) {
-    const rows = s.list.filter((v) => s.sel.has(v.id));
     left = <><b>{nsel} selected</b> <span className="muted">· {money(r2(rows.reduce((a, v) => a + num(v.x.total), 0)))}</span> <button className="linkbtn" onClick={() => salesAct("salesSelNone")}>Clear</button></>;
     right = <>
       {/* a ledger picked from the list, or Enter, applies it (src/js/23, 26) */}

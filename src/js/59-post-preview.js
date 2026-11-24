@@ -276,7 +276,7 @@ function postJobStatesNow(cid){
       else if ((it && it.state === "unknown") || (r && r.outcomeUnknown)) { st = "unknown"; reason = (it && it.reason) || "Checking whether it reached Tally"; }
       else if (live && (!it || ["waiting", "sending", "sent"].includes(it.state))) st = "sending";
       else if (byPerson || j.status === "cancelled") st = "";
-      else if ((it && it.state === "failed") || (r && !r.ok) || j.status === "failed") { st = "refused"; reason = (it && it.reason) || plainMsg(r && r.message) || plainMsg(j.message) || "Tally did not take it"; }
+      else if ((it && it.state === "failed") || (r && !r.ok) || j.status === "failed") { st = "refused"; reason = (it && it.reason) || plainMsg(r && r.message) || (j.message ? postCloudSay(plainMsg(j.message)) : "") || "Tally did not take it"; }
       // bridge 2.1.8: a record refusal (alreadySent: the bridge's own record says it went from that computer) is not Tally's word
       out.set(id, {st, job: j, reason, alreadySent: !!(r && r.alreadySent)});
     });
@@ -349,7 +349,7 @@ function postPostedRows(cid){
 }
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
-function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
+function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).filter(x => x.state !== "posted" || !postedOld(x.at)).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
 // ---------- a bill sent and not confirmed in Tally, checked with a fresh read of Tally (review of 02-Oct-2026, item 3)
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
 // made while bridge 2.1.1 was timing out: a duplicate in real books. Now, before such a bill is shown, Tally is read
@@ -700,7 +700,7 @@ async function postTestCopies(cid, id, n){
     // TRIAL in the narration (voucherXml adds " | TDSDesk:<id>" after it)
     const nar = e.narration || narrationFor(e);
     e.narration = /^TRIAL \| /.test(nar) ? nar : "TRIAL | " + nar;
-    ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postByReply", "postAltered", "postedVia", "postedInto", "postedOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
+    ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postByReply", "postAltered", "postedVia", "postedInto", "postedOptional", "sentOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
     d.entries[e.id] = e; Store.saveEntry(cid, e); ids.push(e.id);
   }
   refreshStats(cid); render();

@@ -206,7 +206,11 @@ function BillBar({ e }) {
   } else if (e.status === "approved") {
     const k = billBar(e); // (src/js/01: its words and buttons: Undo approval while not posted, Deleted in Tally while posted and not sending)
     left = <><span className="tag ok">Approved</span> <span className="note">{k.note}</span></>;
-    right = <>{k.acts.map(([a, t]) => <button key={a} className="btn" onClick={() => doAct(a)}>{t}</button>)}{next}</>;
+    right = <>{k.acts.map(([a, t]) => <button key={a} className="btn" onClick={() => doAct(a)}>{t}</button>)}
+      {/* next-fix-reupload-posted: "Not in Tally? Post again" (billNotInTally, src/js/96-not-in-tally.js: FinCom's copy of
+          Tally decides; loaded on the press, kept out of the first file's budget) */}
+      {e.exportedAt && e.postedVia !== "file" && !(typeof e.sentOptional === "boolean" ? e.sentOptional : (CO() && CO().createOptional)) && typeof TCloud === "object" && TCloud.has(S.coId) && <button className="btn" data-not-in-tally={e.id} disabled={typeof NotInTally === "object" && NotInTally.on(e.id)}
+        onClick={() => import("../../../src/js/96-not-in-tally.js").then(() => billNotInTally(e.id))}>{typeof NotInTally === "object" && NotInTally.on(e.id) ? "Checking…" : "Not in Tally? Post again"}</button>}{next}</>;
   } else {
     left = <span className="tag no">No entry</span>;
     right = <><button className="btn" onClick={() => doAct("restore")}>Move back to review</button>{next}</>;

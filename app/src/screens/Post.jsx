@@ -19,6 +19,7 @@
 //      the counts are postCounts (postTabCounts), the tab with work opens by itself (Errors when any), and the tab chosen
 //      is kept for the client (S.postTabs).
 // Posting itself stays in the business logic (postAllToTally, postBillsToTally, …).
+import OldPosted from "../parts/OldPosted.jsx";
 import "../../../src/js/99-screen-parts.js";
 import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
@@ -31,6 +32,8 @@ import "../../../src/js/97-postto-link.js";
 import "../../../src/js/98-post-register.js";
 // who holds a posting (PostOwner: src/js/59-post-owner.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/59-post-owner.js";
+// why a posting waits (Tally closed, the company not open, the Tally computer off): postWaitWhy for 62's words
+import "../lib/postWait.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
@@ -77,6 +80,8 @@ function RunLine({ co }) {
       {bp.checkFailed ? " · " + bp.checkFailed + " not posted: Tally could not be checked first" : ""}
       {/* round 18: reading entries from Tally is off on the bridge (prospective only): the pre-check could not be made */}
       {bp.checkNote ? " · " + bp.checkNote : ""}
+      {/* (polish 2) bills an earlier posting of FinCom holds, decided by FinCom's copy of Tally (src/js/96 postEarlier) */}
+      {bp.earlier ? " · " + bp.earlier : ""}
       {failed.length ? " · " + failed.length + " failed and went back to To review (" + failed.map((f) => f.no + ": " + f.msg).join("; ") + ")" : ""}
       {(bp.masters || []).length > 0 && <span data-post-masters="">{" · Ledgers: " + bp.masters.map((m) => m.name + ": " + m.word).join(", ")}</span>}
       {bp.optional > 0 && <span>{" · " + bp.optional + " went in as Optional vouchers. " + OPTIONAL_HELP}</span>}
@@ -281,7 +286,9 @@ function Line2({ x, owner }) {
 function RawReply({ x }) {
   const [open, setOpen] = useState(false);
   const raw = typeof postReplyRaw === "function" ? postReplyRaw(x.r, x.it) || (x.st.reason && x.st.reason.said) || "" : "";
-  if (!raw) return null;
+  // (the cloud's words for a posting meant for another Tally computer, migration 54 and after: not Tally's, and they name
+  // the computer and its Windows user, so never shown: src/js/62-post-reasons.js)
+  if (!raw || /^(elsewhere|startedelsewhere|nolink)$/.test((x.st.reason && x.st.reason.id) || "")) return null;
   return <>{" "}<button className="linkbtn" data-show-reply="" onClick={() => setOpen(!open)}>{open ? "Hide Tally's reply" : "Show Tally's reply"}</button>
     {open && <pre className="pe-raw" data-reply-raw="">{raw}</pre>}</>;
 }
@@ -300,7 +307,7 @@ function RowActs({ co, x, canPost }) {
   // 30-Oct-2026: a bank line posted straight to the bridge, not in Tally (src/js/62): to its line on the Bank page, where
   // Check with Tally settles a partly made batch
   if (a && a.kind === "bankLine") out.push(<button key="bl" className="btn small" data-open-bank="" data-bank-line-act={a.label} onClick={() => txnGo("bank", x.id)}>{a.label === "Check with Tally" ? "Check with Tally on the Bank page" : "Open the bank line"}</button>);
-  if (a && a.kind === "cancel") out.push(<button key="c" className="btn small" data-cancel-post="" onClick={async () => { try { const r = await TCloud.rpc("tally_post_cancel", { p_id: job.id }); toast((r && r.warn) || "Cancelled; nothing is sent to Tally."); } catch (err) { toast(String((err && err.message) || err)); } CloudJobs.load(true); }}>Cancel</button>);
+  if (a && a.kind === "cancel") out.push(<button key="c" className="btn small" data-cancel-post="" onClick={async () => { try { const r = await TCloud.rpc("tally_post_cancel", { p_id: job.id }); toast((r && r.warn && postCloudSay(r.warn)) || "Cancelled; nothing is sent to Tally."); } catch (err) { toast(postCloudSay(String((err && err.message) || err))); } CloudJobs.load(true); }}>Cancel</button>);
   if (a && a.kind === "restore" && bill && e.status === "deleted") out.push(<button key="rs" className="btn small" data-restore="" onClick={() => billRestore(e.id)}>Restore the bill</button>);
   if (a && a.kind === "ledger" && x.miss && x.miss.length) out.push(<LedgerPick key="l" name={x.miss[0].ledger} role={x.miss[0].role} />);
   if (a && a.kind === "settle") {
@@ -483,7 +490,8 @@ function Attention({ co, canPost }) {
 }
 // Posted: every entry in statuses 1, 2, 3 and 10, newest first
 function History({ co, canPost }) {
-  return <div data-post-history=""><EntryList co={co} tab="posted" canPost={canPost} empty={<p className="note" data-post-noposted="">{"Nothing posted yet for this client."}</p>} /></div>;
+  const old = typeof postTabRows === "function" && postTabRows(co.id, "posted").old;
+  return <div data-post-history=""><EntryList co={co} tab="posted" canPost={canPost} empty={<p className="note" data-post-noposted="">{old ? "Nothing posted to Tally in the last 24 hours." : "Nothing posted yet for this client."}</p>} /></div>;
 }
 
 function ImportSteps({ co, ledgers }) {
@@ -565,6 +573,7 @@ export function PostStep() {
       {tab === "posted" && <div data-post-panel="posted" role="tabpanel" data-in-tally=""><AutoRuns co={co} /><History co={co} canPost={canPost} />
         <HomeLink id="sent" text={"Everything sent to Tally for " + co.name + ", with who sent it and when, is on the Tally page."} link="Everything sent to Tally" go={() => goTallyPage("sent")} /></div>}
       {tab === "errors" && <div data-post-panel="errors" role="tabpanel"><OwnerRelease co={co} /><Attention co={co} canPost={canPost} /></div>}
+      <OldPosted kind="bills" />
     </section>
   );
 }

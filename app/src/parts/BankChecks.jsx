@@ -202,10 +202,12 @@ export function PostReport({ rep }) {
     <Button className="btn small" onClick={() => goChooseTallyCompany()}>Choose the Tally company</Button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   // 26-Oct-2026: lines the resend guard held back that a posting of this computer already put in Tally (bankSentHeal):
   // one quiet line, nothing red, nothing to post again
-  if (rep.alreadyLine && !(rep.posted || 0) && !(rep.failed || []).length) return <div className="bk-alert" data-already-posted="">{rep.alreadyLine}{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
+  if (rep.alreadyLine && !(rep.posted || 0) && !(rep.failed || []).length && !rep.earlier) return <div className="bk-alert" data-already-posted="">{rep.alreadyLine}{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
   const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
   if (rep.alreadyLine) bits.push(rep.alreadyLine.replace(/\.$/, ""));
+  // (polish 2) lines an earlier posting of FinCom holds, decided by FinCom's copy of Tally (src/js/96 postEarlier)
+  if (rep.earlier) bits.push(rep.earlier);
   if (rep.checkNote) bits.push(rep.checkNote);
   if (rep.unread) bits.push(rep.unread + " in Tally, not yet read back (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
   if (rep.optional) bits.push(rep.optional + " as Optional vouchers (Tally: Display More Reports → Exception Reports → Optional Vouchers)");

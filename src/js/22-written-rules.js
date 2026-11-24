@@ -458,7 +458,7 @@ async function uploadStatements(files, force){
       toast(file.name + ": " + x.say + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
-      b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
+      b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString(), head: err && err.diag && err.diag.head};
     }
   }
   } finally { on.delete(b.cid); }
@@ -608,7 +608,8 @@ function matchTallyBook(acc, rows, force){
   let learnedFromTally = false;
   const book = acc && b.books[acc.id];
   if (!book) return 0;
-  const used = new Set();
+  const used = new Set(), was = new Map(), now = new Date().toISOString();
+  rows.forEach(r => { if (r.state === "intally") was.set(r.id, r.tallyKey); });
   if (force){
     // a fresh copy of the Tally ledger: match everything again (an entry deleted in Tally becomes open again)
     rows.forEach(r => { if (r.state === "intally"){ r.state = r.prevState && r.prevState !== "intally" ? r.prevState : (r.ledger ? "ready" : "attention"); delete r.tallyIdx; delete r.tallyKey; delete r.tallyHow; delete r.tallyRef; } });
@@ -623,6 +624,8 @@ function matchTallyBook(acc, rows, force){
     used.add(i); n++;
     const t = book.entries[i];
     r.prevState = r.state; r.state = "intally"; r.tallyIdx = i; r.tallyKey = bankTallyKey(t); r.tallyHow = how;
+    // when FinCom found it (Bank lists it 24 hours from then); matched again to the same entry, the first time is kept
+    if (!r.matchedAt || was.get(r.id) !== r.tallyKey) r.matchedAt = now;
     r.tallyRef = [t.vt, t.vn, t.party].filter(Boolean).join(" \u00b7 ");
     if (t.party && !/as per details|^\(|^opening|^closing/i.test(t.party) && b.hist){ b.hist.rows[r.fp] = histEntry(r, t.party, "tally"); b.histVer++; learnedFromTally = true; }
   };
@@ -673,8 +676,9 @@ function sameParty(a, b){
 function bankInTally(r){ return !!r && (r.state === "sent" || r.state === "intally"); }
 // the one way from Tally back to "ready": every posting field cleared alike
 function bankClearPosting(r, state){
-  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: ""}, postCleared(r.id));
-  delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew;
+  // (polish 2) its Optional mark too: a line posted again is Optional only if that posting is (NotInTally.optional)
+  Object.assign(r, {state: state || (r.ledger ? "ready" : "attention"), sentAt: "", matchedAt: "", postVerified: false, postByReply: false, tally: null, tallyRef: "", tallyHow: "", checking: false, postError: "", postedOptional: false}, postCleared(r.id));
+  delete r.goneFromTally; delete r.tallyIdx; delete r.postJobNew; delete r.sentOptional;
   const b = B(); if (b && b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
 }
 function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay, tdsLedger: r.tdsLedger || "", salesIds: r.salesIds || null, splits: (r.splits || []).slice()}; }
@@ -746,7 +750,8 @@ function forgetUndoRule(){
   saveBank({rules: true});
 }
 // Multiple selection
-function bankSelected(){ const b = B(); return b.rows.filter(r => b.sel.has(r.id)); }
+// (a ticked line now older than 24 hours, off the page: untick it, so nothing hidden is acted on)
+function bankSelected(){ const b = B(); return b.rows.filter(r => b.sel.has(r.id) && (!bankOld(r) || !b.sel.delete(r.id))); }
 function bulkAction(kind, ledger){
   const b = B(), rows = bankSelected();
   if (!rows.length) return;
@@ -823,7 +828,7 @@ function bankVisibleRows(){
   if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
   const tab = bankTab(), states = tabStates(tab);
-  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && (!states || bankTabOf(r) === tab || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
+  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && ((states ? bankTabOf(r) === tab : bankTabOf(r) !== "old") || b.sticky.has(r.id)) && !bankOld(r) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
 }
 let bankLastClicked = null;
 // the ticks and the bottom bar only (React alone redraws, not the old screens around it)
@@ -1026,13 +1031,13 @@ function bankTabOf(r){
   if (bankAside(r)) return "aside";
   if (r.state === "attention" || r.state === "suggested") return "review";
   if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
-  return r.state === "ignored" ? "ignored" : "done";
+  return r.state === "ignored" ? "ignored" : bankOld(r) ? "old" : "done";
 }
 function bankTab(){ const b = B(); return ["review", "ready", "done", "ignored", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
-  const t = {review: 0, ready: 0, done: 0, ignored: 0, aside: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
-  return {review: t.review, ready: t.ready, done: t.done, ignored: t.ignored, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
+  const t = {review: 0, ready: 0, done: 0, ignored: 0, aside: 0, old: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
+  return {review: t.review, ready: t.ready, done: t.done, ignored: t.ignored, old: t.old, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }
 function entries(n){ return n + (n === 1 ? " entry" : " entries"); }

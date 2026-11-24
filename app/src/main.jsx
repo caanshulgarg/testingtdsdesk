@@ -72,7 +72,7 @@ window.loadBridgeFollow = () => import("./lib/bridgeFollow.js");
 // src/js/82): GSTR-9 and 9C (with the 9C screen, for its PDF), the MIS pack, Post to Tally's settling (postPart, src/js/59),
 // the printed sales invoice
 // (q: quietly, for a job behind the page, MIS.runSoon: a failed fetch is said to it, the page not reloaded)
-window.loadPart = (k, q) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : k === "post" ? import("../../src/js/59-post-owner.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { if (!q) staleReload(e, true); throw e; });
+window.loadPart = (k, q) => (k === "gst9" ? import("./screens/gst/Annual.jsx") : k === "mis" ? import("../../src/js/18-mis-pack.js") : k === "post" ? import("../../src/js/59-post-owner.js") : k === "notintally" ? import("../../src/js/96-not-in-tally.js") : import("../../src/js/26-sales-invoice.js")).catch((e) => { if (!q) staleReload(e, true); throw e; });
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // next-legacy-room: the bill reader (src/js/01-reading-bills.js), loaded the first time a bill is read (readerLoad, src/js/82).
 // Not refreshed by itself when it cannot come: bills waiting in the reading queue would be lost; the bill says why instead

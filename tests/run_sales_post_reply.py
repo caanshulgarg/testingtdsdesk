@@ -6,7 +6,8 @@ Made-up data only.
      Optional (the bridge's reply carries no optional flag: the voucher FinCom sent did);
   2. an answer Tally took but nobody has confirmed (an old bridge's "checking"): not counted as posted, as before;
   3. "Post one by one": Tally's reply counts as posted too;
-  4. an invoice found in Tally afterwards (the duplicate check): its old red note goes; an Optional voucher is said so;
+  4. an invoice found in Tally afterwards (the duplicate check): an Optional voucher is not In Tally (the owner's rule of
+     24-Nov-2026, 32213893f); a regular one is, and its old red note goes;
   5. the same number twice in a sheet: neither is posted;
   6. (next-sales-followups) a queued posting's result that comes later: the same rule as a direct post (Tally's reply or
      a read back counts, an answer nobody confirmed does not), and an Optional voucher said so;
@@ -97,20 +98,24 @@ with sync_playwright() as p:
     st = A.evaluate(STATE)
     ok(st[0]["st"] == "posted" and st[0]["err"] == "", "one by one, Tally's reply: Posted (%s)" % st)
 
-    print("4. found in Tally afterwards: the old red note goes; an Optional voucher said so")
+    print("4. found in Tally afterwards: an Optional voucher is NOT In Tally (the owner's rule, 32213893f); a regular one is, the old red note gone")
     A.evaluate("() => { SL().list = []; }")
     vid = A.evaluate(ADD, ["ZT/41", "2026-11-10", G["k"]])
     A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.postError = 'Failed: not found in Tally when read back, so it is not marked as posted.'; }", vid)
     A.evaluate("() => { window.__inTally = [{guid: 'g-41', masterId: '41', date: '20261110', type: 'Sales', number: 'ZT/41', party: 'Kappa Retail', amount: '1180', optional: 'Yes', cancelled: 'No'}]; }")
     A.evaluate("() => salesCheckTally(SL().list)"); A.wait_for_timeout(200)
     st = A.evaluate(STATE)
-    ok(st[0]["st"] == "intally" and st[0]["err"] == "", "In Tally, the red note gone (%s)" % st)
-    ok(st[0]["opt"], "said to be an Optional voucher in Tally (%s)" % st)
+    ok(st[0]["st"] == "ready" and not st[0]["opt"], "an Optional voucher of its number and amount: not In Tally, still Ready to post (%s)" % st)
+    A.evaluate("(id) => { SL().filter = 'ready'; SL().openId = id; render(); }", vid); A.wait_for_timeout(500)
+    ok(A.evaluate(NOTE) is None, "7. no \"In Tally as an Optional voucher\" note on it (%s)" % A.evaluate(NOTE))
+    A.evaluate("() => { SL().openId = null; render(); }")
+    A.evaluate("() => { window.__inTally = [{guid: 'g-41b', masterId: '42', date: '20261110', type: 'Sales', number: 'ZT/41', party: 'Kappa Retail', amount: '1180', optional: 'No', cancelled: 'No'}]; }")
+    A.evaluate("() => salesCheckTally(SL().list)"); A.wait_for_timeout(200)
+    st = A.evaluate(STATE)
+    ok(st[0]["st"] == "intally" and st[0]["err"] == "" and not st[0]["opt"], "a regular voucher: In Tally, the red note gone, not Optional (%s)" % st)
     # an invoice found in Tally before this fix kept the red note: not shown on an In Tally invoice
     A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); v.postError = 'Failed: not found in Tally when read back.'; SL().filter = 'done'; SL().openId = id; render(); }", vid); A.wait_for_timeout(500)
     ok("not found in Tally" not in A.inner_text("#app"), "an old red note on an In Tally invoice is not shown, on the row or the panel")
-    n = A.evaluate(NOTE)
-    ok(n and "Optional voucher" in n and "untick" not in n and "Client setup" not in n, "7. found in Tally as Optional (entered by hand): said so, no untick advice (%s)" % n)
     A.evaluate("() => { SL().openId = null; render(); }")
 
     print("5. the same number twice: neither copy is posted")
