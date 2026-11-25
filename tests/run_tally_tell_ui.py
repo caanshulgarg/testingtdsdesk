@@ -159,6 +159,14 @@ with sync_playwright() as p:
     st = E(STATE, cid)
     ok(st and st["tell"] == ["days_waiting", "earlier"] and st["own"] == 0, "the earlier year on its own line under the sentence (%s)" % st)
 
+    # (the re-review of 25-Nov-2026) what came of the person's own Update from Tally stays in view beside the sentence
+    scene(view([book(cid, "days_waiting", CASES[15][1], None)]))
+    E("""(c) => { const t = Date.now(); S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: t, company: 'GARG SHEKHAR & COMPANY', via: 'bridge', end: t};
+      FCRunState[c] = {at: t, ok: true, say: 'Updated from Tally: 3 new entries.'}; render(); }""", cid); pg.wait_for_timeout(1200)
+    run = E("(c) => { const e = document.querySelector('#app [data-tsm-row][data-tsm-cid=\"' + c + '\"] td[data-tsm-col=state] [data-tpt-why=run-done]'); return e ? e.innerText.trim() : ''; }", cid)
+    ok(run == "Updated from Tally: 3 new entries." and E(STATE, cid)["tell"] == ["days_waiting"], "a finished Update from Tally: its words still shown beside the sentence (%s)" % run)
+    E("(c) => { delete FCRunState[c]; delete S.tcoSync[c]; render(); }", cid)
+
     print("3. the header's Tally sign, its popover, the client chip")
     def at_client():
         E("(c) => { S.view = 'company'; S.coId = c; S.loadingCo = false; S.alertsOpen = false; S.tallyPanel = false; goClient('dash'); }", cid); pg.wait_for_timeout(1300)

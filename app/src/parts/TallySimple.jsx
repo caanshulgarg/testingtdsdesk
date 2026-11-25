@@ -639,7 +639,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {/* (not linked: the client line says so; the state line only when it adds to it) */}
         {pg.kind !== "free" && (tr && tr.word ? <span className="tpt-say warn" data-tpt-state={pg.kind} data-tpt-tell-word={tr.icon}><Dot k="warn" />{tr.word}</span>
           : <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>)}
-        {!tr && why && <span title={typeof why === "string" ? why : undefined} className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
+        {/* (the re-review: a run's own words and See step N stay beside the cloud's sentence; only the row's own why goes) */}
+        {why && !(tr && !rw && !aw) && <span title={typeof why === "string" ? why : undefined} className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
         {!tr && held && <span className="tpt-why" title={held} data-tpt-held="">{held}</span>}
         {/* Tally tell (migration 221): the cloud's one sentence for this company, and its one button */}
@@ -649,7 +650,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
           onClick={() => moreGo(S.tallyAdv)}>More settings</button></span>}
         {/* next-link-follow (migration 146): where the book is read from, or the linked computer offline with the company open nowhere */}
         {!tr && row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
-        {!tr && near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
+        {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
           <NearPick row={row} /></span>}
       </span>
     </td>
