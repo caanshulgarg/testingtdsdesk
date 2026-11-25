@@ -638,14 +638,14 @@ function postReconcile(cid, quiet){
     if (e){
       if (e.status !== "approved" || billInTally(e) || e.goneFromTally) return;
       if (postOld(e, j)) return;
-      billPosted(cid, e, x, j.company || "", at, {by, quiet: true});
+      billPosted(cid, e, x, j.company || "", at, {by, quiet: true, queuedAt: j.created_at || ""});
       Store.saveEntry(cid, e); bills++;
       return;
     }
     const r = rowOf(id);
     if (!r || r.goneFromTally || r.postVerified === true || r.postByReply === true) return;
     if (!((r.state === "ready" && !postOld(r, j)) || (r.state === "sent" && !r.checking))) return;
-    if (typeof bankPosted === "function"){ bankPosted(cid, r, x, j.company || "", at, {by, quiet: true}); lines++; }
+    if (typeof bankPosted === "function"){ bankPosted(cid, r, x, j.company || "", at, {by, quiet: true, queuedAt: j.created_at || ""}); lines++; }
   });
   const n = bills + lines;
   if (lines) saveBank({rows: true, posted: true});

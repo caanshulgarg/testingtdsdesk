@@ -889,7 +889,7 @@ function bankPosted(cid, r, x, tname, now, o){
   r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; delete r.postJobNew; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
   // (re-upload polish 3) what FinCom sent (the bank's Optional setting), never Tally's answer; unknown for a line marked
   // from an earlier posting (src/js/96 postEarlier): the setting decides then
-  if (o.earlier) delete r.sentOptional; else r.sentOptional = !!(CO(cid) || {}).bankOptional;
+  if (o.earlier) delete r.sentOptional; else r.sentOptional = sentOptionalAt(CO(cid), "bank", o.queuedAt || x.sentAt || now);   // (F1) o.queuedAt: marked late
   r.postByReply = x.verified !== true && x.byReply === true;
   // (an Optional voucher is not in the books: its tag "optional:", never a reason to call the line In Tally again)
   if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = (x.optional ? "optional:" : "") + now; }
@@ -1182,6 +1182,8 @@ async function postBankToTally(ids){
   const masters = b.newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
   b.busy = "Posting " + entries(rows.length) + " to " + tname + "\u2026"; render();
   try {
+    // (F1) the press: a posting that waits in FinCom's cloud is marked later, against the setting as it was now
+    const pressAt = new Date().toISOString();
     const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       // round 15: bank: true tells bridge 2.1.8 to batch these by its bank-lines-per-request setting (bills carry nothing)
@@ -1210,7 +1212,7 @@ async function postBankToTally(ids){
       if (byId.get(r.id) && byId.get(r.id).earlier){ early.push([r, byId.get(r.id)]); return; }
       const sp = split.get(String(r.id));
       if (sp && sp.refused){ r.postError = sp.refused; failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: sp.refused}); return; }
-      if (sp && sp.taken){ ok++; bankPosted(b.cid, r, Object.assign({}, sp.taken, {vchGuess: sp.guess, jobId}), tname, now); posted.push(r); return; }
+      if (sp && sp.taken){ ok++; bankPosted(b.cid, r, Object.assign({}, sp.taken, {vchGuess: sp.guess, jobId}), tname, now, {queuedAt: pressAt}); posted.push(r); return; }
       // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
       const x1 = byId.get(r.id), x0 = x1 && postTaken(x1) ? Object.assign({}, x1, {vchGuess: guesses.get(String(r.id)) || "", jobId}) : x1;
@@ -1231,7 +1233,7 @@ async function postBankToTally(ids){
         r.postError = billUnconf() + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "Not confirmed by Tally yet \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
-        ok++; bankPosted(b.cid, r, x, tname, now); posted.push(r);
+        ok++; bankPosted(b.cid, r, x, tname, now, {queuedAt: pressAt}); posted.push(r);
         if (x.optional) optionalN++;
       } else if (x && typeof bankInReview === "function" && bankInReview(x)){
         // a batch Tally made only partly (or no answer): Tally's words and counts kept on the line, for Check with Tally
@@ -1381,6 +1383,7 @@ async function postBillsToTally(opts){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
       const masters = B().newLed.filter(l => !l.sent && used.has(l.name.toLowerCase()));
       S.billPost = {busy: "Posting " + entries(todo.length) + " to " + tname + "…"}; render();
+      const pressAt = new Date().toISOString();   // (F1) the press (a posting that waits in FinCom's cloud is marked later)
       const j = await Bridge.post({company: tname, client: co.id, masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})), vouchers: todo.map(e => ({id: e.id, xml: voucherXml(e, co)})), released: postReleased(todo)},
         pj => { S.billPost = {busy: postingLine(pj, tname)}; refreshBusy(); }, chk => billsAfterCheck(co.id, chk, tname));
       // B14: stopped by the check of the company this client may post to: nothing was sent, not Tally's reason; the
@@ -1415,7 +1418,7 @@ async function postBillsToTally(opts){
         // bridge 2.1.4 could not check Tally first: nothing was posted; the bill stays waiting, with that one line
         else if (postCheckFail(x)){ e.postCheckFailed = {at: now, message: plainMsg(x.message) || "Could not check Tally, not posted. Try again."}; e.postError = ""; checkFailed++; }
         // round 17a: Tally's reply (bridge 2.1.8, byReply) counts as posted, as a read back does (postTaken, src/js/59)
-        else if (x && postTaken(x)){ ok++; if (postAltered(x)) altered++; else if (x.verified !== true && x.byReply === true) byReplyN++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
+        else if (x && postTaken(x)){ ok++; if (postAltered(x)) altered++; else if (x.verified !== true && x.byReply === true) byReplyN++; billPosted(co.id, e, x, tname, now, {queuedAt: pressAt}); if (x.optional) optionalN++; }
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
           e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "Not confirmed by Tally yet: FinCom checks it in Tally by itself in a moment." : billUnconf() + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "Not confirmed by Tally yet", unread: true}); }
@@ -1448,7 +1451,7 @@ function billPosted(cid, e, x, tname, now, o){
   o = o || {};
   const who = o.by || (Cloud.st && Cloud.st.email) || "";
   if (!o.quiet) logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: who});
-  delete e.release; delete e.postJobNew; if (e.deletedInTally) delete e.deletedInTally.verified; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; if (o.earlier) delete e.sentOptional; else e.sentOptional = !!(CO(cid) || {}).createOptional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
+  delete e.release; delete e.postJobNew; if (e.deletedInTally) delete e.deletedInTally.verified; e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; if (o.earlier) delete e.sentOptional; else e.sentOptional = sentOptionalAt(CO(cid), "", o.queuedAt || x.sentAt || now); e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
   // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back): in Tally (billInTally), said so
   e.postByReply = x.verified !== true && x.byReply === true;
   e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: x.company || tname};

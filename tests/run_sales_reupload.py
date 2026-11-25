@@ -173,6 +173,9 @@ with sync_playwright() as p:
     ok(A.locator("[data-not-in-tally='%s']" % vh).count() == 0, "no \"Not in Tally? Post again\" for such a client")
     A.evaluate("() => { CO().createOptional = false; }")
     print(" i. (polish 3) the client's Optional setting off; Tally answered Optional (a voucher type Optional by default in Tally)")
+    # (polish 4b) a client whose setting was never on and never stamped (the owner's case: Tally's voucher-type default
+    # makes its entries Optional): with no stamp, the setting now decides
+    A.evaluate("() => { CO().createOptional = false; delete CO().createOptionalAt; }")
     vi = A.evaluate(ADD, ["ZR/0465", "2026-11-14", G["k"]])
     A.evaluate("""(id) => { const v = SL().list.find(v => v.id === id); v.postJob = 'j-' + id; window.__rows = window.__rows || {};
       window.__rows['j-' + id] = {id: 'j-' + id, status: 'done', company: 'ZZ Test Reupload Traders', results: [{id, ok: true, byReply: true, verified: false, optional: true, sentAt: new Date().toISOString()}]}; }""", vi)
@@ -193,6 +196,49 @@ with sync_playwright() as p:
     A.evaluate("(id) => salesNotInTally(id)", vi); A.wait_for_timeout(500)
     ok(copyrpc() == [{"p_job": "j-" + vi, "p_id": vi}] and A.evaluate(STATE, vi)["st"] == "posted", "the one Tally called Optional: the copy asked too (%s)" % copyrpc())
     A.evaluate("() => { window.__ids = []; window.__copy = () => ({ok: false, state: 'none'}); }")
+    print(" j. (polish 3, F1) a posting marked late: the Optional setting as it was when it was queued, cautiously")
+    LATE = """([id, n, onAtQueue, changedAfter]) => { const co = CO(), q = '2026-11-20T10:00:00.000Z';
+      co.createOptional = false; co.createOptionalAt = changedAfter ? '2026-11-20T10:05:00.000Z' : '2026-11-20T09:00:00.000Z';
+      const v = SL().list.find(v => v.id === id); v.postJob = 'j-late-' + n;
+      window.__rows['j-late-' + n] = {id: 'j-late-' + n, status: 'done', created_at: q, company: 'ZZ Test Reupload Traders', results: [{id: v.id, ok: true, byReply: true, verified: false, sentAt: '2026-11-20T10:00:02.000Z'}]};
+      return v.id; }"""
+    # on when queued, turned off while the posting waited (its stamp newer than the queued time): FinCom sent it Optional
+    vk = A.evaluate(LATE, [A.evaluate(ADD, ["ZR/0467", "2026-11-14", G["k"]]), "ZR/0467", True, True]); A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(500)
+    sk = A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); return {st: v.status, sent: v.sentOptional}; }", vk)
+    # turned off before it was queued (stamp older): sent regular
+    vl = A.evaluate(LATE, [A.evaluate(ADD, ["ZR/0468", "2026-11-14", G["k"]]), "ZR/0468", False, False]); A.evaluate("() => salesQueuedSync()"); A.wait_for_timeout(500)
+    sl = A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); return {st: v.status, sent: v.sentOptional}; }", vl)
+    ok(sk["st"] == "posted" and sk["sent"] is True, "on when queued, off while it waited: sent as Optional (%s)" % sk)
+    ok(sl["st"] == "posted" and sl["sent"] is False, "off before it was queued: sent regular (%s)" % sl)
+    A.evaluate("() => { CO().createOptional = false; SL().filter = 'done'; SL().openId = null; render(); }"); A.wait_for_timeout(400)
+    ok(A.locator("[data-not-in-tally='%s']" % vk).count() == 0 and A.locator("[data-not-in-tally='%s']" % vl).count() == 1, "the button only on the one sent regular (%d, %d)" % (A.locator("[data-not-in-tally='%s']" % vk).count(), A.locator("[data-not-in-tally='%s']" % vl).count()))
+    # bank lines and bills marked late (postReconcile, bankSentHeal): the posting's queued time handed in
+    bb = A.evaluate("""() => { const co = CO(), cid = co.id, q = '2026-11-20T10:00:00.000Z', out = {};
+      const mk = (id) => { const r = {id, fp: id, state: 'ready', date: '2026-11-10', narr: 'NEFT ZZ', debit: 340, credit: 0, ledger: 'Kappa Retail', dec: {name: 'Kappa Retail'}}; B().rows.push(r); return r; };
+      const x = {ok: true, byReply: true, verified: false, sentAt: '2026-11-20T10:00:02.000Z'};
+      co.bankOptional = false; co.bankOptionalAt = '2026-11-20T10:05:00.000Z'; const r1 = mk('stzr-l1'); bankPosted(cid, r1, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.bankAfter = r1.sentOptional;
+      co.bankOptionalAt = '2026-11-20T09:00:00.000Z'; const r2 = mk('stzr-l2'); bankPosted(cid, r2, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.bankBefore = r2.sentOptional;
+      const e1 = {id: 'bill-zr-l1', status: 'approved', x: {invoiceNo: 'ZB/L1', invoiceDate: '2026-11-12', total: 600, vendorName: 'Made-up Vendor'}, snapshot: {lines: []}}, e2 = Object.assign({}, e1, {id: 'bill-zr-l2', x: Object.assign({}, e1.x, {invoiceNo: 'ZB/L2'})});
+      co.createOptional = false; co.createOptionalAt = '2026-11-20T10:05:00.000Z'; billPosted(cid, e1, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.billAfter = e1.sentOptional;
+      co.createOptionalAt = '2026-11-20T09:00:00.000Z'; billPosted(cid, e2, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.billBefore = e2.sentOptional;
+      co.bankOptional = true; const r3 = mk('stzr-l3'); bankPosted(cid, r3, x, 'ZZ Test Reupload Traders', '2026-11-20T10:00:02.000Z', {quiet: true, queuedAt: q}); out.bankOnNow = r3.sentOptional;
+      co.bankOptional = false; delete co.bankOptionalAt; delete co.createOptionalAt; return out; }""")
+    ok(bb == {"bankAfter": True, "bankBefore": False, "billAfter": True, "billBefore": False, "bankOnNow": True}, "bank lines and bills marked late: the same cautious rule (%s)" % bb)
+    print(" k. (polish 4) the press time; a setting with no stamp; the merge that turns it off stamps it")
+    vm = A.evaluate(ADD, ["ZR/0469", "2026-11-14", G["k"]])
+    A.evaluate("""(id) => { CO().createOptional = false; CO().createOptionalAt = '2026-11-01T00:00:00.000Z'; window.__toasts = [];
+      window.__enq = () => ({ok: true}); window.__holdOthers = SL().list.filter(v => v.status === 'ready' && v.id !== id).map(v => { v.status = 'review'; return v.id; });
+      window.__post = (p) => { CO().createOptionalAt = new Date(Date.now() + 1000).toISOString();
+        return {ok: true, company: 'ZZ Test Reupload Traders', results: p.vouchers.map(v => ({id: v.id, ok: true, byReply: true, verified: false, sentAt: new Date(Date.now() + 3000).toISOString()}))}; }; }""", vm)
+    A.evaluate("() => postSalesToTally()"); A.wait_for_timeout(1500)
+    sm = A.evaluate("(id) => { const v = SL().list.find(v => v.id === id); const o = {st: v.status, sent: v.sentOptional}; window.__post = null; (window.__holdOthers || []).forEach(k => { const w = SL().list.find(x => x.id === k); if (w) w.status = 'ready'; }); CO().createOptionalAt = '2026-11-01T00:00:00.000Z'; return o; }", vm)
+    ok(sm == {"st": "posted", "sent": True}, "the Post press: the setting changed after the press, before Tally's answer: sent as Optional (%s)" % sm)
+    u = A.evaluate("""() => { const q = '2026-11-20T10:00:00.000Z';
+      const d = clientOptKeep({createOptional: true}, {createOptional: true}, {createOptional: false}, null);
+      return {mergeOff: d.createOptional, mergeStamped: !!d.createOptionalAt,
+        noStampPosted: sentOptionalAt({createOptional: false}, '', q, true), noStampRegular: sentOptionalAt({createOptional: false}, '', q, false),
+        olderStampPosted: sentOptionalAt({createOptional: false, createOptionalAt: '2026-11-01T00:00:00.000Z'}, '', q, true)}; }""")
+    ok(u == {"mergeOff": False, "mergeStamped": True, "noStampPosted": False, "noStampRegular": False, "olderStampPosted": False}, "a merge turning the setting off stamps it; with no stamp the setting now decides (never Tally's answer), with an older stamp too (%s)" % u)
     ok(A.evaluate("() => window.__bridgeCalls") == [], "nothing asked of FinCom Bridge or Tally (%s)" % A.evaluate("() => window.__bridgeCalls"))
 
     print("2. Not in Tally? Post again on a posted invoice")
@@ -311,7 +357,9 @@ with sync_playwright() as p:
     ok(t.startswith("4 not sent: see the red note on each") and "0 posted" not in t, "the toast the sales way, no \"0 posted\" (%s)" % t)
     ok(rp == "4 not sent: see the red note on each", "and the line in the posting's report (%s)" % rp)
     P.evaluate("() => { B().filter = 'all'; render(); }"); P.wait_for_timeout(400)
-    ok("4 not sent: see the red note on each" in (P.inner_text("[data-bank-report]") if P.locator("[data-bank-report]").count() else ""), "shown in the report on the page")
+    br_t = P.inner_text("[data-bank-report]") if P.locator("[data-bank-report]").count() else ""
+    ok("4 not sent: see the red note on each" in br_t, "shown in the report on the page")
+    ok("0 in Tally (verified)" not in br_t, "(F2) no \"0 in Tally (verified)\" when only earlier lines are reported (%s)" % br_t.replace("\n", " ")[:200])
     print(" b. an earlier posting Tally took, a regular voucher in the copy: posted before, said once")
     P.evaluate("""() => { const b = B(); b.rows = window.__bankRows(1); b.postReport = null; b.postedTags = {}; window.__rpc = []; window.__toasts = []; window.__sent = [];
       window.__copy = (a) => ({ok: false, state: "there", vtype: "Receipt", vno: "77", day: "2026-09-02"});
@@ -340,9 +388,40 @@ with sync_playwright() as p:
     ok(ex.startswith("2026-11-18") and t == "1 bill was posted before by FinCom and is in Tally: not sent again.", "posted before, the toast the sales way (%s; %s)" % (ex, t))
     ok(bp == "1 bill was posted before by FinCom and is in Tally: not sent again" and len(P.evaluate("() => window.__toasts")) == 1, "the line in S.billPost, one toast (%s; %s)" % (bp, P.evaluate("() => window.__toasts")))
     P.wait_for_timeout(300)
-    ok(bp and bp in (P.inner_text("[data-post-result]") if P.locator("[data-post-result]").count() else ""), "and on the Post screen's result line")
+    pr_t = P.inner_text("[data-post-result]") if P.locator("[data-post-result]").count() else ""
+    ok(bp and bp in pr_t, "and on the Post screen's result line")
+    ok(pr_t.strip().startswith(bp) and "0 in Tally (verified)" not in pr_t, "(F2) the line starts with it, no \"0 in Tally (verified)\" (%s)" % pr_t)
     if SHOTS:
         P.locator("[data-post-result]").first.scroll_into_view_if_needed(); P.wait_for_timeout(200); P.screenshot(path=os.path.join(SHOTS, "4-bills-post-result.png"))
+    print("7. (polish 4) the press time and the late paths on the bank and bills Post press")
+    # bills: the setting changed between the press and Tally's answer
+    P.evaluate("""() => { window.__bill("zb-2", "Alpha Consultants", "ZB/92", 1100); const co = CO(); co.createOptional = false; co.createOptionalAt = '2026-11-01T00:00:00.000Z';
+      window.__post = (p) => { co.createOptionalAt = new Date(Date.now() + 1000).toISOString();
+        return {ok: true, company: 'ZZ Test Reupload Traders', results: p.vouchers.map(v => ({id: v.id, ok: true, byReply: true, verified: false, sentAt: new Date(Date.now() + 3000).toISOString()}))}; }; }""")
+    P.evaluate("() => postBillsToTally()"); P.wait_for_timeout(1500)
+    sb = P.evaluate("() => { const e = D().entries['zb-2']; return {exp: !!e.exportedAt, sent: e.sentOptional}; }")
+    ok(sb == {"exp": True, "sent": True}, "a bill: the setting changed after the press: sent as Optional (%s)" % sb)
+    P.evaluate(BANK2); P.wait_for_timeout(500)
+    P.evaluate("""() => { const co = CO(); co.bankOptional = false; co.bankOptionalAt = '2026-11-01T00:00:00.000Z'; const b = B(); b.rows = window.__bankRows(1); b.postedTags = {}; b.postReport = null;
+      window.__post = (p) => { co.bankOptionalAt = new Date(Date.now() + 1000).toISOString();
+        return {ok: true, company: 'ZZ Test Reupload Traders', results: p.vouchers.map(v => ({id: v.id, kind: 'voucher', ok: true, byReply: true, verified: false, sentAt: new Date(Date.now() + 3000).toISOString()}))}; }; }""")
+    P.evaluate("() => postBankToTally()"); P.wait_for_timeout(1500)
+    sk = P.evaluate("() => ({st: B().rows[0].state, sent: B().rows[0].sentOptional})")
+    ok(sk == {"st": "sent", "sent": True}, "a bank line: the setting changed after the press: sent as Optional (%s)" % sk)
+    # bankSentHeal: the register's queued time (queued_at), and the bridge job's start (startedAt)
+    hl = P.evaluate("""async () => { const co = CO(), cid = co.id, q = Date.parse('2026-11-20T10:00:00.000Z'), iso = (ms) => new Date(q + ms).toISOString();
+      if (typeof bankSentHeal !== 'function') return {missing: true};
+      co.bankOptional = false; co.bankOptionalAt = iso(1000);
+      const b = B(); b.rows = window.__bankRows(2); b.rows.forEach((r, i) => { r.postJob = 'j-heal-' + i; }); b.postedTags = {};
+      const reg0 = window.postRegOf, call0 = Bridge.call, load0 = PostReg.load;
+      PostReg.load = async () => null;
+      window.postRegOf = (c, id) => id === 's1-0' ? {state: 'in_tally', queued_at: iso(0), sent_at: iso(2000), changed_at: iso(2000), job_id: 'j-heal-0', entry_id: id, source: 'reply', company: 'ZZ Test Reupload Traders'} : undefined;
+      Bridge.call = async (url) => /^\/jobs\?id=j-heal-1/.test(url) ? {id: 'j-heal-1', status: 'done', company: 'ZZ Test Reupload Traders', startedAt: iso(0), results: [{id: 's1-1', ok: true, byReply: true, verified: false, sentAt: iso(2000)}]} : call0(url);
+      try { await bankSentHeal(cid, b.rows, 'ZZ Test Reupload Traders', null); }
+      finally { window.postRegOf = reg0; Bridge.call = call0; PostReg.load = load0; }
+      return {reg: {st: b.rows[0].state, sent: b.rows[0].sentOptional}, job: {st: b.rows[1].state, sent: b.rows[1].sentOptional}}; }""")
+    ok(hl.get("reg") == {"st": "sent", "sent": True}, "bankSentHeal, the register's line: its queued_at, the stamp after it: sent as Optional (%s)" % hl)
+    ok(hl.get("job") == {"st": "sent", "sent": True}, "bankSentHeal, the bridge's job record: its startedAt, the stamp after it: sent as Optional (%s)" % hl)
     ok(P.evaluate("() => window.__bcalls.filter(u => /^\\/(vouchers|ledgerlines|tags|daybook)/.test(u))") == [], "nothing read from Tally")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()

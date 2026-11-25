@@ -75,14 +75,13 @@ function RunLine({ co }) {
     {bp.cancelled && <p className="note" style={{ margin: "0 0 8px" }}>{bp.cancelled}</p>}
     {bp.done && !bp.notAllowed && <p className={"note" + (failed.length ? " bad" : "")} data-post-result="" style={{ margin: "0 0 8px" }}>
       {/* round 17a: an entry FinCom Bridge 2.1.8 posted by Tally's reply (it does not read back) counts as in Tally, said so */}
-      {(() => { const rep = bp.byReply || 0, ver = (bp.ok || 0) - (bp.altered || 0) - rep;
-        return [ver || !rep ? ver + " in Tally (verified)" : "", rep ? rep + " in Tally (Tally's reply)" : ""].filter(Boolean).join(" · "); })()}{bp.altered ? " · " + bp.altered + " altered in Tally" : ""}{bp.dup ? " · " + bp.dup + " already in Tally (not posted again)" : ""}
-      {bp.checkFailed ? " · " + bp.checkFailed + " not posted: Tally could not be checked first" : ""}
-      {/* round 18: reading entries from Tally is off on the bridge (prospective only): the pre-check could not be made */}
-      {bp.checkNote ? " · " + bp.checkNote : ""}
-      {/* (polish 2) bills an earlier posting of FinCom holds, decided by FinCom's copy of Tally (src/js/96 postEarlier) */}
-      {bp.earlier ? " · " + bp.earlier : ""}
-      {failed.length ? " · " + failed.length + " failed and went back to To review (" + failed.map((f) => f.no + ": " + f.msg).join("; ") + ")" : ""}
+      {/* round 18: checkNote, reading entries from Tally is off on the bridge (prospective only): the pre-check could not
+          be made. (polish 2) earlier: bills an earlier posting of FinCom holds, decided by FinCom's copy of Tally (src/js/96
+          postEarlier); (F2) with nothing posted now, the line starts with it: no "0 in Tally (verified)" */}
+      {(() => { const rep = bp.byReply || 0, ver = (bp.ok || 0) - (bp.altered || 0) - rep, head = bp.earlier && !(bp.ok || 0) ? [] : [ver || !rep ? ver + " in Tally (verified)" : "", rep ? rep + " in Tally (Tally's reply)" : ""];
+        return head.concat([bp.altered ? bp.altered + " altered in Tally" : "", bp.dup ? bp.dup + " already in Tally (not posted again)" : "",
+          bp.checkFailed ? bp.checkFailed + " not posted: Tally could not be checked first" : "", bp.checkNote || "", bp.earlier || "",
+          failed.length ? failed.length + " failed and went back to To review (" + failed.map((f) => f.no + ": " + f.msg).join("; ") + ")" : ""]).filter(Boolean).join(" · "); })()}
       {(bp.masters || []).length > 0 && <span data-post-masters="">{" · Ledgers: " + bp.masters.map((m) => m.name + ": " + m.word).join(", ")}</span>}
       {bp.optional > 0 && <span>{" · " + bp.optional + " went in as Optional vouchers. " + OPTIONAL_HELP}</span>}
     </p>}
